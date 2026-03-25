@@ -14,6 +14,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    char *id;
+    char *name;
+    char *exec;
+    char *icon;
+} DesktopAction;
+
 struct IsdeDesktopEntry {
     char *name;
     char *generic_name;
@@ -24,6 +31,9 @@ struct IsdeDesktopEntry {
     char *categories;
     char *only_show_in;
     char *not_show_in;
+    char *actions_str;   /* raw "Actions=" value (semicolon-separated IDs) */
+    DesktopAction *actions;
+    int   nactions;
     int   terminal;
     int   no_display;
     int   hidden;
@@ -65,6 +75,48 @@ static void set_field(IsdeDesktopEntry *e, const char *key, const char *val)
         e->no_display = (strcmp(val, "true") == 0);
     else if (strcmp(key, "Hidden") == 0)
         e->hidden = (strcmp(val, "true") == 0);
+    else if (strcmp(key, "Actions") == 0)
+        e->actions_str = strdup(val);
+}
+
+/* Find an action by ID in the pre-allocated actions array */
+static DesktopAction *find_action(IsdeDesktopEntry *e, const char *id)
+{
+    for (int i = 0; i < e->nactions; i++)
+        if (e->actions[i].id && strcmp(e->actions[i].id, id) == 0)
+            return &e->actions[i];
+    return NULL;
+}
+
+/* Parse the Actions= string and allocate action slots */
+static void parse_action_ids(IsdeDesktopEntry *e)
+{
+    if (!e->actions_str) return;
+
+    /* Count semicolons to estimate action count */
+    int count = 0;
+    const char *p = e->actions_str;
+    while (*p) {
+        if (*p == ';') count++;
+        else if (!count || p[-1] == ';') count++;
+        p++;
+    }
+
+    e->actions = calloc(count + 1, sizeof(DesktopAction));
+    e->nactions = 0;
+
+    /* Split by semicolons */
+    char *tmp = strdup(e->actions_str);
+    char *tok = strtok(tmp, ";");
+    while (tok) {
+        char *id = strip(tok);
+        if (*id) {
+            e->actions[e->nactions].id = strdup(id);
+            e->nactions++;
+        }
+        tok = strtok(NULL, ";");
+    }
+    free(tmp);
 }
 
 IsdeDesktopEntry *isde_desktop_load(const char *path)
@@ -81,6 +133,7 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
 
     char line[1024];
     int in_desktop_entry = 0;
+    char *current_action_id = NULL;  /* non-NULL when inside [Desktop Action X] */
 
     while (fgets(line, sizeof(line), fp)) {
         char *s = strip(line);
@@ -89,12 +142,22 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
 
         /* Group header */
         if (*s == '[') {
-            in_desktop_entry = (strncmp(s, "[Desktop Entry]", 15) == 0);
+            in_desktop_entry = 0;
+            free(current_action_id);
+            current_action_id = NULL;
+
+            if (strncmp(s, "[Desktop Entry]", 15) == 0) {
+                in_desktop_entry = 1;
+            } else if (strncmp(s, "[Desktop Action ", 16) == 0) {
+                /* Extract action ID from "[Desktop Action foo]" */
+                char *end = strchr(s + 16, ']');
+                if (end) {
+                    *end = '\0';
+                    current_action_id = strdup(s + 16);
+                }
+            }
             continue;
         }
-
-        if (!in_desktop_entry)
-            continue;
 
         /* Key=Value — skip localized keys (contain '[') */
         char *eq = strchr(s, '=');
@@ -106,10 +169,38 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
         *eq = '\0';
         char *key = strip(s);
         char *val = strip(eq + 1);
-        set_field(e, key, val);
+
+        if (in_desktop_entry) {
+            set_field(e, key, val);
+        } else if (current_action_id) {
+            /* We're inside a [Desktop Action] group.
+             * Actions need to be allocated first, so store raw
+             * and do a second pass — or allocate lazily. */
+            if (!e->actions) {
+                /* First action group encountered before Actions= parsed.
+                 * Parse action IDs now if we have the string. */
+                parse_action_ids(e);
+            }
+            DesktopAction *a = find_action(e, current_action_id);
+            if (a) {
+                if (strcmp(key, "Name") == 0)
+                    a->name = strdup(val);
+                else if (strcmp(key, "Exec") == 0)
+                    a->exec = strdup(val);
+                else if (strcmp(key, "Icon") == 0)
+                    a->icon = strdup(val);
+            }
+        }
     }
 
+    free(current_action_id);
     fclose(fp);
+
+    /* Ensure actions are parsed even if [Desktop Action] groups
+     * appeared before the Actions= key (unlikely but possible) */
+    if (!e->actions && e->actions_str)
+        parse_action_ids(e);
+
     return e;
 }
 
@@ -126,7 +217,31 @@ void isde_desktop_free(IsdeDesktopEntry *e)
     free(e->categories);
     free(e->only_show_in);
     free(e->not_show_in);
+    free(e->actions_str);
+    for (int i = 0; i < e->nactions; i++) {
+        free(e->actions[i].id);
+        free(e->actions[i].name);
+        free(e->actions[i].exec);
+        free(e->actions[i].icon);
+    }
+    free(e->actions);
     free(e);
+}
+
+int isde_desktop_action_count(const IsdeDesktopEntry *e)
+{
+    return e ? e->nactions : 0;
+}
+
+const IsdeDesktopAction *isde_desktop_action(const IsdeDesktopEntry *e,
+                                              int index)
+{
+    if (!e || index < 0 || index >= e->nactions)
+        return NULL;
+    DesktopAction *a = &e->actions[index];
+    /* Return a pointer that matches the public struct layout —
+     * DesktopAction and IsdeDesktopAction have the same fields */
+    return (const IsdeDesktopAction *)a;
 }
 
 const char *isde_desktop_name(const IsdeDesktopEntry *e)         { return e->name; }

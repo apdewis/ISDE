@@ -115,7 +115,7 @@ static void wl_select_callback(Widget w, XtPointer client_data,
         return;
 
     focus_window(wl_panel, wl_group->windows[ret->list_index]);
-    XtPopdown(wl_shell);
+    panel_dismiss_popup(wl_panel);
 }
 
 static void show_window_menu(Panel *p, TaskGroup *g)
@@ -185,6 +185,7 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     XtSetValues(wl_shell, pargs, 2);
 
     XtPopup(wl_shell, XtGrabNone);
+    panel_show_popup(p, wl_shell);
 }
 
 static void taskbar_button_callback(Widget w, XtPointer client_data,
@@ -260,6 +261,39 @@ static void pin_callback(Widget w, XtPointer client_data,
     TaskClosure *tc = (TaskClosure *)client_data;
     tc->group->pinned = !tc->group->pinned;
     save_pinned(tc->panel);
+    panel_dismiss_popup(tc->panel);
+}
+
+typedef struct {
+    Panel      *panel;
+    const char *exec;  /* points into IsdeDesktopEntry — valid for panel lifetime */
+} ActionClosure;
+
+static void action_callback(Widget w, XtPointer client_data,
+                            XtPointer call_data)
+{
+    (void)w;
+    (void)call_data;
+    ActionClosure *ac = (ActionClosure *)client_data;
+    panel_dismiss_popup(ac->panel);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c", ac->exec, (char *)NULL);
+        _exit(127);
+    }
+}
+
+static void close_all_callback(Widget w, XtPointer client_data,
+                               XtPointer call_data)
+{
+    (void)w;
+    (void)call_data;
+    TaskClosure *tc = (TaskClosure *)client_data;
+    Panel *p = tc->panel;
+    TaskGroup *g = tc->group;
+    panel_dismiss_popup(p);
+    for (int i = 0; i < g->nwindows; i++)
+        isde_ewmh_request_close_window(p->ewmh, g->windows[i]);
 }
 
 static void context_menu_handler(Widget w, XtPointer client_data,
@@ -270,25 +304,74 @@ static void context_menu_handler(Widget w, XtPointer client_data,
         return;
 
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3) /* button 3 = right click */
+    if (ev->detail != 3)
         return;
 
     TaskClosure *tc = (TaskClosure *)client_data;
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
 
-    /* Create context menu */
+    /* Toggle: if a popup is already open, just dismiss it */
+    if (p->active_popup) {
+        panel_dismiss_popup(p);
+        return;
+    }
+
     Widget ctx = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                     w, NULL, 0);
+    Arg args[1];
 
+    /* Desktop actions (e.g. "New Window", "New Private Window") */
+    if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
+        IsdeDesktopEntry *de = p->desktop_entries[g->desktop_index];
+        int nactions = isde_desktop_action_count(de);
+        for (int i = 0; i < nactions; i++) {
+            const IsdeDesktopAction *a = isde_desktop_action(de, i);
+            if (!a->name || !a->exec) continue;
+            XtSetArg(args[0], XtNlabel, a->name);
+            Widget entry = XtCreateManagedWidget("action", smeBSBObjectClass,
+                                                  ctx, args, 1);
+            ActionClosure *ac = malloc(sizeof(*ac));
+            ac->panel = p;
+            ac->exec = a->exec;
+            XtAddCallback(entry, XtNcallback, action_callback, ac);
+        }
+
+        /* Separator if we added actions */
+        if (nactions > 0)
+            XtCreateManagedWidget("sep", smeLineObjectClass, ctx, NULL, 0);
+    }
+
+    /* New instance */
+    if (g->desktop_exec) {
+        XtSetArg(args[0], XtNlabel, "New instance");
+        Widget ni = XtCreateManagedWidget("newInst", smeBSBObjectClass,
+                                           ctx, args, 1);
+        ActionClosure *ac = malloc(sizeof(*ac));
+        ac->panel = p;
+        ac->exec = g->desktop_exec;
+        XtAddCallback(ni, XtNcallback, action_callback, ac);
+    }
+
+    /* Close all windows */
+    if (g->nwindows > 0) {
+        XtSetArg(args[0], XtNlabel, "Close all windows");
+        Widget entry = XtCreateManagedWidget("closeAll", smeBSBObjectClass,
+                                              ctx, args, 1);
+        XtAddCallback(entry, XtNcallback, close_all_callback, client_data);
+
+        XtCreateManagedWidget("sep2", smeLineObjectClass, ctx, NULL, 0);
+    }
+
+    /* Pin/unpin */
     const char *label = g->pinned ? "Unpin from taskbar"
                                   : "Pin to taskbar";
-    Arg args[1];
     XtSetArg(args[0], XtNlabel, label);
-    Widget entry = XtCreateManagedWidget("pinToggle", smeBSBObjectClass,
-                                         ctx, args, 1);
-    XtAddCallback(entry, XtNcallback, pin_callback, client_data);
+    Widget pin_entry = XtCreateManagedWidget("pinToggle", smeBSBObjectClass,
+                                              ctx, args, 1);
+    XtAddCallback(pin_entry, XtNcallback, pin_callback, client_data);
 
+    /* Position above button */
     Position bx, by;
     XtTranslateCoords(w, 0, 0, &bx, &by);
 
@@ -306,6 +389,7 @@ static void context_menu_handler(Widget w, XtPointer client_data,
     XtSetValues(ctx, margs, 2);
 
     XtPopup(ctx, XtGrabNone);
+    panel_show_popup(p, ctx);
 }
 
 /* ---------- group management ---------- */
@@ -323,6 +407,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     TaskGroup *g = calloc(1, sizeof(*g));
     g->wm_class = strdup(wm_class);
     g->display_name = strdup(wm_class);
+    g->desktop_index = -1;
     g->cap_windows = 4;
     g->windows = calloc(g->cap_windows, sizeof(xcb_window_t));
 
@@ -355,6 +440,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
             const char *icon = isde_desktop_icon(p->desktop_entries[i]);
             if (icon) g->desktop_icon = strdup(icon);
             g->desktop_exec = strdup(exec);
+            g->desktop_index = i;
             break;
         }
     }

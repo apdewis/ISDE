@@ -3,6 +3,7 @@
  * panel.c — panel initialization, dock window, event integration
  */
 #include "panel.h"
+#include <X11/ShellP.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -221,12 +222,53 @@ int panel_init(Panel *p, int *argc, char **argv)
 /* Periodic poll for client list changes — called every 500ms.
  * This catches _NET_CLIENT_LIST updates that Xt's event dispatch
  * would otherwise drop (PropertyNotify on root, no widget). */
+static xcb_window_t last_active = XCB_WINDOW_NONE;
+
 static void poll_clients(XtPointer client_data, XtIntervalId *id)
 {
     (void)id;
     Panel *p = (Panel *)client_data;
     taskbar_update(p);
+
+    /* Dismiss popups when focus moves to a managed window */
+    if (p->active_popup) {
+        xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
+        if (active != XCB_WINDOW_NONE && active != last_active) {
+            panel_dismiss_popup(p);
+        }
+        last_active = active;
+    } else {
+        last_active = isde_ewmh_get_active_window(p->ewmh);
+    }
+
     XtAppAddTimeOut(p->app, 500, poll_clients, p);
+}
+
+void panel_show_popup(Panel *p, Widget popup)
+{
+    panel_dismiss_popup(p);
+    p->active_popup = popup;
+}
+
+void panel_dismiss_popup(Panel *p)
+{
+    if (!p->active_popup) return;
+
+    /* Reset start button colors if dismissing the start menu */
+    if (p->active_popup == p->start_shell) {
+        Arg ia[2];
+        XtSetArg(ia[0], XtNforeground,
+                 BlackPixelOfScreen(XtScreen(p->start_btn)));
+        XtSetArg(ia[1], XtNbackground,
+                 WhitePixelOfScreen(XtScreen(p->start_btn)));
+        XtSetValues(p->start_btn, ia, 2);
+    }
+
+    ShellWidget sw = (ShellWidget)p->active_popup;
+    if (sw->shell.popped_up)
+        XtPopdown(p->active_popup);
+
+    p->active_popup = NULL;
 }
 
 void panel_run(Panel *p)

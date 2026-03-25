@@ -15,15 +15,28 @@
 #include <string.h>
 #include <unistd.h>
 
-static const char *START_ICON_NORMAL =
+static const char *START_ICON_SVG =
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
     "<polygon points='3,2 13,8 3,14' fill='black'/>"
     "</svg>";
 
-static const char *START_ICON_ACTIVE =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
-    "<polygon points='3,2 13,8 3,14' fill='white'/>"
-    "</svg>";
+static void set_start_btn_active(Panel *p, int active)
+{
+    Arg args[2];
+    Cardinal n = 0;
+    if (active) {
+        XtSetArg(args[n], XtNforeground,
+                 WhitePixelOfScreen(XtScreen(p->start_btn))); n++;
+        XtSetArg(args[n], XtNbackground,
+                 BlackPixelOfScreen(XtScreen(p->start_btn))); n++;
+    } else {
+        XtSetArg(args[n], XtNforeground,
+                 BlackPixelOfScreen(XtScreen(p->start_btn))); n++;
+        XtSetArg(args[n], XtNbackground,
+                 WhitePixelOfScreen(XtScreen(p->start_btn))); n++;
+    }
+    XtSetValues(p->start_btn, args, n);
+}
 
 #define MENU_WIDTH       400
 #define MENU_HEIGHT      350
@@ -158,8 +171,7 @@ static void app_selected(Widget w, XtPointer client_data,
 
     const char *exec = c->apps[ret->list_index].exec;
 
-    /* Close menu */
-    XtPopdown(p->start_shell);
+    panel_dismiss_popup(p);
 
     /* Launch */
     pid_t pid = fork();
@@ -181,16 +193,11 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     if (!XtIsRealized(p->start_shell))
         XtRealizeWidget(p->start_shell);
 
-    Arg ia[1];
-    ShellWidget sw = (ShellWidget)p->start_shell;
-    if (sw->shell.popped_up) {
-        XtPopdown(p->start_shell);
-        XtSetArg(ia[0], XtNsvgData, START_ICON_NORMAL);
-        XtSetValues(p->start_btn, ia, 1);
+    if (p->active_popup == p->start_shell) {
+        panel_dismiss_popup(p);
         return;
     }
-    XtSetArg(ia[0], XtNsvgData, START_ICON_ACTIVE);
-    XtSetValues(p->start_btn, ia, 1);
+    set_start_btn_active(p, 1);
 
     Position bx, by;
     XtTranslateCoords(p->start_btn, 0, 0, &bx, &by);
@@ -203,6 +210,7 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     XtSetValues(p->start_shell, a, na);
 
     XtPopup(p->start_shell, XtGrabNone);
+    panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
     XtUnmapWidget(p->app_box);
 }
@@ -217,7 +225,7 @@ void startmenu_init(Panel *p)
     /* Start button */
     Arg args[12];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNsvgData, START_ICON_NORMAL);  n++;
+    XtSetArg(args[n], XtNsvgData, START_ICON_SVG);  n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;

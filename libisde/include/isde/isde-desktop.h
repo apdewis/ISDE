@@ -12,6 +12,13 @@ extern "C" {
 
 typedef struct IsdeDesktopEntry IsdeDesktopEntry;
 
+typedef struct IsdeDesktopAction {
+    const char *id;     /* Action identifier (e.g. "new-window") */
+    const char *name;   /* Display name */
+    const char *exec;   /* Command to execute */
+    const char *icon;   /* Optional icon (may be NULL) */
+} IsdeDesktopAction;
+
 /* Parse a .desktop file.  Returns NULL on failure. */
 IsdeDesktopEntry *isde_desktop_load(const char *path);
 void              isde_desktop_free(IsdeDesktopEntry *entry);
@@ -28,6 +35,11 @@ const char *isde_desktop_categories(const IsdeDesktopEntry *e);
 int         isde_desktop_terminal(const IsdeDesktopEntry *e);
 int         isde_desktop_no_display(const IsdeDesktopEntry *e);
 int         isde_desktop_hidden(const IsdeDesktopEntry *e);
+
+/* Desktop Actions (e.g. "New Window", "New Private Window").
+ * Returns the number of actions. */
+int isde_desktop_action_count(const IsdeDesktopEntry *e);
+const IsdeDesktopAction *isde_desktop_action(const IsdeDesktopEntry *e, int index);
 
 /* Check OnlyShowIn / NotShowIn against a desktop name (e.g. "ISDE").
  * Returns 1 if the entry should be shown, 0 if filtered out. */

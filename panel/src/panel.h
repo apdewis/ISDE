@@ -41,6 +41,7 @@ typedef struct TaskGroup {
     char       *display_name;      /* Display label */
     char       *desktop_exec;      /* Exec from matching .desktop (for launch) */
     char       *desktop_icon;      /* Icon from matching .desktop */
+    int         desktop_index;     /* Index into Panel.desktop_entries, or -1 */
 
     xcb_window_t *windows;         /* Array of managed windows in this group */
     int           nwindows;
@@ -115,11 +116,17 @@ typedef struct Panel {
     xcb_atom_t         atom_wm_name;
 
     XtIntervalId       clock_timer;
+
+    /* Active popup tracking — for click-outside-to-dismiss */
+    Widget             active_popup;  /* Currently open popup shell, or NULL */
+
     int                running;
 } Panel;
 
 /* ---------- panel.c ---------- */
 int   panel_init(Panel *p, int *argc, char **argv);
+void  panel_show_popup(Panel *p, Widget popup);
+void  panel_dismiss_popup(Panel *p);
 void  panel_run(Panel *p);
 void  panel_cleanup(Panel *p);
 
