@@ -31,10 +31,14 @@
       "Bash(grep -n \"XtCreateApplicationContext\" /home/adam/libISW/src/*.c)",
       "Bash(PKG_CONFIG_PATH=/home/adam/libISW:$PKG_CONFIG_PATH pkg-config --cflags isw)",
       "Bash(grep DefaultScreen /home/adam/libISW/include/X11/*.h)",
-      "Bash(grep -n 'ScreenNumber\\\\|screen_number\\\\|XtScreenNumber' /home/adam/libISW/include/X11/*.h)"
+      "Bash(grep -n 'ScreenNumber\\\\|screen_number\\\\|XtScreenNumber' /home/adam/libISW/include/X11/*.h)",
+      "Bash(LD_LIBRARY_PATH=/home/adam/libISW/src/.libs DISPLAY=:1 timeout 5 /tmp/test_list)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(LD_LIBRARY_PATH=/home/adam/libISW/src/.libs DISPLAY=:1 timeout 5 /tmp/test_list2)"
     ],
     "additionalDirectories": [
-      "/tmp"
+      "/tmp",
+      "/home/adam/libISW/src"
     ]
   }
 }
