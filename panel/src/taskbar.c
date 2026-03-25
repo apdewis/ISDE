@@ -4,8 +4,9 @@
  *
  * Groups windows by WM_CLASS. One button per application:
  *   - 0 windows + pinned: click launches the app
- *   - 1 window: click focuses it
+ *   - 1 window: click focuses/raises it
  *   - >1 windows: click shows a popup menu listing all windows
+ *   - Right-click: pin/unpin context menu
  */
 #include "panel.h"
 
@@ -18,15 +19,12 @@
 
 static char *get_wm_class(Panel *p, xcb_window_t win)
 {
-    xcb_icccm_get_wm_class_reply_t reply;
-    if (!xcb_icccm_get_wm_class_reply(
-            p->conn,
-            xcb_icccm_get_wm_class(p->conn, win),
-            &reply, NULL))
-        return strdup("unknown");
-    char *cls = strdup(reply.class_name);
-    xcb_icccm_get_wm_class_reply_wipe(&reply);
-    return cls;
+    char *instance = NULL, *class = NULL;
+    if (isde_ewmh_get_wm_class(p->ewmh, win, &instance, &class)) {
+        free(instance);
+        return class;
+    }
+    return strdup("unknown");
 }
 
 static char *get_window_title(Panel *p, xcb_window_t win)
@@ -61,13 +59,11 @@ static char *get_window_title(Panel *p, xcb_window_t win)
 
 /* ---------- callbacks ---------- */
 
-/* Closure passed to taskbar button callbacks */
 typedef struct {
     Panel     *panel;
     TaskGroup *group;
 } TaskClosure;
 
-/* Closure for individual window menu entries */
 typedef struct {
     Panel        *panel;
     xcb_window_t  window;
@@ -75,6 +71,8 @@ typedef struct {
 
 static void focus_window(Panel *p, xcb_window_t win)
 {
+    /* Send _NET_ACTIVE_WINDOW — the WM should handle raising
+     * and unmapping minimized windows */
     isde_ewmh_request_active_window(p->ewmh, win);
 }
 
@@ -98,6 +96,96 @@ static void window_menu_callback(Widget w, XtPointer client_data,
     focus_window(wc->panel, wc->window);
 }
 
+/* State for the active window list popup */
+static Widget   wl_shell = NULL;
+static Widget   wl_list  = NULL;
+static String  *wl_titles = NULL;
+static Panel   *wl_panel  = NULL;
+static TaskGroup *wl_group = NULL;
+
+static void wl_select_callback(Widget w, XtPointer client_data,
+                                XtPointer call_data)
+{
+    (void)w;
+    (void)client_data;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
+    if (!wl_group || ret->list_index < 0 ||
+        ret->list_index >= wl_group->nwindows)
+        return;
+
+    focus_window(wl_panel, wl_group->windows[ret->list_index]);
+    XtPopdown(wl_shell);
+}
+
+static void show_window_menu(Panel *p, TaskGroup *g)
+{
+    /* Destroy previous popup if any */
+    if (wl_shell) {
+        XtDestroyWidget(wl_shell);
+        wl_shell = NULL;
+        wl_list = NULL;
+    }
+    free(wl_titles);
+    wl_titles = NULL;
+
+    wl_panel = p;
+    wl_group = g;
+
+    /* Build title array — must stay alive while list is shown */
+    wl_titles = malloc((g->nwindows + 1) * sizeof(String));
+    for (int i = 0; i < g->nwindows; i++)
+        wl_titles[i] = get_window_title(p, g->windows[i]);
+    wl_titles[g->nwindows] = NULL;
+
+    /* Estimate menu height */
+    int menu_h = g->nwindows * 20 + 8;
+    if (menu_h > 300) menu_h = 300;
+
+    /* Create popup shell */
+    Arg args[8];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNwidth, 200);              n++;
+    XtSetArg(args[n], XtNheight, menu_h);           n++;
+    XtSetArg(args[n], XtNoverrideRedirect, True);   n++;
+    XtSetArg(args[n], XtNborderWidth, 1);           n++;
+    wl_shell = XtCreatePopupShell("winListMenu", overrideShellWidgetClass,
+                                  g->button, args, n);
+
+    /* List widget */
+    n = 0;
+    XtSetArg(args[n], XtNlist, wl_titles);           n++;
+    XtSetArg(args[n], XtNnumberStrings, g->nwindows); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);          n++;
+    XtSetArg(args[n], XtNforceColumns, True);         n++;
+    XtSetArg(args[n], XtNverticalList, True);         n++;
+    XtSetArg(args[n], XtNborderWidth, 0);             n++;
+    XtSetArg(args[n], XtNcursor, None);               n++;
+    wl_list = XtCreateManagedWidget("winList", listWidgetClass,
+                                    wl_shell, args, n);
+    XtAddCallback(wl_list, XtNcallback, wl_select_callback, NULL);
+
+    /* Hover-to-highlight translations */
+    static char wlTranslations[] =
+        "<EnterWindow>: Set()\n"
+        "<LeaveWindow>: Unset()\n"
+        "<Motion>:      Set()\n"
+        "<BtnDown>:     Set() Notify()\n"
+        "<BtnUp>:       Notify()";
+    XtOverrideTranslations(wl_list,
+                           XtParseTranslationTable(wlTranslations));
+
+    /* Position above the button */
+    Position bx, by;
+    XtTranslateCoords(g->button, 0, 0, &bx, &by);
+
+    Arg pargs[2];
+    XtSetArg(pargs[0], XtNx, bx);
+    XtSetArg(pargs[1], XtNy, by - menu_h);
+    XtSetValues(wl_shell, pargs, 2);
+
+    XtPopup(wl_shell, XtGrabNone);
+}
+
 static void taskbar_button_callback(Widget w, XtPointer client_data,
                                     XtPointer call_data)
 {
@@ -108,50 +196,81 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
     TaskGroup *g = tc->group;
 
     if (g->nwindows == 0) {
-        /* No instances — launch the app */
         launch_app(p, g);
     } else if (g->nwindows == 1) {
-        /* Single instance — focus it */
         focus_window(p, g->windows[0]);
     } else {
-        /* Multiple instances — show popup menu */
-        if (g->menu)
-            XtDestroyWidget(g->menu);
-
-        g->menu = XtCreatePopupShell("windowMenu", simpleMenuWidgetClass,
-                                     g->button, NULL, 0);
-
-        for (int i = 0; i < g->nwindows; i++) {
-            char *title = get_window_title(p, g->windows[i]);
-            Arg args[1];
-            XtSetArg(args[0], XtNlabel, title);
-            Widget entry = XtCreateManagedWidget("winEntry",
-                                                  smeBSBObjectClass,
-                                                  g->menu, args, 1);
-            WindowClosure *wc = malloc(sizeof(*wc));
-            wc->panel = p;
-            wc->window = g->windows[i];
-            XtAddCallback(entry, XtNcallback, window_menu_callback, wc);
-            free(title);
-        }
-
-        /* Position menu above the button */
-        Arg margs[2];
-        Cardinal mn = 0;
-        Dimension bw, bh;
-        Position bx, by;
-        XtSetArg(margs[0], XtNwidth, &bw);
-        XtSetArg(margs[1], XtNheight, &bh);
-        XtGetValues(g->button, margs, 2);
-        XtTranslateCoords(g->button, 0, 0, &bx, &by);
-
-        mn = 0;
-        XtSetArg(margs[mn], XtNx, bx);   mn++;
-        XtSetArg(margs[mn], XtNy, by - 1); mn++;  /* just above panel */
-        XtSetValues(g->menu, margs, mn);
-
-        XtPopup(g->menu, XtGrabExclusive);
+        show_window_menu(p, g);
     }
+}
+
+/* ---------- right-click context menu (pin/unpin) ---------- */
+
+static void save_pinned(Panel *p)
+{
+    /* Write pinned classes to config — for now just print them.
+     * TODO: write back to isde.toml when we add config writing. */
+    fprintf(stderr, "isde-panel: pinned apps:");
+    for (TaskGroup *g = p->groups; g; g = g->next)
+        if (g->pinned)
+            fprintf(stderr, " %s", g->wm_class);
+    fprintf(stderr, "\n");
+}
+
+static void pin_callback(Widget w, XtPointer client_data,
+                         XtPointer call_data)
+{
+    (void)w;
+    (void)call_data;
+    TaskClosure *tc = (TaskClosure *)client_data;
+    tc->group->pinned = !tc->group->pinned;
+    save_pinned(tc->panel);
+}
+
+static void context_menu_handler(Widget w, XtPointer client_data,
+                                 XEvent *event, Boolean *cont)
+{
+    (void)cont;
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+        return;
+
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    if (ev->detail != 3) /* button 3 = right click */
+        return;
+
+    TaskClosure *tc = (TaskClosure *)client_data;
+    Panel *p = tc->panel;
+    TaskGroup *g = tc->group;
+
+    /* Create context menu */
+    Widget ctx = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
+                                    w, NULL, 0);
+
+    const char *label = g->pinned ? "Unpin from taskbar"
+                                  : "Pin to taskbar";
+    Arg args[1];
+    XtSetArg(args[0], XtNlabel, label);
+    Widget entry = XtCreateManagedWidget("pinToggle", smeBSBObjectClass,
+                                         ctx, args, 1);
+    XtAddCallback(entry, XtNcallback, pin_callback, client_data);
+
+    Position bx, by;
+    XtTranslateCoords(w, 0, 0, &bx, &by);
+
+    if (!XtIsRealized(ctx))
+        XtRealizeWidget(ctx);
+
+    Dimension mh;
+    Arg qargs[1];
+    XtSetArg(qargs[0], XtNheight, &mh);
+    XtGetValues(ctx, qargs, 1);
+
+    Arg margs[2];
+    XtSetArg(margs[0], XtNx, bx);
+    XtSetArg(margs[1], XtNy, by - mh);
+    XtSetValues(ctx, margs, 2);
+
+    XtPopup(ctx, XtGrabNone);
 }
 
 /* ---------- group management ---------- */
@@ -168,24 +287,25 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
 {
     TaskGroup *g = calloc(1, sizeof(*g));
     g->wm_class = strdup(wm_class);
-    g->display_name = strdup(wm_class); /* default display name */
+    g->display_name = strdup(wm_class);
     g->cap_windows = 4;
     g->windows = calloc(g->cap_windows, sizeof(xcb_window_t));
 
     /* Try to find a matching .desktop entry */
+    char cls_lower[128];
+    int j;
+    for (j = 0; wm_class[j] && j < 126; j++)
+        cls_lower[j] = (wm_class[j] >= 'A' && wm_class[j] <= 'Z')
+                     ? wm_class[j] + 32 : wm_class[j];
+    cls_lower[j] = '\0';
+
     for (int i = 0; i < p->ndesktop; i++) {
         const char *exec = isde_desktop_exec(p->desktop_entries[i]);
         if (!exec) continue;
         const char *base = strrchr(exec, '/');
         base = base ? base + 1 : exec;
 
-        /* Simple match: lowercase class vs lowercase exec basename */
-        char cls_lower[128], exec_lower[128];
-        int j;
-        for (j = 0; wm_class[j] && j < 126; j++)
-            cls_lower[j] = (wm_class[j] >= 'A' && wm_class[j] <= 'Z')
-                         ? wm_class[j] + 32 : wm_class[j];
-        cls_lower[j] = '\0';
+        char exec_lower[128];
         for (j = 0; base[j] && base[j] != ' ' && j < 126; j++)
             exec_lower[j] = (base[j] >= 'A' && base[j] <= 'Z')
                            ? base[j] + 32 : base[j];
@@ -218,6 +338,10 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     tc->group = g;
     XtAddCallback(g->button, XtNcallback, taskbar_button_callback, tc);
 
+    /* Right-click handler for pin/unpin */
+    XtAddEventHandler(g->button, ButtonPressMask, False,
+                      context_menu_handler, tc);
+
     /* Link into list */
     g->next = p->groups;
     p->groups = g;
@@ -227,7 +351,6 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
 
 static void group_add_window(TaskGroup *g, xcb_window_t win)
 {
-    /* Check if already present */
     for (int i = 0; i < g->nwindows; i++)
         if (g->windows[i] == win) return;
 
@@ -261,8 +384,7 @@ void taskbar_update(Panel *p)
     }
     free(wins);
 
-    /* Remove non-pinned groups with 0 windows,
-     * hide buttons for empty pinned groups (but keep them) */
+    /* Remove non-pinned groups with 0 windows */
     TaskGroup **pp = &p->groups;
     while (*pp) {
         TaskGroup *g = *pp;
@@ -286,7 +408,6 @@ void taskbar_update(Panel *p)
 
 void taskbar_init(Panel *p)
 {
-    /* Create pinned groups (visible even with 0 windows) */
     for (int i = 0; i < p->npinned; i++) {
         TaskGroup *g = taskbar_add_group(p, p->pinned_classes[i]);
         g->pinned = 1;
@@ -303,7 +424,6 @@ void taskbar_cleanup(Panel *p)
         free(g->desktop_exec);
         free(g->desktop_icon);
         free(g->windows);
-        /* widgets destroyed with shell */
         free(g);
     }
 }

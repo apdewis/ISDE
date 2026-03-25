@@ -113,6 +113,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
         free(tree);
     }
 
+    wm_ewmh_update_client_list(wm);
     xcb_flush(wm->conn);
     wm->running = 1;
     return 0;
@@ -409,6 +410,31 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
         frame_update_title(wm, c);
 }
 
+static void on_client_message(Wm *wm, xcb_client_message_event_t *ev)
+{
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+
+    if (ev->type == ewmh->_NET_ACTIVE_WINDOW) {
+        /* Panel or another client is requesting we activate a window */
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (!c) return;
+
+        /* If minimized (shell not mapped), restore it */
+        if (c->shell && !XtIsRealized(c->shell)) {
+            XtRealizeWidget(c->shell);
+        }
+        /* Re-map frame and client */
+        XtPopup(c->shell, XtGrabNone);
+        xcb_map_window(wm->conn, c->client);
+
+        wm_focus_client(wm, c);
+    } else if (ev->type == ewmh->_NET_CLOSE_WINDOW) {
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (c)
+            wm_close_client(wm, c);
+    }
+}
+
 /* ---------- event loop ---------- */
 
 static int is_wm_event(Wm *wm, uint8_t type)
@@ -418,6 +444,7 @@ static int is_wm_event(Wm *wm, uint8_t type)
     case XCB_CONFIGURE_REQUEST:
     case XCB_UNMAP_NOTIFY:
     case XCB_DESTROY_NOTIFY:
+    case XCB_CLIENT_MESSAGE:
         return 1;
     case XCB_MOTION_NOTIFY:
     case XCB_BUTTON_RELEASE:
@@ -465,6 +492,9 @@ void wm_run(Wm *wm)
                     break;
                 case XCB_DESTROY_NOTIFY:
                     on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
+                    break;
+                case XCB_CLIENT_MESSAGE:
+                    on_client_message(wm, (xcb_client_message_event_t *)ev);
                     break;
                 case XCB_MOTION_NOTIFY:
                     on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
@@ -517,6 +547,9 @@ void wm_run(Wm *wm)
                 break;
             case XCB_DESTROY_NOTIFY:
                 on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
+                break;
+            case XCB_CLIENT_MESSAGE:
+                on_client_message(wm, (xcb_client_message_event_t *)ev);
                 break;
             case XCB_MOTION_NOTIFY:
                 on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);

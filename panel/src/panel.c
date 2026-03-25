@@ -183,6 +183,12 @@ int panel_init(Panel *p, int *argc, char **argv)
     XtRealizeWidget(p->shell);
     XtPopup(p->shell, XtGrabNone);
 
+    /* Reparent clock out of the Box and into the shell directly,
+     * then position it at the right edge */
+    xcb_reparent_window(p->conn, XtWindow(p->clock_label),
+                        XtWindow(p->shell), sw - 52, 0);
+    xcb_flush(p->conn);
+
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_window_t panel_win = XtWindow(p->shell);
