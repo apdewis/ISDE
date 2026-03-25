@@ -33,6 +33,7 @@
 #define PANEL_HEIGHT      32
 #define PANEL_ICON_SIZE   22
 #define PANEL_BUTTON_PAD   4
+#define PANEL_CLOCK_WIDTH 90
 
 /* ---------- Taskbar: one entry per WM_CLASS group ---------- */
 typedef struct TaskGroup {
@@ -80,7 +81,10 @@ typedef struct Panel {
     Widget             start_shell; /* Start menu OverrideShell */
     Widget             cat_box;     /* Left pane: category buttons */
     Widget             app_box;     /* Right pane: app entries for selected category */
-    Widget             clock_label; /* Clock */
+    Widget             clock_time;  /* Clock — time label */
+    Widget             clock_date;  /* Clock — date label */
+    char              *clock_time_fmt; /* strftime format for time */
+    char              *clock_date_fmt; /* strftime format for date */
 
     /* Start menu data */
     StartMenuCategory *categories;

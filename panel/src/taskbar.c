@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 /* ---------- helpers ---------- */
 
@@ -208,13 +209,47 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
 
 static void save_pinned(Panel *p)
 {
-    /* Write pinned classes to config — for now just print them.
-     * TODO: write back to isde.toml when we add config writing. */
-    fprintf(stderr, "isde-panel: pinned apps:");
-    for (TaskGroup *g = p->groups; g; g = g->next)
-        if (g->pinned)
-            fprintf(stderr, " %s", g->wm_class);
-    fprintf(stderr, "\n");
+    char *path = isde_xdg_config_path("pinned");
+    if (!path) return;
+
+    /* Ensure directory exists */
+    char *dir = isde_xdg_config_path("");
+    if (dir) {
+        mkdir(dir, 0755);
+        free(dir);
+    }
+
+    FILE *fp = fopen(path, "w");
+    if (fp) {
+        for (TaskGroup *g = p->groups; g; g = g->next)
+            if (g->pinned)
+                fprintf(fp, "%s\n", g->wm_class);
+        fclose(fp);
+    }
+    free(path);
+}
+
+static void load_pinned_file(Panel *p)
+{
+    char *path = isde_xdg_config_path("pinned");
+    if (!path) return;
+
+    FILE *fp = fopen(path, "r");
+    free(path);
+    if (!fp) return;
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        /* Strip newline */
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        if (!line[0]) continue;
+
+        p->pinned_classes = realloc(p->pinned_classes,
+                                    (p->npinned + 1) * sizeof(char *));
+        p->pinned_classes[p->npinned++] = strdup(line);
+    }
+    fclose(fp);
 }
 
 static void pin_callback(Widget w, XtPointer client_data,
@@ -408,6 +443,9 @@ void taskbar_update(Panel *p)
 
 void taskbar_init(Panel *p)
 {
+    /* Load pinned apps from state file */
+    load_pinned_file(p);
+
     for (int i = 0; i < p->npinned; i++) {
         TaskGroup *g = taskbar_add_group(p, p->pinned_classes[i]);
         g->pinned = 1;

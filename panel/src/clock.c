@@ -1,11 +1,14 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * clock.c — clock applet (rightmost panel item)
+ * clock.c — clock applet: time + date, configurable format
  */
 #include "panel.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+
 
 static void update_clock(XtPointer client_data, XtIntervalId *id)
 {
@@ -14,12 +17,16 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
 
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
-    char buf[32];
-    strftime(buf, sizeof(buf), "%H:%M", tm);
+
+    char tbuf[32], dbuf[32];
+    strftime(tbuf, sizeof(tbuf), p->clock_time_fmt, tm);
+    strftime(dbuf, sizeof(dbuf), p->clock_date_fmt, tm);
 
     Arg args[1];
-    XtSetArg(args[0], XtNlabel, buf);
-    XtSetValues(p->clock_label, args, 1);
+    XtSetArg(args[0], XtNlabel, tbuf);
+    XtSetValues(p->clock_time, args, 1);
+    XtSetArg(args[0], XtNlabel, dbuf);
+    XtSetValues(p->clock_date, args, 1);
 
     /* Schedule next update — align to the next minute boundary */
     unsigned long ms = (60 - tm->tm_sec) * 1000;
@@ -28,14 +35,52 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
 
 void clock_init(Panel *p)
 {
-    Arg args[4];
+    /* Load format from config, or use defaults */
+    if (!p->clock_time_fmt)
+        p->clock_time_fmt = strdup("%H:%M");
+    if (!p->clock_date_fmt)
+        p->clock_date_fmt = strdup("%Y-%m-%d");
+
+    /* Load configured formats from isde.toml [panel.clock] if available */
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *panel_cfg = isde_config_table(root, "panel");
+        if (panel_cfg) {
+            IsdeConfigTable *clock_cfg = isde_config_table(panel_cfg, "clock");
+            if (clock_cfg) {
+                const char *tf = isde_config_string(clock_cfg,
+                                                     "time_format", NULL);
+                if (tf) { free(p->clock_time_fmt); p->clock_time_fmt = strdup(tf); }
+                const char *df = isde_config_string(clock_cfg,
+                                                     "date_format", NULL);
+                if (df) { free(p->clock_date_fmt); p->clock_date_fmt = strdup(df); }
+            }
+        }
+        isde_config_free(cfg);
+    }
+
+    int half = PANEL_HEIGHT / 2;
+
+    /* Time label (top half) */
+    Arg args[6];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, "00:00");            n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNwidth, 50);                  n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);       n++;
-    p->clock_label = XtCreateManagedWidget("clock", labelWidgetClass,
-                                           p->box, args, n);
+    XtSetArg(args[n], XtNlabel, "00:00");        n++;
+    XtSetArg(args[n], XtNborderWidth, 0);         n++;
+    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
+    XtSetArg(args[n], XtNheight, half);            n++;
+    p->clock_time = XtCreateManagedWidget("clockTime", labelWidgetClass,
+                                          p->box, args, n);
+
+    /* Date label (bottom half) */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "0000-00-00");   n++;
+    XtSetArg(args[n], XtNborderWidth, 0);         n++;
+    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
+    XtSetArg(args[n], XtNheight, half);            n++;
+    p->clock_date = XtCreateManagedWidget("clockDate", labelWidgetClass,
+                                          p->box, args, n);
 
     /* Trigger first update immediately */
     p->clock_timer = XtAppAddTimeOut(p->app, 0, update_clock, p);
@@ -45,4 +90,8 @@ void clock_cleanup(Panel *p)
 {
     if (p->clock_timer)
         XtRemoveTimeOut(p->clock_timer);
+    free(p->clock_time_fmt);
+    free(p->clock_date_fmt);
+    p->clock_time_fmt = NULL;
+    p->clock_date_fmt = NULL;
 }

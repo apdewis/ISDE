@@ -183,10 +183,14 @@ int panel_init(Panel *p, int *argc, char **argv)
     XtRealizeWidget(p->shell);
     XtPopup(p->shell, XtGrabNone);
 
-    /* Reparent clock out of the Box and into the shell directly,
-     * then position it at the right edge */
-    xcb_reparent_window(p->conn, XtWindow(p->clock_label),
-                        XtWindow(p->shell), sw - 52, 0);
+    /* Reparent clock labels out of the Box and into the shell,
+     * stacked vertically at the right edge */
+    int clock_x = sw - PANEL_CLOCK_WIDTH - 2;
+    int half = PANEL_HEIGHT / 2;
+    xcb_reparent_window(p->conn, XtWindow(p->clock_time),
+                        XtWindow(p->shell), clock_x, 0);
+    xcb_reparent_window(p->conn, XtWindow(p->clock_date),
+                        XtWindow(p->shell), clock_x, half);
     xcb_flush(p->conn);
 
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
