@@ -6,6 +6,7 @@ add_executable(isde-fm
     src/navbar.c
     src/icons.c
     src/fileops.c
+    src/clipboard.c
 )
 
 target_compile_definitions(isde-fm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

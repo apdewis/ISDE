@@ -56,6 +56,21 @@ typedef enum {
     FM_VIEW_LIST
 } FmViewMode;
 
+/* ---------- Clipboard ---------- */
+typedef enum {
+    FM_CLIP_NONE,
+    FM_CLIP_COPY,
+    FM_CLIP_CUT
+} FmClipOp;
+
+typedef struct {
+    FmClipOp  op;
+    char    **paths;
+    int       npaths;
+    char     *uri_data;    /* cached text/uri-list string */
+    char     *gnome_data;  /* cached x-special/gnome-copied-files string */
+} FmClipboard;
+
 /* ---------- File manager state ---------- */
 typedef struct Fm {
     XtAppContext   app;
@@ -91,6 +106,14 @@ typedef struct Fm {
     int            hist_pos;
     int            hist_count;
 
+    /* Clipboard */
+    FmClipboard    clipboard;
+    xcb_atom_t     atom_clipboard;
+    xcb_atom_t     atom_targets;
+    xcb_atom_t     atom_uri_list;
+    xcb_atom_t     atom_gnome_files;
+    xcb_atom_t     atom_utf8_string;
+
     int            running;
 } Fm;
 
@@ -122,8 +145,17 @@ const char *icons_for_entry(const FmEntry *e);
 void        icons_cleanup(void);
 
 /* ---------- fileops.c ---------- */
+int   fileops_copy(const char *src, const char *dst);
 int   fileops_mkdir(Fm *fm, const char *name);
 int   fileops_delete(Fm *fm, const char *path);
 int   fileops_rename(Fm *fm, const char *oldpath, const char *newname);
+int   fileops_paste(Fm *fm);
+
+/* ---------- clipboard.c ---------- */
+void  clipboard_init(Fm *fm);
+void  clipboard_copy(Fm *fm);
+void  clipboard_cut(Fm *fm);
+void  clipboard_paste(Fm *fm);
+void  clipboard_cleanup(Fm *fm);
 
 #endif /* ISDE_FM_H */

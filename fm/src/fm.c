@@ -101,6 +101,24 @@ static void new_folder_cb(Widget w, XtPointer cd, XtPointer call)
     fm_refresh(fm);
 }
 
+static void cut_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    clipboard_cut((Fm *)cd);
+}
+
+static void copy_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    clipboard_copy((Fm *)cd);
+}
+
+static void paste_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    clipboard_paste((Fm *)cd);
+}
+
 static void delete_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
@@ -127,12 +145,16 @@ static void open_terminal_cb(Widget w, XtPointer cd, XtPointer call)
 
 /* ---------- menu creation helpers ---------- */
 
+static int menu_entry_id = 0;
+
 static Widget add_menu_entry(Widget menu, const char *label,
                              XtCallbackProc cb, XtPointer cd)
 {
     Arg args[20];
+    char name[32];
+    snprintf(name, sizeof(name), "entry%d", menu_entry_id++);
     XtSetArg(args[0], XtNlabel, label);
-    Widget entry = XtCreateManagedWidget((String)label, smeBSBObjectClass,
+    Widget entry = XtCreateManagedWidget(name, smeBSBObjectClass,
                                          menu, args, 1);
     if (cb)
         XtAddCallback(entry, XtNcallback, cb, cd);
@@ -172,6 +194,10 @@ static void setup_menus(Fm *fm, Widget menubar)
                           menubar, args, n);
     Widget edit_menu = XtCreatePopupShell("editMenu", simpleMenuWidgetClass,
                                           menubar, NULL, 0);
+    add_menu_entry(edit_menu, "Cut", cut_cb, fm);
+    add_menu_entry(edit_menu, "Copy", copy_cb, fm);
+    add_menu_entry(edit_menu, "Paste", paste_cb, fm);
+    add_separator(edit_menu);
     add_menu_entry(edit_menu, "Delete", delete_cb, fm);
 
     /* View menu */
@@ -207,23 +233,28 @@ static void setup_menus(Fm *fm, Widget menubar)
 
 void fm_navigate(Fm *fm, const char *path)
 {
+    /* Copy path first — it may point into fm->entries which
+     * browser_read_dir will free */
+    char *new_path = strdup(path);
+
     /* Clear view before freeing old entries */
     if (fm->iconview)
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
 
-    if (browser_read_dir(fm, path) != 0)
+    if (browser_read_dir(fm, new_path) != 0) {
+        free(new_path);
         return;
+    }
 
     free(fm->cwd);
-    fm->cwd = strdup(path);
+    fm->cwd = new_path;
 
     /* Push to history, discarding forward entries */
     fm->hist_pos++;
     if (fm->hist_pos < FM_HISTORY_MAX) {
-        /* Free any forward history */
         for (int i = fm->hist_pos; i < fm->hist_count; i++)
             free(fm->history[i]);
-        fm->history[fm->hist_pos] = strdup(path);
+        fm->history[fm->hist_pos] = strdup(new_path);
         fm->hist_count = fm->hist_pos + 1;
     }
 
@@ -296,8 +327,9 @@ int fm_init(Fm *fm, int *argc, char **argv)
     icons_init();
     fileview_init(fm);
 
-    /* Enable XDND */
+    /* Enable XDND and clipboard */
     ISWXdndEnable(fm->toplevel);
+    clipboard_init(fm);
 
     /* Start in home directory */
     const char *home = getenv("HOME");
@@ -326,6 +358,7 @@ void fm_run(Fm *fm)
 
 void fm_cleanup(Fm *fm)
 {
+    clipboard_cleanup(fm);
     browser_free_entries(fm);
     fileview_cleanup(fm);
     icons_cleanup();
