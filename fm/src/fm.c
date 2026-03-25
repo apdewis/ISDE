@@ -119,10 +119,104 @@ static void paste_cb(Widget w, XtPointer cd, XtPointer call)
     clipboard_paste((Fm *)cd);
 }
 
+/* ---------- rename dialog ---------- */
+
+static Widget rename_shell = NULL;
+static Fm    *rename_fm = NULL;
+static int    rename_index = -1;
+
+static void rename_ok_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Widget dialog = (Widget)cd;
+    char *newname = IswDialogGetValueString(dialog);
+    if (newname && newname[0] && rename_fm && rename_index >= 0 &&
+        rename_index < rename_fm->nentries) {
+        fileops_rename(rename_fm, rename_fm->entries[rename_index].full_path,
+                       newname);
+        fm_refresh(rename_fm);
+    }
+    if (rename_shell) {
+        XtPopdown(rename_shell);
+        XtDestroyWidget(rename_shell);
+        rename_shell = NULL;
+    }
+}
+
+static void rename_cancel_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    if (rename_shell) {
+        XtPopdown(rename_shell);
+        XtDestroyWidget(rename_shell);
+        rename_shell = NULL;
+    }
+}
+
+void show_rename_dialog(Fm *fm)
+{
+    /* Get selected index */
+    int sel = -1;
+    if (fm->iconview)
+        sel = IswIconViewGetSelected(fm->iconview);
+    if (sel < 0 || sel >= fm->nentries)
+        return;
+
+    rename_fm = fm;
+    rename_index = sel;
+
+    /* Destroy previous dialog if open */
+    if (rename_shell) {
+        XtDestroyWidget(rename_shell);
+        rename_shell = NULL;
+    }
+
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNwidth, 300);              n++;
+    XtSetArg(args[n], XtNheight, 120);             n++;
+    XtSetArg(args[n], XtNborderWidth, 1);          n++;
+    rename_shell = XtCreatePopupShell("renameShell",
+                                      transientShellWidgetClass,
+                                      fm->toplevel, args, n);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Rename:");         n++;
+    XtSetArg(args[n], XtNvalue, fm->entries[sel].name); n++;
+    Widget dialog = XtCreateManagedWidget("renameDialog", dialogWidgetClass,
+                                          rename_shell, args, n);
+
+    IswDialogAddButton(dialog, "OK", rename_ok_cb, (XtPointer)dialog);
+    IswDialogAddButton(dialog, "Cancel", rename_cancel_cb, NULL);
+
+    XtPopup(rename_shell, XtGrabNone);
+}
+
+static void rename_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    show_rename_dialog((Fm *)cd);
+}
+
+/* ---------- delete ---------- */
+
 static void delete_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
-    /* TODO: delete selected entries */
+    Fm *fm = (Fm *)cd;
+    if (!fm->iconview) return;
+
+    int *indices = NULL;
+    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    /* Delete in reverse order to keep indices valid */
+    for (int i = nsel - 1; i >= 0; i--) {
+        int idx = indices[i];
+        if (idx >= 0 && idx < fm->nentries)
+            fileops_delete(fm, fm->entries[idx].full_path);
+    }
+    free(indices);
+    if (nsel > 0)
+        fm_refresh(fm);
 }
 
 static void refresh_cb(Widget w, XtPointer cd, XtPointer call)
@@ -166,6 +260,132 @@ static void add_separator(Widget menu)
     XtCreateManagedWidget("sep", smeLineObjectClass, menu, NULL, 0);
 }
 
+/* ---------- right-click context menu (List-based) ---------- */
+
+static Widget  ctx_shell = NULL;
+static Widget  ctx_list  = NULL;
+static Fm     *ctx_fm    = NULL;
+
+/* Menu items — parallel arrays: labels for display, callbacks for action */
+typedef void (*CtxAction)(Fm *);
+
+static void ctx_cut(Fm *fm)    { clipboard_cut(fm); }
+static void ctx_copy(Fm *fm)   { clipboard_copy(fm); }
+static void ctx_paste(Fm *fm)  { clipboard_paste(fm); }
+static void ctx_rename(Fm *fm) { show_rename_dialog(fm); }
+static void ctx_delete_action(Fm *fm) {
+    if (!fm->iconview) return;
+    int *indices = NULL;
+    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    for (int i = nsel - 1; i >= 0; i--) {
+        int idx = indices[i];
+        if (idx >= 0 && idx < fm->nentries)
+            fileops_delete(fm, fm->entries[idx].full_path);
+    }
+    free(indices);
+    if (nsel > 0) fm_refresh(fm);
+}
+static void ctx_new_folder(Fm *fm) {
+    fileops_mkdir(fm, "New Folder");
+    fm_refresh(fm);
+}
+
+static String ctx_labels[] = {
+    "Cut", "Copy", "Paste", "---",
+    "Rename", "Delete", "---", "New Folder", NULL
+};
+static CtxAction ctx_actions[] = {
+    ctx_cut, ctx_copy, ctx_paste, NULL,
+    ctx_rename, ctx_delete_action, NULL, ctx_new_folder
+};
+#define CTX_NITEMS 8
+
+void fm_dismiss_context(void)
+{
+    if (ctx_shell) {
+        XtPopdown(ctx_shell);
+        XtDestroyWidget(ctx_shell);
+        ctx_shell = NULL;
+        ctx_list = NULL;
+    }
+}
+
+static void ctx_select_cb(Widget w, XtPointer client_data,
+                          XtPointer call_data)
+{
+    (void)w;
+    (void)client_data;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
+    fm_dismiss_context();
+
+    if (!ctx_fm || ret->list_index < 0 || ret->list_index >= CTX_NITEMS)
+        return;
+    CtxAction action = ctx_actions[ret->list_index];
+    if (action)
+        action(ctx_fm);
+}
+
+static void ctx_handler(Widget w, XtPointer client_data,
+                        XEvent *event, Boolean *cont)
+{
+    (void)cont;
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+        return;
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    if (ev->detail != 3)
+        return;
+
+    Fm *fm = (Fm *)client_data;
+    ctx_fm = fm;
+
+    /* Dismiss any existing context menu */
+    fm_dismiss_context();
+
+    /* Compute position at click */
+    Position rx, ry;
+    XtTranslateCoords(w, ev->event_x, ev->event_y, &rx, &ry);
+
+    /* Create popup shell */
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNx, rx);                   n++;
+    XtSetArg(args[n], XtNy, ry);                   n++;
+    XtSetArg(args[n], XtNoverrideRedirect, True);   n++;
+    XtSetArg(args[n], XtNborderWidth, 1);           n++;
+    ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
+                                   fm->toplevel, args, n);
+
+    /* List of menu items */
+    n = 0;
+    XtSetArg(args[n], XtNlist, ctx_labels);       n++;
+    XtSetArg(args[n], XtNnumberStrings, CTX_NITEMS); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);       n++;
+    XtSetArg(args[n], XtNforceColumns, True);      n++;
+    XtSetArg(args[n], XtNverticalList, True);      n++;
+    XtSetArg(args[n], XtNborderWidth, 0);          n++;
+    XtSetArg(args[n], XtNcursor, None);            n++;
+    ctx_list = XtCreateManagedWidget("ctxList", listWidgetClass,
+                                     ctx_shell, args, n);
+    XtAddCallback(ctx_list, XtNcallback, ctx_select_cb, NULL);
+
+    /* Hover-to-highlight, click-to-select */
+    static char ctxTranslations[] =
+        "<EnterWindow>: Set()\n"
+        "<LeaveWindow>: Unset()\n"
+        "<Motion>:      Set()\n"
+        "<BtnDown>:     Set() Notify()\n"
+        "<BtnUp>:       Notify()";
+    XtOverrideTranslations(ctx_list,
+                           XtParseTranslationTable(ctxTranslations));
+
+    XtPopup(ctx_shell, XtGrabNone);
+}
+
+void fm_register_context_menu(Fm *fm, Widget w)
+{
+    XtAddEventHandler(w, ButtonPressMask, False, ctx_handler, fm);
+}
+
 static void setup_menus(Fm *fm, Widget menubar)
 {
     Arg args[20];
@@ -198,6 +418,7 @@ static void setup_menus(Fm *fm, Widget menubar)
     add_menu_entry(edit_menu, "Copy", copy_cb, fm);
     add_menu_entry(edit_menu, "Paste", paste_cb, fm);
     add_separator(edit_menu);
+    add_menu_entry(edit_menu, "Rename", rename_cb, fm);
     add_menu_entry(edit_menu, "Delete", delete_cb, fm);
 
     /* View menu */
@@ -233,8 +454,8 @@ static void setup_menus(Fm *fm, Widget menubar)
 
 void fm_navigate(Fm *fm, const char *path)
 {
-    /* Copy path first — it may point into fm->entries which
-     * browser_read_dir will free */
+    fm_dismiss_context();
+
     char *new_path = strdup(path);
 
     /* Clear view before freeing old entries */
@@ -264,6 +485,8 @@ void fm_navigate(Fm *fm, const char *path)
 
 void fm_refresh(Fm *fm)
 {
+    fm_dismiss_context();
+
     /* Clear the view before freeing entries — the IconView holds
      * pointers to the old label/icon strings */
     if (fm->iconview)

@@ -40,6 +40,8 @@ static void iconview_callback(Widget w, XtPointer client_data,
     Fm *fm = (Fm *)client_data;
     IswIconViewCallbackData *d = (IswIconViewCallbackData *)call_data;
 
+    fm_dismiss_context();
+
     if (fm->double_click) {
         if (is_double_click(d->index))
             browser_open_entry(fm, d->index);
@@ -57,6 +59,8 @@ static void listview_callback(Widget w, XtPointer client_data,
     Fm *fm = (Fm *)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
     if (ret->list_index < 0) return;
+
+    fm_dismiss_context();
 
     if (fm->double_click) {
         if (is_double_click(ret->list_index))
@@ -96,6 +100,7 @@ void fileview_init(Fm *fm)
     fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
                                          fm->viewport, args, n);
     XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
+    fm_register_context_menu(fm, fm->iconview);
 
     fm->listview = NULL;
 
@@ -199,6 +204,7 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
         fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
                                              fm->viewport, args, n);
         XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
+        fm_register_context_menu(fm, fm->iconview);
     } else {
         static String empty[] = { "(empty)", NULL };
         n = 0;
@@ -209,6 +215,7 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
         fm->listview = XtCreateManagedWidget("listView", listWidgetClass,
                                              fm->viewport, args, n);
         XtAddCallback(fm->listview, XtNcallback, listview_callback, fm);
+        fm_register_context_menu(fm, fm->listview);
     }
 
     fileview_populate(fm);

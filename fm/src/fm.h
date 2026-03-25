@@ -23,6 +23,7 @@
 #include <ISW/IconView.h>
 #include <ISW/List.h>
 #include <ISW/StatusBar.h>
+#include <ISW/Dialog.h>
 #include <ISW/ISWSVG.h>
 #include <ISW/ISWXdnd.h>
 
@@ -123,6 +124,9 @@ void  fm_run(Fm *fm);
 void  fm_cleanup(Fm *fm);
 void  fm_navigate(Fm *fm, const char *path);
 void  fm_refresh(Fm *fm);
+void  fm_register_context_menu(Fm *fm, Widget w);
+void  fm_dismiss_context(void);
+void  show_rename_dialog(Fm *fm);
 
 /* ---------- browser.c ---------- */
 int   browser_read_dir(Fm *fm, const char *path);
