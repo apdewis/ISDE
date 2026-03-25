@@ -130,8 +130,9 @@ WmClient *wm_find_client_by_frame(Wm *wm, xcb_window_t frame)
 WmClient *wm_find_client_by_widget(Wm *wm, Widget w)
 {
     for (WmClient *c = wm->clients; c; c = c->next)
-        if (c->shell == w || c->form == w ||
-            c->title_label == w || c->close_btn == w)
+        if (c->shell == w || c->title_label == w ||
+            c->minimize_btn == w || c->maximize_btn == w ||
+            c->close_btn == w)
             return c;
     return NULL;
 }
@@ -228,6 +229,57 @@ void wm_close_client(Wm *wm, WmClient *c)
         xcb_kill_client(wm->conn, c->client);
     }
     xcb_flush(wm->conn);
+}
+
+/* ---------- maximize / minimize ---------- */
+
+void wm_maximize_client(Wm *wm, WmClient *c)
+{
+    if (c->maximized) {
+        /* Restore */
+        c->x      = c->save_x;
+        c->y      = c->save_y;
+        c->width  = c->save_w;
+        c->height = c->save_h;
+        c->maximized = 0;
+    } else {
+        /* Save current geometry and maximize */
+        c->save_x = c->x;
+        c->save_y = c->y;
+        c->save_w = c->width;
+        c->save_h = c->height;
+
+        c->x = 0;
+        c->y = 0;
+        c->width  = wm->screen->width_in_pixels - 2 * WM_BORDER_WIDTH;
+        c->height = wm->screen->height_in_pixels - WM_TITLE_HEIGHT
+                    - WM_BORDER_WIDTH;
+        c->maximized = 1;
+    }
+    frame_configure(wm, c);
+    xcb_flush(wm->conn);
+}
+
+void wm_minimize_client(Wm *wm, WmClient *c)
+{
+    /* Placeholder: unmap the frame. A proper implementation would
+     * add the window to a taskbar/dock list for restoring later. */
+    if (c->shell)
+        XtPopdown(c->shell);
+    xcb_unmap_window(wm->conn, c->client);
+    xcb_flush(wm->conn);
+
+    if (wm->focused == c) {
+        wm->focused = NULL;
+        /* Focus next available client */
+        for (WmClient *n = wm->clients; n; n = n->next) {
+            if (n != c) {
+                wm_focus_client(wm, n);
+                break;
+            }
+        }
+        wm_ewmh_update_active(wm);
+    }
 }
 
 /* ---------- WM event handlers (non-widget events) ---------- */
@@ -329,15 +381,11 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         }
     }
 
-    /* Use only raw XCB to move the frame — avoid XtSetValues overhead
-     * which can trigger extra configure/expose cycles */
     c->x = wm->drag_orig_x + (ev->root_x - wm->drag_start_x);
     c->y = wm->drag_orig_y + (ev->root_y - wm->drag_start_y);
 
-    uint32_t vals[] = { c->x, c->y };
-    xcb_configure_window(wm->conn, XtWindow(c->shell),
-                         XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                         vals);
+    /* Use XtMoveWidget to keep Xt internal state in sync */
+    XtMoveWidget(c->shell, c->x, c->y);
     xcb_flush(wm->conn);
 }
 

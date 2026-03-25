@@ -7,7 +7,7 @@
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Shell.h>
-#include <ISW/Form.h>
+#include <X11/IntrinsicP.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
 
@@ -30,13 +30,18 @@ typedef struct WmClient {
 
     /* ISW widget tree for the frame */
     Widget       shell;        /* OverrideShell — the frame window */
-    Widget       form;         /* Form layout container */
     Widget       title_label;  /* Label — window title */
+    Widget       minimize_btn; /* Command — minimize (placeholder) */
+    Widget       maximize_btn; /* Command — maximize/restore */
     Widget       close_btn;    /* Command — close button */
 
     int16_t      x, y;         /* Frame position */
     uint16_t     width, height;/* Client area size (excludes frame) */
     int          focused;
+    int          maximized;
+    /* Saved geometry for restore from maximize */
+    int16_t      save_x, save_y;
+    uint16_t     save_w, save_h;
     char        *title;
 
     struct WmClient *next;
@@ -95,6 +100,8 @@ WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win);
 void      wm_focus_client(Wm *wm, WmClient *c);
 void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
+void      wm_maximize_client(Wm *wm, WmClient *c);
+void      wm_minimize_client(Wm *wm, WmClient *c);
 
 /* ---------- frame.c — frame decoration ---------- */
 WmClient *frame_create(Wm *wm, xcb_window_t client);
