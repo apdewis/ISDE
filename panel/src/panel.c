@@ -117,6 +117,10 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
     return NULL;
 }
 
+/* Forward declarations for D-Bus callbacks */
+static void on_panel_settings_changed(const char *, const char *, void *);
+static void panel_dbus_input_cb(XtPointer, int *, XtInputId *);
+
 int panel_init(Panel *p, int *argc, char **argv)
 {
     memset(p, 0, sizeof(*p));
@@ -215,8 +219,63 @@ int panel_init(Panel *p, int *argc, char **argv)
                                  XCB_CW_EVENT_MASK, &mask);
 
     xcb_flush(p->conn);
+
+    /* D-Bus settings notifications */
+    p->dbus = isde_dbus_init();
+    if (p->dbus) {
+        isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
+        int dbus_fd = isde_dbus_get_fd(p->dbus);
+        if (dbus_fd >= 0)
+            XtAppAddInput(p->app, dbus_fd,
+                          (XtPointer)XtInputReadMask,
+                          panel_dbus_input_cb, p->dbus);
+    }
+
     p->running = 1;
     return 0;
+}
+
+/* ---------- D-Bus settings reload ---------- */
+
+static void panel_reload_config(Panel *p)
+{
+    /* Re-read clock formats */
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *panel_cfg = isde_config_table(root, "panel");
+        if (panel_cfg) {
+            IsdeConfigTable *clock_cfg = isde_config_table(panel_cfg, "clock");
+            if (clock_cfg) {
+                const char *tf = isde_config_string(clock_cfg, "time_format", NULL);
+                if (tf) { free(p->clock_time_fmt); p->clock_time_fmt = strdup(tf); }
+                const char *df = isde_config_string(clock_cfg, "date_format", NULL);
+                if (df) { free(p->clock_date_fmt); p->clock_date_fmt = strdup(df); }
+            }
+        }
+        isde_config_free(cfg);
+    }
+    isde_config_invalidate_cache();
+}
+
+static void on_panel_settings_changed(const char *section, const char *key,
+                                      void *user_data)
+{
+    (void)key;
+    Panel *p = (Panel *)user_data;
+    if (strcmp(section, "panel.clock") == 0 ||
+        strcmp(section, "panel") == 0 ||
+        strcmp(section, "*") == 0)
+        panel_reload_config(p);
+}
+
+static void panel_dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+{
+    (void)fd;
+    (void)id;
+    IsdeDBus *bus = (IsdeDBus *)client_data;
+    isde_dbus_dispatch(bus);
 }
 
 /* Periodic poll for client list changes — called every 500ms.
@@ -298,6 +357,7 @@ void panel_cleanup(Panel *p)
         free(p->pinned_classes[i]);
     free(p->pinned_classes);
 
+    isde_dbus_free(p->dbus);
     isde_ipc_free(p->ipc);
     isde_ewmh_free(p->ewmh);
     XtDestroyApplicationContext(p->app);

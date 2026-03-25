@@ -1,0 +1,249 @@
+#define _POSIX_C_SOURCE 200809L
+/*
+ * settings.c — isde-settings UI shell, plugin loading, panel switching
+ *
+ * Layout: left pane = scrollable List of panel names
+ *         right pane = active panel content
+ */
+#include "settings.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dlfcn.h>
+#include <dirent.h>
+
+#include <ISW/List.h>
+#include <ISW/Viewport.h>
+#include <ISW/Dialog.h>
+
+#define PANEL_LIST_WIDTH 140
+
+/* ---------- panel management ---------- */
+
+static void register_panel(Settings *s, const IsdeSettingsPanel *panel,
+                           void *dl_handle)
+{
+    if (s->npanels >= MAX_PANELS) return;
+    int idx = s->npanels;
+    s->panels[idx] = panel;
+    s->plugin_handles[idx] = dl_handle;
+    s->panel_widgets[idx] = NULL;
+    s->npanels++;
+}
+
+static void load_plugins_from_dir(Settings *s, const char *dir)
+{
+    DIR *d = opendir(dir);
+    if (!d) return;
+
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        size_t nlen = strlen(de->d_name);
+        if (nlen < 4 || strcmp(de->d_name + nlen - 3, ".so") != 0)
+            continue;
+
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, de->d_name);
+
+        void *handle = dlopen(path, RTLD_LAZY);
+        if (!handle) continue;
+
+        IsdeSettingsPanelFunc fn = (IsdeSettingsPanelFunc)
+            dlsym(handle, ISDE_SETTINGS_PANEL_SYMBOL);
+        if (!fn) { dlclose(handle); continue; }
+
+        const IsdeSettingsPanel *panel = fn();
+        if (panel) {
+            register_panel(s, panel, handle);
+        } else {
+            dlclose(handle);
+        }
+    }
+    closedir(d);
+}
+
+static void load_plugins(Settings *s)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/isde/settings-plugins",
+             isde_xdg_data_home());
+    load_plugins_from_dir(s, path);
+
+    const char *dirs = isde_xdg_data_dirs();
+    const char *p = dirs;
+    while (p && *p) {
+        const char *colon = strchr(p, ':');
+        size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
+        if (dlen > 0) {
+            snprintf(path, sizeof(path), "%.*s/isde/settings-plugins",
+                     (int)dlen, p);
+            load_plugins_from_dir(s, path);
+        }
+        p = colon ? colon + 1 : NULL;
+    }
+}
+
+/* ---------- unsaved changes warning ---------- */
+
+static int check_unsaved(Settings *s)
+{
+    int idx = s->active_panel;
+    if (idx < 0 || idx >= s->npanels) return 0;
+    if (!s->panels[idx]->has_changes) return 0;
+    return s->panels[idx]->has_changes();
+}
+
+/* ---------- panel switching ---------- */
+
+void settings_switch_panel(Settings *s, int index)
+{
+    if (index < 0 || index >= s->npanels) return;
+    if (index == s->active_panel && s->panel_widgets[index]) return;
+
+    /* Check for unsaved changes in current panel */
+    if (check_unsaved(s)) {
+        /* TODO: show confirmation dialog.
+         * For now, just switch anyway with a warning. */
+        fprintf(stderr, "isde-settings: warning: unsaved changes discarded\n");
+    }
+
+    /* Unmanage current panel */
+    if (s->active_panel >= 0 && s->panel_widgets[s->active_panel])
+        XtUnmanageChild(s->panel_widgets[s->active_panel]);
+
+    s->active_panel = index;
+
+    /* Create panel widget if needed */
+    if (!s->panel_widgets[index])
+        s->panel_widgets[index] =
+            s->panels[index]->create(s->content_area, s->app);
+
+    XtManageChild(s->panel_widgets[index]);
+}
+
+/* ---------- list selection callback ---------- */
+
+static void panel_list_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w;
+    Settings *s = (Settings *)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    if (ret->list_index >= 0 && ret->list_index < s->npanels)
+        settings_switch_panel(s, ret->list_index);
+}
+
+/* ---------- D-Bus ---------- */
+
+static void settings_dbus_input_cb(XtPointer client_data, int *fd,
+                                    XtInputId *id)
+{
+    (void)fd; (void)id;
+    isde_dbus_dispatch((IsdeDBus *)client_data);
+}
+
+/* ---------- init ---------- */
+
+int settings_init(Settings *s, int *argc, char **argv)
+{
+    memset(s, 0, sizeof(*s));
+    s->active_panel = -1;
+
+    s->toplevel = XtAppInitialize(&s->app, "ISDE-Settings",
+                                  NULL, 0, argc, argv,
+                                  NULL, NULL, 0);
+
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNwidth, 600);  n++;
+    XtSetArg(args[n], XtNheight, 450); n++;
+    XtSetValues(s->toplevel, args, n);
+
+    /* Main layout form — direct child of toplevel */
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 0); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);    n++;
+    Widget form = XtCreateManagedWidget("layout", formWidgetClass,
+                                        s->toplevel, args, n);
+
+    /* Register core panels first (so names are available for the list) */
+    register_panel(s, &panel_input, NULL);
+    register_panel(s, &panel_appearance, NULL);
+    register_panel(s, &panel_display, NULL);
+    load_plugins(s);
+
+    /* Left pane: panel name list */
+    static String *panel_names = NULL;
+    free(panel_names);
+    panel_names = malloc((s->npanels + 1) * sizeof(String));
+    for (int i = 0; i < s->npanels; i++)
+        panel_names[i] = (String)s->panels[i]->name;
+    panel_names[s->npanels] = NULL;
+
+    n = 0;
+    XtSetArg(args[n], XtNlist, panel_names);        n++;
+    XtSetArg(args[n], XtNnumberStrings, s->npanels); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);         n++;
+    XtSetArg(args[n], XtNforceColumns, True);        n++;
+    XtSetArg(args[n], XtNverticalList, True);        n++;
+    XtSetArg(args[n], XtNwidth, PANEL_LIST_WIDTH);   n++;
+    XtSetArg(args[n], XtNheight, 440);               n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);        n++;
+    s->panel_bar = XtCreateManagedWidget("panelList", listWidgetClass,
+                                         form, args, n);
+    XtAddCallback(s->panel_bar, XtNcallback, panel_list_cb, s);
+
+    /* Right pane: content area — explicit size so children aren't zero */
+    n = 0;
+    XtSetArg(args[n], XtNfromHoriz, s->panel_bar);  n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNdefaultDistance, 4);        n++;
+    XtSetArg(args[n], XtNwidth, 600 - PANEL_LIST_WIDTH - 4); n++;
+    XtSetArg(args[n], XtNheight, 440);               n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
+    XtSetArg(args[n], XtNright, XtChainRight);        n++;
+    s->content_area = XtCreateManagedWidget("content", formWidgetClass,
+                                            form, args, n);
+
+    /* D-Bus */
+    s->dbus = isde_dbus_init();
+    if (s->dbus) {
+        int fd = isde_dbus_get_fd(s->dbus);
+        if (fd >= 0)
+            XtAppAddInput(s->app, fd, (XtPointer)XtInputReadMask,
+                          settings_dbus_input_cb, s->dbus);
+    }
+
+    XtRealizeWidget(s->toplevel);
+
+    /* Show first panel by default */
+    if (s->npanels > 0)
+        settings_switch_panel(s, 0);
+
+    s->running = 1;
+    return 0;
+}
+
+void settings_run(Settings *s)
+{
+    while (s->running)
+        XtAppProcessEvent(s->app, XtIMAll);
+}
+
+void settings_cleanup(Settings *s)
+{
+    for (int i = 0; i < s->npanels; i++) {
+        if (s->panels[i]->destroy)
+            s->panels[i]->destroy();
+        if (s->plugin_handles[i])
+            dlclose(s->plugin_handles[i]);
+    }
+    isde_dbus_free(s->dbus);
+    XtDestroyApplicationContext(s->app);
+}

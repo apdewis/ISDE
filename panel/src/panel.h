@@ -25,6 +25,7 @@
 
 #include "isde/isde-ewmh.h"
 #include "isde/isde-ipc.h"
+#include "isde/isde-dbus.h"
 #include "isde/isde-desktop.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-config.h"
@@ -116,6 +117,9 @@ typedef struct Panel {
     xcb_atom_t         atom_wm_name;
 
     XtIntervalId       clock_timer;
+
+    /* D-Bus */
+    IsdeDBus          *dbus;
 
     /* Active popup tracking — for click-outside-to-dismiss */
     Widget             active_popup;  /* Currently open popup shell, or NULL */

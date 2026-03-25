@@ -75,9 +75,10 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_wm_name           = intern(wm->conn, "WM_NAME");
     wm->atom_net_wm_name       = intern(wm->conn, "_NET_WM_NAME");
 
-    /* EWMH and IPC */
+    /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
+    wm->dbus = isde_dbus_init(); /* may be NULL if D-Bus unavailable */
 
     /* Key bindings */
     wm->keysyms = xcb_key_symbols_alloc(wm->conn);
@@ -459,6 +460,10 @@ static int is_wm_event(Wm *wm, uint8_t type)
 void wm_run(Wm *wm)
 {
     while (wm->running) {
+        /* Dispatch pending D-Bus messages */
+        if (wm->dbus)
+            isde_dbus_dispatch(wm->dbus);
+
         /* Process all pending Xt events (widget callbacks, timers, etc.) */
         while (XtAppPending(wm->app)) {
             XtAppProcessEvent(wm->app, XtIMAll);
@@ -580,6 +585,7 @@ void wm_cleanup(Wm *wm)
 
     if (wm->keysyms)
         xcb_key_symbols_free(wm->keysyms);
+    isde_dbus_free(wm->dbus);
     isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);
 

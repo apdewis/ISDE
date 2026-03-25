@@ -31,6 +31,7 @@ pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
 pkg_check_modules(FREETYPE REQUIRED IMPORTED_TARGET freetype2)
 pkg_check_modules(SM REQUIRED IMPORTED_TARGET sm)
 pkg_check_modules(ICE REQUIRED IMPORTED_TARGET ice)
+pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
 
 # --- Subdirectories ---
 add_subdirectory(libisde)
@@ -38,4 +39,5 @@ add_subdirectory(wm)
 add_subdirectory(session)
 add_subdirectory(panel)
 add_subdirectory(fm)
+add_subdirectory(settings)
 add_subdirectory(common)

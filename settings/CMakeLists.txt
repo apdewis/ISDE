@@ -1,0 +1,19 @@
+add_executable(isde-settings
+    src/main.c
+    src/settings.c
+    src/panel-input.c
+    src/panel-appearance.c
+    src/panel-display.c
+)
+
+target_compile_definitions(isde-settings PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
+
+target_link_libraries(isde-settings
+    isde
+    PkgConfig::ISW
+    PkgConfig::XCB
+    PkgConfig::DBUS
+    ${CMAKE_DL_LIBS}
+)
+
+install(TARGETS isde-settings RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

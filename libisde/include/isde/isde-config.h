@@ -58,6 +58,23 @@ int isde_config_string_array(IsdeConfigTable *tbl, const char *key,
  * Reads [input].double_click_ms from isde.toml, defaults to 400. */
 int isde_config_double_click_ms(void);
 
+/* Clear all cached global settings so the next accessor re-reads from file. */
+void isde_config_invalidate_cache(void);
+
+/* ---------- Config file writing ---------- */
+
+/* Write a value into a TOML file. Creates the file/section if missing.
+ * path: file path (e.g. from isde_xdg_config_path("isde.toml"))
+ * section: TOML table name (e.g. "input")
+ * key: key name (e.g. "double_click_ms")
+ * Returns 0 on success. */
+int isde_config_write_string(const char *path, const char *section,
+                              const char *key, const char *value);
+int isde_config_write_int(const char *path, const char *section,
+                           const char *key, int64_t value);
+int isde_config_write_bool(const char *path, const char *section,
+                            const char *key, int value);
+
 #ifdef __cplusplus
 }
 #endif

@@ -32,6 +32,7 @@
 #include <dirent.h>
 
 #include "isde/isde-config.h"
+#include "isde/isde-dbus.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-desktop.h"
 
@@ -106,6 +107,9 @@ typedef struct Fm {
     char          *history[FM_HISTORY_MAX];
     int            hist_pos;
     int            hist_count;
+
+    /* D-Bus for settings notifications */
+    IsdeDBus      *dbus;
 
     /* Clipboard */
     FmClipboard    clipboard;

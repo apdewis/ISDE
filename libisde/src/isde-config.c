@@ -165,22 +165,28 @@ IsdeConfigTable *isde_config_array_table(IsdeConfigTable *tbl, const char *key,
     return wrap_table(toml_table_at(arr, index));
 }
 
+static int dclick_cached = -1;
+
 int isde_config_double_click_ms(void)
 {
-    static int cached = -1;
-    if (cached >= 0) return cached;
+    if (dclick_cached >= 0) return dclick_cached;
 
-    cached = 400; /* default */
+    dclick_cached = 400; /* default */
     char errbuf[128];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
         IsdeConfigTable *root = isde_config_root(cfg);
         IsdeConfigTable *input = isde_config_table(root, "input");
         if (input)
-            cached = (int)isde_config_int(input, "double_click_ms", 400);
+            dclick_cached = (int)isde_config_int(input, "double_click_ms", 400);
         isde_config_free(cfg);
     }
-    return cached;
+    return dclick_cached;
+}
+
+void isde_config_invalidate_cache(void)
+{
+    dclick_cached = -1;
 }
 
 int isde_config_string_array(IsdeConfigTable *tbl, const char *key,

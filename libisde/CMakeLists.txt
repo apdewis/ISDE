@@ -1,9 +1,11 @@
 add_library(isde SHARED
     src/isde-config.c
+    src/isde-config-write.c
     src/isde-xdg.c
     src/isde-desktop.c
     src/isde-ewmh.c
     src/isde-ipc.c
+    src/isde-dbus.c
     vendor/tomlc99/toml.c
 )
 
@@ -23,6 +25,8 @@ target_link_libraries(isde
         PkgConfig::XCB_EWMH
         PkgConfig::XCB_ICCCM
         PkgConfig::XCB_UTIL
+    PRIVATE
+        PkgConfig::DBUS
 )
 
 set_target_properties(isde PROPERTIES

@@ -497,6 +497,45 @@ void fm_refresh(Fm *fm)
     navbar_update(fm);
 }
 
+/* ---------- D-Bus settings reload ---------- */
+
+static void fm_reload_config(Fm *fm)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("fm.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *gen = isde_config_table(root, "general");
+        if (gen) {
+            const char *click = isde_config_string(gen, "click_to_open", "double");
+            fm->double_click = (strcmp(click, "single") != 0);
+            fm->show_hidden = isde_config_bool(gen, "show_hidden", 0);
+        }
+        isde_config_free(cfg);
+    }
+    isde_config_invalidate_cache();
+    fm_refresh(fm);
+}
+
+static void on_settings_changed(const char *section, const char *key,
+                                void *user_data)
+{
+    (void)key;
+    Fm *fm = (Fm *)user_data;
+    if (strcmp(section, "general") == 0 ||
+        strcmp(section, "input") == 0 ||
+        strcmp(section, "*") == 0)
+        fm_reload_config(fm);
+}
+
+static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+{
+    (void)fd;
+    (void)id;
+    IsdeDBus *bus = (IsdeDBus *)client_data;
+    isde_dbus_dispatch(bus);
+}
+
 /* ---------- init ---------- */
 
 int fm_init(Fm *fm, int *argc, char **argv)
@@ -554,6 +593,17 @@ int fm_init(Fm *fm, int *argc, char **argv)
     ISWXdndEnable(fm->toplevel);
     clipboard_init(fm);
 
+    /* D-Bus settings notifications */
+    fm->dbus = isde_dbus_init();
+    if (fm->dbus) {
+        isde_dbus_settings_subscribe(fm->dbus, on_settings_changed, fm);
+        int dbus_fd = isde_dbus_get_fd(fm->dbus);
+        if (dbus_fd >= 0)
+            XtAppAddInput(fm->app, dbus_fd,
+                          (XtPointer)XtInputReadMask,
+                          dbus_input_cb, fm->dbus);
+    }
+
     /* Start in home directory */
     const char *home = getenv("HOME");
     fm->cwd = strdup(home ? home : "/");
@@ -581,6 +631,7 @@ void fm_run(Fm *fm)
 
 void fm_cleanup(Fm *fm)
 {
+    isde_dbus_free(fm->dbus);
     clipboard_cleanup(fm);
     browser_free_entries(fm);
     fileview_cleanup(fm);
