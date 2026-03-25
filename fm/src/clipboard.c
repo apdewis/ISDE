@@ -171,12 +171,12 @@ static void do_file_op(Fm *fm, const char *src_path, FmClipOp op)
     char *dest = malloc(dlen);
     snprintf(dest, dlen, "%s/%s", fm->cwd, base);
 
-    if (strcmp(src_path, dest) == 0) {
-        free(dest);
-        return;
-    }
-
     if (op == FM_CLIP_CUT) {
+        /* Move to same location is a no-op */
+        if (strcmp(src_path, dest) == 0) {
+            free(dest);
+            return;
+        }
         if (rename(src_path, dest) != 0) {
             /* Cross-device: copy then delete source */
             if (fileops_copy(src_path, dest) == 0)
@@ -267,8 +267,16 @@ void clipboard_cut(Fm *fm)
 
 void clipboard_paste(Fm *fm)
 {
-    /* First try gnome-copied-files (has cut/copy info),
-     * fall back to text/uri-list */
+    /* Fast path: if we own the clipboard, use local data directly
+     * instead of round-tripping through X selections */
+    if (fm->clipboard.npaths > 0) {
+        for (int i = 0; i < fm->clipboard.npaths; i++)
+            do_file_op(fm, fm->clipboard.paths[i], fm->clipboard.op);
+        fm_refresh(fm);
+        return;
+    }
+
+    /* Otherwise request from external clipboard owner */
     XtGetSelectionValue(fm->toplevel, fm->atom_clipboard,
                         fm->atom_gnome_files,
                         receive_paste, fm, XCB_CURRENT_TIME);

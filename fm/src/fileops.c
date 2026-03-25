@@ -16,6 +16,62 @@
 #include <errno.h>
 #include <fcntl.h>
 
+/* ---------- conflict resolution ---------- */
+
+/*
+ * If dst already exists, generate a unique name:
+ *   "file.txt"    -> "file (2).txt",  "file (3).txt", ...
+ *   "folder"      -> "folder (2)",    "folder (3)", ...
+ *   "file.tar.gz" -> "file (2).tar.gz", ...
+ *
+ * Returns a malloc'd string (may be the original dst if no conflict).
+ * Caller must free the result.
+ */
+static char *resolve_conflict(const char *dst)
+{
+    struct stat st;
+    if (lstat(dst, &st) != 0)
+        return strdup(dst); /* no conflict */
+
+    /* Split into dir, base, extension */
+    const char *slash = strrchr(dst, '/');
+    const char *base_start = slash ? slash + 1 : dst;
+    size_t dir_len = base_start - dst; /* includes trailing / */
+
+    /* Find extension — handle compound extensions like .tar.gz */
+    const char *dot = strchr(base_start, '.');
+    size_t name_len, ext_len;
+    if (dot) {
+        name_len = dot - base_start;
+        ext_len = strlen(dot);
+    } else {
+        name_len = strlen(base_start);
+        ext_len = 0;
+    }
+
+    for (int i = 2; i < 1000; i++) {
+        /* dir_len + name_len + " (999)" + ext_len + null */
+        size_t total = dir_len + name_len + 8 + ext_len + 1;
+        char *candidate = malloc(total);
+        if (ext_len > 0) {
+            snprintf(candidate, total, "%.*s%.*s (%d)%s",
+                     (int)dir_len, dst,
+                     (int)name_len, base_start,
+                     i, dot);
+        } else {
+            snprintf(candidate, total, "%.*s%.*s (%d)",
+                     (int)dir_len, dst,
+                     (int)name_len, base_start,
+                     i);
+        }
+        if (lstat(candidate, &st) != 0)
+            return candidate; /* this name is free */
+        free(candidate);
+    }
+
+    return strdup(dst); /* give up, return original */
+}
+
 /* ---------- copy a single file ---------- */
 
 static int copy_file(const char *src, const char *dst)
@@ -61,6 +117,7 @@ static int copy_recursive(const char *src, const char *dst)
         return -1;
 
     if (S_ISDIR(st.st_mode)) {
+        /* Directories merge — create if missing, recurse into children */
         if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST)
             return -1;
 
@@ -77,9 +134,13 @@ static int copy_recursive(const char *src, const char *dst)
             size_t slen = strlen(src) + 1 + strlen(de->d_name) + 1;
             size_t dlen = strlen(dst) + 1 + strlen(de->d_name) + 1;
             char *child_src = malloc(slen);
-            char *child_dst = malloc(dlen);
+            char *child_dst_base = malloc(dlen);
             snprintf(child_src, slen, "%s/%s", src, de->d_name);
-            snprintf(child_dst, dlen, "%s/%s", dst, de->d_name);
+            snprintf(child_dst_base, dlen, "%s/%s", dst, de->d_name);
+
+            /* Resolve conflicts for files within merged directories */
+            char *child_dst = resolve_conflict(child_dst_base);
+            free(child_dst_base);
 
             if (copy_recursive(child_src, child_dst) != 0)
                 ret = -1;
@@ -95,7 +156,11 @@ static int copy_recursive(const char *src, const char *dst)
         ssize_t len = readlink(src, link_target, sizeof(link_target) - 1);
         if (len < 0) return -1;
         link_target[len] = '\0';
-        return symlink(link_target, dst);
+        /* Resolve conflict for symlinks too */
+        char *resolved = resolve_conflict(dst);
+        int ret = symlink(link_target, resolved);
+        free(resolved);
+        return ret;
 
     } else {
         return copy_file(src, dst);
@@ -144,7 +209,10 @@ static int delete_recursive(const char *path)
 
 int fileops_copy(const char *src, const char *dst)
 {
-    return copy_recursive(src, dst);
+    char *resolved = resolve_conflict(dst);
+    int ret = copy_recursive(src, resolved);
+    free(resolved);
+    return ret;
 }
 
 int fileops_mkdir(Fm *fm, const char *name)
