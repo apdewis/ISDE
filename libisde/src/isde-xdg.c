@@ -122,3 +122,39 @@ char *isde_xdg_find_data(const char *name)
 {
     return find_in_dirs(isde_xdg_data_home(), isde_xdg_data_dirs(), name);
 }
+
+char *isde_icon_find(const char *category, const char *name)
+{
+    char rel[256];
+    snprintf(rel, sizeof(rel), "icons/%s/%s.svg", category, name);
+
+    /* Search XDG data dirs for isde/icons/<category>/<name>.svg */
+    char *path = isde_xdg_find_data(rel);
+    if (path)
+        return path;
+
+    /* Fallback: check relative to executable for development builds */
+    static char exe_dir[512] = {0};
+    if (!exe_dir[0]) {
+        ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);
+        if (len > 0) {
+            exe_dir[len] = '\0';
+            char *slash = strrchr(exe_dir, '/');
+            if (slash) *slash = '\0';
+        }
+    }
+    if (exe_dir[0]) {
+        /* Try ../../common/data/icons/ relative to build/fm/ */
+        size_t total = strlen(exe_dir) + strlen("/../../common/data/") +
+                       strlen(rel) + 1;
+        path = malloc(total);
+        if (path) {
+            snprintf(path, total, "%s/../../common/data/%s", exe_dir, rel);
+            if (access(path, R_OK) == 0)
+                return path;
+            free(path);
+        }
+    }
+
+    return NULL;
+}

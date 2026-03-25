@@ -22,7 +22,7 @@ static const char *START_ICON_SVG =
 
 static void set_start_btn_active(Panel *p, int active)
 {
-    Arg args[2];
+    Arg args[20];
     Cardinal n = 0;
     if (active) {
         XtSetArg(args[n], XtNforeground,
@@ -223,7 +223,7 @@ void startmenu_init(Panel *p)
     p->active_cat = -1;
 
     /* Start button */
-    Arg args[12];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNsvgData, START_ICON_SVG);  n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;

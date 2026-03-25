@@ -155,7 +155,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     closure[1] = c;
 
     /* Create OverrideShell for the frame */
-    Arg args[10];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNx, c->x);               n++;
     XtSetArg(args[n], XtNy, c->y);               n++;
@@ -312,7 +312,7 @@ void frame_update_title(Wm *wm, WmClient *c)
     free(c->title);
     c->title = fetch_title(wm, c->client);
 
-    Arg args[1];
+    Arg args[20];
     XtSetArg(args[0], XtNlabel, c->title ? c->title : "(untitled)");
     XtSetValues(c->title_label, args, 1);
 }

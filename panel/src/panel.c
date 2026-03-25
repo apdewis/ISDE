@@ -155,7 +155,7 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* Create panel shell — override-redirect dock at bottom of screen */
     int sw = p->screen->width_in_pixels;
-    Arg args[10];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNx, 0);                           n++;
     XtSetArg(args[n], XtNy, p->screen->height_in_pixels

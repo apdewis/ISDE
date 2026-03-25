@@ -44,6 +44,13 @@ char *isde_xdg_find_config(const char *name);
 /* Search for a file in XDG data directories (same logic as above). */
 char *isde_xdg_find_data(const char *name);
 
+/* Find an ISDE icon by category and name.
+ * Searches: $XDG_DATA_HOME/isde/icons/<category>/<name>.svg
+ *           $XDG_DATA_DIRS/isde/icons/<category>/<name>.svg
+ *           <source_tree>/common/data/icons/<category>/<name>.svg
+ * Returns the first path that exists (caller must free), or NULL. */
+char *isde_icon_find(const char *category, const char *name);
+
 #ifdef __cplusplus
 }
 #endif

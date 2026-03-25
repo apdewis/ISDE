@@ -143,7 +143,7 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     if (menu_h > 300) menu_h = 300;
 
     /* Create popup shell */
-    Arg args[8];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNwidth, 200);              n++;
     XtSetArg(args[n], XtNheight, menu_h);           n++;
@@ -319,7 +319,7 @@ static void context_menu_handler(Widget w, XtPointer client_data,
 
     Widget ctx = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                     w, NULL, 0);
-    Arg args[1];
+    Arg args[20];
 
     /* Desktop actions (e.g. "New Window", "New Private Window") */
     if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
@@ -446,7 +446,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     }
 
     /* Create button widget */
-    Arg args[4];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNlabel, g->display_name);   n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;

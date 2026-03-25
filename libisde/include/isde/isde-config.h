@@ -52,6 +52,12 @@ IsdeConfigTable *isde_config_array_table(IsdeConfigTable *tbl, const char *key,
 int isde_config_string_array(IsdeConfigTable *tbl, const char *key,
                              char ***out);
 
+/* ---------- Global ISDE settings (from isde.toml) ---------- */
+
+/* Return the double-click threshold in milliseconds.
+ * Reads [input].double_click_ms from isde.toml, defaults to 400. */
+int isde_config_double_click_ms(void);
+
 #ifdef __cplusplus
 }
 #endif

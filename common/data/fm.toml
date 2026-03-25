@@ -1,0 +1,6 @@
+# ISDE File Manager configuration
+
+[general]
+# "single" or "double"
+click_to_open = "double"
+show_hidden = false

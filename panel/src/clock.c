@@ -22,7 +22,7 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
     strftime(tbuf, sizeof(tbuf), p->clock_time_fmt, tm);
     strftime(dbuf, sizeof(dbuf), p->clock_date_fmt, tm);
 
-    Arg args[1];
+    Arg args[20];
     XtSetArg(args[0], XtNlabel, tbuf);
     XtSetValues(p->clock_time, args, 1);
     XtSetArg(args[0], XtNlabel, dbuf);
@@ -64,7 +64,7 @@ void clock_init(Panel *p)
     int half = PANEL_HEIGHT / 2;
 
     /* Time label (top half) */
-    Arg args[6];
+    Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNlabel, "00:00");        n++;
     XtSetArg(args[n], XtNborderWidth, 0);         n++;
