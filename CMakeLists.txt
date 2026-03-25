@@ -35,3 +35,5 @@ pkg_check_modules(ICE REQUIRED IMPORTED_TARGET ice)
 # --- Subdirectories ---
 add_subdirectory(libisde)
 add_subdirectory(wm)
+add_subdirectory(session)
+add_subdirectory(common)

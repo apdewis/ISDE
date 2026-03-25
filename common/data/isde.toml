@@ -1,0 +1,6 @@
+# ISDE session configuration
+
+[session]
+window_manager = "isde-wm"
+# panel = "isde-panel"
+# file_manager = "isde-fm"
