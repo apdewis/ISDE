@@ -9,6 +9,15 @@ find_package(PkgConfig REQUIRED)
 
 # --- Core dependencies (all components) ---
 pkg_check_modules(ISW REQUIRED IMPORTED_TARGET isw)
+
+# If libISW is not installed, allow overriding its include/lib paths.
+# Usage: cmake -B build -DISW_LOCAL_DIR=/home/user/libISW
+if(ISW_LOCAL_DIR)
+    set_property(TARGET PkgConfig::ISW PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES "${ISW_LOCAL_DIR}/include")
+    set_property(TARGET PkgConfig::ISW PROPERTY
+        INTERFACE_LINK_DIRECTORIES "${ISW_LOCAL_DIR}/src/.libs")
+endif()
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb)
 pkg_check_modules(XCB_EWMH REQUIRED IMPORTED_TARGET xcb-ewmh)
 pkg_check_modules(XCB_ICCCM REQUIRED IMPORTED_TARGET xcb-icccm)
@@ -25,3 +34,4 @@ pkg_check_modules(ICE REQUIRED IMPORTED_TARGET ice)
 
 # --- Subdirectories ---
 add_subdirectory(libisde)
+add_subdirectory(wm)

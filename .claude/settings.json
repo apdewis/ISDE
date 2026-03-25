@@ -14,7 +14,27 @@
       "Bash(gcc -c -Wall -Wextra -std=c11 -Ilibisde/include libisde/src/isde-desktop.c -o /tmp/isde-desktop.o)",
       "Bash(PKG_CONFIG_PATH=/home/adam/libISW:$PKG_CONFIG_PATH cmake -B build)",
       "Read(//usr/local/lib/**)",
-      "Bash(ls /home/adam/libISW/src/.libs/libISW*)"
+      "Bash(ls /home/adam/libISW/src/.libs/libISW*)",
+      "Bash(DISPLAY=:1 xdpyinfo)",
+      "Bash(DISPLAY=:1 xprop -root _NET_SUPPORTED)",
+      "Bash(DISPLAY=:1 xwininfo -root -tree)",
+      "Bash(DISPLAY=:1 xprop -root _NET_CLIENT_LIST)",
+      "Read(//tmp/**)",
+      "Bash(pkill -f \"isde-wm\")",
+      "Bash(grep -n \"SubstructureRedirect\\\\|XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT\" /home/adam/libISW/src/*.c)",
+      "Bash(ls /home/adam/libISW/src/*.c)",
+      "Bash(grep -l \"XtAppMainLoop\\\\|XtAppProcessEvent\\\\|XtAppPending\" /home/adam/libISW/src/*.c)",
+      "Bash(grep -l \"XtAddEventHandler\\\\|XtAddRawEventHandler\\\\|OverrideShell\\\\|TopLevelShell\\\\|CreatePopupShell\" /home/adam/libISW/src/*.c /home/adam/libISW/include/ISW/*.h)",
+      "Bash(grep -l \"xcb_connection\\\\|XtDisplayToApplicationContext\\\\|XtCreateApplicationShell\\\\|XtAppInitialize\\\\|ISWInit\" /home/adam/libISW/src/*.c /home/adam/libISW/include/ISW/*.h)",
+      "Bash(grep -n \"XtScreen\\\\|get_default_screen\\\\|xcb_setup_roots_iterator\" /home/adam/libISW/src/*.c)",
+      "Bash(grep -n \"xcb_change_window_attributes\\\\|XCB_CW_EVENT_MASK\" /home/adam/libISW/src/*.c)",
+      "Bash(grep -n \"XtCreateApplicationContext\" /home/adam/libISW/src/*.c)",
+      "Bash(PKG_CONFIG_PATH=/home/adam/libISW:$PKG_CONFIG_PATH pkg-config --cflags isw)",
+      "Bash(grep DefaultScreen /home/adam/libISW/include/X11/*.h)",
+      "Bash(grep -n 'ScreenNumber\\\\|screen_number\\\\|XtScreenNumber' /home/adam/libISW/include/X11/*.h)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
