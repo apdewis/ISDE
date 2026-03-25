@@ -92,6 +92,7 @@ void fileview_init(Fm *fm)
     XtSetArg(args[n], XtNborderWidth, 0);     n++;
     XtSetArg(args[n], XtNiconSize, 48);        n++;
     XtSetArg(args[n], XtNitemSpacing, 60);     n++;
+    XtSetArg(args[n], XtNmultiSelect, True);   n++;
     fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
                                          fm->viewport, args, n);
     XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
