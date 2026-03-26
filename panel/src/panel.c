@@ -381,7 +381,7 @@ static void panel_dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     isde_dbus_dispatch(bus);
 }
 
-/* Periodic poll for client list changes — called every 500ms.
+/* Periodic poll for client list changes — called every 50ms.
  * This catches _NET_CLIENT_LIST updates that Xt's event dispatch
  * would otherwise drop (PropertyNotify on root, no widget). */
 static xcb_window_t last_active = XCB_WINDOW_NONE;
@@ -408,7 +408,7 @@ static void poll_clients(XtPointer client_data, XtIntervalId *id)
         last_active = isde_ewmh_get_active_window(p->ewmh);
     }
 
-    XtAppAddTimeOut(p->app, 500, poll_clients, p);
+    XtAppAddTimeOut(p->app, 50, poll_clients, p);
 }
 
 void panel_show_popup(Panel *p, Widget popup)
@@ -447,7 +447,7 @@ void panel_run(Panel *p)
     taskbar_update(p);
 
     /* Start periodic client list poll */
-    XtAppAddTimeOut(p->app, 500, poll_clients, p);
+    XtAppAddTimeOut(p->app, 50, poll_clients, p);
 
     while (p->running) {
         XtAppProcessEvent(p->app, XtIMAll);

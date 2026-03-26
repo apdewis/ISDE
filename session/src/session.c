@@ -250,7 +250,7 @@ void session_run(Session *s)
         /* Poll D-Bus fd (or just sleep if no D-Bus) */
         if (dbus_fd >= 0) {
             struct pollfd pfd = { .fd = dbus_fd, .events = POLLIN };
-            poll(&pfd, 1, 500);
+            poll(&pfd, 1, 100);
             if (pfd.revents & POLLIN)
                 isde_dbus_dispatch(s->dbus);
         } else {
