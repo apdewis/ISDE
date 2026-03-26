@@ -77,8 +77,10 @@ void child_reap(Session *s)
             fprintf(stderr, "isde-session: respawning '%s'\n", c->command);
             char *cmd = strdup(c->command);
             int is_wm = c->is_wm;
+            int is_panel = c->is_panel;
             child_remove(s, c);
-            child_spawn(s, cmd, 1, is_wm);
+            Child *nc = child_spawn(s, cmd, 1, is_wm);
+            if (nc) nc->is_panel = is_panel;
             free(cmd);
         } else {
             child_remove(s, c);

@@ -20,15 +20,24 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (panel_init(&panel, &argc, argv) != 0) {
-        fprintf(stderr, "isde-panel: failed to initialize\n");
-        return 1;
-    }
+    do {
+        if (panel_init(&panel, &argc, argv) != 0) {
+            fprintf(stderr, "isde-panel: failed to initialize\n");
+            return 1;
+        }
 
-    fprintf(stderr, "isde-panel: running\n");
-    panel_run(&panel);
+        fprintf(stderr, "isde-panel: running\n");
+        panel_run(&panel);
 
-    panel_cleanup(&panel);
+        int restart = panel.restart;
+        panel_cleanup(&panel);
+
+        if (!restart)
+            break;
+
+        fprintf(stderr, "isde-panel: restarting\n");
+    } while (1);
+
     fprintf(stderr, "isde-panel: exiting\n");
     return 0;
 }

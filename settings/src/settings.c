@@ -220,6 +220,7 @@ int settings_init(Settings *s, int *argc, char **argv)
         if (fd >= 0)
             XtAppAddInput(s->app, fd, (XtPointer)XtInputReadMask,
                           settings_dbus_input_cb, s->dbus);
+        panel_appearance_set_dbus(s->dbus);
     }
 
     XtRealizeWidget(s->toplevel);

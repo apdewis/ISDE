@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <poll.h>
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
@@ -97,6 +98,26 @@ static void apply_input_settings(void)
     xcb_disconnect(conn);
 }
 
+/* ---------- D-Bus settings callback ---------- */
+
+static void on_settings_changed(const char *section, const char *key,
+                                void *user_data)
+{
+    (void)key;
+    Session *s = (Session *)user_data;
+    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0)
+        s->reload_appearance = 1;
+}
+
+static void restart_ui_children(Session *s)
+{
+    /* SIGTERM the WM and panel — child_reap will respawn them */
+    for (Child *c = s->children; c; c = c->next) {
+        if (c->is_wm || c->is_panel)
+            kill(c->pid, SIGTERM);
+    }
+}
+
 /* SIGCHLD handler — just sets a flag so the main loop can reap */
 static volatile sig_atomic_t got_sigchld = 0;
 
@@ -156,6 +177,11 @@ int session_init(Session *s)
     apply_appearance_settings();
     apply_input_settings();
 
+    /* D-Bus for settings change notifications */
+    s->dbus = isde_dbus_init();
+    if (s->dbus)
+        isde_dbus_settings_subscribe(s->dbus, on_settings_changed, s);
+
     s->running = 1;
     return 0;
 }
@@ -176,7 +202,8 @@ void session_run(Session *s)
     if (s->panel_command) {
         fprintf(stderr, "isde-session: starting panel: %s\n",
                 s->panel_command);
-        child_spawn(s, s->panel_command, 1, 0);
+        Child *panel = child_spawn(s, s->panel_command, 1, 0);
+        if (panel) panel->is_panel = 1;
     }
 
     /* Phase 3: Start file manager if configured */
@@ -193,11 +220,20 @@ void session_run(Session *s)
         child_spawn(s, s->autostart_cmds[i], s->autostart_respawn[i], 0);
     }
 
-    /* Main loop — wait for signals and reap children */
+    /* Main loop — poll D-Bus fd and handle signals */
+    int dbus_fd = s->dbus ? isde_dbus_get_fd(s->dbus) : -1;
+
     while (s->running) {
         if (got_sigchld) {
             got_sigchld = 0;
             child_reap(s);
+        }
+
+        if (s->reload_appearance) {
+            s->reload_appearance = 0;
+            fprintf(stderr, "isde-session: appearance changed, "
+                    "restarting WM and panel\n");
+            restart_ui_children(s);
         }
 
         /* If the WM died and wasn't respawned, shut down the session */
@@ -211,8 +247,15 @@ void session_run(Session *s)
             break;
         }
 
-        /* Sleep until next signal */
-        pause();
+        /* Poll D-Bus fd (or just sleep if no D-Bus) */
+        if (dbus_fd >= 0) {
+            struct pollfd pfd = { .fd = dbus_fd, .events = POLLIN };
+            poll(&pfd, 1, 500);
+            if (pfd.revents & POLLIN)
+                isde_dbus_dispatch(s->dbus);
+        } else {
+            pause();
+        }
     }
 }
 
@@ -226,6 +269,7 @@ void session_cleanup(Session *s)
 {
     child_kill_all(s);
     autostart_free(s);
+    isde_dbus_free(s->dbus);
     free(s->wm_command);
     free(s->panel_command);
     free(s->fm_command);

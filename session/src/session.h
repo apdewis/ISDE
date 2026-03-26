@@ -5,8 +5,10 @@
 #define ISDE_SESSION_H
 
 #include "isde/isde-config.h"
+#include "isde/isde-dbus.h"
 #include "isde/isde-xdg.h"
 
+#include <signal.h>
 #include <sys/types.h>
 
 /* ---------- Child process ---------- */
@@ -15,6 +17,7 @@ typedef struct Child {
     char       *command;      /* Original command string */
     int         respawn;      /* 1 if @-prefixed (restart on crash) */
     int         is_wm;        /* 1 if this is the window manager */
+    int         is_panel;     /* 1 if this is the panel */
     struct Child *next;
 } Child;
 
@@ -32,6 +35,12 @@ typedef struct Session {
     char      **autostart_cmds;
     int        *autostart_respawn;
     int         autostart_count;
+
+    /* D-Bus */
+    IsdeDBus   *dbus;
+
+    /* Flags set from D-Bus callbacks */
+    volatile sig_atomic_t reload_appearance;
 
     int         running;
 } Session;

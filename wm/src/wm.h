@@ -90,6 +90,7 @@ typedef struct Wm {
     uint16_t               drag_orig_w, drag_orig_h;
 
     int                    running;
+    int                    restart;
 } Wm;
 
 /* ---------- wm.c — core ---------- */

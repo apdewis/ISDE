@@ -29,9 +29,9 @@ static void wm_on_settings_changed(const char *section, const char *key,
     (void)key;
     Wm *wm = (Wm *)user_data;
     if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
-        isde_theme_reload();
-        for (WmClient *c = wm->clients; c; c = c->next)
-            frame_apply_theme(wm, c);
+        /* Restart to pick up new Xresources */
+        wm->running = 0;
+        wm->restart = 1;
     }
 }
 

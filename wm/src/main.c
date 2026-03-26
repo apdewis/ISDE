@@ -21,15 +21,24 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (wm_init(&wm, &argc, argv) != 0) {
-        fprintf(stderr, "isde-wm: failed to initialize\n");
-        return 1;
-    }
+    do {
+        if (wm_init(&wm, &argc, argv) != 0) {
+            fprintf(stderr, "isde-wm: failed to initialize\n");
+            return 1;
+        }
 
-    fprintf(stderr, "isde-wm: running\n");
-    wm_run(&wm);
+        fprintf(stderr, "isde-wm: running\n");
+        wm_run(&wm);
 
-    wm_cleanup(&wm);
+        int restart = wm.restart;
+        wm_cleanup(&wm);
+
+        if (!restart)
+            break;
+
+        fprintf(stderr, "isde-wm: restarting\n");
+    } while (1);
+
     fprintf(stderr, "isde-wm: exiting\n");
     return 0;
 }

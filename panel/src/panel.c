@@ -256,28 +256,6 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
 /* Theme colors are applied via Xresources (isde_theme_build_resources).
  * No manual XtSetValues needed — all widget names match resource specs. */
 
-static void panel_reload_config(Panel *p)
-{
-    /* Re-read clock formats */
-    char errbuf[256];
-    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (cfg) {
-        IsdeConfigTable *root = isde_config_root(cfg);
-        IsdeConfigTable *panel_cfg = isde_config_table(root, "panel");
-        if (panel_cfg) {
-            IsdeConfigTable *clock_cfg = isde_config_table(panel_cfg, "clock");
-            if (clock_cfg) {
-                const char *tf = isde_config_string(clock_cfg, "time_format", NULL);
-                if (tf) { free(p->clock_time_fmt); p->clock_time_fmt = strdup(tf); }
-                const char *df = isde_config_string(clock_cfg, "date_format", NULL);
-                if (df) { free(p->clock_date_fmt); p->clock_date_fmt = strdup(df); }
-            }
-        }
-        isde_config_free(cfg);
-    }
-    isde_config_invalidate_cache();
-    isde_theme_reload();
-}
 
 static void on_panel_settings_changed(const char *section, const char *key,
                                       void *user_data)
@@ -287,8 +265,10 @@ static void on_panel_settings_changed(const char *section, const char *key,
     if (strcmp(section, "panel.clock") == 0 ||
         strcmp(section, "panel") == 0 ||
         strcmp(section, "appearance") == 0 ||
-        strcmp(section, "*") == 0)
-        panel_reload_config(p);
+        strcmp(section, "*") == 0) {
+        p->running = 0;
+        p->restart = 1;
+    }
 }
 
 static void panel_dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)

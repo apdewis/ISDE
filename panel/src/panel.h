@@ -126,6 +126,7 @@ typedef struct Panel {
     Widget             active_popup;  /* Currently open popup shell, or NULL */
 
     int                running;
+    int                restart;
 } Panel;
 
 /* ---------- panel.c ---------- */
