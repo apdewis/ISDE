@@ -1,32 +1,72 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * panel-appearance.c — Appearance settings: font selection
+ * panel-appearance.c — Appearance settings:
+ *   - Colour scheme (base16 themes)
+ *   - Pointer/cursor theme (Xcursor)
+ *   - Icon theme (freedesktop)
  */
 #include "settings.h"
+#include <ISW/List.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-static Widget font_chooser;
-static char  *saved_family;
-static int    saved_size;
+#include "isde/isde-theme.h"
+
+/* --- colour scheme --- */
+static Widget  scheme_list;
+static String *scheme_names_arr;
+static int     scheme_count;
+static int     saved_scheme_idx;
+
+/* --- cursor theme --- */
+static Widget  cursor_list;
+static String *cursor_names_arr;
+static int     cursor_count;
+static int     saved_cursor_idx;
+
+/* --- icon theme --- */
+static Widget  icon_list;
+static String *icon_names_arr;
+static int     icon_count;
+static int     saved_icon_idx;
+
 static IsdeDBus *panel_dbus;
+
+/* ---------- save / revert ---------- */
 
 static void save_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    const char *family = IswFontChooserGetFamily(font_chooser);
-    int size = IswFontChooserGetSize(font_chooser);
-
-    free(saved_family);
-    saved_family = strdup(family);
-    saved_size = size;
 
     char *path = isde_xdg_config_path("isde.toml");
-    if (path) {
-        isde_config_write_string(path, "appearance", "font_family", family);
-        isde_config_write_int(path, "appearance", "font_size", size);
-        free(path);
+    if (!path) return;
+
+    /* Colour scheme */
+    IswListReturnStruct *sr = IswListShowCurrent(scheme_list);
+    if (sr && sr->list_index >= 0 && sr->list_index < scheme_count) {
+        isde_config_write_string(path, "appearance", "color_scheme",
+                                 scheme_names_arr[sr->list_index]);
+        saved_scheme_idx = sr->list_index;
     }
+
+    /* Cursor theme */
+    sr = IswListShowCurrent(cursor_list);
+    if (sr && sr->list_index >= 0 && sr->list_index < cursor_count) {
+        isde_config_write_string(path, "appearance", "cursor_theme",
+                                 cursor_names_arr[sr->list_index]);
+        saved_cursor_idx = sr->list_index;
+    }
+
+    /* Icon theme */
+    sr = IswListShowCurrent(icon_list);
+    if (sr && sr->list_index >= 0 && sr->list_index < icon_count) {
+        isde_config_write_string(path, "appearance", "icon_theme",
+                                 icon_names_arr[sr->list_index]);
+        saved_icon_idx = sr->list_index;
+    }
+
+    free(path);
 
     if (panel_dbus)
         isde_dbus_settings_notify(panel_dbus, "appearance", "*");
@@ -35,71 +75,222 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
 static void revert_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    /* FontChooser doesn't have a SetFamily/SetSize API —
-     * would need to destroy and recreate. For now just note it. */
+    if (saved_scheme_idx >= 0)
+        IswListHighlight(scheme_list, saved_scheme_idx);
+    if (saved_cursor_idx >= 0)
+        IswListHighlight(cursor_list, saved_cursor_idx);
+    if (saved_icon_idx >= 0)
+        IswListHighlight(icon_list, saved_icon_idx);
 }
+
+/* ---------- find index of a name in an array ---------- */
+
+static int find_index(String *arr, int count, const char *name)
+{
+    if (!name) return 0;
+    for (int i = 0; i < count; i++)
+        if (strcmp(arr[i], name) == 0) return i;
+    return 0;
+}
+
+/* ---------- create ---------- */
 
 static Widget appearance_create(Widget parent, XtAppContext app)
 {
     (void)app;
 
     Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
+    Cardinal n;
     Dimension pw, ph;
     Arg qargs[20];
     XtSetArg(qargs[0], XtNwidth, &pw);
     XtSetArg(qargs[1], XtNheight, &ph);
     XtGetValues(parent, qargs, 2);
+
+    /* Scrollable viewport as the outer container */
+    n = 0;
+    XtSetArg(args[n], XtNallowVert, True);    n++;
+    XtSetArg(args[n], XtNuseRight, True);      n++;
+    XtSetArg(args[n], XtNborderWidth, 0);      n++;
     if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
     if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget form = XtCreateWidget("appearPanel", formWidgetClass,
-                                 parent, args, n);
+    Widget viewport = XtCreateWidget("appearScroll", viewportWidgetClass,
+                                     parent, args, n);
+
+    /* Form inside the viewport for layout */
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);    n++;
+    Widget form = XtCreateManagedWidget("appearForm", formWidgetClass,
+                                        viewport, args, n);
+
+    /* Load current config */
+    char *cur_scheme = NULL, *cur_cursor = NULL, *cur_icon = NULL;
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *appear = isde_config_table(root, "appearance");
+        if (appear) {
+            const char *s;
+            s = isde_config_string(appear, "color_scheme", NULL);
+            if (s) cur_scheme = strdup(s);
+            s = isde_config_string(appear, "cursor_theme", NULL);
+            if (s) cur_cursor = strdup(s);
+            s = isde_config_string(appear, "icon_theme", NULL);
+            if (s) cur_icon = strdup(s);
+        }
+        isde_config_free(cfg);
+    }
+
+    Widget prev = NULL;
+    int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
+
+    /* --- Colour Scheme --- */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Colour Scheme:"); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);           n++;
+    if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
+    Widget scheme_lbl = XtCreateManagedWidget("schemeLbl", labelWidgetClass,
+                                              form, args, n);
+
+    char **raw_schemes = NULL;
+    scheme_count = isde_scheme_list(&raw_schemes);
+    scheme_names_arr = (String *)raw_schemes;
+    if (scheme_count == 0) {
+        scheme_names_arr = malloc(sizeof(String));
+        scheme_names_arr[0] = strdup("(none)");
+        scheme_count = 1;
+    }
+    saved_scheme_idx = find_index(scheme_names_arr, scheme_count, cur_scheme);
 
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Default Font:"); n++;
+    XtSetArg(args[n], XtNlist, scheme_names_arr);     n++;
+    XtSetArg(args[n], XtNnumberStrings, scheme_count); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);           n++;
+    XtSetArg(args[n], XtNforceColumns, True);          n++;
+    XtSetArg(args[n], XtNverticalList, True);          n++;
+    XtSetArg(args[n], XtNheight, list_height);         n++;
+    XtSetArg(args[n], XtNborderWidth, 0);              n++;
+    XtSetArg(args[n], XtNfromVert, scheme_lbl);        n++;
+    scheme_list = XtCreateManagedWidget("schemeList", listWidgetClass,
+                                        form, args, n);
+    IswListHighlight(scheme_list, saved_scheme_idx);
+    prev = scheme_list;
+
+    /* --- Cursor Theme --- */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Cursor Theme:"); n++;
     XtSetArg(args[n], XtNborderWidth, 0);          n++;
-    Widget lbl = XtCreateManagedWidget("fontLbl", labelWidgetClass,
-                                       form, args, n);
+    XtSetArg(args[n], XtNfromVert, prev);           n++;
+    Widget cursor_lbl = XtCreateManagedWidget("cursorLbl", labelWidgetClass,
+                                              form, args, n);
+
+    char **raw_cursors = NULL;
+    cursor_count = isde_cursor_theme_list(&raw_cursors);
+    cursor_names_arr = (String *)raw_cursors;
+    if (cursor_count == 0) {
+        cursor_names_arr = malloc(sizeof(String));
+        cursor_names_arr[0] = strdup("(none)");
+        cursor_count = 1;
+    }
+    saved_cursor_idx = find_index(cursor_names_arr, cursor_count, cur_cursor);
 
     n = 0;
-    XtSetArg(args[n], XtNfromVert, lbl);    n++;
+    XtSetArg(args[n], XtNlist, cursor_names_arr);     n++;
+    XtSetArg(args[n], XtNnumberStrings, cursor_count); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);           n++;
+    XtSetArg(args[n], XtNforceColumns, True);          n++;
+    XtSetArg(args[n], XtNverticalList, True);          n++;
+    XtSetArg(args[n], XtNheight, list_height);         n++;
+    XtSetArg(args[n], XtNborderWidth, 0);              n++;
+    XtSetArg(args[n], XtNfromVert, cursor_lbl);        n++;
+    cursor_list = XtCreateManagedWidget("cursorList", listWidgetClass,
+                                        form, args, n);
+    IswListHighlight(cursor_list, saved_cursor_idx);
+    prev = cursor_list;
+
+    /* --- Icon Theme --- */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Icon Theme:"); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);        n++;
+    XtSetArg(args[n], XtNfromVert, prev);         n++;
+    Widget icon_lbl = XtCreateManagedWidget("iconLbl", labelWidgetClass,
+                                            form, args, n);
+
+    char **raw_icons = NULL;
+    icon_count = isde_icon_theme_list(&raw_icons);
+    icon_names_arr = (String *)raw_icons;
+    if (icon_count == 0) {
+        icon_names_arr = malloc(sizeof(String));
+        icon_names_arr[0] = strdup("(none)");
+        icon_count = 1;
+    }
+    saved_icon_idx = find_index(icon_names_arr, icon_count, cur_icon);
+
+    n = 0;
+    XtSetArg(args[n], XtNlist, icon_names_arr);     n++;
+    XtSetArg(args[n], XtNnumberStrings, icon_count); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);         n++;
+    XtSetArg(args[n], XtNforceColumns, True);        n++;
+    XtSetArg(args[n], XtNverticalList, True);        n++;
+    XtSetArg(args[n], XtNheight, list_height);       n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNfromVert, icon_lbl);        n++;
+    icon_list = XtCreateManagedWidget("iconList", listWidgetClass,
+                                      form, args, n);
+    IswListHighlight(icon_list, saved_icon_idx);
+    prev = icon_list;
+
+    /* --- Save / Revert buttons --- */
+    n = 0;
+    XtSetArg(args[n], XtNfromVert, prev);   n++;
+    XtSetArg(args[n], XtNlabel, "Save");    n++;
     XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    font_chooser = XtCreateManagedWidget("fontChooser", fontChooserWidgetClass,
-                                         form, args, n);
-
-    /* Save / Revert buttons */
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, font_chooser); n++;
-    XtSetArg(args[n], XtNlabel, "Save");           n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
     Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
                                             form, args, n);
     XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
 
     n = 0;
-    XtSetArg(args[n], XtNfromVert, font_chooser); n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);     n++;
-    XtSetArg(args[n], XtNlabel, "Revert");         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
+    XtSetArg(args[n], XtNfromVert, prev);        n++;
+    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
+    XtSetArg(args[n], XtNlabel, "Revert");        n++;
+    XtSetArg(args[n], XtNborderWidth, 0);         n++;
     Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
                                               form, args, n);
     XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
 
-    return form;
+    free(cur_scheme);
+    free(cur_cursor);
+    free(cur_icon);
+
+    return viewport;
 }
 
 static int appearance_has_changes(void)
 {
-    return 0; /* TODO: compare current font selection to saved */
+    /* Check if any list selection differs from saved */
+    if (scheme_list) {
+        IswListReturnStruct *sr = IswListShowCurrent(scheme_list);
+        if (sr && sr->list_index != saved_scheme_idx) return 1;
+    }
+    if (cursor_list) {
+        IswListReturnStruct *sr = IswListShowCurrent(cursor_list);
+        if (sr && sr->list_index != saved_cursor_idx) return 1;
+    }
+    if (icon_list) {
+        IswListReturnStruct *sr = IswListShowCurrent(icon_list);
+        if (sr && sr->list_index != saved_icon_idx) return 1;
+    }
+    return 0;
 }
 
 static void appearance_destroy(void)
 {
-    font_chooser = NULL;
-    free(saved_family);
-    saved_family = NULL;
+    scheme_list = NULL;
+    cursor_list = NULL;
+    icon_list = NULL;
+    /* name arrays stay alive — List widgets hold pointers */
 }
 
 void panel_appearance_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }

@@ -1,0 +1,21 @@
+[Color Scheme]
+Name=ISDE Light
+Author=ISDE Project
+
+[Colors]
+Background=#F5F5F5
+BackgroundLight=#E0E0E0
+SelectionBackground=#BBDEFB
+Border=#9E9E9E
+ForegroundDim=#616161
+Foreground=#333333
+ForegroundLight=#FFFFFF
+BackgroundBright=#FAFAFA
+Red=#C62828
+Orange=#E65100
+Yellow=#F9A825
+Green=#2E7D32
+Cyan=#00838F
+Blue=#1565C0
+Purple=#6A1B9A
+Brown=#795548

@@ -15,6 +15,27 @@
 
 /* ---------- apply input settings from config ---------- */
 
+static void apply_appearance_settings(void)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (!cfg) return;
+
+    IsdeConfigTable *root = isde_config_root(cfg);
+    IsdeConfigTable *appear = isde_config_table(root, "appearance");
+    if (appear) {
+        const char *cursor = isde_config_string(appear, "cursor_theme", NULL);
+        if (cursor) {
+            setenv("XCURSOR_THEME", cursor, 1);
+            fprintf(stderr, "isde-session: cursor theme=%s\n", cursor);
+        }
+        const char *cursor_size = isde_config_string(appear, "cursor_size", NULL);
+        if (cursor_size)
+            setenv("XCURSOR_SIZE", cursor_size, 1);
+    }
+    isde_config_free(cfg);
+}
+
 static void apply_input_settings(void)
 {
     char errbuf[256];
@@ -131,7 +152,8 @@ int session_init(Session *s)
     sa.sa_flags = SA_NOCLDSTOP;
     sigaction(SIGCHLD, &sa, NULL);
 
-    /* Apply input settings from config before starting components */
+    /* Apply settings from config before starting components */
+    apply_appearance_settings();
     apply_input_settings();
 
     s->running = 1;

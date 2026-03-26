@@ -117,17 +117,19 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
     return NULL;
 }
 
-/* Forward declarations for D-Bus callbacks */
+/* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(XtPointer, int *, XtInputId *);
+static void panel_apply_theme(Panel *p);
 
 int panel_init(Panel *p, int *argc, char **argv)
 {
     memset(p, 0, sizeof(*p));
 
+    char **fallbacks = isde_theme_build_resources();
     p->toplevel = XtAppInitialize(&p->app, "ISDE-Panel",
                                   NULL, 0, argc, argv,
-                                  NULL, NULL, 0);
+                                  fallbacks, NULL, 0);
 
     p->conn = XtDisplay(p->toplevel);
     if (xcb_connection_has_error(p->conn))
@@ -198,6 +200,9 @@ int panel_init(Panel *p, int *argc, char **argv)
                         XtWindow(p->shell), clock_x, half);
     xcb_flush(p->conn);
 
+    /* Apply colour scheme */
+    panel_apply_theme(p);
+
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_window_t panel_win = XtWindow(p->shell);
@@ -237,6 +242,74 @@ int panel_init(Panel *p, int *argc, char **argv)
 
 /* ---------- D-Bus settings reload ---------- */
 
+static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
+{
+    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
+        p->conn,
+        xcb_alloc_color(p->conn, p->screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!reply) return p->screen->white_pixel;
+    Pixel px = reply->pixel;
+    free(reply);
+    return px;
+}
+
+static void panel_apply_theme(Panel *p)
+{
+    const IsdeColorScheme *scheme = isde_theme_current();
+    if (!scheme) return;
+
+    Pixel bg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
+    Pixel fg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG));
+
+    Arg args[20];
+    Cardinal n;
+
+    /* Panel bar and box (override-redirect, won't inherit fallbacks) */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, bg); n++;
+    XtSetValues(p->shell, args, n);
+    XtSetValues(p->box, args, n);
+
+    /* Clock */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, bg); n++;
+    XtSetArg(args[n], XtNforeground, fg); n++;
+    XtSetValues(p->clock_time, args, n);
+    XtSetValues(p->clock_date, args, n);
+
+    /* Start button */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, bg); n++;
+    XtSetArg(args[n], XtNforeground, fg); n++;
+    XtSetValues(p->start_btn, args, n);
+
+    /* Start menu shell and lists */
+    if (p->start_shell) {
+        Pixel menu_bg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG));
+        n = 0;
+        XtSetArg(args[n], XtNbackground, menu_bg); n++;
+        XtSetValues(p->start_shell, args, n);
+        n = 0;
+        XtSetArg(args[n], XtNbackground, menu_bg); n++;
+        XtSetArg(args[n], XtNforeground, fg); n++;
+        if (p->cat_box) XtSetValues(p->cat_box, args, n);
+        if (p->app_box) XtSetValues(p->app_box, args, n);
+    }
+
+    /* Taskbar buttons */
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (!g->button) continue;
+        n = 0;
+        XtSetArg(args[n], XtNbackground, bg); n++;
+        XtSetArg(args[n], XtNforeground, fg); n++;
+        XtSetValues(g->button, args, n);
+    }
+}
+
 static void panel_reload_config(Panel *p)
 {
     /* Re-read clock formats */
@@ -257,6 +330,8 @@ static void panel_reload_config(Panel *p)
         isde_config_free(cfg);
     }
     isde_config_invalidate_cache();
+    isde_theme_reload();
+    panel_apply_theme(p);
 }
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -266,6 +341,7 @@ static void on_panel_settings_changed(const char *section, const char *key,
     Panel *p = (Panel *)user_data;
     if (strcmp(section, "panel.clock") == 0 ||
         strcmp(section, "panel") == 0 ||
+        strcmp(section, "appearance") == 0 ||
         strcmp(section, "*") == 0)
         panel_reload_config(p);
 }
@@ -315,12 +391,15 @@ void panel_dismiss_popup(Panel *p)
 
     /* Reset start button colors if dismissing the start menu */
     if (p->active_popup == p->start_shell) {
-        Arg ia[2];
-        XtSetArg(ia[0], XtNforeground,
-                 BlackPixelOfScreen(XtScreen(p->start_btn)));
-        XtSetArg(ia[1], XtNbackground,
-                 WhitePixelOfScreen(XtScreen(p->start_btn)));
-        XtSetValues(p->start_btn, ia, 2);
+        const IsdeColorScheme *scheme = isde_theme_current();
+        if (scheme) {
+            Arg ia[2];
+            XtSetArg(ia[0], XtNforeground,
+                     panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG)));
+            XtSetArg(ia[1], XtNbackground,
+                     panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT)));
+            XtSetValues(p->start_btn, ia, 2);
+        }
     }
 
     ShellWidget sw = (ShellWidget)p->active_popup;

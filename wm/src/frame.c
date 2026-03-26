@@ -14,6 +14,68 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Convert 0xRRGGBB to an X11 Pixel via AllocColor */
+static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
+{
+    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
+        wm->conn,
+        xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!reply) return wm->screen->white_pixel;
+    Pixel px = reply->pixel;
+    free(reply);
+    return px;
+}
+
+/* Apply theme colors to a client's frame widgets */
+void frame_apply_theme(Wm *wm, WmClient *c)
+{
+    const IsdeColorScheme *scheme = isde_theme_current();
+    if (!scheme) return;
+
+    Pixel border_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_COMMENT));
+    Pixel title_bg = c->focused
+        ? color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BLUE))
+        : color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
+    Pixel title_fg = c->focused
+        ? color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT))
+        : color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG));
+    Pixel btn_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
+    Pixel btn_fg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG));
+    Pixel close_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_RED));
+    Pixel close_fg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT));
+
+    Arg args[20];
+    Cardinal n;
+
+    /* Frame shell background (visible as border around client) */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, border_bg); n++;
+    XtSetValues(c->shell, args, n);
+
+    /* Title bar */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, title_bg); n++;
+    XtSetArg(args[n], XtNforeground, title_fg); n++;
+    XtSetValues(c->title_label, args, n);
+
+    /* Min/max buttons */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, btn_bg); n++;
+    XtSetArg(args[n], XtNforeground, btn_fg); n++;
+    XtSetValues(c->minimize_btn, args, n);
+    XtSetValues(c->maximize_btn, args, n);
+
+    /* Close button */
+    n = 0;
+    XtSetArg(args[n], XtNbackground, close_bg); n++;
+    XtSetArg(args[n], XtNforeground, close_fg); n++;
+    XtSetValues(c->close_btn, args, n);
+}
+
 /* ---------- title fetching ---------- */
 
 static char *fetch_title(Wm *wm, xcb_window_t win)
@@ -220,8 +282,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     /* Realize the shell so we get a window ID */
     XtRealizeWidget(c->shell);
 
-    /* Set correct initial positions for all title bar widgets */
+    /* Set correct initial positions and apply theme colors */
     frame_configure(wm, c);
+    frame_apply_theme(wm, c);
 
     /* Reparent the client window into the frame, below the title bar */
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),

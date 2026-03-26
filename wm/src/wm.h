@@ -19,6 +19,7 @@
 #include "isde/isde-ewmh.h"
 #include "isde/isde-ipc.h"
 #include "isde/isde-dbus.h"
+#include "isde/isde-theme.h"
 
 /* ---------- Frame geometry constants ---------- */
 #define WM_TITLE_HEIGHT    24
@@ -112,6 +113,7 @@ void      frame_update_title(Wm *wm, WmClient *c);
 void      frame_configure(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(WmClient *c);
+void      frame_apply_theme(Wm *wm, WmClient *c);
 
 /* ---------- ewmh.c — EWMH property management ---------- */
 void  wm_ewmh_setup(Wm *wm);

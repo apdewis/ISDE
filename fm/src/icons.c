@@ -61,9 +61,23 @@ static char *read_svg_file(const char *path)
     return buf;
 }
 
+static char *configured_icon_theme = NULL;
+
 static char *load_icon(const char *category, const char *name,
                        const char *fallback)
 {
+    /* Try configured icon theme first */
+    if (configured_icon_theme) {
+        char *path = isde_icon_theme_lookup(configured_icon_theme,
+                                             category, name);
+        if (path) {
+            char *data = read_svg_file(path);
+            free(path);
+            if (data) return data;
+        }
+    }
+
+    /* Try ISDE's own icon set */
     char *path = isde_icon_find(category, name);
     if (path) {
         char *data = read_svg_file(path);
@@ -75,6 +89,25 @@ static char *load_icon(const char *category, const char *name,
 
 void icons_init(void)
 {
+    /* Free previous data if reloading */
+    icons_cleanup();
+
+    /* Read configured icon theme from config */
+    free(configured_icon_theme);
+    configured_icon_theme = NULL;
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *appear = isde_config_table(root, "appearance");
+        if (appear) {
+            const char *theme = isde_config_string(appear, "icon_theme", NULL);
+            if (theme)
+                configured_icon_theme = strdup(theme);
+        }
+        isde_config_free(cfg);
+    }
+
     icon_folder_data = load_icon("places", "folder", FALLBACK_FOLDER);
     icon_file_data   = load_icon("mimetypes", "text-plain", FALLBACK_FILE);
     icon_exec_data   = load_icon("mimetypes", "application-x-executable",

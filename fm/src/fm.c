@@ -524,8 +524,14 @@ static void on_settings_changed(const char *section, const char *key,
     Fm *fm = (Fm *)user_data;
     if (strcmp(section, "general") == 0 ||
         strcmp(section, "input") == 0 ||
-        strcmp(section, "*") == 0)
+        strcmp(section, "appearance") == 0 ||
+        strcmp(section, "*") == 0) {
+        if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
+            isde_theme_reload();
+            icons_init(); /* re-scan with new theme */
+        }
         fm_reload_config(fm);
+    }
 }
 
 static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
@@ -557,9 +563,10 @@ int fm_init(Fm *fm, int *argc, char **argv)
         isde_config_free(cfg);
     }
 
+    char **fallbacks = isde_theme_build_resources();
     fm->toplevel = XtAppInitialize(&fm->app, "ISDE-FM",
                                    NULL, 0, argc, argv,
-                                   NULL, NULL, 0);
+                                   fallbacks, NULL, 0);
 
     Arg args[20];
     Cardinal n = 0;

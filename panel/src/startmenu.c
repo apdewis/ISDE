@@ -20,22 +20,41 @@ static const char *START_ICON_SVG =
     "<polygon points='3,2 13,8 3,14' fill='black'/>"
     "</svg>";
 
+static Pixel start_color_pixel(Panel *p, unsigned int rgb)
+{
+    xcb_connection_t *conn = XtDisplay(p->start_btn);
+    xcb_screen_t *screen = XtScreen(p->start_btn);
+    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
+        conn,
+        xcb_alloc_color(conn, screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!reply) return screen->white_pixel;
+    Pixel px = reply->pixel;
+    free(reply);
+    return px;
+}
+
 static void set_start_btn_active(Panel *p, int active)
 {
+    const IsdeColorScheme *scheme = isde_theme_current();
     Arg args[20];
     Cardinal n = 0;
-    if (active) {
+    if (active && scheme) {
         XtSetArg(args[n], XtNforeground,
-                 WhitePixelOfScreen(XtScreen(p->start_btn))); n++;
+                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT))); n++;
         XtSetArg(args[n], XtNbackground,
-                 BlackPixelOfScreen(XtScreen(p->start_btn))); n++;
-    } else {
+                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BLUE))); n++;
+    } else if (scheme) {
         XtSetArg(args[n], XtNforeground,
-                 BlackPixelOfScreen(XtScreen(p->start_btn))); n++;
+                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG))); n++;
         XtSetArg(args[n], XtNbackground,
-                 WhitePixelOfScreen(XtScreen(p->start_btn))); n++;
+                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT))); n++;
     }
-    XtSetValues(p->start_btn, args, n);
+    if (n > 0)
+        XtSetValues(p->start_btn, args, n);
 }
 
 #define MENU_WIDTH       400

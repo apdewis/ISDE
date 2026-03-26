@@ -20,9 +20,11 @@
 #include <ISW/SpinBox.h>
 #include <ISW/FontChooser.h>
 #include <ISW/Tabs.h>
+#include <ISW/Viewport.h>
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
+#include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-settings-plugin.h"
 

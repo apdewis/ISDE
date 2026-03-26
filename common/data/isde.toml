@@ -7,3 +7,14 @@ window_manager = "isde-wm"
 
 [input]
 double_click_ms = 400
+mouse_acceleration = 2
+mouse_threshold = 4
+
+[keyboard]
+repeat_delay = 300
+repeat_interval = 30
+
+[appearance]
+color_scheme = "default-light"
+# cursor_theme = "default"
+# icon_theme = "hicolor"

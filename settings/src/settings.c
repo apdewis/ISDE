@@ -149,9 +149,10 @@ int settings_init(Settings *s, int *argc, char **argv)
     memset(s, 0, sizeof(*s));
     s->active_panel = -1;
 
+    char **fallbacks = isde_theme_build_resources();
     s->toplevel = XtAppInitialize(&s->app, "ISDE-Settings",
                                   NULL, 0, argc, argv,
-                                  NULL, NULL, 0);
+                                  fallbacks, NULL, 0);
 
     Arg args[20];
     Cardinal n = 0;

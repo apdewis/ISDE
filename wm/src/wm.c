@@ -21,6 +21,20 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
     return a;
 }
 
+/* ---------- D-Bus settings changed ---------- */
+
+static void wm_on_settings_changed(const char *section, const char *key,
+                                    void *user_data)
+{
+    (void)key;
+    Wm *wm = (Wm *)user_data;
+    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
+        isde_theme_reload();
+        for (WmClient *c = wm->clients; c; c = c->next)
+            frame_apply_theme(wm, c);
+    }
+}
+
 /* ---------- initialization ---------- */
 
 int wm_init(Wm *wm, int *argc, char **argv)
@@ -28,10 +42,11 @@ int wm_init(Wm *wm, int *argc, char **argv)
     memset(wm, 0, sizeof(*wm));
 
     /* Initialize Xt — this opens the X connection for us */
+    char **fallbacks = isde_theme_build_resources();
     wm->toplevel = XtAppInitialize(&wm->app, "ISDE-WM",
                                    NULL, 0,
                                    argc, argv,
-                                   NULL,
+                                   fallbacks,
                                    NULL, 0);
 
     wm->conn = XtDisplay(wm->toplevel);
@@ -75,10 +90,15 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_wm_name           = intern(wm->conn, "WM_NAME");
     wm->atom_net_wm_name       = intern(wm->conn, "_NET_WM_NAME");
 
+    /* Load initial colour scheme */
+    isde_theme_current();
+
     /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
-    wm->dbus = isde_dbus_init(); /* may be NULL if D-Bus unavailable */
+    wm->dbus = isde_dbus_init();
+    if (wm->dbus)
+        isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
 
     /* Key bindings */
     wm->keysyms = xcb_key_symbols_alloc(wm->conn);
@@ -155,7 +175,8 @@ void wm_focus_client(Wm *wm, WmClient *c)
 
     if (prev && prev != c) {
         prev->focused = 0;
-        frame_update_title(wm, prev); /* redraw unfocused style */
+        frame_apply_theme(wm, prev);
+        frame_update_title(wm, prev);
     }
 
     if (c) {
@@ -166,7 +187,8 @@ void wm_focus_client(Wm *wm, WmClient *c)
         uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
         xcb_configure_window(wm->conn, XtWindow(c->shell),
                              XCB_CONFIG_WINDOW_STACK_MODE, vals);
-        frame_update_title(wm, c); /* redraw focused style */
+        frame_apply_theme(wm, c);
+        frame_update_title(wm, c);
     }
     wm_ewmh_update_active(wm);
     xcb_flush(wm->conn);

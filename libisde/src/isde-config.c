@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 /*
  * isde-config.c — TOML config file loading via tomlc99
  */
@@ -8,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 struct IsdeConfig {
     toml_table_t *root;
@@ -71,6 +73,28 @@ IsdeConfig *isde_config_load(const char *path, char *errbuf, int errbufsz)
 IsdeConfig *isde_config_load_xdg(const char *name, char *errbuf, int errbufsz)
 {
     char *path = isde_xdg_find_config(name);
+
+    /* Dev build fallback: check relative to executable */
+    if (!path) {
+        char exe_dir[512] = {0};
+        ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);
+        if (len > 0) {
+            exe_dir[len] = '\0';
+            char *slash = strrchr(exe_dir, '/');
+            if (slash) *slash = '\0';
+            size_t total = strlen(exe_dir) + strlen("/../../common/data/")
+                         + strlen(name) + 1;
+            path = malloc(total);
+            if (path) {
+                snprintf(path, total, "%s/../../common/data/%s", exe_dir, name);
+                if (access(path, R_OK) != 0) {
+                    free(path);
+                    path = NULL;
+                }
+            }
+        }
+    }
+
     if (!path) {
         if (errbuf)
             snprintf(errbuf, errbufsz, "%s not found in XDG config dirs", name);
