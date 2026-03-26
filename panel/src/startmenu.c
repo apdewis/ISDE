@@ -209,25 +209,20 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     (void)call_data;
     Panel *p = (Panel *)client_data;
 
-    if (!XtIsRealized(p->start_shell))
-        XtRealizeWidget(p->start_shell);
-
     if (p->active_popup == p->start_shell) {
         panel_dismiss_popup(p);
         return;
     }
     set_start_btn_active(p, 1);
 
-    Position bx, by;
-    XtTranslateCoords(p->start_btn, 0, 0, &bx, &by);
+    /* Position above the panel at the left edge */
+    int panel_y = p->screen->height_in_pixels - PANEL_HEIGHT;
+    int menu_y = panel_y - MENU_HEIGHT;
 
-    /* Set position before popup via Xt resources */
-    Arg a[2];
-    Cardinal na = 0;
-    XtSetArg(a[na], XtNx, (Position)bx);              na++;
-    XtSetArg(a[na], XtNy, (Position)(by - MENU_HEIGHT)); na++;
-    XtSetValues(p->start_shell, a, na);
-
+    if (!XtIsRealized(p->start_shell))
+        XtRealizeWidget(p->start_shell);
+    XtConfigureWidget(p->start_shell, 0, menu_y,
+                      MENU_WIDTH, MENU_HEIGHT, 1);
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
@@ -241,15 +236,19 @@ void startmenu_init(Panel *p)
     build_categories(p);
     p->active_cat = -1;
 
-    /* Start button */
+    /* Start button — child of form, pinned left */
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNsvgData, START_ICON_SVG);  n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);        n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     p->start_btn = XtCreateManagedWidget("startBtn", commandWidgetClass,
-                                         p->box, args, n);
+                                         p->form, args, n);
     XtAddCallback(p->start_btn, XtNcallback, toggle_start_menu, p);
 
     /* Start menu shell */

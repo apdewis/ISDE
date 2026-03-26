@@ -77,7 +77,8 @@ typedef struct Panel {
     XtAppContext       app;
     Widget             toplevel;
     Widget             shell;       /* OverrideShell — the panel bar */
-    Widget             box;         /* Horizontal Box layout */
+    Widget             form;        /* Form layout container */
+    Widget             box;         /* Horizontal Box for taskbar buttons */
 
     /* Applets */
     Widget             start_btn;   /* Start menu button (triangle icon) */

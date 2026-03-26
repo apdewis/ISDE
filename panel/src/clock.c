@@ -63,24 +63,35 @@ void clock_init(Panel *p)
 
     int half = PANEL_HEIGHT / 2;
 
-    /* Time label (top half) */
+    /* Time label (top half) — child of form, right of taskbar box */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, "00:00");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
+    XtSetArg(args[n], XtNlabel, "00:00");              n++;
+    XtSetArg(args[n], XtNborderWidth, 0);               n++;
     XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
-    XtSetArg(args[n], XtNheight, half);            n++;
+    XtSetArg(args[n], XtNheight, half);                  n++;
+    XtSetArg(args[n], XtNfromHoriz, p->box);            n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);           n++;
+    XtSetArg(args[n], XtNright, XtChainRight);          n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);              n++;
+    XtSetArg(args[n], XtNbottom, XtChainTop);           n++;
     p->clock_time = XtCreateManagedWidget("clockTime", labelWidgetClass,
-                                          p->box, args, n);
+                                          p->form, args, n);
 
-    /* Date label (bottom half) */
+    /* Date label (bottom half) — below time label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "0000-00-00");   n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
-    XtSetArg(args[n], XtNheight, half);            n++;
+    XtSetArg(args[n], XtNlabel, "0000-00-00");          n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                n++;
+    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);      n++;
+    XtSetArg(args[n], XtNheight, half);                   n++;
+    XtSetArg(args[n], XtNfromVert, p->clock_time);       n++;
+    XtSetArg(args[n], XtNfromHoriz, p->box);             n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);               n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
     p->clock_date = XtCreateManagedWidget("clockDate", labelWidgetClass,
-                                          p->box, args, n);
+                                          p->form, args, n);
 
     /* Trigger first update immediately */
     p->clock_timer = XtAppAddTimeOut(p->app, 0, update_clock, p);

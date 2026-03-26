@@ -172,32 +172,36 @@ int panel_init(Panel *p, int *argc, char **argv)
     p->shell = XtCreatePopupShell("panel", overrideShellWidgetClass,
                                   p->toplevel, args, n);
 
-    /* Horizontal box for panel contents */
+    /* Form layout: start button | taskbar box | clock */
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 0); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);     n++;
+    p->form = XtCreateManagedWidget("panelForm", formWidgetClass,
+                                    p->shell, args, n);
+
+    /* Initialize applets — they create widgets inside p->form */
+    startmenu_init(p);
+
+    /* Taskbar box in the middle */
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNhSpace, 2);                        n++;
+    XtSetArg(args[n], XtNhSpace, 0);                        n++;
     XtSetArg(args[n], XtNvSpace, 0);                        n++;
+    XtSetArg(args[n], XtNfromHoriz, p->start_btn);          n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);                  n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);            n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);                n++;
+    XtSetArg(args[n], XtNright, XtChainRight);              n++;
+    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);             n++;
     p->box = XtCreateManagedWidget("panelBox", boxWidgetClass,
-                                   p->shell, args, n);
+                                   p->form, args, n);
 
-    /* Initialize applets */
-    startmenu_init(p);
     taskbar_init(p);
     clock_init(p);
 
     XtRealizeWidget(p->shell);
     XtPopup(p->shell, XtGrabNone);
-
-    /* Reparent clock labels out of the Box and into the shell,
-     * stacked vertically at the right edge */
-    int clock_x = sw - PANEL_CLOCK_WIDTH - 2;
-    int half = PANEL_HEIGHT / 2;
-    xcb_reparent_window(p->conn, XtWindow(p->clock_time),
-                        XtWindow(p->shell), clock_x, 0);
-    xcb_reparent_window(p->conn, XtWindow(p->clock_date),
-                        XtWindow(p->shell), clock_x, half);
-    xcb_flush(p->conn);
 
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
