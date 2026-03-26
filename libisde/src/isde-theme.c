@@ -67,6 +67,29 @@ static char *find_theme_file(const char *rel)
     return NULL;
 }
 
+/* Parse element colors from key=value within an element section */
+static void parse_element(IsdeElementColors *el, const char *key,
+                          const char *val)
+{
+    unsigned int c = parse_hex_color(val);
+    if      (strcmp(key, "Background")      == 0) el->bg       = c;
+    else if (strcmp(key, "Foreground")       == 0) el->fg       = c;
+    else if (strcmp(key, "Border")           == 0) el->border   = c;
+    else if (strcmp(key, "HoverBackground")  == 0) el->hover_bg = c;
+    else if (strcmp(key, "HoverForeground")  == 0) el->hover_fg = c;
+}
+
+/* Fill in element defaults from global scheme values where not explicitly set */
+static void element_defaults(IsdeElementColors *el, unsigned int bg,
+                             unsigned int fg, unsigned int border_c)
+{
+    if (!el->bg)       el->bg       = bg;
+    if (!el->fg)       el->fg       = fg;
+    if (!el->border)   el->border   = border_c;
+    if (!el->hover_bg) el->hover_bg = el->bg;
+    if (!el->hover_fg) el->hover_fg = el->fg;
+}
+
 IsdeColorScheme *isde_scheme_load(const char *name)
 {
     /* Build filename: <name>.theme */
@@ -80,19 +103,32 @@ IsdeColorScheme *isde_scheme_load(const char *name)
     free(path);
     if (!fp) return NULL;
 
-    IsdeColorScheme *scheme = calloc(1, sizeof(*scheme));
+    IsdeColorScheme *s = calloc(1, sizeof(*s));
     char line[256];
-    int in_colors = 0, in_scheme = 0;
+
+    enum {
+        SEC_NONE, SEC_SCHEME, SEC_COLORS,
+        SEC_TITLEBAR, SEC_TITLEBAR_ACTIVE, SEC_TITLEBAR_BUTTON,
+        SEC_CLOSE_BUTTON, SEC_MENU, SEC_MENU_ITEM,
+        SEC_TASKBAR, SEC_TASKBAR_BUTTON
+    } section = SEC_NONE;
 
     while (fgets(line, sizeof(line), fp)) {
-        /* Strip trailing whitespace */
         char *end = line + strlen(line);
         while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
 
-        /* Section headers */
         if (line[0] == '[') {
-            in_colors = (strcmp(line, "[Colors]") == 0);
-            in_scheme = (strcmp(line, "[Color Scheme]") == 0);
+            if      (strcmp(line, "[Color Scheme]")   == 0) section = SEC_SCHEME;
+            else if (strcmp(line, "[Colors]")          == 0) section = SEC_COLORS;
+            else if (strcmp(line, "[TitleBar]")        == 0) section = SEC_TITLEBAR;
+            else if (strcmp(line, "[TitleBarActive]")  == 0) section = SEC_TITLEBAR_ACTIVE;
+            else if (strcmp(line, "[TitleBarButton]")  == 0) section = SEC_TITLEBAR_BUTTON;
+            else if (strcmp(line, "[CloseButton]")     == 0) section = SEC_CLOSE_BUTTON;
+            else if (strcmp(line, "[Menu]")            == 0) section = SEC_MENU;
+            else if (strcmp(line, "[MenuItem]")        == 0) section = SEC_MENU_ITEM;
+            else if (strcmp(line, "[Taskbar]")         == 0) section = SEC_TASKBAR;
+            else if (strcmp(line, "[TaskbarButton]")   == 0) section = SEC_TASKBAR_BUTTON;
+            else section = SEC_NONE;
             continue;
         }
 
@@ -102,44 +138,59 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         char *key = line;
         char *val = eq + 1;
 
-        if (in_scheme) {
-            if (strcmp(key, "Name") == 0)
-                scheme->name = strdup(val);
-            else if (strcmp(key, "Author") == 0)
-                scheme->author = strdup(val);
-        } else if (in_colors) {
-            static const struct { const char *name; IsdeColorRole role; } color_keys[] = {
-                { "Background",          ISDE_COLOR_BG },
-                { "BackgroundLight",     ISDE_COLOR_BG_LIGHT },
-                { "SelectionBackground", ISDE_COLOR_SELECT_BG },
-                { "Border",              ISDE_COLOR_COMMENT },
-                { "ForegroundDim",       ISDE_COLOR_FG_DIM },
-                { "Foreground",          ISDE_COLOR_FG },
-                { "ForegroundLight",     ISDE_COLOR_FG_LIGHT },
-                { "BackgroundBright",    ISDE_COLOR_BG_BRIGHT },
-                { "Red",                 ISDE_COLOR_RED },
-                { "Orange",              ISDE_COLOR_ORANGE },
-                { "Yellow",              ISDE_COLOR_YELLOW },
-                { "Green",               ISDE_COLOR_GREEN },
-                { "Cyan",                ISDE_COLOR_CYAN },
-                { "Blue",                ISDE_COLOR_BLUE },
-                { "Purple",              ISDE_COLOR_PURPLE },
-                { "Brown",              ISDE_COLOR_BROWN },
-            };
-            for (int k = 0; k < (int)(sizeof(color_keys)/sizeof(color_keys[0])); k++) {
-                if (strcmp(key, color_keys[k].name) == 0) {
-                    scheme->colors[color_keys[k].role] = parse_hex_color(val);
-                    break;
-                }
-            }
+        switch (section) {
+        case SEC_SCHEME:
+            if      (strcmp(key, "Name")   == 0) s->name   = strdup(val);
+            else if (strcmp(key, "Author") == 0) s->author = strdup(val);
+            break;
+
+        case SEC_COLORS: {
+            unsigned int c = parse_hex_color(val);
+            if      (strcmp(key, "Background")          == 0) s->bg        = c;
+            else if (strcmp(key, "BackgroundLight")      == 0) s->bg_light  = c;
+            else if (strcmp(key, "BackgroundBright")     == 0) s->bg_bright = c;
+            else if (strcmp(key, "Foreground")           == 0) s->fg        = c;
+            else if (strcmp(key, "ForegroundDim")        == 0) s->fg_dim    = c;
+            else if (strcmp(key, "ForegroundLight")      == 0) s->fg_light  = c;
+            else if (strcmp(key, "Border")               == 0) s->border    = c;
+            else if (strcmp(key, "SelectionBackground")  == 0) s->select_bg = c;
+            else if (strcmp(key, "SelectionForeground")  == 0) s->select_fg = c;
+            else if (strcmp(key, "Error")                == 0) s->error     = c;
+            else if (strcmp(key, "Warning")              == 0) s->warning   = c;
+            else if (strcmp(key, "Success")              == 0) s->success   = c;
+            else if (strcmp(key, "Active")               == 0) s->active    = c;
+            else if (strcmp(key, "Accent")               == 0) s->accent    = c;
+            break;
+        }
+
+        case SEC_TITLEBAR:        parse_element(&s->titlebar,        key, val); break;
+        case SEC_TITLEBAR_ACTIVE: parse_element(&s->titlebar_active, key, val); break;
+        case SEC_TITLEBAR_BUTTON: parse_element(&s->titlebar_button, key, val); break;
+        case SEC_CLOSE_BUTTON:    parse_element(&s->close_button,    key, val); break;
+        case SEC_MENU:            parse_element(&s->menu,            key, val); break;
+        case SEC_MENU_ITEM:       parse_element(&s->menu_item,       key, val); break;
+        case SEC_TASKBAR:         parse_element(&s->taskbar,         key, val); break;
+        case SEC_TASKBAR_BUTTON:  parse_element(&s->taskbar_button,  key, val); break;
+        default: break;
         }
     }
 
     fclose(fp);
 
-    if (!scheme->name)
-        scheme->name = strdup(name);
-    return scheme;
+    if (!s->name)
+        s->name = strdup(name);
+
+    /* Fill defaults for element sections that weren't specified */
+    element_defaults(&s->titlebar,        s->bg_light, s->fg,       s->border);
+    element_defaults(&s->titlebar_active, s->active,   s->fg_light, s->active);
+    element_defaults(&s->titlebar_button, s->bg_light, s->fg,       s->border);
+    element_defaults(&s->close_button,    s->error,    s->fg_light, s->error);
+    element_defaults(&s->menu,            s->bg,       s->fg,       s->border);
+    element_defaults(&s->menu_item,       s->bg,       s->fg,       s->bg);
+    element_defaults(&s->taskbar,         s->bg_light, s->fg,       s->border);
+    element_defaults(&s->taskbar_button,  s->bg_light, s->fg,       s->border);
+
+    return s;
 }
 
 void isde_scheme_free(IsdeColorScheme *scheme)
@@ -148,14 +199,6 @@ void isde_scheme_free(IsdeColorScheme *scheme)
     free(scheme->name);
     free(scheme->author);
     free(scheme);
-}
-
-unsigned int isde_scheme_color(const IsdeColorScheme *scheme,
-                                IsdeColorRole role)
-{
-    if (!scheme || role < 0 || role >= ISDE_COLOR_COUNT)
-        return 0;
-    return scheme->colors[role];
 }
 
 static void scan_schemes_in_dir(const char *dir, char ***names,
@@ -430,69 +473,115 @@ char **isde_theme_build_resources(void)
     const IsdeColorScheme *s = isde_theme_current();
     if (!s) return NULL;
 
-    unsigned int bg       = s->colors[ISDE_COLOR_BG];
-    unsigned int bg_light = s->colors[ISDE_COLOR_BG_LIGHT];
-    unsigned int fg       = s->colors[ISDE_COLOR_FG];
-    unsigned int fg_dim   = s->colors[ISDE_COLOR_FG_DIM];
-    unsigned int border   = s->colors[ISDE_COLOR_COMMENT];
-    unsigned int bg_bright= s->colors[ISDE_COLOR_BG_BRIGHT];
-
-    /* Build resource lines — wildcard resources cascade to all widgets */
-    char **res = calloc(32, sizeof(char *));
+    char **res = calloc(96, sizeof(char *));
     int i = 0;
 
-    /* Global widget defaults */
-    res[i++] = fmt_color("*background", bg);
-    res[i++] = fmt_color("*foreground", fg);
-    res[i++] = fmt_color("*borderColor", border);
+    /* Global defaults */
+    res[i++] = fmt_color("*background", s->bg);
+    res[i++] = fmt_color("*foreground", s->fg);
+    res[i++] = fmt_color("*borderColor", s->border);
 
-    /* Container and input widgets */
-    res[i++] = fmt_color("*Form.background", bg);
-    res[i++] = fmt_color("*Box.background", bg);
-    res[i++] = fmt_color("*Paned.background", bg);
-    res[i++] = fmt_color("*Viewport.background", bg);
-    res[i++] = fmt_color("*MainWindow.background", bg);
+    /* Containers */
+    res[i++] = fmt_color("*Form.background", s->bg);
+    res[i++] = fmt_color("*Box.background", s->bg);
+    res[i++] = fmt_color("*Paned.background", s->bg);
+    res[i++] = fmt_color("*Viewport.background", s->bg);
+    res[i++] = fmt_color("*MainWindow.background", s->bg);
 
-    /* Buttons */
-    res[i++] = fmt_color("*Command.background", bg_light);
-    res[i++] = fmt_color("*Command.foreground", fg);
+    /* Buttons — use X11 border, not highlight_thickness */
+    res[i++] = fmt_color("*Command.background", s->bg_light);
+    res[i++] = fmt_color("*Command.foreground", s->fg);
+    res[i++] = fmt_color("*Command.borderColor", s->border);
+    res[i++] = strdup("*Command.borderStrokeWidth: 0");
 
     /* Labels */
-    res[i++] = fmt_color("*Label.background", bg);
-    res[i++] = fmt_color("*Label.foreground", fg);
+    res[i++] = fmt_color("*Label.background", s->bg);
+    res[i++] = fmt_color("*Label.foreground", s->fg);
 
-    /* Lists and selections */
-    res[i++] = fmt_color("*List.background", bg);
-    res[i++] = fmt_color("*List.foreground", fg);
+    /* Lists */
+    res[i++] = fmt_color("*List.background", s->bg);
+    res[i++] = fmt_color("*List.foreground", s->fg);
 
     /* Menus */
-    res[i++] = fmt_color("*SimpleMenu.background", bg_light);
-    res[i++] = fmt_color("*SimpleMenu.foreground", fg);
-    res[i++] = fmt_color("*SmeBSB.foreground", fg);
+    res[i++] = fmt_color("*SimpleMenu.background", s->menu.bg);
+    res[i++] = fmt_color("*SimpleMenu.foreground", s->menu.fg);
+    res[i++] = fmt_color("*SimpleMenu.borderColor", s->menu.border);
+    res[i++] = fmt_color("*SmeBSB.foreground", s->menu_item.fg);
 
-    /* Menu bar buttons */
-    res[i++] = fmt_color("*MenuButton.background", bg);
-    res[i++] = fmt_color("*MenuButton.foreground", fg);
+    /* MenuBar buttons */
+    res[i++] = fmt_color("*MenuButton.background", s->bg);
+    res[i++] = fmt_color("*MenuButton.foreground", s->fg);
 
     /* Scrollbars */
-    res[i++] = fmt_color("*Scrollbar.background", bg_light);
-    res[i++] = fmt_color("*Scrollbar.foreground", fg_dim);
+    res[i++] = fmt_color("*Scrollbar.background", s->bg_light);
+    res[i++] = fmt_color("*Scrollbar.foreground", s->fg_dim);
 
     /* Dialog */
-    res[i++] = fmt_color("*Dialog.background", bg);
-    res[i++] = fmt_color("*Dialog.foreground", fg);
+    res[i++] = fmt_color("*Dialog.background", s->bg);
+    res[i++] = fmt_color("*Dialog.foreground", s->fg);
 
     /* Text input */
-    res[i++] = fmt_color("*Text.background", bg_bright);
-    res[i++] = fmt_color("*Text.foreground", fg);
+    res[i++] = fmt_color("*Text.background", s->bg_bright);
+    res[i++] = fmt_color("*Text.foreground", s->fg);
 
     /* IconView */
-    res[i++] = fmt_color("*IconView.background", bg);
-    res[i++] = fmt_color("*IconView.foreground", fg);
+    res[i++] = fmt_color("*IconView.background", s->bg);
+    res[i++] = fmt_color("*IconView.foreground", s->fg);
 
     /* StatusBar */
-    res[i++] = fmt_color("*StatusBar.background", bg_light);
-    res[i++] = fmt_color("*StatusBar.foreground", fg);
+    res[i++] = fmt_color("*StatusBar.background", s->bg_light);
+    res[i++] = fmt_color("*StatusBar.foreground", s->fg);
+
+    /* Panel / Taskbar */
+    res[i++] = fmt_color("*panelBox.background", s->taskbar.bg);
+    res[i++] = fmt_color("*startBtn.background", s->taskbar_button.bg);
+    res[i++] = fmt_color("*startBtn.foreground", s->taskbar_button.fg);
+    res[i++] = fmt_color("*startBtn.borderColor", s->taskbar_button.border);
+    res[i++] = fmt_color("*taskBtn.background", s->taskbar_button.bg);
+    res[i++] = fmt_color("*taskBtn.foreground", s->taskbar_button.fg);
+    res[i++] = fmt_color("*taskBtn.borderColor", s->taskbar_button.border);
+
+    /* Start menu */
+    res[i++] = fmt_color("*startMenu.background", s->menu.bg);
+    res[i++] = fmt_color("*startMenu.borderColor", s->menu.border);
+    res[i++] = fmt_color("*catList.background", s->menu.bg);
+    res[i++] = fmt_color("*catList.foreground", s->menu.fg);
+    res[i++] = fmt_color("*appList.background", s->menu.bg);
+    res[i++] = fmt_color("*appList.foreground", s->menu.fg);
+
+    /* Window list popup */
+    res[i++] = fmt_color("*winListMenu.background", s->menu.bg);
+    res[i++] = fmt_color("*winListMenu.borderColor", s->menu.border);
+    res[i++] = fmt_color("*winList.background", s->menu.bg);
+    res[i++] = fmt_color("*winList.foreground", s->menu.fg);
+
+    /* Context menus */
+    res[i++] = fmt_color("*ctxMenu.background", s->menu.bg);
+    res[i++] = fmt_color("*ctxMenu.borderColor", s->menu.border);
+    res[i++] = fmt_color("*ctxList.background", s->menu.bg);
+    res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
+
+    /* Clock */
+    res[i++] = fmt_color("*clockTime.background", s->taskbar.bg);
+    res[i++] = fmt_color("*clockTime.foreground", s->taskbar.fg);
+    res[i++] = fmt_color("*clockDate.background", s->taskbar.bg);
+    res[i++] = fmt_color("*clockDate.foreground", s->taskbar.fg);
+
+    /* WM title bar (unfocused defaults — focused set via XtSetValues) */
+    res[i++] = fmt_color("*titleBar.background", s->titlebar.bg);
+    res[i++] = fmt_color("*titleBar.foreground", s->titlebar.fg);
+    res[i++] = fmt_color("*minimizeBtn.background", s->titlebar_button.bg);
+    res[i++] = fmt_color("*minimizeBtn.foreground", s->titlebar_button.fg);
+    res[i++] = fmt_color("*minimizeBtn.borderColor", s->titlebar_button.border);
+    res[i++] = fmt_color("*maximizeBtn.background", s->titlebar_button.bg);
+    res[i++] = fmt_color("*maximizeBtn.foreground", s->titlebar_button.fg);
+    res[i++] = fmt_color("*maximizeBtn.borderColor", s->titlebar_button.border);
+    res[i++] = fmt_color("*closeBtn.background", s->close_button.bg);
+    res[i++] = fmt_color("*closeBtn.foreground", s->close_button.fg);
+    res[i++] = fmt_color("*closeBtn.borderColor", s->close_button.border);
+
+    /* Frame shell background (visible as border around client) */
+    res[i++] = fmt_color("*frame.background", s->titlebar.border);
 
     res[i] = NULL;
     return res;

@@ -12,43 +12,54 @@
 extern "C" {
 #endif
 
-/* ---------- Colour scheme (base16) ---------- */
+/* ---------- Colour scheme ---------- */
 
-/* Base16 colour roles */
-typedef enum {
-    ISDE_COLOR_BG = 0,         /* base00 — default background */
-    ISDE_COLOR_BG_LIGHT,       /* base01 — lighter background */
-    ISDE_COLOR_SELECT_BG,      /* base02 — selection background */
-    ISDE_COLOR_COMMENT,        /* base03 — comments, disabled, borders */
-    ISDE_COLOR_FG_DIM,         /* base04 — dark foreground */
-    ISDE_COLOR_FG,             /* base05 — default foreground */
-    ISDE_COLOR_FG_LIGHT,       /* base06 — light foreground */
-    ISDE_COLOR_BG_BRIGHT,      /* base07 — bright background */
-    ISDE_COLOR_RED,            /* base08 — errors, close button */
-    ISDE_COLOR_ORANGE,         /* base09 */
-    ISDE_COLOR_YELLOW,         /* base0A */
-    ISDE_COLOR_GREEN,          /* base0B */
-    ISDE_COLOR_CYAN,           /* base0C */
-    ISDE_COLOR_BLUE,           /* base0D — active, links, focus */
-    ISDE_COLOR_PURPLE,         /* base0E */
-    ISDE_COLOR_BROWN,          /* base0F */
-    ISDE_COLOR_COUNT
-} IsdeColorRole;
+/* Widget state colours — background, foreground, border, hover variants */
+typedef struct {
+    unsigned int bg;
+    unsigned int fg;
+    unsigned int border;
+    unsigned int hover_bg;
+    unsigned int hover_fg;
+} IsdeElementColors;
 
 typedef struct {
     char    *name;
     char    *author;
-    unsigned int colors[ISDE_COLOR_COUNT]; /* 0xRRGGBB */
+
+    /* Global defaults */
+    unsigned int bg;            /* default background */
+    unsigned int bg_light;      /* lighter background (panels, buttons) */
+    unsigned int bg_bright;     /* bright background (text inputs) */
+    unsigned int fg;            /* default foreground */
+    unsigned int fg_dim;        /* secondary/dimmed foreground */
+    unsigned int fg_light;      /* light foreground (on dark backgrounds) */
+    unsigned int border;        /* borders, separators */
+    unsigned int select_bg;     /* selection background */
+    unsigned int select_fg;     /* selection foreground */
+
+    /* Semantic status colours */
+    unsigned int error;         /* errors, destructive actions */
+    unsigned int warning;       /* warnings, caution */
+    unsigned int success;       /* confirmation, positive state */
+    unsigned int active;        /* focused elements, links, primary */
+    unsigned int accent;        /* decorative emphasis */
+
+    /* Element-specific overrides */
+    IsdeElementColors titlebar;         /* title bar (unfocused) */
+    IsdeElementColors titlebar_active;  /* title bar (focused) */
+    IsdeElementColors titlebar_button;  /* title bar min/max buttons */
+    IsdeElementColors close_button;     /* title bar close button */
+    IsdeElementColors menu;             /* dropdown/popup menus */
+    IsdeElementColors menu_item;        /* menu items */
+    IsdeElementColors taskbar;          /* taskbar bar background */
+    IsdeElementColors taskbar_button;   /* taskbar app buttons */
 } IsdeColorScheme;
 
 /* Load a named colour scheme from the theme directories.
  * Returns NULL if not found. Caller must free with isde_scheme_free(). */
 IsdeColorScheme *isde_scheme_load(const char *name);
 void             isde_scheme_free(IsdeColorScheme *scheme);
-
-/* Get a color value (0xRRGGBB) from the current/loaded scheme. */
-unsigned int     isde_scheme_color(const IsdeColorScheme *scheme,
-                                    IsdeColorRole role);
 
 /* List available colour scheme names.
  * Returns count; *names is a malloc'd array of malloc'd strings.

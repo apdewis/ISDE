@@ -31,49 +31,21 @@ static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
 }
 
 /* Apply theme colors to a client's frame widgets */
+/* Only the title bar needs XtSetValues — focused/unfocused is state-dependent.
+ * Everything else comes from Xresources. */
 void frame_apply_theme(Wm *wm, WmClient *c)
 {
-    const IsdeColorScheme *scheme = isde_theme_current();
-    if (!scheme) return;
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) return;
 
-    Pixel border_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_COMMENT));
-    Pixel title_bg = c->focused
-        ? color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BLUE))
-        : color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
-    Pixel title_fg = c->focused
-        ? color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT))
-        : color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG));
-    Pixel btn_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
-    Pixel btn_fg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG));
-    Pixel close_bg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_RED));
-    Pixel close_fg = color_to_pixel(wm, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT));
+    const IsdeElementColors *tb = c->focused
+        ? &s->titlebar_active : &s->titlebar;
 
     Arg args[20];
-    Cardinal n;
-
-    /* Frame shell background (visible as border around client) */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, border_bg); n++;
-    XtSetValues(c->shell, args, n);
-
-    /* Title bar */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, title_bg); n++;
-    XtSetArg(args[n], XtNforeground, title_fg); n++;
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNbackground, color_to_pixel(wm, tb->bg)); n++;
+    XtSetArg(args[n], XtNforeground, color_to_pixel(wm, tb->fg)); n++;
     XtSetValues(c->title_label, args, n);
-
-    /* Min/max buttons */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, btn_bg); n++;
-    XtSetArg(args[n], XtNforeground, btn_fg); n++;
-    XtSetValues(c->minimize_btn, args, n);
-    XtSetValues(c->maximize_btn, args, n);
-
-    /* Close button */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, close_bg); n++;
-    XtSetArg(args[n], XtNforeground, close_fg); n++;
-    XtSetValues(c->close_btn, args, n);
 }
 
 /* ---------- title fetching ---------- */
@@ -254,7 +226,6 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     XtSetArg(args[n], XtNlabel, "\xe2\x80\x93");     n++; /* UTF-8 – */
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);              n++;
     c->minimize_btn = XtCreateManagedWidget("minimizeBtn", commandWidgetClass,
                                             c->shell, args, n);
     XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
@@ -264,7 +235,6 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     XtSetArg(args[n], XtNlabel, "\xe2\x96\xa1");     n++; /* UTF-8 □ */
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);              n++;
     c->maximize_btn = XtCreateManagedWidget("maximizeBtn", commandWidgetClass,
                                             c->shell, args, n);
     XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
@@ -274,7 +244,6 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     XtSetArg(args[n], XtNlabel, "\xc3\x97");          n++; /* UTF-8 × */
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);              n++;
     c->close_btn = XtCreateManagedWidget("closeBtn", commandWidgetClass,
                                          c->shell, args, n);
     XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
@@ -286,9 +255,11 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     frame_configure(wm, c);
     frame_apply_theme(wm, c);
 
-    /* Reparent the client window into the frame, below the title bar */
+    /* Reparent the client window into the frame, below the title bar.
+     * Client keeps its full requested size; border is extra space around it. */
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
-                        WM_BORDER_WIDTH, WM_TITLE_HEIGHT);
+                        WM_BORDER_WIDTH,
+                        WM_BORDER_WIDTH + WM_TITLE_HEIGHT);
 
     /* Remove client border */
     uint32_t bw = 0;
@@ -332,7 +303,7 @@ int frame_total_width(WmClient *c)
 
 int frame_total_height(WmClient *c)
 {
-    return c->height + WM_TITLE_HEIGHT + WM_BORDER_WIDTH;
+    return c->height + WM_TITLE_HEIGHT + 2 * WM_BORDER_WIDTH;
 }
 
 /* ---------- reconfigure frame + client ---------- */
@@ -347,16 +318,19 @@ void frame_configure(Wm *wm, WmClient *c)
      * the X window atomically — avoids Xt and XCB disagreeing */
     XtConfigureWidget(c->shell, c->x, c->y, fw, fh, 0);
 
-    /* Position title bar widgets directly within the shell */
-    int title_w = fw - btn_area;
+    /* Title bar inset by border width; spans inner width */
+    int inner_w = c->width;
+    int title_w = inner_w - btn_area;
     if (title_w < 1) title_w = 1;
-    XtConfigureWidget(c->title_label, 0, 0,
+    int bx = WM_BORDER_WIDTH;
+    int by = WM_BORDER_WIDTH;
+    XtConfigureWidget(c->title_label, bx, by,
                       title_w, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->minimize_btn, title_w, 0,
+    XtConfigureWidget(c->minimize_btn, bx + title_w, by,
                       WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->maximize_btn, title_w + WM_TITLE_HEIGHT, 0,
+    XtConfigureWidget(c->maximize_btn, bx + title_w + WM_TITLE_HEIGHT, by,
                       WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->close_btn, title_w + 2 * WM_TITLE_HEIGHT, 0,
+    XtConfigureWidget(c->close_btn, bx + title_w + 2 * WM_TITLE_HEIGHT, by,
                       WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
 
     /* Resize client window */

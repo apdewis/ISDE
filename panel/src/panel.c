@@ -120,7 +120,6 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
 /* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(XtPointer, int *, XtInputId *);
-static void panel_apply_theme(Panel *p);
 
 int panel_init(Panel *p, int *argc, char **argv)
 {
@@ -200,9 +199,6 @@ int panel_init(Panel *p, int *argc, char **argv)
                         XtWindow(p->shell), clock_x, half);
     xcb_flush(p->conn);
 
-    /* Apply colour scheme */
-    panel_apply_theme(p);
-
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_window_t panel_win = XtWindow(p->shell);
@@ -257,58 +253,8 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
     return px;
 }
 
-static void panel_apply_theme(Panel *p)
-{
-    const IsdeColorScheme *scheme = isde_theme_current();
-    if (!scheme) return;
-
-    Pixel bg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT));
-    Pixel fg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG));
-
-    Arg args[20];
-    Cardinal n;
-
-    /* Panel bar and box (override-redirect, won't inherit fallbacks) */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, bg); n++;
-    XtSetValues(p->shell, args, n);
-    XtSetValues(p->box, args, n);
-
-    /* Clock */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, bg); n++;
-    XtSetArg(args[n], XtNforeground, fg); n++;
-    XtSetValues(p->clock_time, args, n);
-    XtSetValues(p->clock_date, args, n);
-
-    /* Start button */
-    n = 0;
-    XtSetArg(args[n], XtNbackground, bg); n++;
-    XtSetArg(args[n], XtNforeground, fg); n++;
-    XtSetValues(p->start_btn, args, n);
-
-    /* Start menu shell and lists */
-    if (p->start_shell) {
-        Pixel menu_bg = panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG));
-        n = 0;
-        XtSetArg(args[n], XtNbackground, menu_bg); n++;
-        XtSetValues(p->start_shell, args, n);
-        n = 0;
-        XtSetArg(args[n], XtNbackground, menu_bg); n++;
-        XtSetArg(args[n], XtNforeground, fg); n++;
-        if (p->cat_box) XtSetValues(p->cat_box, args, n);
-        if (p->app_box) XtSetValues(p->app_box, args, n);
-    }
-
-    /* Taskbar buttons */
-    for (TaskGroup *g = p->groups; g; g = g->next) {
-        if (!g->button) continue;
-        n = 0;
-        XtSetArg(args[n], XtNbackground, bg); n++;
-        XtSetArg(args[n], XtNforeground, fg); n++;
-        XtSetValues(g->button, args, n);
-    }
-}
+/* Theme colors are applied via Xresources (isde_theme_build_resources).
+ * No manual XtSetValues needed — all widget names match resource specs. */
 
 static void panel_reload_config(Panel *p)
 {
@@ -331,7 +277,6 @@ static void panel_reload_config(Panel *p)
     }
     isde_config_invalidate_cache();
     isde_theme_reload();
-    panel_apply_theme(p);
 }
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -389,15 +334,15 @@ void panel_dismiss_popup(Panel *p)
 {
     if (!p->active_popup) return;
 
-    /* Reset start button colors if dismissing the start menu */
+    /* Reset start button to inactive state */
     if (p->active_popup == p->start_shell) {
-        const IsdeColorScheme *scheme = isde_theme_current();
-        if (scheme) {
+        const IsdeColorScheme *s = isde_theme_current();
+        if (s) {
+            Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
+            Pixel bg = panel_color_pixel(p, s->taskbar_button.bg);
             Arg ia[2];
-            XtSetArg(ia[0], XtNforeground,
-                     panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG)));
-            XtSetArg(ia[1], XtNbackground,
-                     panel_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT)));
+            XtSetArg(ia[0], XtNforeground, fg);
+            XtSetArg(ia[1], XtNbackground, bg);
             XtSetValues(p->start_btn, ia, 2);
         }
     }

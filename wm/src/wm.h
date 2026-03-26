@@ -23,7 +23,7 @@
 
 /* ---------- Frame geometry constants ---------- */
 #define WM_TITLE_HEIGHT    24
-#define WM_BORDER_WIDTH     4
+#define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
 
 /* ---------- Client (managed window) ---------- */

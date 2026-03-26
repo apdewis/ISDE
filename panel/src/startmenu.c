@@ -37,24 +37,24 @@ static Pixel start_color_pixel(Panel *p, unsigned int rgb)
     return px;
 }
 
+/* State-dependent: active inverts to show the menu is open */
 static void set_start_btn_active(Panel *p, int active)
 {
-    const IsdeColorScheme *scheme = isde_theme_current();
-    Arg args[20];
-    Cardinal n = 0;
-    if (active && scheme) {
-        XtSetArg(args[n], XtNforeground,
-                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG_LIGHT))); n++;
-        XtSetArg(args[n], XtNbackground,
-                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BLUE))); n++;
-    } else if (scheme) {
-        XtSetArg(args[n], XtNforeground,
-                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_FG))); n++;
-        XtSetArg(args[n], XtNbackground,
-                 start_color_pixel(p, isde_scheme_color(scheme, ISDE_COLOR_BG_LIGHT))); n++;
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) return;
+    Arg args[2];
+    if (active) {
+        XtSetArg(args[0], XtNforeground,
+                 start_color_pixel(p, s->taskbar_button.hover_fg));
+        XtSetArg(args[1], XtNbackground,
+                 start_color_pixel(p, s->active));
+    } else {
+        XtSetArg(args[0], XtNforeground,
+                 start_color_pixel(p, s->taskbar_button.fg));
+        XtSetArg(args[1], XtNbackground,
+                 start_color_pixel(p, s->taskbar_button.bg));
     }
-    if (n > 0)
-        XtSetValues(p->start_btn, args, n);
+    XtSetValues(p->start_btn, args, 2);
 }
 
 #define MENU_WIDTH       400
