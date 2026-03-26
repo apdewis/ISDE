@@ -20,6 +20,7 @@
 #include "isde/isde-ipc.h"
 #include "isde/isde-dbus.h"
 #include "isde/isde-theme.h"
+#include "isde/isde-xdg.h"
 
 /* ---------- Frame geometry constants ---------- */
 #define WM_TITLE_HEIGHT    24

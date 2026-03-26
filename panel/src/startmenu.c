@@ -15,10 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static const char *START_ICON_SVG =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
-    "<polygon points='3,2 13,8 3,14' fill='black'/>"
-    "</svg>";
+static char *start_icon_path;
 
 static Pixel start_color_pixel(Panel *p, unsigned int rgb)
 {
@@ -236,10 +233,23 @@ void startmenu_init(Panel *p)
     build_categories(p);
     p->active_cat = -1;
 
+    /* Resolve start menu icon from theme */
+    /* Try common start/menu icon names from the theme */
+    free(start_icon_path);
+    start_icon_path = NULL;
+    static const char *menu_icon_names[] = {
+        "start-here", "view-app-grid", "open-menu",
+        "application-menu", "view-grid", NULL
+    };
+    for (int i = 0; !start_icon_path && menu_icon_names[i]; i++)
+        start_icon_path = isde_icon_find("actions", menu_icon_names[i]);
+
     /* Start button — child of form, pinned left */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNsvgData, START_ICON_SVG);  n++;
+    if (start_icon_path)
+        { XtSetArg(args[n], XtNsvgFile, start_icon_path); n++; }
+    XtSetArg(args[n], XtNlabel, "");                 n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;

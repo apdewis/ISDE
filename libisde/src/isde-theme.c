@@ -265,6 +265,22 @@ int isde_scheme_list(char ***names)
 
 /* ---------- cursor themes ---------- */
 
+/* Check whether an index.theme has a Directories= line (icon theme) */
+static int theme_has_directories(const char *icons_dir, const char *theme_name)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s/index.theme", icons_dir, theme_name);
+    FILE *fp = fopen(path, "r");
+    if (!fp) return 0;
+    char line[4096];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "Directories=", 12) == 0) { found = 1; break; }
+    }
+    fclose(fp);
+    return found;
+}
+
 static void scan_cursor_themes(const char *icons_dir, char ***names,
                                int *count, int *cap)
 {
@@ -275,11 +291,18 @@ static void scan_cursor_themes(const char *icons_dir, char ***names,
     while ((de = readdir(d))) {
         if (de->d_name[0] == '.') continue;
 
+        /* Must have a cursors/ subdirectory */
         char cursors_path[512];
         snprintf(cursors_path, sizeof(cursors_path), "%s/%s/cursors",
                  icons_dir, de->d_name);
-        if (access(cursors_path, R_OK | X_OK) == 0)
-            add_name(names, count, cap, de->d_name);
+        if (access(cursors_path, R_OK | X_OK) != 0)
+            continue;
+
+        /* Exclude icon themes (have Directories= in index.theme) */
+        if (theme_has_directories(icons_dir, de->d_name))
+            continue;
+
+        add_name(names, count, cap, de->d_name);
     }
     closedir(d);
 }
@@ -359,6 +382,10 @@ static void scan_icon_themes(const char *icons_dir, char ***names,
     while ((de = readdir(d))) {
         if (de->d_name[0] == '.') continue;
 
+        /* Must have Directories= to be an icon theme */
+        if (!theme_has_directories(icons_dir, de->d_name))
+            continue;
+
         char index_path[512];
         snprintf(index_path, sizeof(index_path), "%s/%s/index.theme",
                  icons_dir, de->d_name);
@@ -396,30 +423,199 @@ int isde_icon_theme_list(char ***names)
     return count;
 }
 
-char *isde_icon_theme_lookup(const char *theme, const char *category,
-                              const char *icon_name)
+/* Find the base directory containing a theme (where index.theme lives) */
+static char *find_theme_base(const char *theme)
 {
     char path[512];
 
-    /* Try scalable first */
+    /* User icons */
+    snprintf(path, sizeof(path), "%s/icons/%s/index.theme",
+             isde_xdg_data_home(), theme);
+    if (access(path, R_OK) == 0) {
+        snprintf(path, sizeof(path), "%s/icons/%s",
+                 isde_xdg_data_home(), theme);
+        return strdup(path);
+    }
+
+    /* ~/.icons (traditional) */
+    const char *home = getenv("HOME");
+    if (home) {
+        snprintf(path, sizeof(path), "%s/.icons/%s/index.theme", home, theme);
+        if (access(path, R_OK) == 0) {
+            snprintf(path, sizeof(path), "%s/.icons/%s", home, theme);
+            return strdup(path);
+        }
+    }
+
+    /* System dirs */
     const char *dirs = isde_xdg_data_dirs();
     const char *p = dirs;
     while (p && *p) {
         const char *colon = strchr(p, ':');
         size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
         if (dlen > 0) {
-            snprintf(path, sizeof(path),
-                     "%.*s/icons/%s/scalable/%s/%s.svg",
-                     (int)dlen, p, theme, category, icon_name);
-            if (access(path, R_OK) == 0)
+            snprintf(path, sizeof(path), "%.*s/icons/%s/index.theme",
+                     (int)dlen, p, theme);
+            if (access(path, R_OK) == 0) {
+                snprintf(path, sizeof(path), "%.*s/icons/%s",
+                         (int)dlen, p, theme);
                 return strdup(path);
+            }
         }
         p = colon ? colon + 1 : NULL;
     }
 
-    /* Fallback to hicolor */
-    if (strcmp(theme, "hicolor") != 0)
-        return isde_icon_theme_lookup("hicolor", category, icon_name);
+    return NULL;
+}
+
+/* Try to find an icon file in a single base directory, checking
+ * every subdirectory listed in index.theme's Directories= line.
+ * Tries: exact.svg, exact.png, exact-symbolic.svg for each dir. */
+static char *search_theme_base(const char *base, const char *icon_name)
+{
+    char idx_path[512];
+    snprintf(idx_path, sizeof(idx_path), "%s/index.theme", base);
+
+    FILE *fp = fopen(idx_path, "r");
+    if (!fp) return NULL;
+
+    char *directories = NULL;
+    char line[8192];
+    int in_theme = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *end = line + strlen(line);
+        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+
+        if (strcmp(line, "[Icon Theme]") == 0) { in_theme = 1; continue; }
+        if (line[0] == '[') { in_theme = 0; continue; }
+        if (in_theme && strncmp(line, "Directories=", 12) == 0) {
+            directories = strdup(line + 12);
+            break;
+        }
+    }
+    fclose(fp);
+
+    if (!directories) return NULL;
+
+    /* Names to try: exact name, then -symbolic variant */
+    const char *names[2];
+    names[0] = icon_name;
+    char symbolic[256];
+    snprintf(symbolic, sizeof(symbolic), "%s-symbolic", icon_name);
+    names[1] = symbolic;
+
+    char path[512];
+
+    for (int ni = 0; ni < 2; ni++) {
+        char *dp = directories;
+        while (dp && *dp) {
+            char *comma = strchr(dp, ',');
+            size_t dlen = comma ? (size_t)(comma - dp) : strlen(dp);
+            if (dlen > 0) {
+                snprintf(path, sizeof(path), "%s/%.*s/%s.svg",
+                         base, (int)dlen, dp, names[ni]);
+                if (access(path, R_OK) == 0) {
+                    free(directories);
+                    return strdup(path);
+                }
+                snprintf(path, sizeof(path), "%s/%.*s/%s.png",
+                         base, (int)dlen, dp, names[ni]);
+                if (access(path, R_OK) == 0) {
+                    free(directories);
+                    return strdup(path);
+                }
+            }
+            dp = comma ? comma + 1 : NULL;
+        }
+    }
+
+    free(directories);
+    return NULL;
+}
+
+/* Read the Inherits= line from a theme's index.theme */
+static char *read_theme_inherits(const char *base)
+{
+    char idx_path[512];
+    snprintf(idx_path, sizeof(idx_path), "%s/index.theme", base);
+
+    FILE *fp = fopen(idx_path, "r");
+    if (!fp) return NULL;
+
+    char *inherits = NULL;
+    char line[1024];
+    int in_theme = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *end = line + strlen(line);
+        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+
+        if (strcmp(line, "[Icon Theme]") == 0) { in_theme = 1; continue; }
+        if (line[0] == '[') { in_theme = 0; continue; }
+        if (in_theme && strncmp(line, "Inherits=", 9) == 0) {
+            inherits = strdup(line + 9);
+            break;
+        }
+    }
+    fclose(fp);
+    return inherits;
+}
+
+char *isde_icon_theme_lookup(const char *theme, const char *category,
+                              const char *icon_name)
+{
+    (void)category;
+
+    /* Prevent infinite loops in broken theme chains */
+    static int depth = 0;
+    if (depth > 8) return NULL;
+
+    char *base = find_theme_base(theme);
+    if (!base) {
+        /* Theme not found — try hicolor as last resort */
+        if (strcmp(theme, "hicolor") != 0) {
+            depth++;
+            char *r = isde_icon_theme_lookup("hicolor", category, icon_name);
+            depth--;
+            return r;
+        }
+        return NULL;
+    }
+
+    /* Search this theme's directories */
+    char *path = search_theme_base(base, icon_name);
+    if (path) { free(base); return path; }
+
+    /* Follow Inherits= chain */
+    char *inherits = read_theme_inherits(base);
+    free(base);
+
+    if (inherits) {
+        char *ip = inherits;
+        while (ip && *ip) {
+            char *comma = strchr(ip, ',');
+            size_t ilen = comma ? (size_t)(comma - ip) : strlen(ip);
+            if (ilen > 0) {
+                char parent[256];
+                snprintf(parent, sizeof(parent), "%.*s", (int)ilen, ip);
+                depth++;
+                path = isde_icon_theme_lookup(parent, category, icon_name);
+                depth--;
+                if (path) { free(inherits); return path; }
+            }
+            ip = comma ? comma + 1 : NULL;
+        }
+        free(inherits);
+    }
+
+    /* Final fallback to hicolor if not already tried */
+    if (strcmp(theme, "hicolor") != 0) {
+        depth++;
+        path = isde_icon_theme_lookup("hicolor", category, icon_name);
+        depth--;
+        return path;
+    }
 
     return NULL;
 }

@@ -48,6 +48,25 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     XtSetValues(c->title_label, args, n);
 }
 
+/* ---------- icon paths (resolved once) ---------- */
+
+static char *icon_minimize;
+static char *icon_maximize;
+static char *icon_restore;
+static char *icon_close;
+
+static void frame_init_icons(void)
+{
+    free(icon_minimize);
+    free(icon_maximize);
+    free(icon_restore);
+    free(icon_close);
+    icon_minimize = isde_icon_find("actions", "window-minimize");
+    icon_maximize = isde_icon_find("actions", "window-maximize");
+    icon_restore  = isde_icon_find("actions", "window-restore");
+    icon_close    = isde_icon_find("actions", "window-close");
+}
+
 /* ---------- title fetching ---------- */
 
 static char *fetch_title(Wm *wm, xcb_window_t win)
@@ -103,6 +122,29 @@ static void maximize_callback(Widget w, XtPointer client_data,
     Wm *wm = ((void **)client_data)[0];
     WmClient *c = ((void **)client_data)[1];
     wm_maximize_client(wm, c);
+
+    /* Swap icon using svgData (svgFile SetValues doesn't redraw) */
+    {
+        char *icon = c->maximized ? icon_restore : icon_maximize;
+        if (icon) {
+            FILE *fp = fopen(icon, "r");
+            if (fp) {
+                fseek(fp, 0, SEEK_END);
+                long len = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+                char *data = malloc(len + 1);
+                if (data) {
+                    fread(data, 1, len, fp);
+                    data[len] = '\0';
+                    Arg a[1];
+                    XtSetArg(a[0], XtNsvgData, data);
+                    XtSetValues(c->maximize_btn, a, 1);
+                    free(data);
+                }
+                fclose(fp);
+            }
+        }
+    }
 }
 
 static void minimize_callback(Widget w, XtPointer client_data,
@@ -161,6 +203,8 @@ static void title_button_handler(Widget w, XtPointer client_data,
 
 WmClient *frame_create(Wm *wm, xcb_window_t client)
 {
+    frame_init_icons();
+
     /* Get client geometry */
     xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(
         wm->conn, xcb_get_geometry(wm->conn, client), NULL);
@@ -223,27 +267,36 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Minimize button */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "\xe2\x80\x93");     n++; /* UTF-8 – */
+    if (icon_minimize)
+        { XtSetArg(args[n], XtNsvgFile, icon_minimize); n++; }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
     c->minimize_btn = XtCreateManagedWidget("minimizeBtn", commandWidgetClass,
                                             c->shell, args, n);
     XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
 
     /* Maximize / restore button */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "\xe2\x96\xa1");     n++; /* UTF-8 □ */
+    if (icon_maximize)
+        { XtSetArg(args[n], XtNsvgFile, icon_maximize); n++; }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
     c->maximize_btn = XtCreateManagedWidget("maximizeBtn", commandWidgetClass,
                                             c->shell, args, n);
     XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
 
     /* Close button */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "\xc3\x97");          n++; /* UTF-8 × */
+    if (icon_close)
+        { XtSetArg(args[n], XtNsvgFile, icon_close); n++; }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
     c->close_btn = XtCreateManagedWidget("closeBtn", commandWidgetClass,
                                          c->shell, args, n);
     XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);

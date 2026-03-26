@@ -2,6 +2,8 @@
  * isde-xdg.c — XDG Base Directory Specification helpers
  */
 #include "isde/isde-xdg.h"
+#include "isde/isde-config.h"
+#include "isde/isde-theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,15 +127,34 @@ char *isde_xdg_find_data(const char *name)
 
 char *isde_icon_find(const char *category, const char *name)
 {
+    /* Try configured icon theme first */
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *appear = isde_config_table(root, "appearance");
+        if (appear) {
+            const char *theme = isde_config_string(appear, "icon_theme", NULL);
+            if (theme) {
+                char *path = isde_icon_theme_lookup(theme, category, name);
+                if (path) {
+                    isde_config_free(cfg);
+                    return path;
+                }
+            }
+        }
+        isde_config_free(cfg);
+    }
+
+    /* Fallback: ISDE bundled icons in isde/icons/<category>/<name>.svg */
     char rel[256];
     snprintf(rel, sizeof(rel), "icons/%s/%s.svg", category, name);
 
-    /* Search XDG data dirs for isde/icons/<category>/<name>.svg */
     char *path = isde_xdg_find_data(rel);
     if (path)
         return path;
 
-    /* Fallback: check relative to executable for development builds */
+    /* Dev build fallback: check relative to executable */
     static char exe_dir[512] = {0};
     if (!exe_dir[0]) {
         ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);
@@ -144,7 +165,6 @@ char *isde_icon_find(const char *category, const char *name)
         }
     }
     if (exe_dir[0]) {
-        /* Try ../../common/data/icons/ relative to build/fm/ */
         size_t total = strlen(exe_dir) + strlen("/../../common/data/") +
                        strlen(rel) + 1;
         path = malloc(total);

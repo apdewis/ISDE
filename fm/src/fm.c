@@ -542,6 +542,16 @@ static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     isde_dbus_dispatch(bus);
 }
 
+/* ---------- close handling ---------- */
+
+static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    fm->running = 0;
+    XtAppSetExitFlag(fm->app);
+}
+
 /* ---------- init ---------- */
 
 int fm_init(Fm *fm, int *argc, char **argv)
@@ -573,6 +583,8 @@ int fm_init(Fm *fm, int *argc, char **argv)
     XtSetArg(args[n], XtNwidth, 700);  n++;
     XtSetArg(args[n], XtNheight, 500); n++;
     XtSetValues(fm->toplevel, args, n);
+
+    XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);
 
     /* MainWindow provides menubar + content area */
     fm->main_window = XtCreateManagedWidget("mainWin", mainWindowWidgetClass,
@@ -631,9 +643,8 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
 void fm_run(Fm *fm)
 {
-    while (fm->running) {
+    while (fm->running && !XtAppGetExitFlag(fm->app))
         XtAppProcessEvent(fm->app, XtIMAll);
-    }
 }
 
 void fm_cleanup(Fm *fm)

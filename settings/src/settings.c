@@ -142,6 +142,16 @@ static void settings_dbus_input_cb(XtPointer client_data, int *fd,
     isde_dbus_dispatch((IsdeDBus *)client_data);
 }
 
+/* ---------- close handling ---------- */
+
+static void settings_destroy_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Settings *s = (Settings *)cd;
+    s->running = 0;
+    XtAppSetExitFlag(s->app);
+}
+
 /* ---------- init ---------- */
 
 int settings_init(Settings *s, int *argc, char **argv)
@@ -159,6 +169,9 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNwidth, 600);  n++;
     XtSetArg(args[n], XtNheight, 450); n++;
     XtSetValues(s->toplevel, args, n);
+
+    XtAddCallback(s->toplevel, XtNdestroyCallback,
+                  settings_destroy_cb, s);
 
     /* Main layout form — direct child of toplevel */
     n = 0;
@@ -235,7 +248,7 @@ int settings_init(Settings *s, int *argc, char **argv)
 
 void settings_run(Settings *s)
 {
-    while (s->running)
+    while (s->running && !XtAppGetExitFlag(s->app))
         XtAppProcessEvent(s->app, XtIMAll);
 }
 
