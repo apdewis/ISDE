@@ -15,6 +15,7 @@ target_link_libraries(isde-panel
     PkgConfig::XCB_EWMH
     PkgConfig::XCB_ICCCM
     PkgConfig::XCB_UTIL
+    PkgConfig::XCB_RANDR
 )
 
 install(TARGETS isde-panel RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb_aux.h>
+#include <xcb/randr.h>
 
 static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
@@ -117,6 +118,57 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
     return NULL;
 }
 
+/* Query primary monitor geometry via RandR.
+ * Falls back to full screen if RandR is unavailable or no primary is set. */
+static void query_primary_monitor(Panel *p)
+{
+    /* Default to full screen */
+    p->mon_x = 0;
+    p->mon_y = 0;
+    p->mon_w = p->screen->width_in_pixels;
+    p->mon_h = p->screen->height_in_pixels;
+
+    xcb_randr_get_output_primary_reply_t *primary =
+        xcb_randr_get_output_primary_reply(p->conn,
+            xcb_randr_get_output_primary(p->conn, p->root), NULL);
+    if (!primary)
+        return;
+
+    xcb_randr_output_t pout = primary->output;
+    free(primary);
+
+    if (pout == XCB_NONE)
+        return;
+
+    xcb_randr_get_output_info_reply_t *oinfo =
+        xcb_randr_get_output_info_reply(p->conn,
+            xcb_randr_get_output_info(p->conn, pout, XCB_CURRENT_TIME),
+            NULL);
+    if (!oinfo)
+        return;
+
+    xcb_randr_crtc_t crtc = oinfo->crtc;
+    free(oinfo);
+
+    if (crtc == XCB_NONE)
+        return;
+
+    xcb_randr_get_crtc_info_reply_t *cinfo =
+        xcb_randr_get_crtc_info_reply(p->conn,
+            xcb_randr_get_crtc_info(p->conn, crtc, XCB_CURRENT_TIME),
+            NULL);
+    if (!cinfo)
+        return;
+
+    p->mon_x = cinfo->x;
+    p->mon_y = cinfo->y;
+    p->mon_w = cinfo->width;
+    p->mon_h = cinfo->height;
+    free(cinfo);
+}
+
+static void panel_reconfigure(Panel *p);
+
 /* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(XtPointer, int *, XtInputId *);
@@ -158,14 +210,16 @@ int panel_init(Panel *p, int *argc, char **argv)
     load_pinned(p);
     load_desktop_entries(p);
 
-    /* Create panel shell — override-redirect dock at bottom of screen */
-    int sw = p->screen->width_in_pixels;
+    /* Query primary monitor geometry */
+    query_primary_monitor(p);
+
+    /* Create panel shell — override-redirect dock at bottom of primary */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, 0);                           n++;
-    XtSetArg(args[n], XtNy, p->screen->height_in_pixels
+    XtSetArg(args[n], XtNx, p->mon_x);                    n++;
+    XtSetArg(args[n], XtNy, p->mon_y + p->mon_h
                               - PANEL_HEIGHT);             n++;
-    XtSetArg(args[n], XtNwidth, sw);                       n++;
+    XtSetArg(args[n], XtNwidth, p->mon_w);                  n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);            n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);          n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
@@ -214,14 +268,18 @@ int panel_init(Panel *p, int *argc, char **argv)
     xcb_ewmh_wm_strut_partial_t strut;
     memset(&strut, 0, sizeof(strut));
     strut.bottom = PANEL_HEIGHT;
-    strut.bottom_start_x = 0;
-    strut.bottom_end_x = sw - 1;
+    strut.bottom_start_x = p->mon_x;
+    strut.bottom_end_x = p->mon_x + p->mon_w - 1;
     xcb_ewmh_set_wm_strut_partial(ewmh, panel_win, strut);
 
     /* Watch root for property changes (client list updates) */
     uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
     xcb_change_window_attributes(p->conn, p->root,
                                  XCB_CW_EVENT_MASK, &mask);
+
+    /* Subscribe to RandR screen change events */
+    xcb_randr_select_input(p->conn, p->root,
+                           XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
 
     xcb_flush(p->conn);
 
@@ -238,6 +296,46 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     p->running = 1;
     return 0;
+}
+
+/* ---------- reconfigure on monitor change ---------- */
+
+static void panel_reconfigure(Panel *p)
+{
+    int16_t  old_x = p->mon_x;
+    uint16_t old_w = p->mon_w, old_h = p->mon_h;
+
+    query_primary_monitor(p);
+
+    if (p->mon_x == old_x && p->mon_w == old_w && p->mon_h == old_h)
+        return;
+
+    int panel_y = p->mon_y + p->mon_h - PANEL_HEIGHT;
+
+    /* Resize panel shell */
+    XtConfigureWidget(p->shell, p->mon_x, panel_y,
+                      p->mon_w, PANEL_HEIGHT, 0);
+
+    /* Reposition clock */
+    int clock_x = p->mon_w - PANEL_CLOCK_WIDTH - 2;
+    int half = PANEL_HEIGHT / 2;
+    XtConfigureWidget(p->clock_time, clock_x, 0,
+                      PANEL_CLOCK_WIDTH, half, 0);
+    XtConfigureWidget(p->clock_date, clock_x, half,
+                      PANEL_CLOCK_WIDTH, half, 0);
+
+    /* Update strut */
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
+    xcb_ewmh_wm_strut_partial_t strut;
+    memset(&strut, 0, sizeof(strut));
+    strut.bottom = PANEL_HEIGHT;
+    strut.bottom_start_x = p->mon_x;
+    strut.bottom_end_x = p->mon_x + p->mon_w - 1;
+    xcb_ewmh_set_wm_strut_partial(ewmh, XtWindow(p->shell), strut);
+    xcb_flush(p->conn);
+
+    fprintf(stderr, "isde-panel: reconfigured for %dx%d+%d+%d\n",
+            p->mon_w, p->mon_h, p->mon_x, p->mon_y);
 }
 
 /* ---------- D-Bus settings reload ---------- */
@@ -292,6 +390,10 @@ static void poll_clients(XtPointer client_data, XtIntervalId *id)
 {
     (void)id;
     Panel *p = (Panel *)client_data;
+
+    /* Check for screen changes (RandR) */
+    panel_reconfigure(p);
+
     taskbar_update(p);
     taskbar_highlight_active(p);
 

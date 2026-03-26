@@ -215,13 +215,13 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     }
     set_start_btn_active(p, 1);
 
-    /* Position above the panel at the left edge */
-    int panel_y = p->screen->height_in_pixels - PANEL_HEIGHT;
+    /* Position above the panel at the left edge of primary monitor */
+    int panel_y = p->mon_y + p->mon_h - PANEL_HEIGHT;
     int menu_y = panel_y - MENU_HEIGHT;
 
     if (!XtIsRealized(p->start_shell))
         XtRealizeWidget(p->start_shell);
-    XtConfigureWidget(p->start_shell, 0, menu_y,
+    XtConfigureWidget(p->start_shell, p->mon_x, menu_y,
                       MENU_WIDTH, MENU_HEIGHT, 1);
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);

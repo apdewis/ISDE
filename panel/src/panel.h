@@ -22,6 +22,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_icccm.h>
+#include <xcb/randr.h>
 
 #include "isde/isde-ewmh.h"
 #include "isde/isde-ipc.h"
@@ -113,6 +114,12 @@ typedef struct Panel {
     int                screen_num;
     IsdeEwmh          *ewmh;
     IsdeIpc           *ipc;
+
+    /* Primary monitor geometry */
+    int16_t            mon_x;
+    int16_t            mon_y;
+    uint16_t           mon_w;
+    uint16_t           mon_h;
 
     /* Atoms */
     xcb_atom_t         atom_net_wm_name;
