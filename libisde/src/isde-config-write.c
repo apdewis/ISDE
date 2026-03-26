@@ -2,9 +2,8 @@
 /*
  * isde-config-write.c — TOML config file writer
  *
- * Reads an existing TOML file, replaces or inserts a key within
- * a [section], and writes it back. Preserves comments and formatting
- * for lines it doesn't touch.
+ * Reads an existing TOML file line by line, replaces or inserts a
+ * key within a [section], and writes it back.
  */
 #include "isde/isde-config.h"
 
@@ -14,28 +13,6 @@
 #include <ctype.h>
 #include <sys/stat.h>
 
-/* Read entire file into a malloc'd string. Returns NULL on failure. */
-static char *read_file(const char *path)
-{
-    FILE *fp = fopen(path, "r");
-    if (!fp) return NULL;
-
-    fseek(fp, 0, SEEK_END);
-    long len = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    if (len < 0) { fclose(fp); return NULL; }
-
-    char *buf = malloc(len + 1);
-    if (!buf) { fclose(fp); return NULL; }
-
-    size_t nread = fread(buf, 1, len, fp);
-    buf[nread] = '\0';
-    fclose(fp);
-    return buf;
-}
-
-/* Ensure parent directory exists */
 static void ensure_dir(const char *path)
 {
     char *dir = strdup(path);
@@ -47,26 +24,14 @@ static void ensure_dir(const char *path)
     free(dir);
 }
 
-/*
- * Write a key=value pair into a TOML file at the given section.
- * value_str is the already-formatted TOML value (e.g. "\"hello\"", "42", "true").
- *
- * Strategy:
- *   1. Read the file line by line
- *   2. Find [section] header
- *   3. Within the section, find "key = ..." and replace the line
- *   4. If key not found in section, append it at the end of the section
- *   5. If section not found, append [section] + key at the end
- *   6. Write back
- */
 static int write_value(const char *path, const char *section,
                        const char *key, const char *value_str)
 {
     ensure_dir(path);
 
-    char *content = read_file(path);
-    /* If file doesn't exist, create from scratch */
-    if (!content) {
+    FILE *in = fopen(path, "r");
+    if (!in) {
+        /* File doesn't exist — create from scratch */
         FILE *fp = fopen(path, "w");
         if (!fp) return -1;
         fprintf(fp, "[%s]\n%s = %s\n", section, key, value_str);
@@ -74,84 +39,99 @@ static int write_value(const char *path, const char *section,
         return 0;
     }
 
-    /* Parse line by line */
-    FILE *out = fopen(path, "w");
-    if (!out) { free(content); return -1; }
+    /* Read all lines into memory */
+    char **lines = NULL;
+    int nlines = 0;
+    int cap = 64;
+    lines = malloc(cap * sizeof(char *));
 
-    int in_target_section = 0;
-    int key_written = 0;
-    int section_found = 0;
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), in)) {
+        /* Strip trailing newline */
+        size_t len = strlen(buf);
+        if (len > 0 && buf[len - 1] == '\n')
+            buf[len - 1] = '\0';
+        if (nlines >= cap) {
+            cap *= 2;
+            lines = realloc(lines, cap * sizeof(char *));
+        }
+        lines[nlines++] = strdup(buf);
+    }
+    fclose(in);
+
+    /* Find section and key, mark for replacement */
+    int in_target = 0;
+    int key_line = -1;    /* line index where key was found */
+    int section_end = -1; /* line index where target section ends */
+    int section_start = -1;
     size_t key_len = strlen(key);
+    char section_header[256];
+    snprintf(section_header, sizeof(section_header), "[%s]", section);
+    size_t sh_len = strlen(section_header);
 
-    char *line = content;
-    while (line && *line) {
-        char *eol = strchr(line, '\n');
-        size_t line_len = eol ? (size_t)(eol - line) : strlen(line);
-
-        /* Temporary null-terminate for comparison */
-        char saved = line[line_len];
-        line[line_len] = '\0';
-
-        /* Strip leading whitespace for comparison */
-        const char *trimmed = line;
+    for (int i = 0; i < nlines; i++) {
+        const char *trimmed = lines[i];
         while (*trimmed && isspace((unsigned char)*trimmed))
             trimmed++;
 
         if (trimmed[0] == '[') {
-            /* Section header */
-            if (in_target_section && !key_written) {
-                /* End of target section without finding key — insert before next section */
-                fprintf(out, "%s = %s\n", key, value_str);
-                key_written = 1;
-            }
-
-            /* Check if this is our target section */
-            char section_check[256];
-            snprintf(section_check, sizeof(section_check), "[%s]", section);
-            in_target_section = (strncmp(trimmed, section_check,
-                                         strlen(section_check)) == 0);
-            if (in_target_section)
-                section_found = 1;
-
-        } else if (in_target_section && !key_written && trimmed[0] != '#'
-                   && trimmed[0] != '\0') {
-            /* Check if this line is our key */
+            if (in_target && key_line < 0)
+                section_end = i; /* key not found, insert before this section */
+            in_target = (strncmp(trimmed, section_header, sh_len) == 0 &&
+                        (trimmed[sh_len] == '\0' || isspace((unsigned char)trimmed[sh_len])));
+            if (in_target)
+                section_start = i;
+        } else if (in_target && key_line < 0 &&
+                   trimmed[0] != '#' && trimmed[0] != '\0') {
             if (strncmp(trimmed, key, key_len) == 0) {
                 const char *after = trimmed + key_len;
                 while (*after && isspace((unsigned char)*after))
                     after++;
-                if (*after == '=') {
-                    /* Replace this line */
-                    fprintf(out, "%s = %s\n", key, value_str);
-                    key_written = 1;
-                    line[line_len] = saved;
-                    line = eol ? eol + 1 : NULL;
-                    continue;
-                }
+                if (*after == '=')
+                    key_line = i;
             }
         }
+    }
+    if (in_target && section_end < 0)
+        section_end = nlines; /* section goes to end of file */
 
-        /* Write the original line */
-        line[line_len] = saved;
-        fwrite(line, 1, line_len, out);
-        fputc('\n', out);
-
-        line = eol ? eol + 1 : NULL;
+    /* Write output */
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        for (int i = 0; i < nlines; i++) free(lines[i]);
+        free(lines);
+        return -1;
     }
 
-    /* If we were in the target section at EOF and didn't write the key */
-    if (in_target_section && !key_written) {
+    int written = 0;
+    for (int i = 0; i < nlines; i++) {
+        if (i == key_line) {
+            /* Replace this line */
+            fprintf(out, "%s = %s\n", key, value_str);
+            written = 1;
+        } else if (i == section_end && key_line < 0 && section_start >= 0) {
+            /* Insert key before the next section header */
+            fprintf(out, "%s = %s\n", key, value_str);
+            fprintf(out, "%s\n", lines[i]);
+            written = 1;
+        } else {
+            fprintf(out, "%s\n", lines[i]);
+        }
+    }
+
+    /* Key not found and section ends at EOF */
+    if (!written && section_start >= 0 && key_line < 0) {
         fprintf(out, "%s = %s\n", key, value_str);
-        key_written = 1;
     }
 
-    /* If section was never found, append it */
-    if (!section_found) {
+    /* Section not found at all */
+    if (section_start < 0) {
         fprintf(out, "\n[%s]\n%s = %s\n", section, key, value_str);
     }
 
     fclose(out);
-    free(content);
+    for (int i = 0; i < nlines; i++) free(lines[i]);
+    free(lines);
     return 0;
 }
 
@@ -160,7 +140,6 @@ static int write_value(const char *path, const char *section,
 int isde_config_write_string(const char *path, const char *section,
                               const char *key, const char *value)
 {
-    /* Format as TOML string: "value" */
     size_t len = strlen(value) + 3;
     char *val_str = malloc(len);
     snprintf(val_str, len, "\"%s\"", value);
@@ -182,4 +161,3 @@ int isde_config_write_bool(const char *path, const char *section,
 {
     return write_value(path, section, key, value ? "true" : "false");
 }
-

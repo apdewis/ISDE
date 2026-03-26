@@ -10,6 +10,71 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <xcb/xcb.h>
+#include <xcb/xkb.h>
+
+/* ---------- apply input settings from config ---------- */
+
+static void apply_input_settings(void)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (!cfg) return;
+
+    IsdeConfigTable *root = isde_config_root(cfg);
+    IsdeConfigTable *input = isde_config_table(root, "input");
+    if (!input) { isde_config_free(cfg); return; }
+
+    int accel     = (int)isde_config_int(input, "mouse_acceleration", -1);
+    int threshold = (int)isde_config_int(input, "mouse_threshold", -1);
+
+    IsdeConfigTable *kb = isde_config_table(root, "keyboard");
+    int rep_delay = kb ? (int)isde_config_int(kb, "repeat_delay", -1) : -1;
+    int rep_int   = kb ? (int)isde_config_int(kb, "repeat_interval", -1) : -1;
+    isde_config_free(cfg);
+
+    /* Connect to X to apply settings */
+    const char *display = getenv("DISPLAY");
+    int screen;
+    xcb_connection_t *conn = xcb_connect(display, &screen);
+    if (xcb_connection_has_error(conn)) {
+        xcb_disconnect(conn);
+        return;
+    }
+
+    /* Mouse acceleration and threshold */
+    if (accel > 0 || threshold > 0) {
+        xcb_change_pointer_control(conn,
+            accel > 0 ? accel : 2,   /* numerator */
+            1,                        /* denominator */
+            threshold > 0 ? threshold : 4,
+            accel > 0,
+            threshold > 0);
+        fprintf(stderr, "isde-session: mouse accel=%d threshold=%d\n",
+                accel, threshold);
+    }
+
+    /* Keyboard repeat */
+    if (rep_delay > 0 || rep_int > 0) {
+        /* Initialize XKB extension */
+        xcb_xkb_use_extension(conn, 1, 0);
+
+        xcb_xkb_set_controls(conn,
+            XCB_XKB_ID_USE_CORE_KBD,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            rep_delay > 0 ? rep_delay : 300,
+            rep_int > 0 ? rep_int : 30,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            XCB_XKB_BOOL_CTRL_REPEAT_KEYS,
+            0,
+            NULL);
+        fprintf(stderr, "isde-session: keyboard repeat delay=%d interval=%d\n",
+                rep_delay, rep_int);
+    }
+
+    xcb_flush(conn);
+    xcb_disconnect(conn);
+}
 
 /* SIGCHLD handler — just sets a flag so the main loop can reap */
 static volatile sig_atomic_t got_sigchld = 0;
@@ -65,6 +130,9 @@ int session_init(Session *s)
     sa.sa_handler = sigchld_handler;
     sa.sa_flags = SA_NOCLDSTOP;
     sigaction(SIGCHLD, &sa, NULL);
+
+    /* Apply input settings from config before starting components */
+    apply_input_settings();
 
     s->running = 1;
     return 0;

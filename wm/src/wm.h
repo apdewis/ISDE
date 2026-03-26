@@ -18,6 +18,7 @@
 
 #include "isde/isde-ewmh.h"
 #include "isde/isde-ipc.h"
+#include "isde/isde-dbus.h"
 
 /* ---------- Frame geometry constants ---------- */
 #define WM_TITLE_HEIGHT    24
@@ -64,6 +65,7 @@ typedef struct Wm {
 
     /* IPC */
     IsdeIpc               *ipc;
+    IsdeDBus              *dbus;
 
     /* Key bindings */
     xcb_key_symbols_t     *keysyms;

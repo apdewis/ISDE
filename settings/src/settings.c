@@ -168,6 +168,7 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     /* Register core panels first (so names are available for the list) */
     register_panel(s, &panel_input, NULL);
+    register_panel(s, &panel_keyboard, NULL);
     register_panel(s, &panel_appearance, NULL);
     register_panel(s, &panel_display, NULL);
     load_plugins(s);

@@ -58,8 +58,8 @@ void  settings_switch_panel(Settings *s, int index);
 
 /* Core panel registration */
 extern const IsdeSettingsPanel panel_input;
+extern const IsdeSettingsPanel panel_keyboard;
 extern const IsdeSettingsPanel panel_appearance;
 extern const IsdeSettingsPanel panel_display;
-extern const IsdeSettingsPanel panel_session;
 
 #endif /* ISDE_SETTINGS_H */

@@ -1,41 +1,47 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * panel-input.c — Mouse settings: double-click speed, acceleration, threshold
+ * panel-keyboard.c — Keyboard settings: repeat delay and interval
  */
 #include "settings.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <xcb/xcb.h>
+#include <xcb/xkb.h>
 
-static Widget scale_dclick;
-static Widget scale_accel;
-static Widget scale_threshold;
+static Widget scale_repeat_delay;
+static Widget scale_repeat_interval;
 
-static int saved_dclick;
-static int saved_accel_num;
-static int saved_threshold;
+static int saved_repeat_delay;
+static int saved_repeat_interval;
 
 static IsdeDBus        *panel_dbus;
 static xcb_connection_t *panel_conn;
 
-static void apply_mouse(int accel_num, int threshold)
+static void apply_keyboard(int delay, int interval)
 {
     if (!panel_conn) return;
-    xcb_change_pointer_control(panel_conn,
-                               accel_num, 1, threshold, 1, 1);
+    xcb_xkb_use_extension(panel_conn, 1, 0);
+    xcb_xkb_set_controls(panel_conn,
+        XCB_XKB_ID_USE_CORE_KBD,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        delay, interval,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        XCB_XKB_BOOL_CTRL_REPEAT_KEYS,
+        0, NULL);
     xcb_flush(panel_conn);
 }
 
-static void read_current_mouse(void)
+static void read_current_keyboard(void)
 {
     if (!panel_conn) return;
-    xcb_get_pointer_control_reply_t *reply =
-        xcb_get_pointer_control_reply(panel_conn,
-            xcb_get_pointer_control(panel_conn), NULL);
+    xcb_xkb_use_extension(panel_conn, 1, 0);
+    xcb_xkb_get_controls_reply_t *reply =
+        xcb_xkb_get_controls_reply(panel_conn,
+            xcb_xkb_get_controls(panel_conn, XCB_XKB_ID_USE_CORE_KBD),
+            NULL);
     if (reply) {
-        saved_accel_num = reply->acceleration_numerator;
-        saved_threshold = reply->threshold;
+        saved_repeat_delay = reply->repeatDelay;
+        saved_repeat_interval = reply->repeatInterval;
         free(reply);
     }
 }
@@ -44,36 +50,31 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
 
-    int dclick = IswScaleGetValue(scale_dclick);
-    int accel  = IswScaleGetValue(scale_accel);
-    int thresh = IswScaleGetValue(scale_threshold);
+    int delay    = IswScaleGetValue(scale_repeat_delay);
+    int interval = IswScaleGetValue(scale_repeat_interval);
 
-    apply_mouse(accel, thresh);
+    apply_keyboard(delay, interval);
 
     char *path = isde_xdg_config_path("isde.toml");
     if (path) {
-            isde_config_write_int(path, "input", "double_click_ms", dclick);
-        isde_config_write_int(path, "input", "mouse_acceleration", accel);
-        isde_config_write_int(path, "input", "mouse_threshold", thresh);
+        isde_config_write_int(path, "keyboard", "repeat_delay", delay);
+        isde_config_write_int(path, "keyboard", "repeat_interval", interval);
         free(path);
     }
 
-    saved_dclick = dclick;
-    saved_accel_num = accel;
-    saved_threshold = thresh;
+    saved_repeat_delay = delay;
+    saved_repeat_interval = interval;
 
-    isde_config_invalidate_cache();
     if (panel_dbus)
-        isde_dbus_settings_notify(panel_dbus, "input", "*");
+        isde_dbus_settings_notify(panel_dbus, "keyboard", "*");
 }
 
 static void revert_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    IswScaleSetValue(scale_dclick, saved_dclick);
-    IswScaleSetValue(scale_accel, saved_accel_num);
-    IswScaleSetValue(scale_threshold, saved_threshold);
-    apply_mouse(saved_accel_num, saved_threshold);
+    IswScaleSetValue(scale_repeat_delay, saved_repeat_delay);
+    IswScaleSetValue(scale_repeat_interval, saved_repeat_interval);
+    apply_keyboard(saved_repeat_delay, saved_repeat_interval);
 }
 
 static Widget make_scale_row(Widget form, Widget above, const char *label_text,
@@ -103,25 +104,24 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     return *out_scale;
 }
 
-static Widget input_create(Widget parent, XtAppContext app)
+static Widget keyboard_create(Widget parent, XtAppContext app)
 {
     (void)app;
 
     panel_conn = XtDisplay(XtParent(parent));
 
-    saved_dclick = isde_config_double_click_ms();
-    read_current_mouse();
+    read_current_keyboard();
 
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
         IsdeConfigTable *root = isde_config_root(cfg);
-        IsdeConfigTable *input = isde_config_table(root, "input");
-        if (input) {
-            saved_accel_num = (int)isde_config_int(input, "mouse_acceleration",
-                                                    saved_accel_num);
-            saved_threshold = (int)isde_config_int(input, "mouse_threshold",
-                                                    saved_threshold);
+        IsdeConfigTable *kb = isde_config_table(root, "keyboard");
+        if (kb) {
+            saved_repeat_delay = (int)isde_config_int(kb, "repeat_delay",
+                                                       saved_repeat_delay);
+            saved_repeat_interval = (int)isde_config_int(kb, "repeat_interval",
+                                                          saved_repeat_interval);
         }
         isde_config_free(cfg);
     }
@@ -138,16 +138,14 @@ static Widget input_create(Widget parent, XtAppContext app)
     if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
     if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
 
-    Widget form = XtCreateWidget("mousePanel", formWidgetClass,
+    Widget form = XtCreateWidget("keyboardPanel", formWidgetClass,
                                  parent, args, n);
 
     Widget row;
-    row = make_scale_row(form, NULL, "Double-click speed (ms):",
-                         100, 1000, saved_dclick, &scale_dclick);
-    row = make_scale_row(form, row, "Mouse acceleration:",
-                         1, 10, saved_accel_num, &scale_accel);
-    row = make_scale_row(form, row, "Mouse threshold (pixels):",
-                         1, 20, saved_threshold, &scale_threshold);
+    row = make_scale_row(form, NULL, "Key repeat delay (ms):",
+                         100, 1000, saved_repeat_delay, &scale_repeat_delay);
+    row = make_scale_row(form, row, "Key repeat interval (ms):",
+                         10, 200, saved_repeat_interval, &scale_repeat_interval);
 
     n = 0;
     XtSetArg(args[n], XtNfromVert, row);   n++;
@@ -169,28 +167,26 @@ static Widget input_create(Widget parent, XtAppContext app)
     return form;
 }
 
-static int input_has_changes(void)
+static int keyboard_has_changes(void)
 {
-    if (!scale_dclick) return 0;
-    return IswScaleGetValue(scale_dclick) != saved_dclick ||
-           IswScaleGetValue(scale_accel) != saved_accel_num ||
-           IswScaleGetValue(scale_threshold) != saved_threshold;
+    if (!scale_repeat_delay) return 0;
+    return IswScaleGetValue(scale_repeat_delay) != saved_repeat_delay ||
+           IswScaleGetValue(scale_repeat_interval) != saved_repeat_interval;
 }
 
-static void input_destroy(void)
+static void keyboard_destroy(void)
 {
-    scale_dclick = NULL;
-    scale_accel = NULL;
-    scale_threshold = NULL;
+    scale_repeat_delay = NULL;
+    scale_repeat_interval = NULL;
 }
 
-void panel_input_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
+void panel_keyboard_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
-const IsdeSettingsPanel panel_input = {
-    .name        = "Mouse",
+const IsdeSettingsPanel panel_keyboard = {
+    .name        = "Keyboard",
     .icon        = NULL,
-    .section     = "input",
-    .create      = input_create,
-    .has_changes = input_has_changes,
-    .destroy     = input_destroy,
+    .section     = "keyboard",
+    .create      = keyboard_create,
+    .has_changes = keyboard_has_changes,
+    .destroy     = keyboard_destroy,
 };

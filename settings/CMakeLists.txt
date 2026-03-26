@@ -2,6 +2,7 @@ add_executable(isde-settings
     src/main.c
     src/settings.c
     src/panel-input.c
+    src/panel-keyboard.c
     src/panel-appearance.c
     src/panel-display.c
 )
@@ -13,6 +14,7 @@ target_link_libraries(isde-settings
     PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::DBUS
+    PkgConfig::XCB_XKB
     ${CMAKE_DL_LIBS}
 )
 

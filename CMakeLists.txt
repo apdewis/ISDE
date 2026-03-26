@@ -32,6 +32,7 @@ pkg_check_modules(FREETYPE REQUIRED IMPORTED_TARGET freetype2)
 pkg_check_modules(SM REQUIRED IMPORTED_TARGET sm)
 pkg_check_modules(ICE REQUIRED IMPORTED_TARGET ice)
 pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
+pkg_check_modules(XCB_XKB REQUIRED IMPORTED_TARGET xcb-xkb)
 
 # --- Subdirectories ---
 add_subdirectory(libisde)
