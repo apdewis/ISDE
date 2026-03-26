@@ -73,3 +73,17 @@ Foreground=#333333
 Border=#9E9E9E
 HoverBackground=#BBDEFB
 HoverForeground=#333333
+
+[TaskbarButtonActive]
+Background=#BBDEFB
+Foreground=#333333
+Border=#9E9E9E
+HoverBackground=#BBDEFB
+HoverForeground=#333333
+
+[TaskbarButtonFocus]
+Background=#1565C0
+Foreground=#FFFFFF
+Border=#0D47A1
+HoverBackground=#1976D2
+HoverForeground=#FFFFFF

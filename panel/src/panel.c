@@ -289,6 +289,7 @@ static void poll_clients(XtPointer client_data, XtIntervalId *id)
     (void)id;
     Panel *p = (Panel *)client_data;
     taskbar_update(p);
+    taskbar_highlight_active(p);
 
     /* Dismiss popups when focus moves to a managed window */
     if (p->active_popup) {

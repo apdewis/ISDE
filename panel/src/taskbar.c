@@ -525,6 +525,57 @@ void taskbar_update(Panel *p)
     }
 }
 
+/* ---------- active window highlight ---------- */
+
+static Pixel taskbar_pixel(Panel *p, unsigned int rgb)
+{
+    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
+        p->conn,
+        xcb_alloc_color(p->conn, p->screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!reply) return p->screen->white_pixel;
+    Pixel px = reply->pixel;
+    free(reply);
+    return px;
+}
+
+void taskbar_highlight_active(Panel *p)
+{
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) return;
+
+    xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
+    char *active_class = NULL;
+    if (active != XCB_WINDOW_NONE)
+        active_class = get_wm_class(p, active);
+
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (!g->button) continue;
+
+        int is_focused = (active_class && g->wm_class &&
+                          strcmp(g->wm_class, active_class) == 0);
+
+        const IsdeElementColors *ec;
+        if (is_focused)
+            ec = &s->taskbar_button_focus;
+        else if (g->nwindows > 0)
+            ec = &s->taskbar_button_active;
+        else
+            ec = &s->taskbar_button;
+
+        Arg args[20];
+        Cardinal n = 0;
+        XtSetArg(args[n], XtNbackground, taskbar_pixel(p, ec->bg)); n++;
+        XtSetArg(args[n], XtNforeground, taskbar_pixel(p, ec->fg)); n++;
+        XtSetValues(g->button, args, n);
+    }
+
+    free(active_class);
+}
+
 /* ---------- init / cleanup ---------- */
 
 void taskbar_init(Panel *p)

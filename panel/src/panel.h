@@ -139,6 +139,7 @@ void  panel_cleanup(Panel *p);
 /* ---------- taskbar.c ---------- */
 void  taskbar_init(Panel *p);
 void  taskbar_update(Panel *p);
+void  taskbar_highlight_active(Panel *p);
 void  taskbar_cleanup(Panel *p);
 
 TaskGroup *taskbar_find_group(Panel *p, const char *wm_class);

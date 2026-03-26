@@ -52,8 +52,10 @@ typedef struct {
     IsdeElementColors close_button;     /* title bar close button */
     IsdeElementColors menu;             /* dropdown/popup menus */
     IsdeElementColors menu_item;        /* menu items */
-    IsdeElementColors taskbar;          /* taskbar bar background */
-    IsdeElementColors taskbar_button;   /* taskbar app buttons */
+    IsdeElementColors taskbar;              /* taskbar bar background */
+    IsdeElementColors taskbar_button;       /* taskbar button (no windows) */
+    IsdeElementColors taskbar_button_active; /* taskbar button (has windows) */
+    IsdeElementColors taskbar_button_focus;  /* taskbar button (focused app) */
 } IsdeColorScheme;
 
 /* Load a named colour scheme from the theme directories.

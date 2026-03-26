@@ -110,7 +110,8 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         SEC_NONE, SEC_SCHEME, SEC_COLORS,
         SEC_TITLEBAR, SEC_TITLEBAR_ACTIVE, SEC_TITLEBAR_BUTTON,
         SEC_CLOSE_BUTTON, SEC_MENU, SEC_MENU_ITEM,
-        SEC_TASKBAR, SEC_TASKBAR_BUTTON
+        SEC_TASKBAR, SEC_TASKBAR_BUTTON,
+        SEC_TASKBAR_BUTTON_ACTIVE, SEC_TASKBAR_BUTTON_FOCUS
     } section = SEC_NONE;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -127,7 +128,9 @@ IsdeColorScheme *isde_scheme_load(const char *name)
             else if (strcmp(line, "[Menu]")            == 0) section = SEC_MENU;
             else if (strcmp(line, "[MenuItem]")        == 0) section = SEC_MENU_ITEM;
             else if (strcmp(line, "[Taskbar]")         == 0) section = SEC_TASKBAR;
-            else if (strcmp(line, "[TaskbarButton]")   == 0) section = SEC_TASKBAR_BUTTON;
+            else if (strcmp(line, "[TaskbarButton]")       == 0) section = SEC_TASKBAR_BUTTON;
+            else if (strcmp(line, "[TaskbarButtonActive]") == 0) section = SEC_TASKBAR_BUTTON_ACTIVE;
+            else if (strcmp(line, "[TaskbarButtonFocus]")  == 0) section = SEC_TASKBAR_BUTTON_FOCUS;
             else section = SEC_NONE;
             continue;
         }
@@ -170,7 +173,9 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         case SEC_MENU:            parse_element(&s->menu,            key, val); break;
         case SEC_MENU_ITEM:       parse_element(&s->menu_item,       key, val); break;
         case SEC_TASKBAR:         parse_element(&s->taskbar,         key, val); break;
-        case SEC_TASKBAR_BUTTON:  parse_element(&s->taskbar_button,  key, val); break;
+        case SEC_TASKBAR_BUTTON:        parse_element(&s->taskbar_button,        key, val); break;
+        case SEC_TASKBAR_BUTTON_ACTIVE: parse_element(&s->taskbar_button_active, key, val); break;
+        case SEC_TASKBAR_BUTTON_FOCUS:  parse_element(&s->taskbar_button_focus,  key, val); break;
         default: break;
         }
     }
@@ -187,8 +192,10 @@ IsdeColorScheme *isde_scheme_load(const char *name)
     element_defaults(&s->close_button,    s->error,    s->fg_light, s->error);
     element_defaults(&s->menu,            s->bg,       s->fg,       s->border);
     element_defaults(&s->menu_item,       s->bg,       s->fg,       s->bg);
-    element_defaults(&s->taskbar,         s->bg_light, s->fg,       s->border);
-    element_defaults(&s->taskbar_button,  s->bg_light, s->fg,       s->border);
+    element_defaults(&s->taskbar,              s->bg_light,  s->fg,       s->border);
+    element_defaults(&s->taskbar_button,       s->bg_light,  s->fg,       s->border);
+    element_defaults(&s->taskbar_button_active,s->select_bg, s->fg,       s->border);
+    element_defaults(&s->taskbar_button_focus, s->active,    s->fg_light, s->active);
 
     return s;
 }
