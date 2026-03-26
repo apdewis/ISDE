@@ -273,11 +273,36 @@ void wm_maximize_client(Wm *wm, WmClient *c)
         c->save_w = c->width;
         c->save_h = c->height;
 
-        c->x = 0;
-        c->y = 0;
-        c->width  = wm->screen->width_in_pixels - 2 * WM_BORDER_WIDTH;
-        c->height = wm->screen->height_in_pixels - WM_TITLE_HEIGHT
-                    - WM_BORDER_WIDTH;
+        /* Compute work area by scanning all root children for struts */
+        int top = 0, bottom = 0, left = 0, right = 0;
+        xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+        xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+            wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+        if (tree) {
+            xcb_window_t *children = xcb_query_tree_children(tree);
+            int nchildren = xcb_query_tree_children_length(tree);
+            for (int i = 0; i < nchildren; i++) {
+                xcb_ewmh_wm_strut_partial_t strut;
+                if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+                        xcb_ewmh_get_wm_strut_partial(ewmh, children[i]),
+                        &strut, NULL)) {
+                    if ((int)strut.top > top)       top = strut.top;
+                    if ((int)strut.bottom > bottom) bottom = strut.bottom;
+                    if ((int)strut.left > left)     left = strut.left;
+                    if ((int)strut.right > right)   right = strut.right;
+                }
+            }
+            free(tree);
+        }
+
+        int sw = wm->screen->width_in_pixels;
+        int sh = wm->screen->height_in_pixels;
+
+        c->x = left;
+        c->y = top;
+        c->width  = sw - left - right - 2 * WM_BORDER_WIDTH;
+        c->height = sh - top - bottom - WM_TITLE_HEIGHT
+                    - 2 * WM_BORDER_WIDTH;
         c->maximized = 1;
     }
     frame_configure(wm, c);
