@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <poll.h>
 #include <xcb/xcb_aux.h>
 
 /* ---------- helpers ---------- */
@@ -28,8 +29,10 @@ static void wm_on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Wm *wm = (Wm *)user_data;
-    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
-        /* Restart to pick up new Xresources */
+    if (strcmp(section, "appearance") == 0 ||
+        strcmp(section, "wm.desktops") == 0 ||
+        strcmp(section, "*") == 0) {
+        /* Restart to pick up new config */
         wm->running = 0;
         wm->restart = 1;
     }
@@ -107,6 +110,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* EWMH setup (advertise _NET_SUPPORTED, etc.) */
     wm_ewmh_setup(wm);
 
+    /* Virtual desktops */
+    wm_desktops_init(wm);
+
     /* Manage any pre-existing windows */
     xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
         wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
@@ -124,6 +130,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
                     attr->map_state == XCB_MAP_STATE_VIEWABLE) {
                     WmClient *c = frame_create(wm, children[i]);
                     if (c) {
+                        c->desktop = wm->current_desktop;
                         XtPopup(c->shell, XtGrabNone);
                         xcb_map_window(wm->conn, c->client);
                     }
@@ -350,6 +357,9 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 
     WmClient *c = frame_create(wm, ev->window);
     if (c) {
+        c->desktop = wm->current_desktop;
+        xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
+                                c->client, c->desktop);
         xcb_map_window(wm->conn, ev->window);
         XtPopup(c->shell, XtGrabNone);
         wm_focus_client(wm, c);
@@ -485,141 +495,77 @@ static void on_client_message(Wm *wm, xcb_client_message_event_t *ev)
 
 /* ---------- event loop ---------- */
 
-static int is_wm_event(Wm *wm, uint8_t type)
+static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
 {
+    uint8_t type = ev->response_type & ~0x80;
+
+    uint32_t cmd;
+    if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
+        if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT)
+            wm->running = 0;
+        return;
+    }
+
     switch (type) {
     case XCB_MAP_REQUEST:
+        on_map_request(wm, (xcb_map_request_event_t *)ev);
+        break;
     case XCB_CONFIGURE_REQUEST:
+        on_configure_request(wm, (xcb_configure_request_event_t *)ev);
+        break;
     case XCB_UNMAP_NOTIFY:
+        on_unmap_notify(wm, (xcb_unmap_notify_event_t *)ev);
+        break;
     case XCB_DESTROY_NOTIFY:
+        on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
+        break;
     case XCB_CLIENT_MESSAGE:
-        return 1;
+        on_client_message(wm, (xcb_client_message_event_t *)ev);
+        break;
     case XCB_MOTION_NOTIFY:
+        if (wm->drag_mode != DRAG_NONE)
+            on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
+        break;
     case XCB_BUTTON_RELEASE:
-        /* Only handle these when a drag is active;
-         * otherwise let Xt dispatch to widget callbacks */
-        return wm->drag_mode != DRAG_NONE;
+        if (wm->drag_mode != DRAG_NONE)
+            on_button_release(wm, (xcb_button_release_event_t *)ev);
+        break;
+    case XCB_PROPERTY_NOTIFY:
+        on_property_notify(wm, (xcb_property_notify_event_t *)ev);
+        break;
+    case XCB_KEY_PRESS:
+        wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
+        break;
     default:
-        return 0;
+        XtDispatchEvent(ev, wm->conn);
+        break;
     }
 }
 
 void wm_run(Wm *wm)
 {
+    int xcb_fd = xcb_get_file_descriptor(wm->conn);
+
     while (wm->running) {
-        /* Dispatch pending D-Bus messages */
+        /* Process any pending Xt work (widget events, timers) */
+        while (XtAppPending(wm->app))
+            XtAppProcessEvent(wm->app, XtIMAll);
+
+        /* D-Bus dispatch */
         if (wm->dbus)
             isde_dbus_dispatch(wm->dbus);
 
-        /* Process all pending Xt events (widget callbacks, timers, etc.) */
-        while (XtAppPending(wm->app)) {
-            XtAppProcessEvent(wm->app, XtIMAll);
+        /* Wait for data on the XCB fd, with a short timeout
+         * so Xt timers (OSD hide, etc.) get a chance to fire */
+        struct pollfd pfd = { .fd = xcb_fd, .events = POLLIN };
+        poll(&pfd, 1, 50);
 
-            /* After Xt processes, poll for WM-specific events that Xt
-             * may have queued but can't dispatch (no widget for root) */
-            xcb_generic_event_t *ev;
-            while ((ev = xcb_poll_for_queued_event(wm->conn))) {
-                uint8_t type = ev->response_type & ~0x80;
-
-                /* Check IPC */
-                uint32_t cmd;
-                if (isde_ipc_decode(wm->ipc, ev, &cmd,
-                                    NULL, NULL, NULL, NULL)) {
-                    if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT)
-                        wm->running = 0;
-                    free(ev);
-                    continue;
-                }
-
-                switch (type) {
-                case XCB_MAP_REQUEST:
-                    on_map_request(wm, (xcb_map_request_event_t *)ev);
-                    break;
-                case XCB_CONFIGURE_REQUEST:
-                    on_configure_request(wm,
-                        (xcb_configure_request_event_t *)ev);
-                    break;
-                case XCB_UNMAP_NOTIFY:
-                    on_unmap_notify(wm, (xcb_unmap_notify_event_t *)ev);
-                    break;
-                case XCB_DESTROY_NOTIFY:
-                    on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
-                    break;
-                case XCB_CLIENT_MESSAGE:
-                    on_client_message(wm, (xcb_client_message_event_t *)ev);
-                    break;
-                case XCB_MOTION_NOTIFY:
-                    on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
-                    break;
-                case XCB_BUTTON_RELEASE:
-                    on_button_release(wm, (xcb_button_release_event_t *)ev);
-                    break;
-                case XCB_PROPERTY_NOTIFY:
-                    on_property_notify(wm,
-                        (xcb_property_notify_event_t *)ev);
-                    break;
-                case XCB_KEY_PRESS:
-                    wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
-                    break;
-                default:
-                    /* Let Xt handle via XtDispatchEvent */
-                    XtDispatchEvent(ev, wm->conn);
-                    break;
-                }
-                free(ev);
-            }
-        }
-
-        /* Block waiting for next event from X server */
-        xcb_generic_event_t *ev = xcb_wait_for_event(wm->conn);
-        if (!ev) break;
-
-        uint8_t type = ev->response_type & ~0x80;
-
-        uint32_t cmd;
-        if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
-            if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT)
-                wm->running = 0;
+        /* Drain all XCB events */
+        xcb_generic_event_t *ev;
+        while ((ev = xcb_poll_for_event(wm->conn))) {
+            dispatch_wm_event(wm, ev);
             free(ev);
-            continue;
         }
-
-        if (is_wm_event(wm, type)) {
-            /* Handle WM events directly */
-            switch (type) {
-            case XCB_MAP_REQUEST:
-                on_map_request(wm, (xcb_map_request_event_t *)ev);
-                break;
-            case XCB_CONFIGURE_REQUEST:
-                on_configure_request(wm,
-                    (xcb_configure_request_event_t *)ev);
-                break;
-            case XCB_UNMAP_NOTIFY:
-                on_unmap_notify(wm, (xcb_unmap_notify_event_t *)ev);
-                break;
-            case XCB_DESTROY_NOTIFY:
-                on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
-                break;
-            case XCB_CLIENT_MESSAGE:
-                on_client_message(wm, (xcb_client_message_event_t *)ev);
-                break;
-            case XCB_MOTION_NOTIFY:
-                on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
-                break;
-            case XCB_BUTTON_RELEASE:
-                on_button_release(wm, (xcb_button_release_event_t *)ev);
-                break;
-            }
-        } else if (type == XCB_PROPERTY_NOTIFY) {
-            on_property_notify(wm, (xcb_property_notify_event_t *)ev);
-        } else if (type == XCB_KEY_PRESS) {
-            wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
-        } else {
-            /* Widget events — let Xt dispatch to callbacks */
-            XtDispatchEvent(ev, wm->conn);
-        }
-
-        free(ev);
     }
 }
 

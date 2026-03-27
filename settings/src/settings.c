@@ -185,6 +185,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     register_panel(s, &panel_keyboard, NULL);
     register_panel(s, &panel_appearance, NULL);
     register_panel(s, &panel_display, NULL);
+    register_panel(s, &panel_desktops, NULL);
     load_plugins(s);
 
     /* Left pane: panel name list */
@@ -235,6 +236,7 @@ int settings_init(Settings *s, int *argc, char **argv)
                           settings_dbus_input_cb, s->dbus);
         panel_appearance_set_dbus(s->dbus);
         panel_display_set_dbus(s->dbus);
+        panel_desktops_set_dbus(s->dbus);
     }
 
     XtRealizeWidget(s->toplevel);

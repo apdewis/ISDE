@@ -5,6 +5,7 @@ add_executable(isde-settings
     src/panel-keyboard.c
     src/panel-appearance.c
     src/panel-display.c
+    src/panel-desktops.c
 )
 
 target_compile_definitions(isde-settings PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

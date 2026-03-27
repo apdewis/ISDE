@@ -42,6 +42,7 @@ typedef struct WmClient {
     uint16_t     width, height;/* Client area size (excludes frame) */
     int          focused;
     int          maximized;
+    uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
     /* Saved geometry for restore from maximize */
     int16_t      save_x, save_y;
     uint16_t     save_w, save_h;
@@ -83,6 +84,14 @@ typedef struct Wm {
     WmClient              *clients;
     WmClient              *focused;
 
+    /* Virtual desktops */
+    int                    desk_rows;
+    int                    desk_cols;
+    int                    num_desktops;
+    uint32_t               current_desktop;
+    Widget                 desk_osd;       /* OSD popup shell */
+    XtIntervalId           desk_osd_timer; /* auto-hide timer */
+
     /* Drag state */
     enum { DRAG_NONE, DRAG_MOVE, DRAG_RESIZE } drag_mode;
     WmClient              *drag_client;
@@ -121,6 +130,12 @@ void      frame_apply_theme(Wm *wm, WmClient *c);
 void  wm_ewmh_setup(Wm *wm);
 void  wm_ewmh_update_client_list(Wm *wm);
 void  wm_ewmh_update_active(Wm *wm);
+
+/* ---------- desktops.c — virtual desktop management ---------- */
+void  wm_desktops_init(Wm *wm);
+void  wm_desktops_switch(Wm *wm, uint32_t desktop);
+void  wm_desktops_move(Wm *wm, int dx, int dy);
+void  wm_desktops_show_osd(Wm *wm);
 
 /* ---------- keys.c — key binding handling ---------- */
 void  wm_keys_setup(Wm *wm);

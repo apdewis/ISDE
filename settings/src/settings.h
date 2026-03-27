@@ -63,8 +63,10 @@ extern const IsdeSettingsPanel panel_input;
 extern const IsdeSettingsPanel panel_keyboard;
 extern const IsdeSettingsPanel panel_appearance;
 extern const IsdeSettingsPanel panel_display;
+extern const IsdeSettingsPanel panel_desktops;
 
 void panel_appearance_set_dbus(IsdeDBus *bus);
 void panel_display_set_dbus(IsdeDBus *bus);
+void panel_desktops_set_dbus(IsdeDBus *bus);
 
 #endif /* ISDE_SETTINGS_H */

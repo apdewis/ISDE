@@ -31,12 +31,12 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_NUMBER_OF_DESKTOPS,
         ewmh->_NET_CURRENT_DESKTOP,
         ewmh->_NET_WM_STRUT_PARTIAL,
+        ewmh->_NET_WM_DESKTOP,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);
 
-    isde_ewmh_set_number_of_desktops(wm->ewmh, 1);
-    isde_ewmh_set_current_desktop(wm->ewmh, 0);
+    /* Desktop count set by wm_desktops_init() */
     isde_ewmh_set_client_list(wm->ewmh, NULL, 0);
     isde_ewmh_set_active_window(wm->ewmh, XCB_WINDOW_NONE);
 

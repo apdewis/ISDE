@@ -3,6 +3,7 @@ add_executable(isde-wm
     src/wm.c
     src/frame.c
     src/ewmh.c
+    src/desktops.c
     src/keys.c
 )
 
