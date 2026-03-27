@@ -262,54 +262,144 @@ void wm_close_client(Wm *wm, WmClient *c)
     xcb_flush(wm->conn);
 }
 
+/* ---------- work area (respects struts) ---------- */
+
+static void get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
+{
+    int top = 0, bottom = 0, left = 0, right = 0;
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+        wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+    if (tree) {
+        xcb_window_t *children = xcb_query_tree_children(tree);
+        int nchildren = xcb_query_tree_children_length(tree);
+        for (int i = 0; i < nchildren; i++) {
+            xcb_ewmh_wm_strut_partial_t strut;
+            if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+                    xcb_ewmh_get_wm_strut_partial(ewmh, children[i]),
+                    &strut, NULL)) {
+                if ((int)strut.top > top)       top = strut.top;
+                if ((int)strut.bottom > bottom) bottom = strut.bottom;
+                if ((int)strut.left > left)     left = strut.left;
+                if ((int)strut.right > right)   right = strut.right;
+            }
+        }
+        free(tree);
+    }
+    *wx = left;
+    *wy = top;
+    *ww = wm->screen->width_in_pixels - left - right;
+    *wh = wm->screen->height_in_pixels - top - bottom;
+}
+
+/* ---------- snap detection ---------- */
+
+enum {
+    SNAP_NONE = 0,
+    SNAP_LEFT, SNAP_RIGHT, SNAP_TOP, SNAP_BOTTOM,
+    SNAP_TL, SNAP_TR, SNAP_BL, SNAP_BR
+};
+
+#define SNAP_THRESHOLD isde_scale(8)
+
+static int detect_snap_zone(Wm *wm, int rx, int ry)
+{
+    int sw = wm->screen->width_in_pixels;
+    int sh = wm->screen->height_in_pixels;
+    int t = SNAP_THRESHOLD;
+
+    int at_left   = (rx <= t);
+    int at_right  = (rx >= sw - t - 1);
+    int at_top    = (ry <= t);
+    int at_bottom = (ry >= sh - t - 1);
+
+    if (at_left  && at_top)    return SNAP_TL;
+    if (at_right && at_top)    return SNAP_TR;
+    if (at_left  && at_bottom) return SNAP_BL;
+    if (at_right && at_bottom) return SNAP_BR;
+    if (at_left)               return SNAP_LEFT;
+    if (at_right)              return SNAP_RIGHT;
+    if (at_top)                return SNAP_TOP;
+    if (at_bottom)             return SNAP_BOTTOM;
+    return SNAP_NONE;
+}
+
+static void apply_snap(Wm *wm, WmClient *c, int zone)
+{
+    int wx, wy, ww, wh;
+    get_work_area(wm, &wx, &wy, &ww, &wh);
+
+    int th = WM_TITLE_HEIGHT;
+
+    /* Save geometry for restore */
+    c->save_x = c->x;
+    c->save_y = c->y;
+    c->save_w = c->width;
+    c->save_h = c->height;
+
+    switch (zone) {
+    case SNAP_LEFT:
+        c->x = wx; c->y = wy;
+        c->width = ww / 2; c->height = wh - th;
+        break;
+    case SNAP_RIGHT:
+        c->x = wx + ww / 2; c->y = wy;
+        c->width = ww - ww / 2; c->height = wh - th;
+        break;
+    case SNAP_TOP:
+        c->x = wx; c->y = wy;
+        c->width = ww; c->height = wh - th;
+        c->maximized = 1;
+        break;
+    case SNAP_BOTTOM:
+        c->x = wx; c->y = wy + wh / 2;
+        c->width = ww; c->height = wh / 2 - th;
+        break;
+    case SNAP_TL:
+        c->x = wx; c->y = wy;
+        c->width = ww / 2; c->height = wh / 2 - th;
+        break;
+    case SNAP_TR:
+        c->x = wx + ww / 2; c->y = wy;
+        c->width = ww - ww / 2; c->height = wh / 2 - th;
+        break;
+    case SNAP_BL:
+        c->x = wx; c->y = wy + wh / 2;
+        c->width = ww / 2; c->height = wh / 2 - th;
+        break;
+    case SNAP_BR:
+        c->x = wx + ww / 2; c->y = wy + wh / 2;
+        c->width = ww - ww / 2; c->height = wh / 2 - th;
+        break;
+    }
+
+    frame_configure(wm, c);
+    xcb_flush(wm->conn);
+}
+
 /* ---------- maximize / minimize ---------- */
 
 void wm_maximize_client(Wm *wm, WmClient *c)
 {
     if (c->maximized) {
-        /* Restore */
         c->x      = c->save_x;
         c->y      = c->save_y;
         c->width  = c->save_w;
         c->height = c->save_h;
         c->maximized = 0;
     } else {
-        /* Save current geometry and maximize */
         c->save_x = c->x;
         c->save_y = c->y;
         c->save_w = c->width;
         c->save_h = c->height;
 
-        /* Compute work area by scanning all root children for struts */
-        int top = 0, bottom = 0, left = 0, right = 0;
-        xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
-        xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
-            wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
-        if (tree) {
-            xcb_window_t *children = xcb_query_tree_children(tree);
-            int nchildren = xcb_query_tree_children_length(tree);
-            for (int i = 0; i < nchildren; i++) {
-                xcb_ewmh_wm_strut_partial_t strut;
-                if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
-                        xcb_ewmh_get_wm_strut_partial(ewmh, children[i]),
-                        &strut, NULL)) {
-                    if ((int)strut.top > top)       top = strut.top;
-                    if ((int)strut.bottom > bottom) bottom = strut.bottom;
-                    if ((int)strut.left > left)     left = strut.left;
-                    if ((int)strut.right > right)   right = strut.right;
-                }
-            }
-            free(tree);
-        }
+        int wx, wy, ww, wh;
+        get_work_area(wm, &wx, &wy, &ww, &wh);
 
-        int sw = wm->screen->width_in_pixels;
-        int sh = wm->screen->height_in_pixels;
-
-        c->x = left;
-        c->y = top;
-        c->width  = sw - left - right - 2 * WM_BORDER_WIDTH;
-        c->height = sh - top - bottom - WM_TITLE_HEIGHT
-                    - 2 * WM_BORDER_WIDTH;
+        c->x = wx;
+        c->y = wy;
+        c->width  = ww - 2 * WM_BORDER_WIDTH;
+        c->height = wh - WM_TITLE_HEIGHT - 2 * WM_BORDER_WIDTH;
         c->maximized = 1;
     }
     frame_configure(wm, c);
@@ -458,16 +548,12 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         uint8_t type = next->response_type & ~0x80;
         if (type == XCB_MOTION_NOTIFY) {
             ev = (xcb_motion_notify_event_t *)next;
-            /* keep draining */
         } else {
-            /* Put it back — we can't, so just handle it now.
-             * Non-motion events during drag are rare. */
             if (type == XCB_BUTTON_RELEASE) {
                 on_button_release(wm, (xcb_button_release_event_t *)next);
                 free(next);
                 return;
             }
-            /* For other events, dispatch and continue */
             XtDispatchEvent(next, wm->conn);
             free(next);
             break;
@@ -481,6 +567,17 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         c->x = wm->drag_orig_x + dx;
         c->y = wm->drag_orig_y + dy;
         XtMoveWidget(c->shell, c->x, c->y);
+        int zone = detect_snap_zone(wm, ev->root_x, ev->root_y);
+        if (zone != SNAP_NONE) {
+            apply_snap(wm, c, zone);
+            /* Re-apply child positions — shell resize may have reset them */
+            frame_configure(wm, c);
+            xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
+            xcb_flush(wm->conn);
+            wm->drag_mode = DRAG_NONE;
+            wm->drag_client = NULL;
+            return;
+        }
     } else if (wm->drag_mode == DRAG_RESIZE) {
         int e = wm->resize_edge;
         int nx = wm->drag_orig_x;
@@ -519,6 +616,8 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
 {
     (void)ev;
     if (wm->drag_mode != DRAG_NONE) {
+        WmClient *c = wm->drag_client;
+
         xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
         xcb_flush(wm->conn);
         wm->drag_mode   = DRAG_NONE;

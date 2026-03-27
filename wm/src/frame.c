@@ -466,23 +466,35 @@ void frame_update_grips(Wm *wm, WmClient *c)
     int fw = frame_total_width(c);
     int fh = frame_total_height(c);
     int g = GRIP_SIZE;
-    int corner = g * 2;
+    int th = WM_TITLE_HEIGHT;
 
-    /* Order: top, bottom, left, right, tl, tr, bl, br */
+    /* Grips sit on client edges, below the title bar.
+     * No top edge grip — title bar handles that area.
+     * Left/right grips span from title bar bottom to frame bottom.
+     * Corner grips at bottom-left and bottom-right only. */
+    int client_top = th;
+    int client_h = fh - th;
+
+    /* Order: top, bottom, left, right, tl, tr, bl, br
+     * Top and top-corners are zero-sized (disabled) since
+     * the title bar occupies that space. */
     struct { int x, y, w, h; } r[8] = {
-        { corner,    0,       fw - 2*corner, g },        /* top */
-        { corner,    fh - g,  fw - 2*corner, g },        /* bottom */
-        { 0,         corner,  g, fh - 2*corner },        /* left */
-        { fw - g,    corner,  g, fh - 2*corner },        /* right */
-        { 0,         0,       corner, corner },           /* top-left */
-        { fw-corner, 0,       corner, corner },           /* top-right */
-        { 0,         fh-corner, corner, corner },         /* bottom-left */
-        { fw-corner, fh-corner, corner, corner },         /* bottom-right */
+        { 0,      0,        0, 0 },                      /* top — disabled */
+        { g,      fh - g,   fw - 2*g, g },               /* bottom */
+        { 0,      client_top, g, client_h - g },          /* left */
+        { fw - g, client_top, g, client_h - g },          /* right */
+        { 0,      0,        0, 0 },                       /* tl — disabled */
+        { 0,      0,        0, 0 },                       /* tr — disabled */
+        { 0,      fh - g,   g, g },                       /* bottom-left */
+        { fw - g, fh - g,   g, g },                       /* bottom-right */
     };
 
     for (int i = 0; i < 8; i++) {
-        if (r[i].w < 1) r[i].w = 1;
-        if (r[i].h < 1) r[i].h = 1;
+        if (r[i].w < 1 || r[i].h < 1) {
+            xcb_unmap_window(wm->conn, c->grip[i]);
+            continue;
+        }
+        xcb_map_window(wm->conn, c->grip[i]);
         uint32_t vals[] = { r[i].x, r[i].y, r[i].w, r[i].h,
                             XCB_STACK_MODE_ABOVE };
         xcb_configure_window(wm->conn, c->grip[i],
