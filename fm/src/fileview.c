@@ -90,8 +90,8 @@ void fileview_init(Fm *fm)
     /* IconView inside viewport — wider spacing for labels */
     n = 0;
     XtSetArg(args[n], XtNborderWidth, 0);     n++;
-    XtSetArg(args[n], XtNiconSize, 48);        n++;
-    XtSetArg(args[n], XtNitemSpacing, 60);     n++;
+    XtSetArg(args[n], XtNiconSize, 32);        n++;
+    XtSetArg(args[n], XtNitemSpacing, 16);     n++;
     XtSetArg(args[n], XtNmultiSelect, True);   n++;
     fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
                                          fm->viewport, args, n);
