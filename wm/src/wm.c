@@ -468,29 +468,30 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
         frame_update_title(wm, c);
 }
 
-static void on_client_message(Wm *wm, xcb_client_message_event_t *ev)
+/* Returns 1 if handled, 0 if Xt should dispatch it */
+static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
 {
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
 
     if (ev->type == ewmh->_NET_ACTIVE_WINDOW) {
-        /* Panel or another client is requesting we activate a window */
         WmClient *c = wm_find_client_by_window(wm, ev->window);
-        if (!c) return;
+        if (!c) return 1;
 
-        /* If minimized (shell not mapped), restore it */
-        if (c->shell && !XtIsRealized(c->shell)) {
+        if (c->shell && !XtIsRealized(c->shell))
             XtRealizeWidget(c->shell);
-        }
-        /* Re-map frame and client */
         XtPopup(c->shell, XtGrabNone);
         xcb_map_window(wm->conn, c->client);
-
         wm_focus_client(wm, c);
+        return 1;
     } else if (ev->type == ewmh->_NET_CLOSE_WINDOW) {
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (c)
             wm_close_client(wm, c);
+        return 1;
     }
+
+    /* Not an EWMH message — let Xt handle (WM_PROTOCOLS, etc.) */
+    return 0;
 }
 
 /* ---------- event loop ---------- */
@@ -520,15 +521,20 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
         break;
     case XCB_CLIENT_MESSAGE:
-        on_client_message(wm, (xcb_client_message_event_t *)ev);
+        if (!on_client_message(wm, (xcb_client_message_event_t *)ev))
+            XtDispatchEvent(ev, wm->conn);
         break;
     case XCB_MOTION_NOTIFY:
         if (wm->drag_mode != DRAG_NONE)
             on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
+        else
+            XtDispatchEvent(ev, wm->conn);
         break;
     case XCB_BUTTON_RELEASE:
         if (wm->drag_mode != DRAG_NONE)
             on_button_release(wm, (xcb_button_release_event_t *)ev);
+        else
+            XtDispatchEvent(ev, wm->conn);
         break;
     case XCB_PROPERTY_NOTIFY:
         on_property_notify(wm, (xcb_property_notify_event_t *)ev);
