@@ -193,26 +193,20 @@ void places_init(Fm *fm)
     /* Create sidebar viewport */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNallowVert, True);         n++;
-    XtSetArg(args[n], XtNallowHoriz, False);        n++;
-    XtSetArg(args[n], XtNuseRight, False);           n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(160));    n++;
-    XtSetArg(args[n], XtNfromVert, fm->nav_box);     n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);         n++;
+    XtSetArg(args[n], XtNallowVert, True);              n++;
+    XtSetArg(args[n], XtNallowHoriz, False);             n++;
+    XtSetArg(args[n], XtNuseRight, False);                n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
+    XtSetArg(args[n], XtNflexGrow, 0);                    n++;
     fm->places_vp = XtCreateManagedWidget("placesVp", viewportWidgetClass,
-                                           fm->paned, args, n);
+                                           fm->hbox, args, n);
 
-    /* Vertical box inside viewport */
+    /* Vertical FlexBox inside viewport — strict single-column layout */
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    XtSetArg(args[n], XtNhSpace, 0);                      n++;
-    XtSetArg(args[n], XtNvSpace, 0);                      n++;
-    fm->places_box = XtCreateManagedWidget("placesBox", boxWidgetClass,
+    XtSetArg(args[n], XtNspacing, 0);                     n++;
+    fm->places_box = XtCreateManagedWidget("placesBox", flexBoxWidgetClass,
                                             fm->places_vp, args, n);
 
     /* Allocate button tracking array */
@@ -233,7 +227,6 @@ void places_init(Fm *fm)
             XtSetArg(args[n], XtNinternalWidth, isde_scale(6)); n++;
             XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
             XtSetArg(args[n], XtNjustify, XtJustifyLeft);  n++;
-            XtSetArg(args[n], XtNwidth, isde_scale(152));   n++;
             Widget lbl = XtCreateManagedWidget(wname, labelWidgetClass,
                                                 fm->places_box, args, n);
             fm->place_buttons[i] = lbl;
@@ -246,7 +239,6 @@ void places_init(Fm *fm)
             XtSetArg(args[n], XtNinternalWidth, isde_scale(4)); n++;
             XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
             XtSetArg(args[n], XtNjustify, XtJustifyLeft);   n++;
-            XtSetArg(args[n], XtNwidth, isde_scale(152));    n++;
 
             Widget btn = XtCreateManagedWidget(wname, commandWidgetClass,
                                                 fm->places_box, args, n);

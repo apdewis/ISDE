@@ -83,14 +83,9 @@ void fileview_init(Fm *fm)
     XtSetArg(args[n], XtNallowHoriz, True);         n++;
     XtSetArg(args[n], XtNuseRight, True);           n++;
     XtSetArg(args[n], XtNborderWidth, 0);           n++;
-    XtSetArg(args[n], XtNfromVert, fm->nav_box);    n++;
-    XtSetArg(args[n], XtNfromHoriz, fm->places_vp); n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);          n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);    n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);        n++;
-    XtSetArg(args[n], XtNright, XtChainRight);      n++;
+    XtSetArg(args[n], XtNflexGrow, 1);              n++;
     fm->viewport = XtCreateManagedWidget("viewport", viewportWidgetClass,
-                                         fm->paned, args, n);
+                                         fm->hbox, args, n);
 
     /* IconView inside viewport — wider spacing for labels */
     n = 0;

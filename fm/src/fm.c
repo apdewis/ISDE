@@ -593,22 +593,29 @@ int fm_init(Fm *fm, int *argc, char **argv)
     Widget menubar = IswMainWindowGetMenuBar(fm->main_window);
     setup_menus(fm, menubar);
 
-    /* Single content container: nav bar on top, file view below */
-    Arg fargs[2];
-    Cardinal fn = 0;
-    XtSetArg(fargs[fn], XtNdefaultDistance, 0); fn++;
-    XtSetArg(fargs[fn], XtNborderWidth, 0);    fn++;
-    fm->paned = XtCreateManagedWidget("content", formWidgetClass,
-                                      fm->main_window, fargs, fn);
+    /* Outer FlexBox: vertical — navbar on top, body fills remainder */
+    n = 0;
+    XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
+    fm->vbox = XtCreateManagedWidget("vbox", flexBoxWidgetClass,
+                                      fm->main_window, args, n);
 
-    /* Navigation bar (full width, top) */
+    /* Navigation bar — no grow, gets its preferred height */
     navbar_init(fm);
 
-    /* Places sidebar (left side, below navbar) */
+    /* Content area: horizontal FlexBox (sidebar | fileview) */
+    n = 0;
+    XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
+    XtSetArg(args[n], XtNflexGrow, 1);                      n++;
+    fm->hbox = XtCreateManagedWidget("hbox", flexBoxWidgetClass,
+                                      fm->vbox, args, n);
+
+    /* Places sidebar — fixed width, no grow */
     icons_init();
     places_init(fm);
 
-    /* File view (right of sidebar, below navbar) */
+    /* File view — grows to fill remaining width */
     fileview_init(fm);
 
     /* Enable XDND and clipboard */
@@ -636,27 +643,6 @@ int fm_init(Fm *fm, int *argc, char **argv)
     browser_read_dir(fm, fm->cwd);
 
     XtRealizeWidget(fm->toplevel);
-
-    /* After realization, size viewports to fill the Form.
-     * Form chain constraints handle resize, but initial layout
-     * is based on children's preferred sizes which are too small. */
-    {
-        Dimension form_w, form_h, nav_h;
-        Arg qa[2];
-        XtSetArg(qa[0], XtNwidth, &form_w);
-        XtSetArg(qa[1], XtNheight, &form_h);
-        XtGetValues(fm->paned, qa, 2);
-        XtSetArg(qa[0], XtNheight, &nav_h);
-        XtGetValues(fm->nav_box, qa, 1);
-
-        Dimension vp_h = form_h > nav_h ? form_h - nav_h : 1;
-        Dimension places_w = isde_scale(160);
-        Dimension file_w = form_w > places_w ? form_w - places_w : 1;
-
-        XtConfigureWidget(fm->nav_box, 0, 0, form_w, nav_h, 0);
-        XtConfigureWidget(fm->places_vp, 0, nav_h, places_w, vp_h, 0);
-        XtConfigureWidget(fm->viewport, places_w, nav_h, file_w, vp_h, 0);
-    }
 
     fileview_populate(fm);
     navbar_update(fm);

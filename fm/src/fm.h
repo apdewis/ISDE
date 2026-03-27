@@ -19,6 +19,7 @@
 #include <ISW/Form.h>
 #include <ISW/Paned.h>
 #include <ISW/Box.h>
+#include <ISW/FlexBox.h>
 #include <ISW/Viewport.h>
 #include <ISW/IconView.h>
 #include <ISW/List.h>
@@ -94,7 +95,8 @@ typedef struct Fm {
     int            nplace_buttons;
 
     /* Main content */
-    Widget         paned;
+    Widget         vbox;         /* outer FlexBox (vertical) */
+    Widget         hbox;         /* inner FlexBox (horizontal) */
     Widget         viewport;
     Widget         iconview;    /* current if FM_VIEW_ICON */
     Widget         listview;    /* current if FM_VIEW_LIST */

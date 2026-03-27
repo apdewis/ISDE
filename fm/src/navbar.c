@@ -88,12 +88,8 @@ void navbar_init(Fm *fm)
     XtSetArg(args[n], XtNhSpace, 2);                        n++;
     XtSetArg(args[n], XtNvSpace, 0);                        n++;
     XtSetArg(args[n], XtNheight, 28);                        n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                   n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);                n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
-    XtSetArg(args[n], XtNright, XtChainRight);                n++;
     fm->nav_box = XtCreateManagedWidget("navBar", boxWidgetClass,
-                                        fm->paned, args, n);
+                                        fm->vbox, args, n);
 
     fm->back_btn = make_nav_button(fm, "backBtn", "go-back", "<", back_cb);
     fm->fwd_btn  = make_nav_button(fm, "fwdBtn", "go-forward", ">", fwd_cb);
