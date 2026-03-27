@@ -172,6 +172,10 @@ int   fileops_mkdir(Fm *fm, const char *name);
 int   fileops_delete(Fm *fm, const char *path);
 int   fileops_rename(Fm *fm, const char *oldpath, const char *newname);
 int   fileops_paste(Fm *fm);
+int   fileops_trash(const char *path);
+int   fileops_restore(const char *trash_name);
+int   fileops_empty_trash(void);
+char *fileops_trash_path(void);
 
 /* ---------- clipboard.c ---------- */
 void  clipboard_init(Fm *fm);

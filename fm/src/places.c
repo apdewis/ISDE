@@ -83,6 +83,11 @@ static void build_places_list(void)
     add_xdg_dir("PICTURES",  "Pictures",  "folder-pictures");
     add_xdg_dir("VIDEOS",    "Videos",    "folder-videos");
 
+    /* Trash */
+    char *trash_path = fileops_trash_path();
+    places_add("Trash", trash_path, "user-trash", 0);
+    free(trash_path);
+
     /* --- Devices section --- */
     places_add("Devices", NULL, NULL, 1);
     places_add("File System", "/", "drive-harddisk", 0);

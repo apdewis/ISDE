@@ -203,11 +203,38 @@ static void rename_cb(Widget w, XtPointer cd, XtPointer call)
 static Widget delete_shell = NULL;
 static Fm   *delete_fm = NULL;
 
-static void delete_confirm_ok(Widget w, XtPointer cd, XtPointer call)
+static void dismiss_delete_dialog(void)
+{
+    if (delete_shell) {
+        XtPopdown(delete_shell);
+        XtDestroyWidget(delete_shell);
+        delete_shell = NULL;
+    }
+}
+
+static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
     Fm *fm = delete_fm;
-    if (!fm || !fm->iconview) goto done;
+    if (!fm || !fm->iconview) { dismiss_delete_dialog(); return; }
+
+    int *indices = NULL;
+    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    for (int i = nsel - 1; i >= 0; i--) {
+        int idx = indices[i];
+        if (idx >= 0 && idx < fm->nentries)
+            fileops_trash(fm->entries[idx].full_path);
+    }
+    free(indices);
+    if (nsel > 0) fm_refresh(fm);
+    dismiss_delete_dialog();
+}
+
+static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    Fm *fm = delete_fm;
+    if (!fm || !fm->iconview) { dismiss_delete_dialog(); return; }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -217,25 +244,14 @@ static void delete_confirm_ok(Widget w, XtPointer cd, XtPointer call)
             fileops_delete(fm, fm->entries[idx].full_path);
     }
     free(indices);
-    if (nsel > 0)
-        fm_refresh(fm);
-
-done:
-    if (delete_shell) {
-        XtPopdown(delete_shell);
-        XtDestroyWidget(delete_shell);
-        delete_shell = NULL;
-    }
+    if (nsel > 0) fm_refresh(fm);
+    dismiss_delete_dialog();
 }
 
 static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    if (delete_shell) {
-        XtPopdown(delete_shell);
-        XtDestroyWidget(delete_shell);
-        delete_shell = NULL;
-    }
+    dismiss_delete_dialog();
 }
 
 static void fm_delete_selected(Fm *fm)
@@ -283,7 +299,16 @@ static void fm_delete_selected(Fm *fm)
     Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
                                            delete_shell, args, n);
 
-    IswDialogAddButton(dialog, "Delete", delete_confirm_ok, NULL);
+    char *trash_path = fileops_trash_path();
+    int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
+    free(trash_path);
+
+    if (in_trash) {
+        IswDialogAddButton(dialog, "Delete Permanently", delete_do_permanent, NULL);
+    } else {
+        IswDialogAddButton(dialog, "Move to Trash", delete_do_trash, NULL);
+        IswDialogAddButton(dialog, "Delete Permanently", delete_do_permanent, NULL);
+    }
     IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
 
     XtPopup(delete_shell, XtGrabNone);
@@ -299,6 +324,66 @@ static void refresh_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     fm_refresh((Fm *)cd);
+}
+
+/* ---------- empty trash ---------- */
+
+static Widget empty_trash_shell = NULL;
+
+static void empty_trash_ok(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    fileops_empty_trash();
+    char *trash_p = fileops_trash_path();
+    if (strncmp(fm->cwd, trash_p, strlen(trash_p)) == 0)
+        fm_refresh(fm);
+    free(trash_p);
+    if (empty_trash_shell) {
+        XtPopdown(empty_trash_shell);
+        XtDestroyWidget(empty_trash_shell);
+        empty_trash_shell = NULL;
+    }
+}
+
+static void empty_trash_cancel(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    if (empty_trash_shell) {
+        XtPopdown(empty_trash_shell);
+        XtDestroyWidget(empty_trash_shell);
+        empty_trash_shell = NULL;
+    }
+}
+
+static void empty_trash_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+
+    if (empty_trash_shell) {
+        XtDestroyWidget(empty_trash_shell);
+        empty_trash_shell = NULL;
+    }
+
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNwidth, isde_scale(300));  n++;
+    XtSetArg(args[n], XtNheight, isde_scale(120)); n++;
+    XtSetArg(args[n], XtNborderWidth, 1);           n++;
+    empty_trash_shell = XtCreatePopupShell("emptyTrashShell",
+                                            transientShellWidgetClass,
+                                            fm->toplevel, args, n);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Permanently delete all items in Trash?"); n++;
+    Widget dialog = XtCreateManagedWidget("emptyTrashDialog", dialogWidgetClass,
+                                           empty_trash_shell, args, n);
+
+    IswDialogAddButton(dialog, "Empty Trash", empty_trash_ok, fm);
+    IswDialogAddButton(dialog, "Cancel", empty_trash_cancel, NULL);
+
+    XtPopup(empty_trash_shell, XtGrabNone);
 }
 
 static void open_terminal_cb(Widget w, XtPointer cd, XtPointer call)
@@ -356,6 +441,18 @@ static void ctx_new_folder(Fm *fm) {
     fileops_mkdir(fm, "New Folder");
     fm_refresh(fm);
 }
+static void ctx_restore(Fm *fm) {
+    if (!fm->iconview) return;
+    int *indices = NULL;
+    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    for (int i = 0; i < nsel; i++) {
+        int idx = indices[i];
+        if (idx >= 0 && idx < fm->nentries)
+            fileops_restore(fm->entries[idx].name);
+    }
+    free(indices);
+    if (nsel > 0) fm_refresh(fm);
+}
 
 static String ctx_labels[] = {
     "Cut", "Copy", "Paste", "---",
@@ -366,6 +463,16 @@ static CtxAction ctx_actions[] = {
     ctx_rename, ctx_delete_action, NULL, ctx_new_folder
 };
 #define CTX_NITEMS 8
+
+static String ctx_trash_labels[] = {
+    "Restore", "Delete Permanently", NULL
+};
+static CtxAction ctx_trash_actions[] = {
+    ctx_restore, ctx_delete_action
+};
+#define CTX_TRASH_NITEMS 2
+
+static int ctx_in_trash = 0;
 
 void fm_dismiss_context(void)
 {
@@ -385,9 +492,13 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
     fm_dismiss_context();
 
-    if (!ctx_fm || ret->list_index < 0 || ret->list_index >= CTX_NITEMS)
+    if (!ctx_fm || ret->list_index < 0)
         return;
-    CtxAction action = ctx_actions[ret->list_index];
+    CtxAction *acts = ctx_in_trash ? ctx_trash_actions : ctx_actions;
+    int nitems = ctx_in_trash ? CTX_TRASH_NITEMS : CTX_NITEMS;
+    if (ret->list_index >= nitems)
+        return;
+    CtxAction action = acts[ret->list_index];
     if (action)
         action(ctx_fm);
 }
@@ -422,10 +533,18 @@ static void ctx_handler(Widget w, XtPointer client_data,
     ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, args, n);
 
+    /* Detect if browsing trash */
+    char *trash_p = fileops_trash_path();
+    ctx_in_trash = (strncmp(fm->cwd, trash_p, strlen(trash_p)) == 0);
+    free(trash_p);
+
+    String *labels = ctx_in_trash ? ctx_trash_labels : ctx_labels;
+    int nitems = ctx_in_trash ? CTX_TRASH_NITEMS : CTX_NITEMS;
+
     /* List of menu items */
     n = 0;
-    XtSetArg(args[n], XtNlist, ctx_labels);       n++;
-    XtSetArg(args[n], XtNnumberStrings, CTX_NITEMS); n++;
+    XtSetArg(args[n], XtNlist, labels);           n++;
+    XtSetArg(args[n], XtNnumberStrings, nitems);  n++;
     XtSetArg(args[n], XtNdefaultColumns, 1);       n++;
     XtSetArg(args[n], XtNforceColumns, True);      n++;
     XtSetArg(args[n], XtNverticalList, True);      n++;
@@ -470,6 +589,8 @@ static void setup_menus(Fm *fm, Widget menubar)
     add_menu_entry(file_menu, "Open Terminal Here", open_terminal_cb, fm);
     add_separator(file_menu);
     add_menu_entry(file_menu, "Refresh", refresh_cb, fm);
+    add_separator(file_menu);
+    add_menu_entry(file_menu, "Empty Trash", empty_trash_cb, fm);
     add_separator(file_menu);
     add_menu_entry(file_menu, "Quit", quit_cb, fm);
 

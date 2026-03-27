@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<path d="M14 16h20v24H14z" fill="currentColor" opacity="0.5"/>
+<path d="M12 12h24v4H12z" fill="currentColor" opacity="0.7"/>
+<path d="M18 8h12v4H18z" fill="currentColor"/>
+<path d="M20 20v14M24 20v14M28 20v14" stroke="currentColor" stroke-width="1.5" opacity="0.6" fill="none"/>
+</svg>

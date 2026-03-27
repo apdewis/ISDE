@@ -205,6 +205,248 @@ static int delete_recursive(const char *path)
     }
 }
 
+/* ---------- trash support (freedesktop.org Trash spec) ---------- */
+
+static char *get_trash_dir(void)
+{
+    const char *data_home = isde_xdg_data_home();
+    size_t len = strlen(data_home) + strlen("/Trash") + 1;
+    char *trash = malloc(len);
+    snprintf(trash, len, "%s/Trash", data_home);
+    return trash;
+}
+
+static int ensure_trash_dirs(const char *trash_dir)
+{
+    char path[PATH_MAX];
+    if (mkdir(trash_dir, 0700) != 0 && errno != EEXIST)
+        return -1;
+    snprintf(path, sizeof(path), "%s/files", trash_dir);
+    if (mkdir(path, 0700) != 0 && errno != EEXIST)
+        return -1;
+    snprintf(path, sizeof(path), "%s/info", trash_dir);
+    if (mkdir(path, 0700) != 0 && errno != EEXIST)
+        return -1;
+    return 0;
+}
+
+static char *url_encode_path(const char *path)
+{
+    size_t len = strlen(path);
+    char *enc = malloc(len * 3 + 1);
+    if (!enc) return NULL;
+    char *p = enc;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)path[i];
+        if (c == '/' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+            c == '~') {
+            *p++ = c;
+        } else {
+            sprintf(p, "%%%02X", c);
+            p += 3;
+        }
+    }
+    *p = '\0';
+    return enc;
+}
+
+static char *unique_trash_name(const char *trash_dir, const char *basename)
+{
+    char path[PATH_MAX];
+    struct stat st;
+    snprintf(path, sizeof(path), "%s/files/%s", trash_dir, basename);
+    if (lstat(path, &st) != 0)
+        return strdup(basename);
+
+    const char *dot = strchr(basename, '.');
+    size_t name_len = dot ? (size_t)(dot - basename) : strlen(basename);
+    const char *ext = dot ? dot : "";
+
+    for (int i = 2; i < 10000; i++) {
+        char candidate[PATH_MAX];
+        snprintf(candidate, sizeof(candidate), "%.*s.%d%s",
+                 (int)name_len, basename, i, ext);
+        snprintf(path, sizeof(path), "%s/files/%s", trash_dir, candidate);
+        if (lstat(path, &st) != 0)
+            return strdup(candidate);
+    }
+    return strdup(basename);
+}
+
+int fileops_trash(const char *path)
+{
+    char *trash_dir = get_trash_dir();
+    if (ensure_trash_dirs(trash_dir) != 0) {
+        free(trash_dir);
+        return -1;
+    }
+
+    const char *slash = strrchr(path, '/');
+    const char *basename = slash ? slash + 1 : path;
+    char *trash_name = unique_trash_name(trash_dir, basename);
+
+    char dst[PATH_MAX];
+    snprintf(dst, sizeof(dst), "%s/files/%s", trash_dir, trash_name);
+
+    int ret;
+    if (rename(path, dst) == 0) {
+        ret = 0;
+    } else if (errno == EXDEV) {
+        ret = copy_recursive(path, dst);
+        if (ret == 0)
+            delete_recursive(path);
+    } else {
+        free(trash_name);
+        free(trash_dir);
+        return -1;
+    }
+
+    if (ret == 0) {
+        char info_path[PATH_MAX];
+        snprintf(info_path, sizeof(info_path), "%s/info/%s.trashinfo",
+                 trash_dir, trash_name);
+        FILE *fp = fopen(info_path, "w");
+        if (fp) {
+            char *encoded = url_encode_path(path);
+            time_t now = time(NULL);
+            struct tm *tm = localtime(&now);
+            char datebuf[32];
+            strftime(datebuf, sizeof(datebuf), "%Y-%m-%dT%H:%M:%S", tm);
+            fprintf(fp, "[Trash Info]\nPath=%s\nDeletionDate=%s\n",
+                    encoded, datebuf);
+            fclose(fp);
+            free(encoded);
+        }
+    }
+
+    free(trash_name);
+    free(trash_dir);
+    return ret;
+}
+
+static char *read_trashinfo_path(const char *info_path)
+{
+    FILE *fp = fopen(info_path, "r");
+    if (!fp) return NULL;
+    char line[PATH_MAX];
+    char *result = NULL;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "Path=", 5) == 0) {
+            char *val = line + 5;
+            char *nl = strchr(val, '\n');
+            if (nl) *nl = '\0';
+            size_t len = strlen(val);
+            result = malloc(len + 1);
+            char *out = result;
+            for (size_t i = 0; i < len; i++) {
+                if (val[i] == '%' && i + 2 < len) {
+                    char hex[3] = { val[i+1], val[i+2], '\0' };
+                    *out++ = (char)strtol(hex, NULL, 16);
+                    i += 2;
+                } else {
+                    *out++ = val[i];
+                }
+            }
+            *out = '\0';
+            break;
+        }
+    }
+    fclose(fp);
+    return result;
+}
+
+int fileops_restore(const char *trash_name)
+{
+    char *trash_dir = get_trash_dir();
+    char info_path[PATH_MAX];
+    snprintf(info_path, sizeof(info_path), "%s/info/%s.trashinfo",
+             trash_dir, trash_name);
+    char *orig_path = read_trashinfo_path(info_path);
+    if (!orig_path) { free(trash_dir); return -1; }
+
+    char *parent = strdup(orig_path);
+    char *pslash = strrchr(parent, '/');
+    if (pslash && pslash != parent) {
+        *pslash = '\0';
+        for (char *p = parent + 1; *p; p++) {
+            if (*p == '/') { *p = '\0'; mkdir(parent, 0755); *p = '/'; }
+        }
+        mkdir(parent, 0755);
+    }
+    free(parent);
+
+    char *dst = resolve_conflict(orig_path);
+    char src[PATH_MAX];
+    snprintf(src, sizeof(src), "%s/files/%s", trash_dir, trash_name);
+
+    int ret;
+    if (rename(src, dst) == 0) {
+        ret = 0;
+    } else if (errno == EXDEV) {
+        ret = copy_recursive(src, dst);
+        if (ret == 0) delete_recursive(src);
+    } else {
+        ret = -1;
+    }
+
+    if (ret == 0) unlink(info_path);
+
+    free(orig_path);
+    free(dst);
+    free(trash_dir);
+    return ret;
+}
+
+int fileops_empty_trash(void)
+{
+    char *trash_dir = get_trash_dir();
+    char path[PATH_MAX];
+    int ret = 0;
+
+    snprintf(path, sizeof(path), "%s/files", trash_dir);
+    DIR *dir = opendir(path);
+    if (dir) {
+        struct dirent *de;
+        while ((de = readdir(dir))) {
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+                continue;
+            char child[PATH_MAX];
+            snprintf(child, sizeof(child), "%s/%s", path, de->d_name);
+            if (delete_recursive(child) != 0) ret = -1;
+        }
+        closedir(dir);
+    }
+
+    snprintf(path, sizeof(path), "%s/info", trash_dir);
+    dir = opendir(path);
+    if (dir) {
+        struct dirent *de;
+        while ((de = readdir(dir))) {
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+                continue;
+            char child[PATH_MAX];
+            snprintf(child, sizeof(child), "%s/%s", path, de->d_name);
+            unlink(child);
+        }
+        closedir(dir);
+    }
+
+    free(trash_dir);
+    return ret;
+}
+
+char *fileops_trash_path(void)
+{
+    char *trash_dir = get_trash_dir();
+    size_t len = strlen(trash_dir) + strlen("/files") + 1;
+    char *path = malloc(len);
+    snprintf(path, len, "%s/files", trash_dir);
+    ensure_trash_dirs(trash_dir);
+    free(trash_dir);
+    return path;
+}
+
 /* ---------- public API ---------- */
 
 int fileops_copy(const char *src, const char *dst)
