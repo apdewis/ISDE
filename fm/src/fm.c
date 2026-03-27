@@ -198,17 +198,19 @@ static void rename_cb(Widget w, XtPointer cd, XtPointer call)
     show_rename_dialog((Fm *)cd);
 }
 
-/* ---------- delete ---------- */
+/* ---------- delete with confirmation ---------- */
 
-static void delete_cb(Widget w, XtPointer cd, XtPointer call)
+static Widget delete_shell = NULL;
+static Fm   *delete_fm = NULL;
+
+static void delete_confirm_ok(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    if (!fm->iconview) return;
+    (void)w; (void)cd; (void)call;
+    Fm *fm = delete_fm;
+    if (!fm || !fm->iconview) goto done;
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
-    /* Delete in reverse order to keep indices valid */
     for (int i = nsel - 1; i >= 0; i--) {
         int idx = indices[i];
         if (idx >= 0 && idx < fm->nentries)
@@ -217,6 +219,80 @@ static void delete_cb(Widget w, XtPointer cd, XtPointer call)
     free(indices);
     if (nsel > 0)
         fm_refresh(fm);
+
+done:
+    if (delete_shell) {
+        XtPopdown(delete_shell);
+        XtDestroyWidget(delete_shell);
+        delete_shell = NULL;
+    }
+}
+
+static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    if (delete_shell) {
+        XtPopdown(delete_shell);
+        XtDestroyWidget(delete_shell);
+        delete_shell = NULL;
+    }
+}
+
+static void fm_delete_selected(Fm *fm)
+{
+    if (!fm->iconview) return;
+
+    int *indices = NULL;
+    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    if (nsel <= 0) {
+        free(indices);
+        return;
+    }
+
+    /* Build confirmation message */
+    char msg[256];
+    if (nsel == 1) {
+        int idx = indices[0];
+        if (idx >= 0 && idx < fm->nentries)
+            snprintf(msg, sizeof(msg), "Delete \"%s\"?", fm->entries[idx].name);
+        else
+            snprintf(msg, sizeof(msg), "Delete selected item?");
+    } else {
+        snprintf(msg, sizeof(msg), "Delete %d items?", nsel);
+    }
+    free(indices);
+
+    delete_fm = fm;
+
+    if (delete_shell) {
+        XtDestroyWidget(delete_shell);
+        delete_shell = NULL;
+    }
+
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNwidth, isde_scale(300));  n++;
+    XtSetArg(args[n], XtNheight, isde_scale(120)); n++;
+    XtSetArg(args[n], XtNborderWidth, 1);           n++;
+    delete_shell = XtCreatePopupShell("deleteShell",
+                                       transientShellWidgetClass,
+                                       fm->toplevel, args, n);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, msg); n++;
+    Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
+                                           delete_shell, args, n);
+
+    IswDialogAddButton(dialog, "Delete", delete_confirm_ok, NULL);
+    IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
+
+    XtPopup(delete_shell, XtGrabNone);
+}
+
+static void delete_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    fm_delete_selected((Fm *)cd);
 }
 
 static void refresh_cb(Widget w, XtPointer cd, XtPointer call)
@@ -274,16 +350,7 @@ static void ctx_copy(Fm *fm)   { clipboard_copy(fm); }
 static void ctx_paste(Fm *fm)  { clipboard_paste(fm); }
 static void ctx_rename(Fm *fm) { show_rename_dialog(fm); }
 static void ctx_delete_action(Fm *fm) {
-    if (!fm->iconview) return;
-    int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
-    for (int i = nsel - 1; i >= 0; i--) {
-        int idx = indices[i];
-        if (idx >= 0 && idx < fm->nentries)
-            fileops_delete(fm, fm->entries[idx].full_path);
-    }
-    free(indices);
-    if (nsel > 0) fm_refresh(fm);
+    fm_delete_selected(fm);
 }
 static void ctx_new_folder(Fm *fm) {
     fileops_mkdir(fm, "New Folder");
@@ -497,6 +564,125 @@ void fm_refresh(Fm *fm)
     navbar_update(fm);
 }
 
+/* ---------- keyboard shortcuts ---------- */
+
+static Fm *shortcut_fm = NULL;  /* single instance for Xt actions */
+
+static void act_copy(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) clipboard_copy(shortcut_fm);
+}
+
+static void act_cut(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) clipboard_cut(shortcut_fm);
+}
+
+static void act_paste(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) clipboard_paste(shortcut_fm);
+}
+
+static void act_delete(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) fm_delete_selected(shortcut_fm);
+}
+
+static void act_rename(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) show_rename_dialog(shortcut_fm);
+}
+
+static void act_go_up(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    Fm *fm = shortcut_fm;
+    if (!fm) return;
+    char *parent = strdup(fm->cwd);
+    char *slash = strrchr(parent, '/');
+    if (slash && slash != parent)
+        *slash = '\0';
+    else {
+        free(parent);
+        parent = strdup("/");
+    }
+    fm_navigate(fm, parent);
+    free(parent);
+}
+
+static void act_go_back(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    Fm *fm = shortcut_fm;
+    if (!fm || fm->hist_pos <= 0) return;
+    fm->hist_pos--;
+    free(fm->cwd);
+    fm->cwd = strdup(fm->history[fm->hist_pos]);
+    fm_refresh(fm);
+}
+
+static void act_go_fwd(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    Fm *fm = shortcut_fm;
+    if (!fm || fm->hist_pos >= fm->hist_count - 1) return;
+    fm->hist_pos++;
+    free(fm->cwd);
+    fm->cwd = strdup(fm->history[fm->hist_pos]);
+    fm_refresh(fm);
+}
+
+static void act_refresh(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) fm_refresh(shortcut_fm);
+}
+
+static void act_open(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    Fm *fm = shortcut_fm;
+    if (!fm || !fm->iconview) return;
+    int sel = IswIconViewGetSelected(fm->iconview);
+    if (sel >= 0 && sel < fm->nentries)
+        browser_open_entry(fm, sel);
+}
+
+static XtActionsRec fm_actions[] = {
+    {"fm-copy",     act_copy},
+    {"fm-cut",      act_cut},
+    {"fm-paste",    act_paste},
+    {"fm-delete",   act_delete},
+    {"fm-rename",   act_rename},
+    {"fm-go-up",    act_go_up},
+    {"fm-go-back",  act_go_back},
+    {"fm-go-fwd",   act_go_fwd},
+    {"fm-refresh",  act_refresh},
+    {"fm-open",     act_open},
+};
+
+static char fm_translations[] =
+    "Ctrl<Key>c:        fm-copy()\n"
+    "Ctrl<Key>x:        fm-cut()\n"
+    "Ctrl<Key>v:        fm-paste()\n"
+    "<Key>Delete:        fm-delete()\n"
+    "<Key>KP_Delete:     fm-delete()\n"
+    "<Key>F2:            fm-rename()\n"
+    "<Key>BackSpace:     fm-go-up()\n"
+    "Alt<Key>Left:       fm-go-back()\n"
+    "Alt<Key>Right:      fm-go-fwd()\n"
+    "<Key>F5:            fm-refresh()\n";
+
+void fm_install_shortcuts(Widget w)
+{
+    XtOverrideTranslations(w, XtParseTranslationTable(fm_translations));
+}
+
 /* ---------- D-Bus settings reload ---------- */
 
 static void fm_reload_config(Fm *fm)
@@ -617,6 +803,10 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     /* File view — grows to fill remaining width */
     fileview_init(fm);
+
+    /* Keyboard shortcuts — register actions globally */
+    shortcut_fm = fm;
+    XtAppAddActions(fm->app, fm_actions, XtNumber(fm_actions));
 
     /* Enable XDND and clipboard */
     ISWXdndEnable(fm->toplevel);

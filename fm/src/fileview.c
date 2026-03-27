@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <xcb/xcb.h>
 
 /* ---------- double-click tracking ---------- */
 
@@ -36,11 +37,18 @@ static int is_double_click(int index)
 static void iconview_callback(Widget w, XtPointer client_data,
                               XtPointer call_data)
 {
-    (void)w;
     Fm *fm = (Fm *)client_data;
     IswIconViewCallbackData *d = (IswIconViewCallbackData *)call_data;
 
     fm_dismiss_context();
+
+    /* Check if triggered by keyboard (Enter/Return) — always open */
+    XEvent *ev = XtLastEventProcessed(XtDisplay(w));
+    if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
+               (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
+        browser_open_entry(fm, d->index);
+        return;
+    }
 
     if (fm->double_click) {
         if (is_double_click(d->index))
@@ -97,13 +105,20 @@ void fileview_init(Fm *fm)
                                          fm->viewport, args, n);
     XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
     fm_register_context_menu(fm, fm->iconview);
+    fm_install_shortcuts(fm->iconview);
 
     fm->listview = NULL;
 
-    /* Unmanage status bar — not used, otherwise it steals height */
+    /* Status bar */
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
-    if (statusbar)
-        XtUnmanageChild(statusbar);
+    if (statusbar) {
+        n = 0;
+        XtSetArg(args[n], XtNlabel, "");           n++;
+        XtSetArg(args[n], XtNborderWidth, 0);      n++;
+        XtSetArg(args[n], XtNstatusStretch, True);  n++;
+        fm->status_label = XtCreateManagedWidget("status", labelWidgetClass,
+                                                  statusbar, args, n);
+    }
 }
 
 void fileview_populate(Fm *fm)
@@ -195,6 +210,7 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
                                              fm->viewport, args, n);
         XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
         fm_register_context_menu(fm, fm->iconview);
+        fm_install_shortcuts(fm->iconview);
     } else {
         static String empty[] = { "(empty)", NULL };
         n = 0;
@@ -206,6 +222,7 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
                                              fm->viewport, args, n);
         XtAddCallback(fm->listview, XtNcallback, listview_callback, fm);
         fm_register_context_menu(fm, fm->listview);
+        fm_install_shortcuts(fm->listview);
     }
 
     fileview_populate(fm);

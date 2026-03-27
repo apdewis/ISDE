@@ -138,6 +138,7 @@ void  fm_cleanup(Fm *fm);
 void  fm_navigate(Fm *fm, const char *path);
 void  fm_refresh(Fm *fm);
 void  fm_register_context_menu(Fm *fm, Widget w);
+void  fm_install_shortcuts(Widget w);
 void  fm_dismiss_context(void);
 void  show_rename_dialog(Fm *fm);
 
