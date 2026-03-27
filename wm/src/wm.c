@@ -581,6 +581,7 @@ void wm_cleanup(Wm *wm)
 {
     while (wm->clients)
         wm_remove_client(wm, wm->clients);
+    xcb_flush(wm->conn);
 
     if (wm->keysyms)
         xcb_key_symbols_free(wm->keysyms);
