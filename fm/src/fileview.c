@@ -100,16 +100,10 @@ void fileview_init(Fm *fm)
 
     fm->listview = NULL;
 
-    /* Status bar */
+    /* Unmanage status bar — not used, otherwise it steals height */
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
-    if (statusbar) {
-        n = 0;
-        XtSetArg(args[n], XtNlabel, "");           n++;
-        XtSetArg(args[n], XtNborderWidth, 0);      n++;
-        XtSetArg(args[n], XtNstatusStretch, True);  n++;
-        fm->status_label = XtCreateManagedWidget("status", labelWidgetClass,
-                                                  statusbar, args, n);
-    }
+    if (statusbar)
+        XtUnmanageChild(statusbar);
 }
 
 void fileview_populate(Fm *fm)

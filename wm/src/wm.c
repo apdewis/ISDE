@@ -264,28 +264,41 @@ void wm_close_client(Wm *wm, WmClient *c)
 
 /* ---------- work area (respects struts) ---------- */
 
+static void check_strut(xcb_ewmh_connection_t *ewmh, xcb_window_t win,
+                        int *top, int *bottom, int *left, int *right)
+{
+    xcb_ewmh_wm_strut_partial_t strut;
+    if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+            xcb_ewmh_get_wm_strut_partial(ewmh, win),
+            &strut, NULL)) {
+        if ((int)strut.top > *top)       *top = strut.top;
+        if ((int)strut.bottom > *bottom) *bottom = strut.bottom;
+        if ((int)strut.left > *left)     *left = strut.left;
+        if ((int)strut.right > *right)   *right = strut.right;
+    }
+}
+
 static void get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 {
     int top = 0, bottom = 0, left = 0, right = 0;
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+
+    /* Check managed clients — struts are on client windows, not frames */
+    for (WmClient *c = wm->clients; c; c = c->next)
+        check_strut(ewmh, c->client, &top, &bottom, &left, &right);
+
+    /* Also check direct root children in case a window set struts
+     * before being managed (e.g. override-redirect panels) */
     xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
         wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
     if (tree) {
         xcb_window_t *children = xcb_query_tree_children(tree);
         int nchildren = xcb_query_tree_children_length(tree);
-        for (int i = 0; i < nchildren; i++) {
-            xcb_ewmh_wm_strut_partial_t strut;
-            if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
-                    xcb_ewmh_get_wm_strut_partial(ewmh, children[i]),
-                    &strut, NULL)) {
-                if ((int)strut.top > top)       top = strut.top;
-                if ((int)strut.bottom > bottom) bottom = strut.bottom;
-                if ((int)strut.left > left)     left = strut.left;
-                if ((int)strut.right > right)   right = strut.right;
-            }
-        }
+        for (int i = 0; i < nchildren; i++)
+            check_strut(ewmh, children[i], &top, &bottom, &left, &right);
         free(tree);
     }
+
     *wx = left;
     *wy = top;
     *ww = wm->screen->width_in_pixels - left - right;
@@ -395,7 +408,6 @@ void wm_maximize_client(Wm *wm, WmClient *c)
 
         int wx, wy, ww, wh;
         get_work_area(wm, &wx, &wy, &ww, &wh);
-
         c->x = wx;
         c->y = wy;
         c->width  = ww - 2 * WM_BORDER_WIDTH;
