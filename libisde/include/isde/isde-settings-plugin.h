@@ -24,9 +24,16 @@ typedef struct IsdeSettingsPanel {
     const char *section;    /* Config section this panel edits: "appearance" */
 
     /* Create the panel's widget tree inside parent.
-     * Should include its own Save/Revert buttons.
-     * Returns the top-level container widget for this panel. */
+     * Do NOT create viewports or Save/Revert buttons — the shell
+     * provides a scrollable container and common buttons.
+     * Returns the top-level container widget (typically a Form). */
     Widget (*create)(Widget parent, XtAppContext app);
+
+    /* Save current settings to config and apply. */
+    void (*apply)(void);
+
+    /* Revert to last saved values. */
+    void (*revert)(void);
 
     /* Returns 1 if the panel has unsaved changes. */
     int (*has_changes)(void);

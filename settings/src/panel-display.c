@@ -204,10 +204,8 @@ static void scale_changed_cb(Widget w, XtPointer cd, XtPointer call)
     update_scale_label(current_scale);
 }
 
-static void save_cb(Widget w, XtPointer cd, XtPointer call)
+static void display_apply(void)
 {
-    (void)w; (void)cd; (void)call;
-
     char *path = isde_xdg_config_path("isde.toml");
     if (!path) return;
 
@@ -219,9 +217,8 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
         isde_dbus_settings_notify(display_dbus, "display", "scale_percent");
 }
 
-static void revert_cb(Widget w, XtPointer cd, XtPointer call)
+static void display_revert(void)
 {
-    (void)w; (void)cd; (void)call;
     current_scale = saved_scale;
     Arg a[1];
     XtSetArg(a[0], XtNscaleValue, saved_scale);
@@ -243,21 +240,11 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(qargs[1], XtNheight, &ph);
     XtGetValues(parent, qargs, 2);
 
-    /* Scrollable viewport */
-    n = 0;
-    XtSetArg(args[n], XtNallowVert, True);    n++;
-    XtSetArg(args[n], XtNuseRight, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
-    if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget viewport = XtCreateWidget("displayScroll", viewportWidgetClass,
-                                     parent, args, n);
-
     n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 4); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("displayForm", formWidgetClass,
-                                        viewport, args, n);
+    Widget form = XtCreateWidget("displayForm", formWidgetClass,
+                                 parent, args, n);
 
     /* Query outputs */
     xcb_connection_t *conn = XtDisplay(parent);
@@ -333,25 +320,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtAddCallback(scale_slider, XtNvalueChanged, scale_changed_cb, NULL);
     prev = scale_slider;
 
-    /* --- Save / Revert --- */
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, prev);   n++;
-    XtSetArg(args[n], XtNlabel, "Save");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
-                                            form, args, n);
-    XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, prev);        n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
-    XtSetArg(args[n], XtNlabel, "Revert");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
-                                              form, args, n);
-    XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
-
-    return viewport;
+    return form;
 }
 
 static int display_has_changes(void)
@@ -374,6 +343,8 @@ const IsdeSettingsPanel panel_display = {
     .icon        = NULL,
     .section     = "display",
     .create      = display_create,
+    .apply       = display_apply,
+    .revert      = display_revert,
     .has_changes = display_has_changes,
     .destroy     = display_destroy,
 };

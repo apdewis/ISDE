@@ -94,6 +94,24 @@ static int check_unsaved(Settings *s)
     return s->panels[idx]->has_changes();
 }
 
+/* ---------- common save/revert callbacks ---------- */
+
+static void common_save_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Settings *s = (Settings *)cd;
+    if (s->active_panel >= 0 && s->panels[s->active_panel]->apply)
+        s->panels[s->active_panel]->apply();
+}
+
+static void common_revert_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Settings *s = (Settings *)cd;
+    if (s->active_panel >= 0 && s->panels[s->active_panel]->revert)
+        s->panels[s->active_panel]->revert();
+}
+
 /* ---------- panel switching ---------- */
 
 void settings_switch_panel(Settings *s, int index)
@@ -103,8 +121,6 @@ void settings_switch_panel(Settings *s, int index)
 
     /* Check for unsaved changes in current panel */
     if (check_unsaved(s)) {
-        /* TODO: show confirmation dialog.
-         * For now, just switch anyway with a warning. */
         fprintf(stderr, "isde-settings: warning: unsaved changes discarded\n");
     }
 
@@ -115,9 +131,23 @@ void settings_switch_panel(Settings *s, int index)
     s->active_panel = index;
 
     /* Create panel widget if needed */
-    if (!s->panel_widgets[index])
+    if (!s->panel_widgets[index]) {
         s->panel_widgets[index] =
             s->panels[index]->create(s->content_area, s->app);
+
+        /* Size the panel to fill the content area */
+        Dimension cw, ch;
+        Arg qa[20];
+        XtSetArg(qa[0], XtNwidth, &cw);
+        XtSetArg(qa[1], XtNheight, &ch);
+        XtGetValues(s->content_area, qa, 2);
+        Arg sa[20];
+        Cardinal sn = 0;
+        if (cw > 0) { XtSetArg(sa[sn], XtNwidth, cw);  sn++; }
+        if (ch > 0) { XtSetArg(sa[sn], XtNheight, ch); sn++; }
+        if (sn > 0)
+            XtSetValues(s->panel_widgets[index], sa, sn);
+    }
 
     XtManageChild(s->panel_widgets[index]);
 }
@@ -213,19 +243,78 @@ int settings_init(Settings *s, int *argc, char **argv)
                                          form, args, n);
     XtAddCallback(s->panel_bar, XtNcallback, panel_list_cb, s);
 
-    /* Right pane: content area — explicit size so children aren't zero */
+    /* Right pane: form with scrollable content + fixed buttons at bottom */
+    int right_w = isde_scale(600) - PANEL_LIST_WIDTH - isde_scale(4);
+    int right_h = isde_scale(440);
+    int btn_h = isde_scale(32);
+
     n = 0;
     XtSetArg(args[n], XtNfromHoriz, s->panel_bar);  n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNdefaultDistance, 4);        n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(600) - PANEL_LIST_WIDTH - isde_scale(4)); n++;
-    XtSetArg(args[n], XtNheight, isde_scale(440));    n++;
+    XtSetArg(args[n], XtNdefaultDistance, 0);        n++;
+    XtSetArg(args[n], XtNwidth, right_w);            n++;
+    XtSetArg(args[n], XtNheight, right_h);           n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
-    XtSetArg(args[n], XtNright, XtChainRight);        n++;
-    s->content_area = XtCreateManagedWidget("content", formWidgetClass,
+    XtSetArg(args[n], XtNright, XtChainRight);       n++;
+    s->content_form = XtCreateManagedWidget("contentForm", formWidgetClass,
                                             form, args, n);
+
+    /* Scrollable viewport for panel content */
+    n = 0;
+    XtSetArg(args[n], XtNallowVert, True);          n++;
+    XtSetArg(args[n], XtNuseRight, True);            n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNwidth, right_w);            n++;
+    XtSetArg(args[n], XtNheight, right_h - btn_h);  n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
+    XtSetArg(args[n], XtNright, XtChainRight);       n++;
+    s->content_vp = XtCreateManagedWidget("contentScroll", viewportWidgetClass,
+                                          s->content_form, args, n);
+
+    /* Panel content container inside viewport */
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 4);        n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNwidth, right_w - isde_scale(20)); n++;
+    XtSetArg(args[n], XtNheight, right_h - btn_h);       n++;
+    s->content_area = XtCreateManagedWidget("content", formWidgetClass,
+                                            s->content_vp, args, n);
+
+    /* Save / Revert buttons — fixed at bottom right.
+     * Position Save at the right edge, Revert to its left. */
+    int btn_w = isde_scale(60);
+
+    n = 0;
+    XtSetArg(args[n], XtNfromVert, s->content_vp);          n++;
+    XtSetArg(args[n], XtNlabel, "Save");                     n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                      n++;
+    XtSetArg(args[n], XtNhorizDistance, right_w - btn_w * 2 - isde_scale(4)); n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);                n++;
+    s->save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
+                                        s->content_form, args, n);
+    XtAddCallback(s->save_btn, XtNcallback, common_save_cb, s);
+
+    n = 0;
+    XtSetArg(args[n], XtNfromVert, s->content_vp);          n++;
+    XtSetArg(args[n], XtNfromHoriz, s->save_btn);           n++;
+    XtSetArg(args[n], XtNlabel, "Revert");                   n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                      n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);                n++;
+    s->revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
+                                          s->content_form, args, n);
+    XtAddCallback(s->revert_btn, XtNcallback, common_revert_cb, s);
 
     /* D-Bus */
     s->dbus = isde_dbus_init();

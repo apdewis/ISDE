@@ -35,10 +35,8 @@ static IsdeDBus *panel_dbus;
 
 /* ---------- save / revert ---------- */
 
-static void save_cb(Widget w, XtPointer cd, XtPointer call)
+static void appearance_apply(void)
 {
-    (void)w; (void)cd; (void)call;
-
     char *path = isde_xdg_config_path("isde.toml");
     if (!path) return;
 
@@ -72,9 +70,8 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
         isde_dbus_settings_notify(panel_dbus, "appearance", "*");
 }
 
-static void revert_cb(Widget w, XtPointer cd, XtPointer call)
+static void appearance_revert(void)
 {
-    (void)w; (void)cd; (void)call;
     if (saved_scheme_idx >= 0)
         IswListHighlight(scheme_list, saved_scheme_idx);
     if (saved_cursor_idx >= 0)
@@ -107,22 +104,11 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     XtSetArg(qargs[1], XtNheight, &ph);
     XtGetValues(parent, qargs, 2);
 
-    /* Scrollable viewport as the outer container */
-    n = 0;
-    XtSetArg(args[n], XtNallowVert, True);    n++;
-    XtSetArg(args[n], XtNuseRight, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
-    if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget viewport = XtCreateWidget("appearScroll", viewportWidgetClass,
-                                     parent, args, n);
-
-    /* Form inside the viewport for layout */
     n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 4); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("appearForm", formWidgetClass,
-                                        viewport, args, n);
+    Widget form = XtCreateWidget("appearForm", formWidgetClass,
+                                 parent, args, n);
 
     /* Load current config */
     char *cur_scheme = NULL, *cur_cursor = NULL, *cur_icon = NULL;
@@ -242,29 +228,11 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     IswListHighlight(icon_list, saved_icon_idx);
     prev = icon_list;
 
-    /* --- Save / Revert buttons --- */
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, prev);   n++;
-    XtSetArg(args[n], XtNlabel, "Save");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
-                                            form, args, n);
-    XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, prev);        n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
-    XtSetArg(args[n], XtNlabel, "Revert");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
-                                              form, args, n);
-    XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
-
     free(cur_scheme);
     free(cur_cursor);
     free(cur_icon);
 
-    return viewport;
+    return form;
 }
 
 static int appearance_has_changes(void)
@@ -300,6 +268,8 @@ const IsdeSettingsPanel panel_appearance = {
     .icon        = NULL,
     .section     = "appearance",
     .create      = appearance_create,
+    .apply       = appearance_apply,
+    .revert      = appearance_revert,
     .has_changes = appearance_has_changes,
     .destroy     = appearance_destroy,
 };

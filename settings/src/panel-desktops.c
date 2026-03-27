@@ -15,10 +15,8 @@ static int saved_cols;
 
 static IsdeDBus *panel_dbus;
 
-static void save_cb(Widget w, XtPointer cd, XtPointer call)
+static void desktops_apply(void)
 {
-    (void)w; (void)cd; (void)call;
-
     int rows = IswScaleGetValue(scale_rows);
     int cols = IswScaleGetValue(scale_cols);
 
@@ -36,9 +34,8 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
         isde_dbus_settings_notify(panel_dbus, "wm.desktops", "*");
 }
 
-static void revert_cb(Widget w, XtPointer cd, XtPointer call)
+static void desktops_revert(void)
 {
-    (void)w; (void)cd; (void)call;
     IswScaleSetValue(scale_rows, saved_rows);
     IswScaleSetValue(scale_cols, saved_cols);
 }
@@ -94,27 +91,11 @@ static Widget desktops_create(Widget parent, XtAppContext app)
     }
 
     Arg args[20];
-    Cardinal n;
-    Dimension pw, ph;
-    Arg qargs[20];
-    XtSetArg(qargs[0], XtNwidth, &pw);
-    XtSetArg(qargs[1], XtNheight, &ph);
-    XtGetValues(parent, qargs, 2);
-
-    n = 0;
-    XtSetArg(args[n], XtNallowVert, True);    n++;
-    XtSetArg(args[n], XtNuseRight, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
-    if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget viewport = XtCreateWidget("desktopsScroll", viewportWidgetClass,
-                                     parent, args, n);
-
-    n = 0;
+    Cardinal n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 4); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("desktopsPanel", formWidgetClass,
-                                        viewport, args, n);
+    Widget form = XtCreateWidget("desktopsPanel", formWidgetClass,
+                                 parent, args, n);
 
     Widget row;
     row = make_scale_row(form, NULL, "Desktop rows:",
@@ -122,24 +103,7 @@ static Widget desktops_create(Widget parent, XtAppContext app)
     row = make_scale_row(form, row, "Desktop columns:",
                          1, 4, saved_cols, &scale_cols);
 
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);   n++;
-    XtSetArg(args[n], XtNlabel, "Save");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
-                                            form, args, n);
-    XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);         n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
-    XtSetArg(args[n], XtNlabel, "Revert");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
-                                              form, args, n);
-    XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
-
-    return viewport;
+    return form;
 }
 
 static int desktops_has_changes(void)
@@ -162,6 +126,8 @@ const IsdeSettingsPanel panel_desktops = {
     .icon        = NULL,
     .section     = "wm.desktops",
     .create      = desktops_create,
+    .apply       = desktops_apply,
+    .revert      = desktops_revert,
     .has_changes = desktops_has_changes,
     .destroy     = desktops_destroy,
 };

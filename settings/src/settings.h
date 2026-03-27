@@ -35,8 +35,11 @@ typedef struct Settings {
     Widget         toplevel;
     Widget         main_window;
     Widget         panel_bar;     /* Top row: panel selector buttons */
-    Widget         content_area;  /* Center: active panel content */
-    Widget         button_bar;    /* Bottom: Apply / Reset */
+    Widget         content_form;  /* Right pane form */
+    Widget         content_vp;    /* Scrollable viewport for panel content */
+    Widget         content_area;  /* Form inside viewport — panels go here */
+    Widget         save_btn;
+    Widget         revert_btn;
 
     /* Panels (core + plugins) */
     const IsdeSettingsPanel *panels[MAX_PANELS];

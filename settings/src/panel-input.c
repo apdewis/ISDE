@@ -40,10 +40,8 @@ static void read_current_mouse(void)
     }
 }
 
-static void save_cb(Widget w, XtPointer cd, XtPointer call)
+static void input_apply(void)
 {
-    (void)w; (void)cd; (void)call;
-
     int dclick = IswScaleGetValue(scale_dclick);
     int accel  = IswScaleGetValue(scale_accel);
     int thresh = IswScaleGetValue(scale_threshold);
@@ -52,7 +50,7 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
 
     char *path = isde_xdg_config_path("isde.toml");
     if (path) {
-            isde_config_write_int(path, "input", "double_click_ms", dclick);
+        isde_config_write_int(path, "input", "double_click_ms", dclick);
         isde_config_write_int(path, "input", "mouse_acceleration", accel);
         isde_config_write_int(path, "input", "mouse_threshold", thresh);
         free(path);
@@ -67,9 +65,8 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
         isde_dbus_settings_notify(panel_dbus, "input", "*");
 }
 
-static void revert_cb(Widget w, XtPointer cd, XtPointer call)
+static void input_revert(void)
 {
-    (void)w; (void)cd; (void)call;
     IswScaleSetValue(scale_dclick, saved_dclick);
     IswScaleSetValue(scale_accel, saved_accel_num);
     IswScaleSetValue(scale_threshold, saved_threshold);
@@ -127,27 +124,11 @@ static Widget input_create(Widget parent, XtAppContext app)
     }
 
     Arg args[20];
-    Cardinal n;
-    Dimension pw, ph;
-    Arg qargs[20];
-    XtSetArg(qargs[0], XtNwidth, &pw);
-    XtSetArg(qargs[1], XtNheight, &ph);
-    XtGetValues(parent, qargs, 2);
-
-    n = 0;
-    XtSetArg(args[n], XtNallowVert, True);    n++;
-    XtSetArg(args[n], XtNuseRight, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
-    if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget viewport = XtCreateWidget("mouseScroll", viewportWidgetClass,
-                                     parent, args, n);
-
-    n = 0;
+    Cardinal n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 4); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("mousePanel", formWidgetClass,
-                                        viewport, args, n);
+    Widget form = XtCreateWidget("mousePanel", formWidgetClass,
+                                 parent, args, n);
 
     Widget row;
     row = make_scale_row(form, NULL, "Double-click speed (ms):",
@@ -157,24 +138,7 @@ static Widget input_create(Widget parent, XtAppContext app)
     row = make_scale_row(form, row, "Mouse threshold (pixels):",
                          1, 20, saved_threshold, &scale_threshold);
 
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);   n++;
-    XtSetArg(args[n], XtNlabel, "Save");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
-                                            form, args, n);
-    XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);         n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
-    XtSetArg(args[n], XtNlabel, "Revert");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
-                                              form, args, n);
-    XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
-
-    return viewport;
+    return form;
 }
 
 static int input_has_changes(void)
@@ -199,6 +163,8 @@ const IsdeSettingsPanel panel_input = {
     .icon        = NULL,
     .section     = "input",
     .create      = input_create,
+    .apply       = input_apply,
+    .revert      = input_revert,
     .has_changes = input_has_changes,
     .destroy     = input_destroy,
 };

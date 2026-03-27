@@ -46,10 +46,8 @@ static void read_current_keyboard(void)
     }
 }
 
-static void save_cb(Widget w, XtPointer cd, XtPointer call)
+static void keyboard_apply(void)
 {
-    (void)w; (void)cd; (void)call;
-
     int delay    = IswScaleGetValue(scale_repeat_delay);
     int interval = IswScaleGetValue(scale_repeat_interval);
 
@@ -69,9 +67,8 @@ static void save_cb(Widget w, XtPointer cd, XtPointer call)
         isde_dbus_settings_notify(panel_dbus, "keyboard", "*");
 }
 
-static void revert_cb(Widget w, XtPointer cd, XtPointer call)
+static void keyboard_revert(void)
 {
-    (void)w; (void)cd; (void)call;
     IswScaleSetValue(scale_repeat_delay, saved_repeat_delay);
     IswScaleSetValue(scale_repeat_interval, saved_repeat_interval);
     apply_keyboard(saved_repeat_delay, saved_repeat_interval);
@@ -127,27 +124,11 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
     }
 
     Arg args[20];
-    Cardinal n;
-    Dimension pw, ph;
-    Arg qargs[20];
-    XtSetArg(qargs[0], XtNwidth, &pw);
-    XtSetArg(qargs[1], XtNheight, &ph);
-    XtGetValues(parent, qargs, 2);
-
-    n = 0;
-    XtSetArg(args[n], XtNallowVert, True);    n++;
-    XtSetArg(args[n], XtNuseRight, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
-    if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
-    Widget viewport = XtCreateWidget("keyboardScroll", viewportWidgetClass,
-                                     parent, args, n);
-
-    n = 0;
+    Cardinal n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 4); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("keyboardPanel", formWidgetClass,
-                                        viewport, args, n);
+    Widget form = XtCreateWidget("keyboardPanel", formWidgetClass,
+                                 parent, args, n);
 
     Widget row;
     row = make_scale_row(form, NULL, "Key repeat delay (ms):",
@@ -155,24 +136,7 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
     row = make_scale_row(form, row, "Key repeat interval (ms):",
                          10, 200, saved_repeat_interval, &scale_repeat_interval);
 
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);   n++;
-    XtSetArg(args[n], XtNlabel, "Save");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);   n++;
-    Widget save_btn = XtCreateManagedWidget("saveBtn", commandWidgetClass,
-                                            form, args, n);
-    XtAddCallback(save_btn, XtNcallback, save_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNfromVert, row);         n++;
-    XtSetArg(args[n], XtNfromHoriz, save_btn);    n++;
-    XtSetArg(args[n], XtNlabel, "Revert");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    Widget revert_btn = XtCreateManagedWidget("revertBtn", commandWidgetClass,
-                                              form, args, n);
-    XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
-
-    return viewport;
+    return form;
 }
 
 static int keyboard_has_changes(void)
@@ -195,6 +159,8 @@ const IsdeSettingsPanel panel_keyboard = {
     .icon        = NULL,
     .section     = "keyboard",
     .create      = keyboard_create,
+    .apply       = keyboard_apply,
+    .revert      = keyboard_revert,
     .has_changes = keyboard_has_changes,
     .destroy     = keyboard_destroy,
 };
