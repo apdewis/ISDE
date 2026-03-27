@@ -76,18 +76,19 @@ void fileview_init(Fm *fm)
 {
     fm->view_mode = FM_VIEW_ICON;
 
-    /* Viewport for scrolling — below the nav bar */
+    /* Viewport for scrolling — below the nav bar, right of places sidebar */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNallowVert, True);        n++;
-    XtSetArg(args[n], XtNallowHoriz, True);       n++;
-    XtSetArg(args[n], XtNuseRight, True);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    XtSetArg(args[n], XtNfromVert, fm->nav_box);  n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);        n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);  n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);      n++;
-    XtSetArg(args[n], XtNright, XtChainRight);    n++;
+    XtSetArg(args[n], XtNallowVert, True);          n++;
+    XtSetArg(args[n], XtNallowHoriz, True);         n++;
+    XtSetArg(args[n], XtNuseRight, True);           n++;
+    XtSetArg(args[n], XtNborderWidth, 0);           n++;
+    XtSetArg(args[n], XtNfromVert, fm->nav_box);    n++;
+    XtSetArg(args[n], XtNfromHoriz, fm->places_vp); n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);          n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);    n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);        n++;
+    XtSetArg(args[n], XtNright, XtChainRight);      n++;
     fm->viewport = XtCreateManagedWidget("viewport", viewportWidgetClass,
                                          fm->paned, args, n);
 

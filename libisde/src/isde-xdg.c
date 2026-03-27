@@ -179,6 +179,71 @@ char *isde_icon_find(const char *category, const char *name)
     return NULL;
 }
 
+char *isde_xdg_user_dir(const char *name)
+{
+    /* Build path to user-dirs.dirs */
+    char path[512];
+    snprintf(path, sizeof(path), "%s/user-dirs.dirs", isde_xdg_config_home());
+
+    FILE *fp = fopen(path, "r");
+    if (!fp)
+        return NULL;
+
+    /* Build the key we're looking for: XDG_xxx_DIR */
+    char key[64];
+    snprintf(key, sizeof(key), "XDG_%s_DIR", name);
+    size_t klen = strlen(key);
+
+    char line[1024];
+    char *result = NULL;
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+
+    while (fgets(line, sizeof(line), fp)) {
+        /* Skip comments and blank lines */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '#' || *p == '\n' || *p == '\0')
+            continue;
+
+        /* Match key= */
+        if (strncmp(p, key, klen) != 0 || p[klen] != '=')
+            continue;
+
+        p += klen + 1;
+        /* Skip whitespace after = */
+        while (*p == ' ' || *p == '\t') p++;
+
+        /* Value is quoted: "..." */
+        if (*p != '"')
+            continue;
+        p++;
+
+        /* Find closing quote */
+        char *end = strchr(p, '"');
+        if (!end)
+            continue;
+        *end = '\0';
+
+        /* Expand $HOME */
+        if (strncmp(p, "$HOME/", 6) == 0) {
+            size_t total = strlen(home) + strlen(p + 5) + 1;
+            result = malloc(total);
+            if (result)
+                snprintf(result, total, "%s%s", home, p + 5);
+        } else if (strcmp(p, "$HOME") == 0) {
+            /* Set to $HOME means "not configured" per spec */
+            result = NULL;
+        } else if (p[0] == '/') {
+            result = strdup(p);
+        }
+        break;
+    }
+
+    fclose(fp);
+    return result;
+}
+
 int isde_scale_percent(void)
 {
     const char *env = getenv("ISW_SCALE_FACTOR");

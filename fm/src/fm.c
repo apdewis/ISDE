@@ -601,11 +601,14 @@ int fm_init(Fm *fm, int *argc, char **argv)
     fm->paned = XtCreateManagedWidget("content", formWidgetClass,
                                       fm->main_window, fargs, fn);
 
-    /* Navigation bar (inside paned) */
+    /* Navigation bar (full width, top) */
     navbar_init(fm);
 
-    /* File view (inside paned) */
+    /* Places sidebar (left side, below navbar) */
     icons_init();
+    places_init(fm);
+
+    /* File view (right of sidebar, below navbar) */
     fileview_init(fm);
 
     /* Enable XDND and clipboard */
@@ -634,6 +637,27 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtRealizeWidget(fm->toplevel);
 
+    /* After realization, size viewports to fill the Form.
+     * Form chain constraints handle resize, but initial layout
+     * is based on children's preferred sizes which are too small. */
+    {
+        Dimension form_w, form_h, nav_h;
+        Arg qa[2];
+        XtSetArg(qa[0], XtNwidth, &form_w);
+        XtSetArg(qa[1], XtNheight, &form_h);
+        XtGetValues(fm->paned, qa, 2);
+        XtSetArg(qa[0], XtNheight, &nav_h);
+        XtGetValues(fm->nav_box, qa, 1);
+
+        Dimension vp_h = form_h > nav_h ? form_h - nav_h : 1;
+        Dimension places_w = isde_scale(160);
+        Dimension file_w = form_w > places_w ? form_w - places_w : 1;
+
+        XtConfigureWidget(fm->nav_box, 0, 0, form_w, nav_h, 0);
+        XtConfigureWidget(fm->places_vp, 0, nav_h, places_w, vp_h, 0);
+        XtConfigureWidget(fm->viewport, places_w, nav_h, file_w, vp_h, 0);
+    }
+
     fileview_populate(fm);
     navbar_update(fm);
 
@@ -653,6 +677,7 @@ void fm_cleanup(Fm *fm)
     clipboard_cleanup(fm);
     browser_free_entries(fm);
     fileview_cleanup(fm);
+    places_cleanup(fm);
     icons_cleanup();
     free(fm->cwd);
     for (int i = 0; i < fm->hist_count; i++)

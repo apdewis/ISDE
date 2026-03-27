@@ -87,6 +87,12 @@ typedef struct Fm {
     Widget         up_btn;
     Widget         path_label;
 
+    /* Places sidebar */
+    Widget         places_vp;
+    Widget         places_box;
+    Widget        *place_buttons;
+    int            nplace_buttons;
+
     /* Main content */
     Widget         paned;
     Widget         viewport;
@@ -147,6 +153,10 @@ void  fileview_cleanup(Fm *fm);
 /* ---------- navbar.c ---------- */
 void  navbar_init(Fm *fm);
 void  navbar_update(Fm *fm);
+
+/* ---------- places.c ---------- */
+void  places_init(Fm *fm);
+void  places_cleanup(Fm *fm);
 
 /* ---------- icons.c ---------- */
 void        icons_init(void);
