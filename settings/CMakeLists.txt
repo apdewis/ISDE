@@ -15,6 +15,7 @@ target_link_libraries(isde-settings
     PkgConfig::XCB
     PkgConfig::DBUS
     PkgConfig::XCB_XKB
+    PkgConfig::XCB_RANDR
     ${CMAKE_DL_LIBS}
 )
 

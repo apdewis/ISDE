@@ -54,9 +54,9 @@ static void set_start_btn_active(Panel *p, int active)
     XtSetValues(p->start_btn, args, 2);
 }
 
-#define MENU_WIDTH       400
-#define MENU_HEIGHT      350
-#define CAT_PANE_WIDTH   130
+#define MENU_WIDTH       isde_scale(400)
+#define MENU_HEIGHT      isde_scale(350)
+#define CAT_PANE_WIDTH   isde_scale(130)
 
 /* Standard freedesktop.org category mapping */
 static const struct { const char *key; const char *label; } CAT_MAP[] = {

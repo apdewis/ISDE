@@ -580,8 +580,8 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, 700);  n++;
-    XtSetArg(args[n], XtNheight, 500); n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(700));  n++;
+    XtSetArg(args[n], XtNheight, isde_scale(500)); n++;
     XtSetValues(fm->toplevel, args, n);
 
     XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);

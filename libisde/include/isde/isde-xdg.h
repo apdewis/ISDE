@@ -51,6 +51,13 @@ char *isde_xdg_find_data(const char *name);
  * Returns the first path that exists (caller must free), or NULL. */
 char *isde_icon_find(const char *category, const char *name);
 
+/* Return the ISW/ISDE scale factor as a percentage (100 = 1x, 200 = 2x).
+ * Reads ISW_SCALE_FACTOR env var. Returns 100 if not set. */
+int isde_scale_percent(void);
+
+/* Scale a pixel dimension by the current scale factor. */
+int isde_scale(int value);
+
 #ifdef __cplusplus
 }
 #endif

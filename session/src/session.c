@@ -34,6 +34,19 @@ static void apply_appearance_settings(void)
         if (cursor_size)
             setenv("XCURSOR_SIZE", cursor_size, 1);
     }
+
+    /* Set ISW_SCALE_FACTOR for HiDPI scaling */
+    IsdeConfigTable *disp = isde_config_table(root, "display");
+    if (disp) {
+        int scale = (int)isde_config_int(disp, "scale_percent", 100);
+        if (scale > 0) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.2f", scale / 100.0);
+            setenv("ISW_SCALE_FACTOR", buf, 1);
+            fprintf(stderr, "isde-session: ISW_SCALE_FACTOR=%s\n", buf);
+        }
+    }
+
     isde_config_free(cfg);
 }
 

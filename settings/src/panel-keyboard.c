@@ -127,19 +127,27 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
     }
 
     Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
+    Cardinal n;
     Dimension pw, ph;
     Arg qargs[20];
     XtSetArg(qargs[0], XtNwidth, &pw);
     XtSetArg(qargs[1], XtNheight, &ph);
     XtGetValues(parent, qargs, 2);
+
+    n = 0;
+    XtSetArg(args[n], XtNallowVert, True);    n++;
+    XtSetArg(args[n], XtNuseRight, True);      n++;
+    XtSetArg(args[n], XtNborderWidth, 0);      n++;
     if (pw > 0) { XtSetArg(args[n], XtNwidth, pw); n++; }
     if (ph > 0) { XtSetArg(args[n], XtNheight, ph); n++; }
+    Widget viewport = XtCreateWidget("keyboardScroll", viewportWidgetClass,
+                                     parent, args, n);
 
-    Widget form = XtCreateWidget("keyboardPanel", formWidgetClass,
-                                 parent, args, n);
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);    n++;
+    Widget form = XtCreateManagedWidget("keyboardPanel", formWidgetClass,
+                                        viewport, args, n);
 
     Widget row;
     row = make_scale_row(form, NULL, "Key repeat delay (ms):",
@@ -164,7 +172,7 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
                                               form, args, n);
     XtAddCallback(revert_btn, XtNcallback, revert_cb, NULL);
 
-    return form;
+    return viewport;
 }
 
 static int keyboard_has_changes(void)

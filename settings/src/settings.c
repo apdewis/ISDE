@@ -17,7 +17,7 @@
 #include <ISW/Viewport.h>
 #include <ISW/Dialog.h>
 
-#define PANEL_LIST_WIDTH 140
+#define PANEL_LIST_WIDTH isde_scale(140)
 
 /* ---------- panel management ---------- */
 
@@ -166,8 +166,8 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, 600);  n++;
-    XtSetArg(args[n], XtNheight, 450); n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(600));  n++;
+    XtSetArg(args[n], XtNheight, isde_scale(450)); n++;
     XtSetValues(s->toplevel, args, n);
 
     XtAddCallback(s->toplevel, XtNdestroyCallback,
@@ -202,7 +202,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNforceColumns, True);        n++;
     XtSetArg(args[n], XtNverticalList, True);        n++;
     XtSetArg(args[n], XtNwidth, PANEL_LIST_WIDTH);   n++;
-    XtSetArg(args[n], XtNheight, 440);               n++;
+    XtSetArg(args[n], XtNheight, isde_scale(440));    n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
@@ -217,8 +217,8 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNfromHoriz, s->panel_bar);  n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNdefaultDistance, 4);        n++;
-    XtSetArg(args[n], XtNwidth, 600 - PANEL_LIST_WIDTH - 4); n++;
-    XtSetArg(args[n], XtNheight, 440);               n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(600) - PANEL_LIST_WIDTH - isde_scale(4)); n++;
+    XtSetArg(args[n], XtNheight, isde_scale(440));    n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
@@ -234,6 +234,7 @@ int settings_init(Settings *s, int *argc, char **argv)
             XtAppAddInput(s->app, fd, (XtPointer)XtInputReadMask,
                           settings_dbus_input_cb, s->dbus);
         panel_appearance_set_dbus(s->dbus);
+        panel_display_set_dbus(s->dbus);
     }
 
     XtRealizeWidget(s->toplevel);
