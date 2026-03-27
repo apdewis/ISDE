@@ -82,7 +82,8 @@ static Widget desktops_create(Widget parent, XtAppContext app)
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
         IsdeConfigTable *root = isde_config_root(cfg);
-        IsdeConfigTable *desk = isde_config_table(root, "wm.desktops");
+        IsdeConfigTable *wm_tbl = isde_config_table(root, "wm");
+        IsdeConfigTable *desk = wm_tbl ? isde_config_table(wm_tbl, "desktops") : NULL;
         if (desk) {
             int r = (int)isde_config_int(desk, "rows", 1);
             int c = (int)isde_config_int(desk, "columns", 2);
