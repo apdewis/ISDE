@@ -31,11 +31,15 @@
 ## Views
 
 - **Detail/column list view** — show name, size, date modified, permissions in columns with sortable headers
-- **Directory tree sidebar** — toggle via View menu, Tree widget showing directory hierarchy
+- **Places sidebar** — KDE-style left panel with sections for quick navigation. Toggle via View menu. List widget inside a Viewport, grouped by section headers (Label widgets):
+  - **Places**: Home, Desktop, Documents, Downloads, Music, Pictures, Videos (XDG user directories from `user-dirs.dirs`)
+  - **Devices**: mounted filesystems from `/proc/mounts` or `/etc/mtab`, excluding virtual filesystems (proc, sysfs, tmpfs, etc.). Show mount point and device name. Click to navigate to mount point.
+  - **Bookmarks**: user-defined bookmarks from `~/.config/isde/bookmarks` (one path per line). Right-click to add current directory / remove bookmark.
+  - Clicking any entry navigates the main file view to that path.
+  - Stored as a Paned child alongside the file view so it can be resized.
 - **Thumbnail previews** — for image files, load and display a thumbnail instead of the generic icon
 
 ## Integration
 
 - **Desktop icon management** — manage icons on the root window (`_NET_WM_WINDOW_TYPE_DESKTOP`), read `~/Desktop/*.desktop`
-- **Bookmarks/Places sidebar** — user-defined bookmarks plus standard XDG directories (Documents, Downloads, etc.)
 - **Drag source** — ISW currently only supports XDND drop targets. Adding drag source to IconView would enable drag-and-drop file operations between FM windows and other apps.

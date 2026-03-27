@@ -70,7 +70,7 @@ void clock_init(Panel *p)
     XtSetArg(args[n], XtNborderWidth, 0);               n++;
     XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
     XtSetArg(args[n], XtNheight, half);                  n++;
-    XtSetArg(args[n], XtNfromHoriz, p->box);            n++;
+    XtSetArg(args[n], XtNfromHoriz, p->tray_box);       n++;
     XtSetArg(args[n], XtNleft, XtChainRight);           n++;
     XtSetArg(args[n], XtNright, XtChainRight);          n++;
     XtSetArg(args[n], XtNtop, XtChainTop);              n++;

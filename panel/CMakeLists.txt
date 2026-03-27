@@ -3,6 +3,7 @@ add_executable(isde-panel
     src/panel.c
     src/taskbar.c
     src/startmenu.c
+    src/tray.c
     src/clock.c
 )
 

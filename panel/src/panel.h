@@ -125,6 +125,16 @@ typedef struct Panel {
     xcb_atom_t         atom_net_wm_name;
     xcb_atom_t         atom_wm_name;
 
+    /* System tray */
+    Widget             tray_box;       /* Box widget for tray icons */
+    xcb_window_t      *tray_icons;     /* Embedded icon windows */
+    int                ntray;
+    int                cap_tray;
+    xcb_atom_t         atom_tray_sel;  /* _NET_SYSTEM_TRAY_S<n> */
+    xcb_atom_t         atom_tray_opcode; /* _NET_SYSTEM_TRAY_OPCODE */
+    xcb_atom_t         atom_xembed;
+    xcb_atom_t         atom_xembed_info;
+
     XtIntervalId       clock_timer;
 
     /* D-Bus */
@@ -156,6 +166,12 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class);
 /* ---------- startmenu.c ---------- */
 void  startmenu_init(Panel *p);
 void  startmenu_cleanup(Panel *p);
+
+/* ---------- tray.c ---------- */
+void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
+void  tray_init_selection(Panel *p); /* claim selection (after realize) */
+void  tray_handle_event(Panel *p, xcb_generic_event_t *ev);
+void  tray_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */
 void  clock_init(Panel *p);

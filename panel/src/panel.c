@@ -252,10 +252,14 @@ int panel_init(Panel *p, int *argc, char **argv)
                                    p->form, args, n);
 
     taskbar_init(p);
+    tray_init_widgets(p);
     clock_init(p);
 
     XtRealizeWidget(p->shell);
     XtPopup(p->shell, XtGrabNone);
+
+    /* Claim system tray selection (needs realized window) */
+    tray_init_selection(p);
 
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
@@ -391,6 +395,15 @@ static void poll_clients(XtPointer client_data, XtIntervalId *id)
     (void)id;
     Panel *p = (Panel *)client_data;
 
+    /* Drain pending XCB events for tray handling */
+    {
+        xcb_generic_event_t *ev;
+        while ((ev = xcb_poll_for_event(p->conn)) != NULL) {
+            tray_handle_event(p, ev);
+            free(ev);
+        }
+    }
+
     /* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
@@ -457,6 +470,7 @@ void panel_run(Panel *p)
 void panel_cleanup(Panel *p)
 {
     clock_cleanup(p);
+    tray_cleanup(p);
     taskbar_cleanup(p);
     startmenu_cleanup(p);
 
