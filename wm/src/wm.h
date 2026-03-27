@@ -48,6 +48,9 @@ typedef struct WmClient {
     uint16_t     save_w, save_h;
     char        *title;
 
+    /* Resize grips — input-only windows on frame edges */
+    xcb_window_t  grip[8];  /* top, bottom, left, right, tl, tr, bl, br */
+
     struct WmClient *next;
 } WmClient;
 
@@ -94,10 +97,14 @@ typedef struct Wm {
 
     /* Drag state */
     enum { DRAG_NONE, DRAG_MOVE, DRAG_RESIZE } drag_mode;
+    int                    resize_edge;
     WmClient              *drag_client;
     int16_t                drag_start_x, drag_start_y;
     int16_t                drag_orig_x, drag_orig_y;
     uint16_t               drag_orig_w, drag_orig_h;
+
+    /* Resize cursors */
+    xcb_cursor_t           cursors[8];
 
     int                    running;
     int                    restart;
@@ -125,6 +132,20 @@ void      frame_configure(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
+void      frame_create_grips(Wm *wm, WmClient *c);
+void      frame_update_grips(Wm *wm, WmClient *c);
+void      frame_destroy_grips(Wm *wm, WmClient *c);
+void      frame_init_cursors(Wm *wm);
+
+/* Grip indices — match the grip[8] array order */
+#define GRIP_TOP    0
+#define GRIP_BOTTOM 1
+#define GRIP_LEFT   2
+#define GRIP_RIGHT  3
+#define GRIP_TL     4
+#define GRIP_TR     5
+#define GRIP_BL     6
+#define GRIP_BR     7
 
 /* ---------- ewmh.c — EWMH property management ---------- */
 void  wm_ewmh_setup(Wm *wm);

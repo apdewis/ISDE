@@ -368,6 +368,40 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
     }
 }
 
+static WmClient *find_grip_client(Wm *wm, xcb_window_t win, int *edge)
+{
+    for (WmClient *c = wm->clients; c; c = c->next)
+        for (int i = 0; i < 8; i++)
+            if (c->grip[i] == win) { *edge = i; return c; }
+    *edge = -1;
+    return NULL;
+}
+
+static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
+{
+    int edge;
+    WmClient *c = find_grip_client(wm, ev->event, &edge);
+    if (!c || edge < 0) return;
+
+    wm_focus_client(wm, c);
+    wm->drag_mode    = DRAG_RESIZE;
+    wm->resize_edge  = edge;
+    wm->drag_client  = c;
+    wm->drag_start_x = ev->root_x;
+    wm->drag_start_y = ev->root_y;
+    wm->drag_orig_x  = c->x;
+    wm->drag_orig_y  = c->y;
+    wm->drag_orig_w  = c->width;
+    wm->drag_orig_h  = c->height;
+
+    xcb_grab_pointer(wm->conn, 1, wm->root,
+                     XCB_EVENT_MASK_BUTTON_RELEASE |
+                     XCB_EVENT_MASK_POINTER_MOTION,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, wm->cursors[edge], XCB_CURRENT_TIME);
+    xcb_flush(wm->conn);
+}
+
 static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
@@ -416,7 +450,7 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev);
 static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
 {
     WmClient *c = wm->drag_client;
-    if (!c || wm->drag_mode != DRAG_MOVE) return;
+    if (!c || wm->drag_mode == DRAG_NONE) return;
 
     /* Coalesce: drain any queued motion events and use the latest one */
     xcb_generic_event_t *next;
@@ -440,11 +474,44 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         }
     }
 
-    c->x = wm->drag_orig_x + (ev->root_x - wm->drag_start_x);
-    c->y = wm->drag_orig_y + (ev->root_y - wm->drag_start_y);
+    int dx = ev->root_x - wm->drag_start_x;
+    int dy = ev->root_y - wm->drag_start_y;
 
-    /* Use XtMoveWidget to keep Xt internal state in sync */
-    XtMoveWidget(c->shell, c->x, c->y);
+    if (wm->drag_mode == DRAG_MOVE) {
+        c->x = wm->drag_orig_x + dx;
+        c->y = wm->drag_orig_y + dy;
+        XtMoveWidget(c->shell, c->x, c->y);
+    } else if (wm->drag_mode == DRAG_RESIZE) {
+        int e = wm->resize_edge;
+        int nx = wm->drag_orig_x;
+        int ny = wm->drag_orig_y;
+        int nw = wm->drag_orig_w;
+        int nh = wm->drag_orig_h;
+        int min_sz = isde_scale(50);
+
+        if (e == GRIP_TOP || e == GRIP_TL || e == GRIP_TR) {
+            nh = wm->drag_orig_h - dy;
+            ny = wm->drag_orig_y + dy;
+        }
+        if (e == GRIP_BOTTOM || e == GRIP_BL || e == GRIP_BR) {
+            nh = wm->drag_orig_h + dy;
+        }
+        if (e == GRIP_LEFT || e == GRIP_TL || e == GRIP_BL) {
+            nw = wm->drag_orig_w - dx;
+            nx = wm->drag_orig_x + dx;
+        }
+        if (e == GRIP_RIGHT || e == GRIP_TR || e == GRIP_BR) {
+            nw = wm->drag_orig_w + dx;
+        }
+
+        if (nw < min_sz) { nw = min_sz; nx = wm->drag_orig_x + wm->drag_orig_w - min_sz; }
+        if (nh < min_sz) { nh = min_sz; ny = wm->drag_orig_y + wm->drag_orig_h - min_sz; }
+
+        c->x = nx; c->y = ny;
+        c->width = nw; c->height = nh;
+        frame_configure(wm, c);
+    }
+
     xcb_flush(wm->conn);
 }
 
@@ -536,6 +603,15 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         else
             XtDispatchEvent(ev, wm->conn);
         break;
+    case XCB_BUTTON_PRESS: {
+        xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
+        int edge;
+        if (find_grip_client(wm, bp->event, &edge))
+            on_grip_press(wm, bp);
+        else
+            XtDispatchEvent(ev, wm->conn);
+        break;
+    }
     case XCB_PROPERTY_NOTIFY:
         on_property_notify(wm, (xcb_property_notify_event_t *)ev);
         break;

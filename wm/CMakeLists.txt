@@ -21,6 +21,7 @@ target_link_libraries(isde-wm
     PkgConfig::CAIRO_XCB
     PkgConfig::FONTCONFIG
     PkgConfig::FREETYPE
+    PkgConfig::XCB_CURSOR
 )
 
 install(TARGETS isde-wm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

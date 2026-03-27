@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <xcb/xcb_cursor.h>
+
+#define GRIP_SIZE isde_scale(6)
 
 /* Convert 0xRRGGBB to an X11 Pixel via AllocColor */
 static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
@@ -302,6 +305,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
 
     /* Realize the shell so we get a window ID */
+    frame_init_cursors(wm);
     XtRealizeWidget(c->shell);
 
     /* Set correct initial positions and apply theme colors */
@@ -313,6 +317,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
                         WM_BORDER_WIDTH,
                         WM_BORDER_WIDTH + WM_TITLE_HEIGHT);
+
+    /* Create invisible resize grips — after reparent so they stack on top */
+    frame_create_grips(wm, c);
 
     /* Remove client border */
     uint32_t bw = 0;
@@ -336,6 +343,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
 void frame_destroy(Wm *wm, WmClient *c)
 {
+    frame_destroy_grips(wm, c);
+
     /* Reparent client back to root */
     xcb_reparent_window(wm->conn, c->client, wm->root, c->x, c->y);
     xcb_flush(wm->conn);
@@ -391,6 +400,11 @@ void frame_configure(Wm *wm, WmClient *c)
     xcb_configure_window(wm->conn, c->client,
                          XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                          cvals);
+
+    /* Update grip positions */
+    if (c->grip[0])
+        frame_update_grips(wm, c);
+
     xcb_flush(wm->conn);
 }
 
@@ -405,4 +419,85 @@ void frame_update_title(Wm *wm, WmClient *c)
     Arg args[20];
     XtSetArg(args[0], XtNlabel, c->title ? c->title : "(untitled)");
     XtSetValues(c->title_label, args, 1);
+}
+
+/* ---------- resize cursors ---------- */
+
+void frame_init_cursors(Wm *wm)
+{
+    if (wm->cursors[0]) return;
+    xcb_cursor_context_t *ctx;
+    if (xcb_cursor_context_new(wm->conn, wm->screen, &ctx) < 0)
+        return;
+    static const char *names[8] = {
+        "top_side", "bottom_side", "left_side", "right_side",
+        "top_left_corner", "top_right_corner",
+        "bottom_left_corner", "bottom_right_corner"
+    };
+    for (int i = 0; i < 8; i++)
+        wm->cursors[i] = xcb_cursor_load_cursor(ctx, names[i]);
+    xcb_cursor_context_free(ctx);
+}
+
+/* ---------- resize grips ---------- */
+
+void frame_create_grips(Wm *wm, WmClient *c)
+{
+    xcb_window_t parent = XtWindow(c->shell);
+    uint32_t mask = XCB_EVENT_MASK_BUTTON_PRESS |
+                    XCB_EVENT_MASK_ENTER_WINDOW |
+                    XCB_EVENT_MASK_LEAVE_WINDOW;
+
+    for (int i = 0; i < 8; i++) {
+        uint32_t vals[2] = { mask, wm->cursors[i] };
+        c->grip[i] = xcb_generate_id(wm->conn);
+        xcb_create_window(wm->conn, 0, c->grip[i], parent,
+                          0, 0, 1, 1, 0,
+                          XCB_WINDOW_CLASS_INPUT_ONLY,
+                          XCB_COPY_FROM_PARENT,
+                          XCB_CW_EVENT_MASK | XCB_CW_CURSOR, vals);
+        xcb_map_window(wm->conn, c->grip[i]);
+    }
+    frame_update_grips(wm, c);
+}
+
+void frame_update_grips(Wm *wm, WmClient *c)
+{
+    int fw = frame_total_width(c);
+    int fh = frame_total_height(c);
+    int g = GRIP_SIZE;
+    int corner = g * 2;
+
+    /* Order: top, bottom, left, right, tl, tr, bl, br */
+    struct { int x, y, w, h; } r[8] = {
+        { corner,    0,       fw - 2*corner, g },        /* top */
+        { corner,    fh - g,  fw - 2*corner, g },        /* bottom */
+        { 0,         corner,  g, fh - 2*corner },        /* left */
+        { fw - g,    corner,  g, fh - 2*corner },        /* right */
+        { 0,         0,       corner, corner },           /* top-left */
+        { fw-corner, 0,       corner, corner },           /* top-right */
+        { 0,         fh-corner, corner, corner },         /* bottom-left */
+        { fw-corner, fh-corner, corner, corner },         /* bottom-right */
+    };
+
+    for (int i = 0; i < 8; i++) {
+        if (r[i].w < 1) r[i].w = 1;
+        if (r[i].h < 1) r[i].h = 1;
+        uint32_t vals[] = { r[i].x, r[i].y, r[i].w, r[i].h,
+                            XCB_STACK_MODE_ABOVE };
+        xcb_configure_window(wm->conn, c->grip[i],
+                             XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+                             XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT |
+                             XCB_CONFIG_WINDOW_STACK_MODE, vals);
+    }
+}
+
+void frame_destroy_grips(Wm *wm, WmClient *c)
+{
+    for (int i = 0; i < 8; i++) {
+        if (c->grip[i]) {
+            xcb_destroy_window(wm->conn, c->grip[i]);
+            c->grip[i] = 0;
+        }
+    }
 }
