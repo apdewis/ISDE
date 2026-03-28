@@ -33,7 +33,7 @@
 #include "isde/isde-config.h"
 
 /* ---------- Panel geometry (scaled) ---------- */
-#define PANEL_HEIGHT      isde_scale(32)
+#define PANEL_HEIGHT      isde_font_height("toolbar", 16)
 #define PANEL_ICON_SIZE   isde_scale(22)
 #define PANEL_BUTTON_PAD  isde_scale(4)
 #define PANEL_CLOCK_WIDTH isde_scale(90)

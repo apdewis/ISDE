@@ -63,35 +63,50 @@ void clock_init(Panel *p)
 
     int half = PANEL_HEIGHT / 2;
 
+    /* Derive font sizes to fit within half the panel height.
+     * Each half has ~2px internal padding per side from the Label widget,
+     * so available text height is (half - 4) pixels.
+     * Convert back to pt: pt = px * 72 / 96 = px * 3 / 4 */
+    int avail_px = half - isde_scale(4);
+    if (avail_px < isde_scale(6)) avail_px = isde_scale(6);
+    int time_pt = (avail_px * 3) / (4 * isde_scale(1));
+    int date_pt = time_pt > 2 ? time_pt - 2 : time_pt;
+
+    /* Build font spec strings: "General-<size>" */
+    char time_font[64], date_font[64];
+    snprintf(time_font, sizeof(time_font), "Sans-%d", time_pt);
+    snprintf(date_font, sizeof(date_font), "Sans-%d", date_pt);
+
     /* Time label (top half) — child of form, right of taskbar box */
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, "00:00");              n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);     n++;
-    XtSetArg(args[n], XtNheight, half);                  n++;
-    XtSetArg(args[n], XtNfromHoriz, p->tray_box);       n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);           n++;
-    XtSetArg(args[n], XtNright, XtChainRight);          n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);              n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);           n++;
-    p->clock_time = XtCreateManagedWidget("clockTime", labelWidgetClass,
-                                          p->form, args, n);
+    p->clock_time = XtVaCreateManagedWidget("clockTime", labelWidgetClass,
+        p->form,
+        XtNlabel,      "00:00",
+        XtNborderWidth, 0,
+        XtNwidth,       PANEL_CLOCK_WIDTH,
+        XtNheight,      half,
+        XtNfromHoriz,   p->tray_box,
+        XtNleft,        XtChainRight,
+        XtNright,       XtChainRight,
+        XtNtop,         XtChainTop,
+        XtNbottom,      XtChainTop,
+        XtVaTypedArg, XtNfont, XtRString, time_font, strlen(time_font) + 1,
+        NULL);
 
     /* Date label (bottom half) — below time label */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "0000-00-00");          n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                n++;
-    XtSetArg(args[n], XtNwidth, PANEL_CLOCK_WIDTH);      n++;
-    XtSetArg(args[n], XtNheight, half);                   n++;
-    XtSetArg(args[n], XtNfromVert, p->clock_time);       n++;
-    XtSetArg(args[n], XtNfromHoriz, p->box);             n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);               n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    p->clock_date = XtCreateManagedWidget("clockDate", labelWidgetClass,
-                                          p->form, args, n);
+    p->clock_date = XtVaCreateManagedWidget("clockDate", labelWidgetClass,
+        p->form,
+        XtNlabel,      "0000-00-00",
+        XtNborderWidth, 0,
+        XtNwidth,       PANEL_CLOCK_WIDTH,
+        XtNheight,      half,
+        XtNfromVert,    p->clock_time,
+        XtNfromHoriz,   p->box,
+        XtNleft,        XtChainRight,
+        XtNright,       XtChainRight,
+        XtNtop,         XtChainTop,
+        XtNbottom,      XtChainBottom,
+        XtVaTypedArg, XtNfont, XtRString, date_font, strlen(date_font) + 1,
+        NULL);
 
     /* Trigger first update immediately */
     p->clock_timer = XtAppAddTimeOut(p->app, 0, update_clock, p);

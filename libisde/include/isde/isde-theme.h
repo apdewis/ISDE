@@ -104,6 +104,12 @@ void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
 char **isde_theme_build_resources(void);
 void   isde_theme_free_resources(char **resources);
 
+/* Compute a widget height (in scaled pixels) suitable for containing text
+ * rendered in the given font category.  Reads [fonts] from isde.toml.
+ * category: "general", "fixed", "small", "toolbar", "menu", "title"
+ * padding:  extra vertical padding (unscaled pixels) added to font height */
+int isde_font_height(const char *category, int padding);
+
 #ifdef __cplusplus
 }
 #endif

@@ -23,7 +23,7 @@
 #include "isde/isde-xdg.h"
 
 /* ---------- Frame geometry (scaled) ---------- */
-#define WM_TITLE_HEIGHT    isde_scale(24)
+#define WM_TITLE_HEIGHT    isde_font_height("title", 10)
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
 

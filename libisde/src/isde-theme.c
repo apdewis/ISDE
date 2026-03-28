@@ -821,14 +821,12 @@ char **isde_theme_build_resources(void)
                 sz  = (int)isde_config_int(fonts, "small_size", 8);
                 res[i++] = fmt_font("*StatusBar.font", fam, sz);
                 res[i++] = fmt_font("*Tip.font", fam, sz);
-                res[i++] = fmt_font("*clockDate.font", fam, sz);
 
                 /* Toolbar — Command buttons in toolbars */
                 fam = isde_config_string(fonts, "toolbar_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "toolbar_size", 9);
                 res[i++] = fmt_font("*startBtn.font", fam, sz);
                 res[i++] = fmt_font("*taskBtn.font", fam, sz);
-                res[i++] = fmt_font("*clockTime.font", fam, sz);
 
                 /* Menus */
                 fam = isde_config_string(fonts, "menu_family", "Sans");
@@ -855,4 +853,58 @@ void isde_theme_free_resources(char **resources)
     for (int i = 0; resources[i]; i++)
         free(resources[i]);
     free(resources);
+}
+
+/* Cached font sizes — loaded once from config */
+static int g_font_sizes[6] = {0};  /* general, fixed, small, toolbar, menu, title */
+static int g_font_sizes_loaded = 0;
+
+static void load_font_sizes(void)
+{
+    if (g_font_sizes_loaded) return;
+    g_font_sizes_loaded = 1;
+
+    /* Defaults */
+    g_font_sizes[0] = 10; /* general */
+    g_font_sizes[1] = 10; /* fixed */
+    g_font_sizes[2] = 8;  /* small */
+    g_font_sizes[3] = 9;  /* toolbar */
+    g_font_sizes[4] = 10; /* menu */
+    g_font_sizes[5] = 10; /* title */
+
+    static const char *keys[6] = {
+        "general_size", "fixed_size", "small_size",
+        "toolbar_size", "menu_size", "title_size"
+    };
+
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *fonts = isde_config_table(root, "fonts");
+        if (fonts) {
+            for (int i = 0; i < 6; i++) {
+                int sz = (int)isde_config_int(fonts, keys[i], 0);
+                if (sz > 0) g_font_sizes[i] = sz;
+            }
+        }
+        isde_config_free(cfg);
+    }
+}
+
+int isde_font_height(const char *category, int padding)
+{
+    load_font_sizes();
+
+    int idx = 0; /* general */
+    if      (strcmp(category, "fixed")   == 0) idx = 1;
+    else if (strcmp(category, "small")   == 0) idx = 2;
+    else if (strcmp(category, "toolbar") == 0) idx = 3;
+    else if (strcmp(category, "menu")    == 0) idx = 4;
+    else if (strcmp(category, "title")   == 0) idx = 5;
+
+    /* Convert point size to pixel height:
+     * pixels = pt * (96 / 72) = pt * 4/3, then add padding and scale */
+    int px = (g_font_sizes[idx] * 4 + 2) / 3 + padding;
+    return isde_scale(px);
 }
