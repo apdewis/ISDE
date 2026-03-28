@@ -142,7 +142,8 @@ static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
     dismiss_delete_dialog();
 }
 
-static void fm_delete_selected(Fm *fm)
+/* permanent = 0: trash mode (Delete key), permanent = 1: permanent mode (Shift+Delete) */
+static void fm_delete_confirm(Fm *fm, int permanent)
 {
     if (!fm->iconview) return;
 
@@ -153,16 +154,28 @@ static void fm_delete_selected(Fm *fm)
         return;
     }
 
+    char *trash_path = fileops_trash_path();
+    int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
+    free(trash_path);
+
+    /* In trash or shift+delete: permanent mode */
+    if (in_trash) permanent = 1;
+
     /* Build confirmation message */
     char msg[256];
     if (nsel == 1) {
         int idx = indices[0];
-        if (idx >= 0 && idx < fm->nentries)
-            snprintf(msg, sizeof(msg), "Delete \"%s\"?", fm->entries[idx].name);
+        const char *name = (idx >= 0 && idx < fm->nentries)
+                           ? fm->entries[idx].name : "selected item";
+        if (permanent)
+            snprintf(msg, sizeof(msg), "Permanently delete \"%s\"?", name);
         else
-            snprintf(msg, sizeof(msg), "Delete selected item?");
+            snprintf(msg, sizeof(msg), "Move \"%s\" to Trash?", name);
     } else {
-        snprintf(msg, sizeof(msg), "Delete %d items?", nsel);
+        if (permanent)
+            snprintf(msg, sizeof(msg), "Permanently delete %d items?", nsel);
+        else
+            snprintf(msg, sizeof(msg), "Move %d items to Trash?", nsel);
     }
     free(indices);
 
@@ -187,19 +200,23 @@ static void fm_delete_selected(Fm *fm)
     Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
                                            delete_shell, args, n);
 
-    char *trash_path = fileops_trash_path();
-    int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
-    free(trash_path);
-
-    if (in_trash) {
-        IswDialogAddButton(dialog, "Delete Permanently", delete_do_permanent, NULL);
-    } else {
-        IswDialogAddButton(dialog, "Move to Trash", delete_do_trash, NULL);
-        IswDialogAddButton(dialog, "Delete Permanently", delete_do_permanent, NULL);
-    }
+    if (permanent)
+        IswDialogAddButton(dialog, "Delete", delete_do_permanent, NULL);
+    else
+        IswDialogAddButton(dialog, "Move", delete_do_trash, NULL);
     IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
 
     XtPopup(delete_shell, XtGrabNone);
+}
+
+static void fm_delete_selected(Fm *fm)
+{
+    fm_delete_confirm(fm, 0);
+}
+
+static void fm_delete_selected_permanent(Fm *fm)
+{
+    fm_delete_confirm(fm, 1);
 }
 
 /* ---------- empty trash ---------- */
@@ -652,6 +669,12 @@ static void act_delete(Widget w, XEvent *ev, String *p, Cardinal *n)
     if (shortcut_fm) fm_delete_selected(shortcut_fm);
 }
 
+static void act_delete_permanent(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (shortcut_fm) fm_delete_selected_permanent(shortcut_fm);
+}
+
 static void act_rename(Widget w, XEvent *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
@@ -727,6 +750,7 @@ static XtActionsRec fm_actions[] = {
     {"fm-cut",           act_cut},
     {"fm-paste",         act_paste},
     {"fm-delete",        act_delete},
+    {"fm-delete-permanent", act_delete_permanent},
     {"fm-rename",        act_rename},
     {"fm-go-up",         act_go_up},
     {"fm-go-back",       act_go_back},
@@ -740,6 +764,8 @@ static char fm_translations[] =
     "Ctrl<Key>c:        fm-copy()\n"
     "Ctrl<Key>x:        fm-cut()\n"
     "Ctrl<Key>v:        fm-paste()\n"
+    "Shift<Key>Delete:    fm-delete-permanent()\n"
+    "Shift<Key>KP_Delete: fm-delete-permanent()\n"
     "<Key>Delete:        fm-delete()\n"
     "<Key>KP_Delete:     fm-delete()\n"
     "<Key>F2:            fm-rename()\n"
