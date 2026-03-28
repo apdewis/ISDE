@@ -9,115 +9,9 @@
 #include <string.h>
 #include <unistd.h>
 
-/* ---------- menu callbacks ---------- */
+/* ---------- forward declarations ---------- */
 
-static void quit_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    fm->running = 0;
-}
-
-static void go_back_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    if (fm->hist_pos > 0) {
-        fm->hist_pos--;
-        free(fm->cwd);
-        fm->cwd = strdup(fm->history[fm->hist_pos]);
-        fm_refresh(fm);
-    }
-}
-
-static void go_fwd_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    if (fm->hist_pos < fm->hist_count - 1) {
-        fm->hist_pos++;
-        free(fm->cwd);
-        fm->cwd = strdup(fm->history[fm->hist_pos]);
-        fm_refresh(fm);
-    }
-}
-
-static void go_up_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    char *parent = strdup(fm->cwd);
-    char *slash = strrchr(parent, '/');
-    if (slash && slash != parent)
-        *slash = '\0';
-    else {
-        free(parent);
-        parent = strdup("/");
-    }
-    fm_navigate(fm, parent);
-    free(parent);
-}
-
-static void go_home_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    const char *home = getenv("HOME");
-    if (home)
-        fm_navigate(fm, home);
-}
-
-static void go_root_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    fm_navigate((Fm *)cd, "/");
-}
-
-static void view_icons_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    fileview_set_mode((Fm *)cd, FM_VIEW_ICON);
-}
-
-static void view_list_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    fileview_set_mode((Fm *)cd, FM_VIEW_LIST);
-}
-
-static void toggle_hidden_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    fm->show_hidden = !fm->show_hidden;
-    fm_refresh(fm);
-}
-
-static void new_folder_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    fileops_mkdir(fm, "New Folder");
-    fm_refresh(fm);
-}
-
-static void cut_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    clipboard_cut((Fm *)cd);
-}
-
-static void copy_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    clipboard_copy((Fm *)cd);
-}
-
-static void paste_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    clipboard_paste((Fm *)cd);
-}
+static void fm_delete_selected(Fm *fm);
 
 /* ---------- rename dialog ---------- */
 
@@ -190,12 +84,6 @@ void show_rename_dialog(Fm *fm)
     IswDialogAddButton(dialog, "Cancel", rename_cancel_cb, NULL);
 
     XtPopup(rename_shell, XtGrabNone);
-}
-
-static void rename_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    show_rename_dialog((Fm *)cd);
 }
 
 /* ---------- delete with confirmation ---------- */
@@ -314,18 +202,6 @@ static void fm_delete_selected(Fm *fm)
     XtPopup(delete_shell, XtGrabNone);
 }
 
-static void delete_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    fm_delete_selected((Fm *)cd);
-}
-
-static void refresh_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    fm_refresh((Fm *)cd);
-}
-
 /* ---------- empty trash ---------- */
 
 static Widget empty_trash_shell = NULL;
@@ -356,11 +232,8 @@ static void empty_trash_cancel(Widget w, XtPointer cd, XtPointer call)
     }
 }
 
-static void empty_trash_cb(Widget w, XtPointer cd, XtPointer call)
+static void ctx_empty_trash(Fm *fm)
 {
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-
     if (empty_trash_shell) {
         XtDestroyWidget(empty_trash_shell);
         empty_trash_shell = NULL;
@@ -386,39 +259,14 @@ static void empty_trash_cb(Widget w, XtPointer cd, XtPointer call)
     XtPopup(empty_trash_shell, XtGrabNone);
 }
 
-static void open_terminal_cb(Widget w, XtPointer cd, XtPointer call)
+static void ctx_open_terminal(Fm *fm)
 {
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
     pid_t pid = fork();
     if (pid == 0) {
         chdir(fm->cwd);
         execlp("xterm", "xterm", (char *)NULL);
         _exit(127);
     }
-}
-
-/* ---------- menu creation helpers ---------- */
-
-static int menu_entry_id = 0;
-
-static Widget add_menu_entry(Widget menu, const char *label,
-                             XtCallbackProc cb, XtPointer cd)
-{
-    Arg args[20];
-    char name[32];
-    snprintf(name, sizeof(name), "entry%d", menu_entry_id++);
-    XtSetArg(args[0], XtNlabel, label);
-    Widget entry = XtCreateManagedWidget(name, smeBSBObjectClass,
-                                         menu, args, 1);
-    if (cb)
-        XtAddCallback(entry, XtNcallback, cb, cd);
-    return entry;
-}
-
-static void add_separator(Widget menu)
-{
-    XtCreateManagedWidget("sep", smeLineObjectClass, menu, NULL, 0);
 }
 
 /* ---------- right-click context menu (List-based) ---------- */
@@ -456,21 +304,23 @@ static void ctx_restore(Fm *fm) {
 
 static String base_labels[] = {
     "Cut", "Copy", "Paste", "---",
-    "Rename", "Delete", "---", "New Folder"
+    "Rename", "Delete", "---",
+    "New Folder", "Open Terminal Here"
 };
 static CtxAction base_actions[] = {
     ctx_cut, ctx_copy, ctx_paste, NULL,
-    ctx_rename, ctx_delete_action, NULL, ctx_new_folder
+    ctx_rename, ctx_delete_action, NULL,
+    ctx_new_folder, ctx_open_terminal
 };
-#define BASE_NITEMS 8
+#define BASE_NITEMS 9
 
 static String ctx_trash_labels[] = {
-    "Restore", "Delete Permanently", NULL
+    "Restore", "Delete Permanently", "---", "Empty Trash", NULL
 };
 static CtxAction ctx_trash_actions[] = {
-    ctx_restore, ctx_delete_action
+    ctx_restore, ctx_delete_action, NULL, ctx_empty_trash
 };
-#define CTX_TRASH_NITEMS 2
+#define CTX_TRASH_NITEMS 4
 
 static int ctx_in_trash = 0;
 
@@ -727,72 +577,6 @@ void fm_register_context_menu(Fm *fm, Widget w)
     XtAddEventHandler(w, ButtonPressMask, False, ctx_handler, fm);
 }
 
-static void setup_menus(Fm *fm, Widget menubar)
-{
-    Arg args[20];
-    Cardinal n;
-
-    /* File menu */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "File"); n++;
-    XtSetArg(args[n], XtNmenuName, "fileMenu"); n++;
-    XtCreateManagedWidget("fileBtn", menuButtonWidgetClass,
-                          menubar, args, n);
-    Widget file_menu = XtCreatePopupShell("fileMenu", simpleMenuWidgetClass,
-                                          menubar, NULL, 0);
-    add_menu_entry(file_menu, "New Folder", new_folder_cb, fm);
-    add_menu_entry(file_menu, "Open Terminal Here", open_terminal_cb, fm);
-    add_separator(file_menu);
-    add_menu_entry(file_menu, "Refresh", refresh_cb, fm);
-    add_separator(file_menu);
-    add_menu_entry(file_menu, "Empty Trash", empty_trash_cb, fm);
-    add_separator(file_menu);
-    add_menu_entry(file_menu, "Quit", quit_cb, fm);
-
-    /* Edit menu */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Edit"); n++;
-    XtSetArg(args[n], XtNmenuName, "editMenu"); n++;
-    XtCreateManagedWidget("editBtn", menuButtonWidgetClass,
-                          menubar, args, n);
-    Widget edit_menu = XtCreatePopupShell("editMenu", simpleMenuWidgetClass,
-                                          menubar, NULL, 0);
-    add_menu_entry(edit_menu, "Cut", cut_cb, fm);
-    add_menu_entry(edit_menu, "Copy", copy_cb, fm);
-    add_menu_entry(edit_menu, "Paste", paste_cb, fm);
-    add_separator(edit_menu);
-    add_menu_entry(edit_menu, "Rename", rename_cb, fm);
-    add_menu_entry(edit_menu, "Delete", delete_cb, fm);
-
-    /* View menu */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "View"); n++;
-    XtSetArg(args[n], XtNmenuName, "viewMenu"); n++;
-    XtCreateManagedWidget("viewBtn", menuButtonWidgetClass,
-                          menubar, args, n);
-    Widget view_menu = XtCreatePopupShell("viewMenu", simpleMenuWidgetClass,
-                                          menubar, NULL, 0);
-    add_menu_entry(view_menu, "Icons", view_icons_cb, fm);
-    add_menu_entry(view_menu, "List", view_list_cb, fm);
-    add_separator(view_menu);
-    add_menu_entry(view_menu, "Show Hidden Files", toggle_hidden_cb, fm);
-
-    /* Go menu */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Go"); n++;
-    XtSetArg(args[n], XtNmenuName, "goMenu"); n++;
-    XtCreateManagedWidget("goBtn", menuButtonWidgetClass,
-                          menubar, args, n);
-    Widget go_menu = XtCreatePopupShell("goMenu", simpleMenuWidgetClass,
-                                        menubar, NULL, 0);
-    add_menu_entry(go_menu, "Back", go_back_cb, fm);
-    add_menu_entry(go_menu, "Forward", go_fwd_cb, fm);
-    add_menu_entry(go_menu, "Up", go_up_cb, fm);
-    add_separator(go_menu);
-    add_menu_entry(go_menu, "Home", go_home_cb, fm);
-    add_menu_entry(go_menu, "Root (/)", go_root_cb, fm);
-}
-
 /* ---------- navigation ---------- */
 
 void fm_navigate(Fm *fm, const char *path)
@@ -929,17 +713,27 @@ static void act_open(Widget w, XEvent *ev, String *p, Cardinal *n)
         browser_open_entry(fm, sel);
 }
 
+static void act_toggle_hidden(Widget w, XEvent *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    Fm *fm = shortcut_fm;
+    if (!fm) return;
+    fm->show_hidden = !fm->show_hidden;
+    fm_refresh(fm);
+}
+
 static XtActionsRec fm_actions[] = {
-    {"fm-copy",     act_copy},
-    {"fm-cut",      act_cut},
-    {"fm-paste",    act_paste},
-    {"fm-delete",   act_delete},
-    {"fm-rename",   act_rename},
-    {"fm-go-up",    act_go_up},
-    {"fm-go-back",  act_go_back},
-    {"fm-go-fwd",   act_go_fwd},
-    {"fm-refresh",  act_refresh},
-    {"fm-open",     act_open},
+    {"fm-copy",          act_copy},
+    {"fm-cut",           act_cut},
+    {"fm-paste",         act_paste},
+    {"fm-delete",        act_delete},
+    {"fm-rename",        act_rename},
+    {"fm-go-up",         act_go_up},
+    {"fm-go-back",       act_go_back},
+    {"fm-go-fwd",        act_go_fwd},
+    {"fm-refresh",       act_refresh},
+    {"fm-open",          act_open},
+    {"fm-toggle-hidden", act_toggle_hidden},
 };
 
 static char fm_translations[] =
@@ -952,7 +746,8 @@ static char fm_translations[] =
     "<Key>BackSpace:     fm-go-up()\n"
     "Alt<Key>Left:       fm-go-back()\n"
     "Alt<Key>Right:      fm-go-fwd()\n"
-    "<Key>F5:            fm-refresh()\n";
+    "<Key>F5:            fm-refresh()\n"
+    "Ctrl<Key>h:        fm-toggle-hidden()\n";
 
 void fm_install_shortcuts(Widget w)
 {
@@ -1048,12 +843,10 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);
 
-    /* MainWindow provides menubar + content area */
+    /* MainWindow — no menu bar, content only */
     fm->main_window = XtCreateManagedWidget("mainWin", mainWindowWidgetClass,
                                             fm->toplevel, NULL, 0);
-
-    Widget menubar = IswMainWindowGetMenuBar(fm->main_window);
-    setup_menus(fm, menubar);
+    XtUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
 
     /* Outer FlexBox: vertical — navbar on top, body fills remainder */
     n = 0;

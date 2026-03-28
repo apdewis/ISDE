@@ -9,11 +9,6 @@
 #include <X11/StringDefs.h>
 #include <X11/Shell.h>
 #include <ISW/MainWindow.h>
-#include <ISW/MenuBar.h>
-#include <ISW/MenuButton.h>
-#include <ISW/SimpleMenu.h>
-#include <ISW/SmeBSB.h>
-#include <ISW/SmeLine.h>
 #include <ISW/Command.h>
 #include <ISW/Label.h>
 #include <ISW/Form.h>
@@ -55,12 +50,6 @@ typedef struct {
     const char *mime_icon;  /* icon name from icons.c */
 } FmEntry;
 
-/* ---------- View mode ---------- */
-typedef enum {
-    FM_VIEW_ICON,
-    FM_VIEW_LIST
-} FmViewMode;
-
 /* ---------- Clipboard ---------- */
 typedef enum {
     FM_CLIP_NONE,
@@ -97,9 +86,7 @@ typedef struct Fm {
     Widget         vbox;         /* outer FlexBox (vertical) */
     Widget         hbox;         /* inner FlexBox (horizontal) */
     Widget         viewport;
-    Widget         iconview;    /* current if FM_VIEW_ICON */
-    Widget         listview;    /* current if FM_VIEW_LIST */
-    FmViewMode     view_mode;
+    Widget         iconview;
     int            show_hidden;
     int            double_click;  /* 1 = double click to open, 0 = single */
 
@@ -153,7 +140,6 @@ void  browser_open_entry(Fm *fm, int index);
 /* ---------- fileview.c ---------- */
 void  fileview_init(Fm *fm);
 void  fileview_populate(Fm *fm);
-void  fileview_set_mode(Fm *fm, FmViewMode mode);
 void  fileview_cleanup(Fm *fm);
 
 /* ---------- navbar.c ---------- */

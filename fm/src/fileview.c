@@ -58,32 +58,10 @@ static void iconview_callback(Widget w, XtPointer client_data,
     }
 }
 
-/* ---------- List callback ---------- */
-
-static void listview_callback(Widget w, XtPointer client_data,
-                              XtPointer call_data)
-{
-    (void)w;
-    Fm *fm = (Fm *)client_data;
-    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
-    if (ret->list_index < 0) return;
-
-    fm_dismiss_context();
-
-    if (fm->double_click) {
-        if (is_double_click(ret->list_index))
-            browser_open_entry(fm, ret->list_index);
-    } else {
-        browser_open_entry(fm, ret->list_index);
-    }
-}
-
 /* ---------- init / populate ---------- */
 
 void fileview_init(Fm *fm)
 {
-    fm->view_mode = FM_VIEW_ICON;
-
     /* Viewport for scrolling — below the nav bar, right of places sidebar */
     Arg args[20];
     Cardinal n = 0;
@@ -107,8 +85,6 @@ void fileview_init(Fm *fm)
     fm_register_context_menu(fm, fm->iconview);
     fm_install_shortcuts(fm->iconview);
 
-    fm->listview = NULL;
-
     /* Status bar */
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
     if (statusbar) {
@@ -123,7 +99,7 @@ void fileview_init(Fm *fm)
 
 void fileview_populate(Fm *fm)
 {
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
+    if (fm->iconview) {
         /* Build arrays for IconView — must stay alive since
          * IconView stores pointers, not copies */
         static String *labels = NULL;
@@ -159,15 +135,6 @@ void fileview_populate(Fm *fm)
             icons[i] = (String)fm->entries[i].mime_icon;
         }
         IswIconViewSetItems(fm->iconview, labels, icons, fm->nentries);
-    } else if (fm->view_mode == FM_VIEW_LIST && fm->listview) {
-        /* Build string array for List */
-        static String *list_items = NULL;
-        free(list_items);
-        list_items = malloc((fm->nentries + 1) * sizeof(String));
-        for (int i = 0; i < fm->nentries; i++)
-            list_items[i] = fm->entries[i].name;
-        list_items[fm->nentries] = NULL;
-        IswListChange(fm->listview, list_items, fm->nentries, 0, True);
     }
 
     /* Update status bar */
@@ -183,49 +150,6 @@ void fileview_populate(Fm *fm)
         XtSetArg(args[0], XtNlabel, buf);
         XtSetValues(fm->status_label, args, 1);
     }
-}
-
-void fileview_set_mode(Fm *fm, FmViewMode mode)
-{
-    if (mode == fm->view_mode) return;
-
-    /* Destroy current view widget */
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
-        XtDestroyWidget(fm->iconview);
-        fm->iconview = NULL;
-    } else if (fm->view_mode == FM_VIEW_LIST && fm->listview) {
-        XtDestroyWidget(fm->listview);
-        fm->listview = NULL;
-    }
-
-    fm->view_mode = mode;
-
-    Arg args[20];
-    Cardinal n;
-
-    if (mode == FM_VIEW_ICON) {
-        n = 0;
-        XtSetArg(args[n], XtNborderWidth, 0); n++;
-        fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
-                                             fm->viewport, args, n);
-        XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
-        fm_register_context_menu(fm, fm->iconview);
-        fm_install_shortcuts(fm->iconview);
-    } else {
-        static String empty[] = { "(empty)", NULL };
-        n = 0;
-        XtSetArg(args[n], XtNlist, empty);         n++;
-        XtSetArg(args[n], XtNnumberStrings, 1);    n++;
-        XtSetArg(args[n], XtNverticalList, True);   n++;
-        XtSetArg(args[n], XtNborderWidth, 0);      n++;
-        fm->listview = XtCreateManagedWidget("listView", listWidgetClass,
-                                             fm->viewport, args, n);
-        XtAddCallback(fm->listview, XtNcallback, listview_callback, fm);
-        fm_register_context_menu(fm, fm->listview);
-        fm_install_shortcuts(fm->listview);
-    }
-
-    fileview_populate(fm);
 }
 
 void fileview_cleanup(Fm *fm)
