@@ -23,6 +23,19 @@ static PlaceEntry *places = NULL;
 static int          nplaces = 0;
 static int          places_cap = 0;
 
+/* ---------- Section tracking ---------- */
+
+typedef struct {
+    Widget  header;     /* Label widget for section title */
+    Widget  list;       /* List widget for section items */
+    int     start_idx;  /* index into places[] of first item */
+    int     nitems;     /* number of items in this section */
+    String *labels;     /* string array owned by us, pointed to by List */
+} PlaceSection;
+
+static PlaceSection *sections = NULL;
+static int            nsections = 0;
+
 static void places_add(const char *label, const char *path,
                         const char *icon_name, int is_header)
 {
@@ -48,6 +61,15 @@ static void places_free_entries(void)
     places = NULL;
     nplaces = 0;
     places_cap = 0;
+}
+
+static void sections_free(void)
+{
+    for (int i = 0; i < nsections; i++)
+        free(sections[i].labels);
+    free(sections);
+    sections = NULL;
+    nsections = 0;
 }
 
 /* ---------- Build place list ---------- */
@@ -173,27 +195,71 @@ static void build_places_list(void)
     }
 }
 
+/* ---------- Build sections from flat place list ---------- */
+
+static void build_sections(void)
+{
+    sections_free();
+
+    /* Count sections (headers) */
+    int count = 0;
+    for (int i = 0; i < nplaces; i++)
+        if (places[i].is_header) count++;
+
+    sections = calloc(count, sizeof(PlaceSection));
+    nsections = 0;
+
+    for (int i = 0; i < nplaces; i++) {
+        if (!places[i].is_header)
+            continue;
+
+        PlaceSection *s = &sections[nsections++];
+        s->start_idx = i + 1;
+
+        /* Count items until next header or end */
+        s->nitems = 0;
+        for (int j = i + 1; j < nplaces && !places[j].is_header; j++)
+            s->nitems++;
+
+        /* Build label array for the List widget */
+        s->labels = calloc(s->nitems, sizeof(String));
+        for (int j = 0; j < s->nitems; j++)
+            s->labels[j] = places[s->start_idx + j].label;
+    }
+}
+
 /* ---------- Sidebar UI ---------- */
 
-static void place_click_cb(Widget w, XtPointer cd, XtPointer call)
+static void place_list_cb(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)call;
+    (void)w;
     Fm *fm = (Fm *)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
 
-    /* Find which button was clicked by matching widget */
-    for (int i = 0; i < nplaces; i++) {
-        if (places[i].is_header || !places[i].path)
+    if (ret->list_index == XAW_LIST_NONE)
+        return;
+
+    /* Find which section this List widget belongs to */
+    for (int i = 0; i < nsections; i++) {
+        if (sections[i].list != w)
             continue;
-        if (fm->place_buttons && fm->place_buttons[i] == w) {
-            fm_navigate(fm, places[i].path);
-            return;
-        }
+
+        int idx = sections[i].start_idx + ret->list_index;
+        if (idx < nplaces && places[idx].path)
+            fm_navigate(fm, places[idx].path);
+
+        /* Unhighlight all other section lists */
+        for (int j = 0; j < nsections; j++)
+            if (j != i && sections[j].list)
+                IswListUnhighlight(sections[j].list);
+        return;
     }
 }
 
 void places_init(Fm *fm)
 {
     build_places_list();
+    build_sections();
 
     /* Create sidebar viewport */
     Arg args[20];
@@ -206,7 +272,7 @@ void places_init(Fm *fm)
     fm->places_vp = XtCreateManagedWidget("placesVp", viewportWidgetClass,
                                            fm->hbox, args, n);
 
-    /* Vertical FlexBox inside viewport — strict single-column layout */
+    /* Vertical FlexBox inside viewport */
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
@@ -214,49 +280,45 @@ void places_init(Fm *fm)
     fm->places_box = XtCreateManagedWidget("placesBox", flexBoxWidgetClass,
                                             fm->places_vp, args, n);
 
-    /* Allocate button tracking array */
-    fm->place_buttons = calloc(nplaces, sizeof(Widget));
-    fm->nplace_buttons = nplaces;
-
-    /* Create widgets for each entry */
+    /* Create header + list for each section */
     char wname[32];
-    for (int i = 0; i < nplaces; i++) {
-        PlaceEntry *pe = &places[i];
+    for (int i = 0; i < nsections; i++) {
+        PlaceSection *s = &sections[i];
+        int hdr_idx = s->start_idx - 1;
 
-        if (pe->is_header) {
-            /* Section header — bold label */
-            n = 0;
-            snprintf(wname, sizeof(wname), "placeHdr%d", i);
-            XtSetArg(args[n], XtNlabel, pe->label);       n++;
-            XtSetArg(args[n], XtNborderWidth, 0);          n++;
-            XtSetArg(args[n], XtNinternalWidth, isde_scale(6)); n++;
-            XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
-            XtSetArg(args[n], XtNjustify, XtJustifyLeft);  n++;
-            Widget lbl = XtCreateManagedWidget(wname, labelWidgetClass,
-                                                fm->places_box, args, n);
-            fm->place_buttons[i] = lbl;
-        } else {
-            /* Clickable place button */
-            n = 0;
-            snprintf(wname, sizeof(wname), "place%d", i);
-            XtSetArg(args[n], XtNlabel, pe->label);        n++;
-            XtSetArg(args[n], XtNborderWidth, 0);           n++;
-            XtSetArg(args[n], XtNinternalWidth, isde_scale(4)); n++;
-            XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
-            XtSetArg(args[n], XtNjustify, XtJustifyLeft);   n++;
+        /* Section header label */
+        n = 0;
+        snprintf(wname, sizeof(wname), "placeHdr%d", i);
+        XtSetArg(args[n], XtNlabel, places[hdr_idx].label); n++;
+        XtSetArg(args[n], XtNborderWidth, 0);                n++;
+        XtSetArg(args[n], XtNinternalWidth, isde_scale(6));  n++;
+        XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
+        XtSetArg(args[n], XtNjustify, XtJustifyLeft);        n++;
+        s->header = XtCreateManagedWidget(wname, labelWidgetClass,
+                                           fm->places_box, args, n);
 
-            Widget btn = XtCreateManagedWidget(wname, commandWidgetClass,
-                                                fm->places_box, args, n);
-            XtAddCallback(btn, XtNcallback, place_click_cb, fm);
-            fm->place_buttons[i] = btn;
+        /* List widget for this section's items */
+        if (s->nitems > 0) {
+            n = 0;
+            snprintf(wname, sizeof(wname), "placeList%d", i);
+            XtSetArg(args[n], XtNlist, s->labels);                n++;
+            XtSetArg(args[n], XtNnumberStrings, s->nitems);       n++;
+            XtSetArg(args[n], XtNdefaultColumns, 1);              n++;
+            XtSetArg(args[n], XtNforceColumns, True);             n++;
+            XtSetArg(args[n], XtNverticalList, True);             n++;
+            XtSetArg(args[n], XtNborderWidth, 0);                 n++;
+            XtSetArg(args[n], XtNinternalWidth, isde_scale(4));   n++;
+            XtSetArg(args[n], XtNinternalHeight, isde_scale(2));  n++;
+            s->list = XtCreateManagedWidget(wname, listWidgetClass,
+                                             fm->places_box, args, n);
+            XtAddCallback(s->list, XtNcallback, place_list_cb, fm);
         }
     }
 }
 
 void places_cleanup(Fm *fm)
 {
-    free(fm->place_buttons);
-    fm->place_buttons = NULL;
-    fm->nplace_buttons = 0;
+    (void)fm;
+    sections_free();
     places_free_entries();
 }

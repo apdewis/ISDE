@@ -92,8 +92,6 @@ typedef struct Fm {
     /* Places sidebar */
     Widget         places_vp;
     Widget         places_box;
-    Widget        *place_buttons;
-    int            nplace_buttons;
 
     /* Main content */
     Widget         vbox;         /* outer FlexBox (vertical) */
