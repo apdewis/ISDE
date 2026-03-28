@@ -43,6 +43,7 @@ typedef struct WmClient {
     int          focused;
     int          maximized;
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
+    xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */
     /* Saved geometry for restore from maximize */
     int16_t      save_x, save_y;
     uint16_t     save_w, save_h;
@@ -123,6 +124,12 @@ void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);
 void      wm_minimize_client(Wm *wm, WmClient *c);
+
+/* ---------- wm.c — work area ---------- */
+void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
+
+/* ---------- placement.c — window placement ---------- */
+void  wm_place_client(Wm *wm, WmClient *c);
 
 /* ---------- frame.c — frame decoration ---------- */
 WmClient *frame_create(Wm *wm, xcb_window_t client);

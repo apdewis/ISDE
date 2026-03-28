@@ -278,7 +278,7 @@ static void check_strut(xcb_ewmh_connection_t *ewmh, xcb_window_t win,
     }
 }
 
-static void get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
+void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 {
     int top = 0, bottom = 0, left = 0, right = 0;
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
@@ -340,7 +340,7 @@ static int detect_snap_zone(Wm *wm, int rx, int ry)
 static void apply_snap(Wm *wm, WmClient *c, int zone)
 {
     int wx, wy, ww, wh;
-    get_work_area(wm, &wx, &wy, &ww, &wh);
+    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
 
     int th = WM_TITLE_HEIGHT;
 
@@ -407,7 +407,7 @@ void wm_maximize_client(Wm *wm, WmClient *c)
         c->save_h = c->height;
 
         int wx, wy, ww, wh;
-        get_work_area(wm, &wx, &wy, &ww, &wh);
+        wm_get_work_area(wm, &wx, &wy, &ww, &wh);
         c->x = wx;
         c->y = wy;
         c->width  = ww - 2 * WM_BORDER_WIDTH;

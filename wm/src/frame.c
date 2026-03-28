@@ -226,6 +226,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     c->title = fetch_title(wm, client);
 
+    /* Smart placement: center transients over parent, cascade others */
+    wm_place_client(wm, c);
+
     int fw = frame_total_width(c);
     int fh = frame_total_height(c);
 
