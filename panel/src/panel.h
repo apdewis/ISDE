@@ -17,6 +17,7 @@
 #include <ISW/SmeBSB.h>
 #include <ISW/SmeLine.h>
 #include <ISW/MenuButton.h>
+#include <ISW/Viewport.h>
 #include <ISW/ISWSVG.h>
 
 #include <xcb/xcb.h>
@@ -85,6 +86,7 @@ typedef struct Panel {
     Widget             start_btn;   /* Start menu button (triangle icon) */
     Widget             start_shell; /* Start menu OverrideShell */
     Widget             cat_box;     /* Left pane: category buttons */
+    Widget             app_viewport;/* Right pane: scrollable viewport */
     Widget             app_box;     /* Right pane: app entries for selected category */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */

@@ -56,7 +56,7 @@ static void set_start_btn_active(Panel *p, int active)
 
 #define MENU_WIDTH       isde_scale(400)
 #define MENU_HEIGHT      isde_scale(350)
-#define CAT_PANE_WIDTH   isde_scale(130)
+#define CAT_PANE_WIDTH   isde_scale(150)
 
 /* Standard freedesktop.org category mapping */
 static const struct { const char *key; const char *label; } CAT_MAP[] = {
@@ -156,7 +156,8 @@ static void show_category(Panel *p, int index)
     names[c->napps] = NULL;
 
     IswListChange(p->app_box, names, c->napps, 0, True);
-    XtMapWidget(p->app_box);
+    IswViewportSetLocation(p->app_viewport, 0.0, 0.0);
+    XtMapWidget(p->app_viewport);
     /* Don't free names — the List widget holds the pointer.
      * Previous array leaks, but it's small and infrequent. */
 }
@@ -223,7 +224,7 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
-    XtUnmapWidget(p->app_box);
+    XtUnmapWidget(p->app_viewport);
 }
 
 /* ---------- init / cleanup ---------- */
@@ -278,7 +279,14 @@ void startmenu_init(Panel *p)
     Widget form = XtCreateManagedWidget("menuForm", formWidgetClass,
                                         p->start_shell, args, n);
 
-    /* Category list (left pane) */
+    /* Pane background tones from theme */
+    const IsdeColorScheme *scheme = isde_theme_current();
+    Pixel cat_bg  = scheme ? start_color_pixel(p, scheme->bg)
+                           : XtScreen(p->start_btn)->white_pixel;
+    Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
+                           : XtScreen(p->start_btn)->white_pixel;
+
+    /* Category list (left pane) — darker tone */
     String *cat_names = malloc((p->ncategories + 1) * sizeof(String));
     for (int i = 0; i < p->ncategories; i++)
         cat_names[i] = (String)p->categories[i].label;
@@ -294,12 +302,27 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
     XtSetArg(args[n], XtNheight, MENU_HEIGHT);                n++;
     XtSetArg(args[n], XtNcursor, None);                       n++;
+    XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
     p->cat_box = XtCreateManagedWidget("catList", listWidgetClass,
                                        form, args, n);
     XtAddCallback(p->cat_box, XtNcallback, category_selected, p);
     /* Don't free cat_names — the List widget holds a pointer to it */
 
-    /* App list (right pane) — starts with placeholder.
+    /* Viewport for app list (right pane) — lighter tone, vertical scroll */
+    n = 0;
+    XtSetArg(args[n], XtNfromHoriz, p->cat_box);                  n++;
+    XtSetArg(args[n], XtNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
+    XtSetArg(args[n], XtNheight, MENU_HEIGHT);                    n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                         n++;
+    XtSetArg(args[n], XtNallowVert, True);                        n++;
+    XtSetArg(args[n], XtNallowHoriz, False);                      n++;
+    XtSetArg(args[n], XtNuseRight, True);                          n++;
+    XtSetArg(args[n], XtNbackground, app_bg);                      n++;
+    p->app_viewport = XtCreateManagedWidget("appViewport",
+                                            viewportWidgetClass,
+                                            form, args, n);
+
+    /* App list — child of viewport.
      * Must be static since the List widget holds the pointer. */
     static String initial[] = { "Select a category", NULL };
     n = 0;
@@ -309,12 +332,10 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNforceColumns, True);                     n++;
     XtSetArg(args[n], XtNverticalList, True);                     n++;
     XtSetArg(args[n], XtNborderWidth, 0);                         n++;
-    XtSetArg(args[n], XtNfromHoriz, p->cat_box);                  n++;
-    XtSetArg(args[n], XtNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT);                    n++;
     XtSetArg(args[n], XtNcursor, None);                            n++;
+    XtSetArg(args[n], XtNbackground, app_bg);                      n++;
     p->app_box = XtCreateManagedWidget("appList", listWidgetClass,
-                                       form, args, n);
+                                       p->app_viewport, args, n);
     XtAddCallback(p->app_box, XtNcallback, app_selected, p);
 
     /* Category list: hover highlights and switches category immediately */
@@ -338,7 +359,7 @@ void startmenu_init(Panel *p)
                            XtParseTranslationTable(appTranslations));
 
     /* Hide app list until a category is hovered */
-    XtUnmapWidget(p->app_box);
+    XtUnmapWidget(p->app_viewport);
 }
 
 void startmenu_cleanup(Panel *p)

@@ -73,3 +73,19 @@ Required system libraries:
 - **IPC** is entirely X11-based: EWMH properties + PropertyNotify for state broadcast, X ClientMessage for commands, X Selections for clipboard, `_NET_SYSTEM_TRAY` + XEmbed for tray icons, `_NET_WM_STRUT_PARTIAL` for panel space reservation.
 - **Config reload**: settings manager writes XDG config files; other components re-read on `SIGHUP` or via inotify.
 - **Session autostart**: `@`-prefixed entries in the autostart file are respawned on crash (matching LXDE's lxsession convention).
+
+## ISW Coding Rules
+
+- **Arg arrays**: Always declare `Arg args[20]` or larger. Never size Arg arrays to the exact count — resources get added over time and undersized arrays cause stack smashing. 20 is a safe default.
+- **ISW is ASCII only**: Do not use Unicode characters for widget labels. Use SVG icons via `XtNsvgFile` or `XtNsvgData`.
+- **List/IconView data lifetime**: These widgets store pointers to the label/icon arrays, they do not copy. The backing arrays must remain valid for the lifetime of the widget or until replaced by a new `IswListChange`/`IswIconViewSetItems` call. Clear the widget (set 0 items) before freeing the backing data.
+- **Shell geometry**: `XtSetValues` on shell widgets for x/y/width/height may be ignored by geometry management. Use `XtConfigureWidget` from `<X11/IntrinsicP.h>` for reliable positioning.
+- **No fork/exec for system operations**: Never fork/exec external tools (cp, rm, xset, xrandr, etc.) when library or system calls exist. Use POSIX APIs for file operations, XCB APIs for X11 settings, xcb-randr for display configuration. Forking to launch user applications (e.g. opening a file with its associated app) is acceptable.
+
+## Design Guide
+
+See [DESIGN.md](DESIGN.md) for HIG rules — scrollbar placement, widget conventions, and other UI standards. Follow it when creating or modifying any user-facing interface.
+
+## Communication Style
+
+When corrected, just fix the problem. No "you're right" or other glad-handling — be direct. Don't agree with corrections that are actually wrong either; push back when warranted.

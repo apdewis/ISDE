@@ -34,7 +34,14 @@
       "Bash(grep -n 'ScreenNumber\\\\|screen_number\\\\|XtScreenNumber' /home/adam/libISW/include/X11/*.h)",
       "Bash(LD_LIBRARY_PATH=/home/adam/libISW/src/.libs DISPLAY=:1 timeout 5 /tmp/test_list)",
       "Bash(echo \"exit: $?\")",
-      "Bash(LD_LIBRARY_PATH=/home/adam/libISW/src/.libs DISPLAY=:1 timeout 5 /tmp/test_list2)"
+      "Bash(LD_LIBRARY_PATH=/home/adam/libISW/src/.libs DISPLAY=:1 timeout 5 /tmp/test_list2)",
+      "Read(//usr/share/icons/Adwaita/**)",
+      "Read(//usr/share/icons/**)",
+      "Bash(find /usr/share/icons/hicolor -name application-menu* -o -name start-here* -o -name view-app-grid* -o -name apps-menu*)",
+      "Bash(find /usr/share/icons/Adwaita -name open-menu* -o -name view-app-grid* -o -name view-grid* -o -name application-menu*)",
+      "Bash(ls /home/adam/libISW/build*)",
+      "Bash(ls -d /home/adam/ISDE/*/)",
+      "Bash(grep -n \"isde_config_write\\\\|isde_config_string\" /home/adam/ISDE/settings/src/*.c)"
     ],
     "additionalDirectories": [
       "/tmp",
