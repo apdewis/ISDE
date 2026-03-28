@@ -47,6 +47,16 @@ static void rename_cancel_cb(Widget w, XtPointer cd, XtPointer call)
     }
 }
 
+static void act_dismiss_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (rename_shell) {
+        XtPopdown(rename_shell);
+        XtDestroyWidget(rename_shell);
+        rename_shell = NULL;
+    }
+}
+
 void show_rename_dialog(Fm *fm)
 {
     /* Get selected index */
@@ -73,6 +83,8 @@ void show_rename_dialog(Fm *fm)
     rename_shell = XtCreatePopupShell("renameShell",
                                       transientShellWidgetClass,
                                       fm->toplevel, args, n);
+    XtOverrideTranslations(rename_shell, XtParseTranslationTable(
+        "<Message>WM_PROTOCOLS: fm-dismiss-rename()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Rename:");         n++;
@@ -98,6 +110,13 @@ static void dismiss_delete_dialog(void)
         XtDestroyWidget(delete_shell);
         delete_shell = NULL;
     }
+}
+
+/* WM_DELETE_WINDOW action for dialog shells — dismiss instead of exit */
+static void act_dismiss_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    dismiss_delete_dialog();
 }
 
 static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
@@ -194,6 +213,8 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     delete_shell = XtCreatePopupShell("deleteShell",
                                        transientShellWidgetClass,
                                        fm->toplevel, args, n);
+    XtOverrideTranslations(delete_shell, XtParseTranslationTable(
+        "<Message>WM_PROTOCOLS: fm-dismiss-delete()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, msg); n++;
@@ -249,6 +270,16 @@ static void empty_trash_cancel(Widget w, XtPointer cd, XtPointer call)
     }
 }
 
+static void act_dismiss_empty_trash(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+{
+    (void)w; (void)ev; (void)p; (void)n;
+    if (empty_trash_shell) {
+        XtPopdown(empty_trash_shell);
+        XtDestroyWidget(empty_trash_shell);
+        empty_trash_shell = NULL;
+    }
+}
+
 static void ctx_empty_trash(Fm *fm)
 {
     if (empty_trash_shell) {
@@ -264,6 +295,8 @@ static void ctx_empty_trash(Fm *fm)
     empty_trash_shell = XtCreatePopupShell("emptyTrashShell",
                                             transientShellWidgetClass,
                                             fm->toplevel, args, n);
+    XtOverrideTranslations(empty_trash_shell, XtParseTranslationTable(
+        "<Message>WM_PROTOCOLS: fm-dismiss-empty-trash()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Permanently delete all items in Trash?"); n++;
@@ -530,7 +563,7 @@ static void ctx_build_menu(Fm *fm)
 }
 
 static void ctx_handler(Widget w, XtPointer client_data,
-                        XEvent *event, Boolean *cont)
+                        xcb_generic_event_t *event, Boolean *cont)
 {
     (void)cont;
     if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
@@ -645,43 +678,43 @@ void fm_refresh(Fm *fm)
 
 static Fm *shortcut_fm = NULL;  /* single instance for Xt actions */
 
-static void act_copy(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_copy(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) clipboard_copy(shortcut_fm);
 }
 
-static void act_cut(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_cut(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) clipboard_cut(shortcut_fm);
 }
 
-static void act_paste(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_paste(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) clipboard_paste(shortcut_fm);
 }
 
-static void act_delete(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) fm_delete_selected(shortcut_fm);
 }
 
-static void act_delete_permanent(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_delete_permanent(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) fm_delete_selected_permanent(shortcut_fm);
 }
 
-static void act_rename(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) show_rename_dialog(shortcut_fm);
 }
 
-static void act_go_up(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     Fm *fm = shortcut_fm;
@@ -698,7 +731,7 @@ static void act_go_up(Widget w, XEvent *ev, String *p, Cardinal *n)
     free(parent);
 }
 
-static void act_go_back(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     Fm *fm = shortcut_fm;
@@ -709,7 +742,7 @@ static void act_go_back(Widget w, XEvent *ev, String *p, Cardinal *n)
     fm_refresh(fm);
 }
 
-static void act_go_fwd(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     Fm *fm = shortcut_fm;
@@ -720,13 +753,13 @@ static void act_go_fwd(Widget w, XEvent *ev, String *p, Cardinal *n)
     fm_refresh(fm);
 }
 
-static void act_refresh(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_refresh(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     if (shortcut_fm) fm_refresh(shortcut_fm);
 }
 
-static void act_open(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     Fm *fm = shortcut_fm;
@@ -736,7 +769,7 @@ static void act_open(Widget w, XEvent *ev, String *p, Cardinal *n)
         browser_open_entry(fm, sel);
 }
 
-static void act_toggle_hidden(Widget w, XEvent *ev, String *p, Cardinal *n)
+static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)w; (void)ev; (void)p; (void)n;
     Fm *fm = shortcut_fm;
@@ -758,6 +791,9 @@ static XtActionsRec fm_actions[] = {
     {"fm-refresh",       act_refresh},
     {"fm-open",          act_open},
     {"fm-toggle-hidden", act_toggle_hidden},
+    {"fm-dismiss-rename", act_dismiss_rename},
+    {"fm-dismiss-delete", act_dismiss_delete},
+    {"fm-dismiss-empty-trash", act_dismiss_empty_trash},
 };
 
 static char fm_translations[] =

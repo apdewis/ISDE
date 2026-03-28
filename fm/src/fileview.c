@@ -43,7 +43,7 @@ static void iconview_callback(Widget w, XtPointer client_data,
     fm_dismiss_context();
 
     /* Check if triggered by keyboard (Enter/Return) — always open */
-    XEvent *ev = XtLastEventProcessed(XtDisplay(w));
+    xcb_generic_event_t *ev = XtLastEventProcessed(XtDisplay(w));
     if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
                (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
         browser_open_entry(fm, d->index);
