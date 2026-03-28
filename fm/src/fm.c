@@ -533,18 +533,10 @@ static void ctx_handler(Widget w, XtPointer client_data,
     ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, args, n);
 
-    /* Detect if browsing trash */
-    char *trash_p = fileops_trash_path();
-    ctx_in_trash = (strncmp(fm->cwd, trash_p, strlen(trash_p)) == 0);
-    free(trash_p);
-
-    String *labels = ctx_in_trash ? ctx_trash_labels : ctx_labels;
-    int nitems = ctx_in_trash ? CTX_TRASH_NITEMS : CTX_NITEMS;
-
     /* List of menu items */
     n = 0;
-    XtSetArg(args[n], XtNlist, labels);           n++;
-    XtSetArg(args[n], XtNnumberStrings, nitems);  n++;
+    XtSetArg(args[n], XtNlist, ctx_labels);       n++;
+    XtSetArg(args[n], XtNnumberStrings, CTX_NITEMS); n++;
     XtSetArg(args[n], XtNdefaultColumns, 1);       n++;
     XtSetArg(args[n], XtNforceColumns, True);      n++;
     XtSetArg(args[n], XtNverticalList, True);      n++;
