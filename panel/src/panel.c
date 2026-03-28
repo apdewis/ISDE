@@ -434,8 +434,10 @@ void panel_dismiss_popup(Panel *p)
 {
     if (!p->active_popup) return;
 
-    /* Reset start button to inactive state */
+    /* Reset start button to inactive state and release keyboard grab */
     if (p->active_popup == p->start_shell) {
+        xcb_ungrab_keyboard(p->conn, XCB_CURRENT_TIME);
+        xcb_flush(p->conn);
         const IsdeColorScheme *s = isde_theme_current();
         if (s) {
             Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);

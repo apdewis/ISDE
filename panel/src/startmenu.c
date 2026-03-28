@@ -15,6 +15,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <xcb/xcb_keysyms.h>
+#include <X11/keysym.h>
+
 static char *start_icon_path;
 
 static Pixel start_color_pixel(Panel *p, unsigned int rgb)
@@ -162,6 +165,22 @@ static void show_category(Panel *p, int index)
      * Previous array leaks, but it's small and infrequent. */
 }
 
+static void launch_app(Panel *p, int index)
+{
+    if (p->active_cat < 0 || p->active_cat >= p->ncategories) return;
+    StartMenuCategory *c = &p->categories[p->active_cat];
+    if (index < 0 || index >= c->napps) return;
+
+    const char *exec = c->apps[index].exec;
+    panel_dismiss_popup(p);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c", exec, (char *)NULL);
+        _exit(127);
+    }
+}
+
 /* ---------- callbacks ---------- */
 
 static void category_selected(Widget w, XtPointer client_data,
@@ -181,20 +200,94 @@ static void app_selected(Widget w, XtPointer client_data,
     Panel *p = (Panel *)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
     if (ret->list_index == XAW_LIST_NONE) return;
-    if (p->active_cat < 0 || p->active_cat >= p->ncategories) return;
+    launch_app(p, ret->list_index);
+}
 
-    StartMenuCategory *c = &p->categories[p->active_cat];
-    if (ret->list_index >= c->napps) return;
+/* ---------- keyboard navigation ---------- */
 
-    const char *exec = c->apps[ret->list_index].exec;
+static xcb_key_symbols_t *key_syms;
 
-    panel_dismiss_popup(p);
+static void menu_key_handler(Widget w, XtPointer client_data,
+                             XEvent *xev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) return;
 
-    /* Launch */
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl("/bin/sh", "sh", "-c", exec, (char *)NULL);
-        _exit(127);
+    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
+
+    if (!key_syms)
+        key_syms = xcb_key_symbols_alloc(p->conn);
+
+    xcb_keysym_t sym = xcb_key_symbols_get_keysym(key_syms,
+                                                   kev->detail, 0);
+
+    switch (sym) {
+    case XK_Down:
+        if (p->menu_focus == 0) {
+            int next = p->cat_highlight + 1;
+            if (next >= p->ncategories) next = p->ncategories - 1;
+            p->cat_highlight = next;
+            IswListHighlight(p->cat_box, next);
+            show_category(p, next);
+            p->app_highlight = -1;
+            IswListUnhighlight(p->app_box);
+        } else {
+            if (p->active_cat < 0) break;
+            StartMenuCategory *c = &p->categories[p->active_cat];
+            int next = p->app_highlight + 1;
+            if (next >= c->napps) next = c->napps - 1;
+            p->app_highlight = next;
+            IswListHighlight(p->app_box, next);
+        }
+        break;
+
+    case XK_Up:
+        if (p->menu_focus == 0) {
+            int next = p->cat_highlight - 1;
+            if (next < 0) next = 0;
+            p->cat_highlight = next;
+            IswListHighlight(p->cat_box, next);
+            show_category(p, next);
+            p->app_highlight = -1;
+            IswListUnhighlight(p->app_box);
+        } else {
+            int next = p->app_highlight - 1;
+            if (next < 0) next = 0;
+            p->app_highlight = next;
+            IswListHighlight(p->app_box, next);
+        }
+        break;
+
+    case XK_Right:
+        if (p->menu_focus == 1 || p->active_cat < 0) break;
+        p->menu_focus = 1;
+        p->app_highlight = 0;
+        IswListHighlight(p->app_box, 0);
+        break;
+
+    case XK_Left:
+        if (p->menu_focus == 0) break;
+        p->menu_focus = 0;
+        p->app_highlight = -1;
+        IswListUnhighlight(p->app_box);
+        break;
+
+    case XK_Return:
+    case XK_KP_Enter:
+        if (p->menu_focus == 0) {
+            if (p->active_cat < 0) break;
+            p->menu_focus = 1;
+            p->app_highlight = 0;
+            IswListHighlight(p->app_box, 0);
+        } else {
+            launch_app(p, p->app_highlight);
+        }
+        break;
+
+    case XK_Escape:
+        panel_dismiss_popup(p);
+        break;
     }
 }
 
@@ -224,7 +317,18 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
+    p->cat_highlight = 0;
+    p->app_highlight = -1;
+    p->menu_focus = 0;
     XtUnmapWidget(p->app_viewport);
+
+    /* Highlight first category and grab keyboard */
+    IswListHighlight(p->cat_box, 0);
+    show_category(p, 0);
+    xcb_grab_keyboard(p->conn, 1, XtWindow(p->start_shell),
+                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
+                      XCB_GRAB_MODE_ASYNC);
+    xcb_flush(p->conn);
 }
 
 /* ---------- init / cleanup ---------- */
@@ -233,6 +337,9 @@ void startmenu_init(Panel *p)
 {
     build_categories(p);
     p->active_cat = -1;
+    p->cat_highlight = -1;
+    p->app_highlight = -1;
+    p->menu_focus = 0;
 
     /* Resolve start menu icon from theme */
     /* Try common start/menu icon names from the theme */
@@ -358,6 +465,10 @@ void startmenu_init(Panel *p)
     XtOverrideTranslations(p->app_box,
                            XtParseTranslationTable(appTranslations));
 
+    /* Keyboard navigation via event handler on the shell */
+    XtAddEventHandler(p->start_shell, KeyPressMask, False,
+                      menu_key_handler, p);
+
     /* Hide app list until a category is hovered */
     XtUnmapWidget(p->app_viewport);
 }
@@ -369,4 +480,9 @@ void startmenu_cleanup(Panel *p)
     free(p->categories);
     p->categories = NULL;
     p->ncategories = 0;
+
+    if (key_syms) {
+        xcb_key_symbols_free(key_syms);
+        key_syms = NULL;
+    }
 }

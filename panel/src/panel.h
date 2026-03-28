@@ -97,6 +97,9 @@ typedef struct Panel {
     StartMenuCategory *categories;
     int                ncategories;
     int                active_cat;  /* Currently displayed category index */
+    int                cat_highlight; /* Keyboard-highlighted category */
+    int                app_highlight; /* Keyboard-highlighted app */
+    int                menu_focus;    /* 0 = category pane, 1 = app pane */
 
     /* Taskbar */
     TaskGroup         *groups;
