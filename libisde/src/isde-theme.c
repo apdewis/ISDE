@@ -671,12 +671,19 @@ static char *fmt_color(const char *resource, unsigned int rgb)
     return buf;
 }
 
+static char *fmt_font(const char *resource, const char *family, int size)
+{
+    char *buf = malloc(strlen(resource) + strlen(family) + 16);
+    sprintf(buf, "%s: %s-%d", resource, family, size);
+    return buf;
+}
+
 char **isde_theme_build_resources(void)
 {
     const IsdeColorScheme *s = isde_theme_current();
     if (!s) return NULL;
 
-    char **res = calloc(96, sizeof(char *));
+    char **res = calloc(112, sizeof(char *));
     int i = 0;
 
     /* Global defaults */
@@ -785,6 +792,58 @@ char **isde_theme_build_resources(void)
 
     /* Frame shell background (visible as border around client) */
     res[i++] = fmt_color("*frame.background", s->titlebar.border);
+
+    /* --- Fonts from [fonts] config --- */
+    {
+        char errbuf[256];
+        IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf,
+                                                sizeof(errbuf));
+        if (cfg) {
+            IsdeConfigTable *root = isde_config_root(cfg);
+            IsdeConfigTable *fonts = isde_config_table(root, "fonts");
+            if (fonts) {
+                const char *fam;
+                int sz;
+
+                /* General — global default */
+                fam = isde_config_string(fonts, "general_family", "Sans");
+                sz  = (int)isde_config_int(fonts, "general_size", 10);
+                res[i++] = fmt_font("*font", fam, sz);
+
+                /* Fixed — Text widget (editors, terminal) */
+                fam = isde_config_string(fonts, "fixed_family", "Monospace");
+                sz  = (int)isde_config_int(fonts, "fixed_size", 10);
+                res[i++] = fmt_font("*Text.font", fam, sz);
+                res[i++] = fmt_font("*AsciiSink.font", fam, sz);
+
+                /* Small — StatusBar, Tip */
+                fam = isde_config_string(fonts, "small_family", "Sans");
+                sz  = (int)isde_config_int(fonts, "small_size", 8);
+                res[i++] = fmt_font("*StatusBar.font", fam, sz);
+                res[i++] = fmt_font("*Tip.font", fam, sz);
+                res[i++] = fmt_font("*clockDate.font", fam, sz);
+
+                /* Toolbar — Command buttons in toolbars */
+                fam = isde_config_string(fonts, "toolbar_family", "Sans");
+                sz  = (int)isde_config_int(fonts, "toolbar_size", 9);
+                res[i++] = fmt_font("*startBtn.font", fam, sz);
+                res[i++] = fmt_font("*taskBtn.font", fam, sz);
+                res[i++] = fmt_font("*clockTime.font", fam, sz);
+
+                /* Menus */
+                fam = isde_config_string(fonts, "menu_family", "Sans");
+                sz  = (int)isde_config_int(fonts, "menu_size", 10);
+                res[i++] = fmt_font("*SmeBSB.font", fam, sz);
+                res[i++] = fmt_font("*MenuButton.font", fam, sz);
+
+                /* Window title */
+                fam = isde_config_string(fonts, "title_family", "Sans");
+                sz  = (int)isde_config_int(fonts, "title_size", 10);
+                res[i++] = fmt_font("*titleBar.font", fam, sz);
+            }
+            isde_config_free(cfg);
+        }
+    }
 
     res[i] = NULL;
     return res;
