@@ -6,6 +6,7 @@ add_library(isde SHARED
     src/isde-ewmh.c
     src/isde-ipc.c
     src/isde-dbus.c
+    src/isde-mime.c
     src/isde-theme.c
     vendor/tomlc99/toml.c
 )

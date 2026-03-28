@@ -29,6 +29,7 @@ struct IsdeDesktopEntry {
     char *icon;
     char *type;
     char *categories;
+    char *mime_types;
     char *only_show_in;
     char *not_show_in;
     char *actions_str;   /* raw "Actions=" value (semicolon-separated IDs) */
@@ -65,6 +66,8 @@ static void set_field(IsdeDesktopEntry *e, const char *key, const char *val)
         e->type = strdup(val);
     else if (strcmp(key, "Categories") == 0)
         e->categories = strdup(val);
+    else if (strcmp(key, "MimeType") == 0)
+        e->mime_types = strdup(val);
     else if (strcmp(key, "OnlyShowIn") == 0)
         e->only_show_in = strdup(val);
     else if (strcmp(key, "NotShowIn") == 0)
@@ -215,6 +218,7 @@ void isde_desktop_free(IsdeDesktopEntry *e)
     free(e->icon);
     free(e->type);
     free(e->categories);
+    free(e->mime_types);
     free(e->only_show_in);
     free(e->not_show_in);
     free(e->actions_str);
@@ -251,6 +255,7 @@ const char *isde_desktop_exec(const IsdeDesktopEntry *e)         { return e->exe
 const char *isde_desktop_icon(const IsdeDesktopEntry *e)         { return e->icon; }
 const char *isde_desktop_type(const IsdeDesktopEntry *e)         { return e->type; }
 const char *isde_desktop_categories(const IsdeDesktopEntry *e)   { return e->categories; }
+const char *isde_desktop_mime_types(const IsdeDesktopEntry *e)   { return e->mime_types; }
 int         isde_desktop_terminal(const IsdeDesktopEntry *e)     { return e->terminal; }
 int         isde_desktop_no_display(const IsdeDesktopEntry *e)   { return e->no_display; }
 int         isde_desktop_hidden(const IsdeDesktopEntry *e)       { return e->hidden; }
@@ -281,6 +286,13 @@ int isde_desktop_should_show(const IsdeDesktopEntry *e, const char *desktop)
     if (e->not_show_in)
         return !list_contains(e->not_show_in, desktop);
     return 1;
+}
+
+int isde_desktop_handles_mime(const IsdeDesktopEntry *e, const char *mime)
+{
+    if (!e || !e->mime_types || !mime)
+        return 0;
+    return list_contains(e->mime_types, mime);
 }
 
 char *isde_desktop_build_exec(const IsdeDesktopEntry *e,

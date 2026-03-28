@@ -454,15 +454,15 @@ static void ctx_restore(Fm *fm) {
     if (nsel > 0) fm_refresh(fm);
 }
 
-static String ctx_labels[] = {
+static String base_labels[] = {
     "Cut", "Copy", "Paste", "---",
-    "Rename", "Delete", "---", "New Folder", NULL
+    "Rename", "Delete", "---", "New Folder"
 };
-static CtxAction ctx_actions[] = {
+static CtxAction base_actions[] = {
     ctx_cut, ctx_copy, ctx_paste, NULL,
     ctx_rename, ctx_delete_action, NULL, ctx_new_folder
 };
-#define CTX_NITEMS 8
+#define BASE_NITEMS 8
 
 static String ctx_trash_labels[] = {
     "Restore", "Delete Permanently", NULL
@@ -474,6 +474,39 @@ static CtxAction ctx_trash_actions[] = {
 
 static int ctx_in_trash = 0;
 
+/* Dynamic menu state — freed on dismiss */
+static String    *dyn_labels;
+static CtxAction *dyn_actions;
+static int        dyn_nitems;
+
+/* "Open with" app entries — desktop entry indices into fm->desktop_entries */
+#define MAX_OPEN_WITH 16
+static int   ow_indices[MAX_OPEN_WITH];  /* desktop_entries[] index */
+static int   ow_count;
+static char *ow_label_buf[MAX_OPEN_WITH]; /* "Open with AppName" strings */
+static char *ow_file_path;               /* path of file to open */
+
+static void ctx_open_with(Fm *fm)
+{
+    /* Determine which "Open with" entry was selected — the callback index
+     * is embedded in dyn_actions; we find it via a range of stub functions.
+     * Instead, we use a single action and store the app index separately. */
+}
+
+static void ctx_free_dynamic(void)
+{
+    free(dyn_labels);
+    dyn_labels = NULL;
+    free(dyn_actions);
+    dyn_actions = NULL;
+    dyn_nitems = 0;
+    for (int i = 0; i < ow_count; i++)
+        free(ow_label_buf[i]);
+    ow_count = 0;
+    free(ow_file_path);
+    ow_file_path = NULL;
+}
+
 void fm_dismiss_context(void)
 {
     if (ctx_shell) {
@@ -482,6 +515,25 @@ void fm_dismiss_context(void)
         ctx_shell = NULL;
         ctx_list = NULL;
     }
+    ctx_free_dynamic();
+}
+
+static void ctx_launch_open_with(Fm *fm, int ow_idx)
+{
+    if (ow_idx < 0 || ow_idx >= ow_count) return;
+    IsdeDesktopEntry *de = fm->desktop_entries[ow_indices[ow_idx]];
+    const char *file = ow_file_path;
+    if (!file) return;
+
+    char *cmd = isde_desktop_build_exec(de, &file, 1);
+    if (!cmd) return;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+    free(cmd);
 }
 
 static void ctx_select_cb(Widget w, XtPointer client_data,
@@ -490,17 +542,124 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
     (void)w;
     (void)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
+    int idx = ret->list_index;
+
+    /* Save what we need before dismiss destroys the dynamic state */
+    Fm *fm = ctx_fm;
+    int in_trash = ctx_in_trash;
+
+    if (!fm || idx < 0)  {
+        fm_dismiss_context();
+        return;
+    }
+
+    if (in_trash) {
+        fm_dismiss_context();
+        if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx])
+            ctx_trash_actions[idx](fm);
+        return;
+    }
+
+    /* Check if this is an "Open with" entry */
+    if (idx < ow_count) {
+        /* Save values before dismiss frees them */
+        int ow_idx = idx;
+        int de_idx = ow_indices[ow_idx];
+        IsdeDesktopEntry *de = fm->desktop_entries[de_idx];
+        char *file = ow_file_path ? strdup(ow_file_path) : NULL;
+
+        fm_dismiss_context();
+
+        if (file && de) {
+            char *cmd = isde_desktop_build_exec(de, (const char **)&file, 1);
+            if (cmd) {
+                pid_t pid = fork();
+                if (pid == 0) {
+                    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+                    _exit(127);
+                }
+                free(cmd);
+            }
+            free(file);
+        }
+        return;
+    }
+
+    /* Adjust index past "Open with" entries + separator */
+    int base_idx = idx - (ow_count > 0 ? ow_count + 1 : 0);
     fm_dismiss_context();
 
-    if (!ctx_fm || ret->list_index < 0)
-        return;
-    CtxAction *acts = ctx_in_trash ? ctx_trash_actions : ctx_actions;
-    int nitems = ctx_in_trash ? CTX_TRASH_NITEMS : CTX_NITEMS;
-    if (ret->list_index >= nitems)
-        return;
-    CtxAction action = acts[ret->list_index];
-    if (action)
-        action(ctx_fm);
+    if (base_idx >= 0 && base_idx < BASE_NITEMS) {
+        CtxAction action = base_actions[base_idx];
+        if (action)
+            action(fm);
+    }
+}
+
+/* Build "Open with" entries for the selected file */
+static void ctx_build_open_with(Fm *fm)
+{
+    ow_count = 0;
+
+    if (!fm->iconview) return;
+    int sel = IswIconViewGetSelected(fm->iconview);
+    if (sel < 0 || sel >= fm->nentries) return;
+
+    FmEntry *e = &fm->entries[sel];
+    if (e->is_dir) return;
+
+    const char *mime = isde_mime_type_for_file(e->name);
+    if (!mime || strcmp(mime, "application/octet-stream") == 0) return;
+
+    free(ow_file_path);
+    ow_file_path = strdup(e->full_path);
+
+    for (int i = 0; i < fm->ndesktop && ow_count < MAX_OPEN_WITH; i++) {
+        IsdeDesktopEntry *de = fm->desktop_entries[i];
+        if (!de) continue;
+        if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) continue;
+        if (!isde_desktop_handles_mime(de, mime)) continue;
+        const char *name = isde_desktop_name(de);
+        if (!name) continue;
+
+        ow_indices[ow_count] = i;
+        char buf[256];
+        snprintf(buf, sizeof(buf), "Open with %s", name);
+        ow_label_buf[ow_count] = strdup(buf);
+        ow_count++;
+    }
+}
+
+/* Build the dynamic labels/actions arrays */
+static void ctx_build_menu(Fm *fm)
+{
+    int total = (ow_count > 0 ? ow_count + 1 : 0) + BASE_NITEMS;
+
+    dyn_labels = malloc((total + 1) * sizeof(String));
+    dyn_actions = malloc(total * sizeof(CtxAction));
+    dyn_nitems = total;
+
+    int pos = 0;
+
+    /* "Open with" entries */
+    for (int i = 0; i < ow_count; i++) {
+        dyn_labels[pos] = ow_label_buf[i];
+        dyn_actions[pos] = NULL; /* handled specially in ctx_select_cb */
+        pos++;
+    }
+    if (ow_count > 0) {
+        dyn_labels[pos] = "---";
+        dyn_actions[pos] = NULL;
+        pos++;
+    }
+
+    /* Base items */
+    for (int i = 0; i < BASE_NITEMS; i++) {
+        dyn_labels[pos] = base_labels[i];
+        dyn_actions[pos] = base_actions[i];
+        pos++;
+    }
+    dyn_labels[pos] = NULL;
 }
 
 static void ctx_handler(Widget w, XtPointer client_data,
@@ -519,6 +678,10 @@ static void ctx_handler(Widget w, XtPointer client_data,
     /* Dismiss any existing context menu */
     fm_dismiss_context();
 
+    /* Build "Open with" entries and dynamic menu */
+    ctx_build_open_with(fm);
+    ctx_build_menu(fm);
+
     /* Compute position at click */
     Position rx, ry;
     XtTranslateCoords(w, ev->event_x, ev->event_y, &rx, &ry);
@@ -535,13 +698,13 @@ static void ctx_handler(Widget w, XtPointer client_data,
 
     /* List of menu items */
     n = 0;
-    XtSetArg(args[n], XtNlist, ctx_labels);       n++;
-    XtSetArg(args[n], XtNnumberStrings, CTX_NITEMS); n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);       n++;
-    XtSetArg(args[n], XtNforceColumns, True);      n++;
-    XtSetArg(args[n], XtNverticalList, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
-    XtSetArg(args[n], XtNcursor, None);            n++;
+    XtSetArg(args[n], XtNlist, dyn_labels);          n++;
+    XtSetArg(args[n], XtNnumberStrings, dyn_nitems); n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);          n++;
+    XtSetArg(args[n], XtNforceColumns, True);         n++;
+    XtSetArg(args[n], XtNverticalList, True);         n++;
+    XtSetArg(args[n], XtNborderWidth, 0);             n++;
+    XtSetArg(args[n], XtNcursor, None);               n++;
     ctx_list = XtCreateManagedWidget("ctxList", listWidgetClass,
                                      ctx_shell, args, n);
     XtAddCallback(ctx_list, XtNcallback, ctx_select_cb, NULL);
@@ -937,6 +1100,40 @@ int fm_init(Fm *fm, int *argc, char **argv)
     }
 
     /* Start in home directory */
+    /* Cache desktop entries for "Open with" */
+    {
+        static const char *app_dirs[] = {
+            "/usr/share/applications",
+            "/usr/local/share/applications",
+            NULL
+        };
+        /* Also check $HOME/.local/share/applications */
+        const char *home_env = getenv("HOME");
+        char local_apps[512] = "";
+        if (home_env)
+            snprintf(local_apps, sizeof(local_apps),
+                     "%s/.local/share/applications", home_env);
+
+        fm->desktop_entries = NULL;
+        fm->ndesktop = 0;
+        int cap = 0;
+        for (int d = -1; app_dirs[d + 1] || d < 0; d++) {
+            const char *dir = (d < 0) ? local_apps : app_dirs[d];
+            if (!dir[0]) continue;
+            int count = 0;
+            IsdeDesktopEntry **batch = isde_desktop_scan_dir(dir, &count);
+            if (!batch) continue;
+            if (fm->ndesktop + count > cap) {
+                cap = fm->ndesktop + count + 64;
+                fm->desktop_entries = realloc(fm->desktop_entries,
+                                              cap * sizeof(IsdeDesktopEntry *));
+            }
+            for (int i = 0; i < count; i++)
+                fm->desktop_entries[fm->ndesktop++] = batch[i];
+            free(batch);
+        }
+    }
+
     const char *home = getenv("HOME");
     fm->cwd = strdup(home ? home : "/");
     fm->history[0] = strdup(fm->cwd);
@@ -971,5 +1168,8 @@ void fm_cleanup(Fm *fm)
     free(fm->cwd);
     for (int i = 0; i < fm->hist_count; i++)
         free(fm->history[i]);
+    for (int i = 0; i < fm->ndesktop; i++)
+        isde_desktop_free(fm->desktop_entries[i]);
+    free(fm->desktop_entries);
     XtDestroyApplicationContext(fm->app);
 }

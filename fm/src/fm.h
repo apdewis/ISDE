@@ -37,6 +37,7 @@
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-desktop.h"
+#include "isde/isde-mime.h"
 
 /* ---------- Constants ---------- */
 #define FM_ICON_SIZE     48
@@ -116,6 +117,10 @@ typedef struct Fm {
     char          *history[FM_HISTORY_MAX];
     int            hist_pos;
     int            hist_count;
+
+    /* Desktop entry cache (for "Open with") */
+    IsdeDesktopEntry **desktop_entries;
+    int                ndesktop;
 
     /* D-Bus for settings notifications */
     IsdeDBus      *dbus;
