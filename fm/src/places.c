@@ -267,7 +267,7 @@ void places_init(Fm *fm)
     XtSetArg(args[n], XtNallowVert, True);              n++;
     XtSetArg(args[n], XtNallowHoriz, False);             n++;
     XtSetArg(args[n], XtNuseRight, False);                n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                 n++;
     XtSetArg(args[n], XtNflexGrow, 0);                    n++;
     fm->places_vp = XtCreateManagedWidget("placesVp", viewportWidgetClass,
                                            fm->hbox, args, n);

@@ -86,7 +86,7 @@ void navbar_init(Fm *fm)
 
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                   n++;
     XtSetArg(args[n], XtNhSpace, isde_scale(4));              n++;
     XtSetArg(args[n], XtNvSpace, isde_scale(2));             n++;
     XtSetArg(args[n], XtNheight, isde_scale(36));            n++;

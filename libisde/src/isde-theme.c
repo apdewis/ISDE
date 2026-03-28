@@ -806,8 +806,10 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*placeHdr1.foreground", s->fg_dim);
     res[i++] = fmt_color("*placeHdr2.foreground", s->fg_dim);
 
-    /* Navbar — lighter background */
+    /* Navbar — lighter background, dark border */
     res[i++] = fmt_color("*navBar.background", s->bg_light);
+    res[i++] = fmt_color("*navBar.borderColor", s->fg);
+    res[i++] = fmt_color("*placesVp.borderColor", s->fg);
 
     /* --- Fonts from [fonts] config --- */
     {
