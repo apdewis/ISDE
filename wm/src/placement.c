@@ -17,6 +17,18 @@ static void clamp_to_work_area(Wm *wm, WmClient *c)
     int wx, wy, ww, wh;
     wm_get_work_area(wm, &wx, &wy, &ww, &wh);
 
+    /* Shrink client if it exceeds available space (accounting for frame) */
+    int max_cw = ww - 2 * WM_BORDER_WIDTH;
+    int max_ch = wh - WM_TITLE_HEIGHT - 2 * WM_BORDER_WIDTH;
+    if (max_cw < 1) max_cw = 1;
+    if (max_ch < 1) max_ch = 1;
+
+    if (c->width > (uint16_t)max_cw)
+        c->width = max_cw;
+    if (c->height > (uint16_t)max_ch)
+        c->height = max_ch;
+
+    /* Clamp position so the frame fits within work area */
     int fw = frame_total_width(c);
     int fh = frame_total_height(c);
 
