@@ -107,7 +107,10 @@ void browser_open_entry(Fm *fm, int index)
 
     if (e->is_dir) {
         fm_navigate(fm, e->full_path);
-    } else if (e->mode & S_IXUSR) {
+        return;
+    }
+
+    if (e->mode & S_IXUSR) {
         /* Executable — launch directly */
         pid_t pid = fork();
         if (pid == 0) {
@@ -115,12 +118,31 @@ void browser_open_entry(Fm *fm, int index)
             execl(e->full_path, e->name, (char *)NULL);
             _exit(127);
         }
-    } else {
-        /* Try xdg-open */
-        pid_t pid = fork();
-        if (pid == 0) {
-            execlp("xdg-open", "xdg-open", e->full_path, (char *)NULL);
-            _exit(127);
-        }
+        return;
     }
+
+    /* Look up default app via mimeapps.list */
+    const char *mime = isde_mime_type_for_file(e->name);
+    char *desktop_id = mime ? isde_mime_default_app(mime) : NULL;
+    char *desktop_path = desktop_id ? isde_mime_find_desktop(desktop_id) : NULL;
+
+    if (desktop_path) {
+        IsdeDesktopEntry *de = isde_desktop_load(desktop_path);
+        if (de) {
+            const char *file = e->full_path;
+            char *cmd = isde_desktop_build_exec(de, &file, 1);
+            if (cmd) {
+                pid_t pid = fork();
+                if (pid == 0) {
+                    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+                    _exit(127);
+                }
+                free(cmd);
+            }
+            isde_desktop_free(de);
+        }
+        free(desktop_path);
+    }
+
+    free(desktop_id);
 }
