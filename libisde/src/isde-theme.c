@@ -811,6 +811,10 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*navBar.borderColor", s->fg);
     res[i++] = fmt_color("*placesVp.borderColor", s->fg);
 
+    /* Taskbar — square buttons */
+    res[i++] = strdup("*taskBtn.cornerRadius: 0");
+    res[i++] = strdup("*startBtn.cornerRadius: 0");
+
     /* --- Fonts from [fonts] config --- */
     {
         char errbuf[256];
