@@ -683,7 +683,7 @@ char **isde_theme_build_resources(void)
     const IsdeColorScheme *s = isde_theme_current();
     if (!s) return NULL;
 
-    char **res = calloc(112, sizeof(char *));
+    char **res = calloc(128, sizeof(char *));
     int i = 0;
 
     /* Global defaults */
@@ -793,6 +793,11 @@ char **isde_theme_build_resources(void)
     /* Frame shell background (visible as border around client) */
     res[i++] = fmt_color("*frame.background", s->titlebar.border);
 
+    /* Places sidebar section headers — dimmed, small font */
+    res[i++] = fmt_color("*placeHdr0.foreground", s->fg_dim);
+    res[i++] = fmt_color("*placeHdr1.foreground", s->fg_dim);
+    res[i++] = fmt_color("*placeHdr2.foreground", s->fg_dim);
+
     /* --- Fonts from [fonts] config --- */
     {
         char errbuf[256];
@@ -815,6 +820,11 @@ char **isde_theme_build_resources(void)
                 sz  = (int)isde_config_int(fonts, "fixed_size", 10);
                 res[i++] = fmt_font("*Text.font", fam, sz);
                 res[i++] = fmt_font("*AsciiSink.font", fam, sz);
+
+                /* Places sidebar headers — 2pt smaller than general */
+                res[i++] = fmt_font("*placeHdr0.font", fam, sz - 2);
+                res[i++] = fmt_font("*placeHdr1.font", fam, sz - 2);
+                res[i++] = fmt_font("*placeHdr2.font", fam, sz - 2);
 
                 /* Small — StatusBar, Tip */
                 fam = isde_config_string(fonts, "small_family", "Sans");
