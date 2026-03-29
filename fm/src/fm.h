@@ -173,4 +173,8 @@ void  clipboard_cut(Fm *fm);
 void  clipboard_paste(Fm *fm);
 void  clipboard_cleanup(Fm *fm);
 
+/* ---------- dnd.c ---------- */
+void  dnd_init(Fm *fm);
+void  dnd_cleanup(Fm *fm);
+
 #endif /* ISDE_FM_H */

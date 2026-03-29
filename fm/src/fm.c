@@ -939,8 +939,7 @@ int fm_init(Fm *fm, int *argc, char **argv)
     shortcut_fm = fm;
     XtAppAddActions(fm->app, fm_actions, XtNumber(fm_actions));
 
-    /* Enable XDND and clipboard */
-    ISWXdndEnable(fm->toplevel);
+    /* Clipboard init (atoms only — no XDND dependency) */
     clipboard_init(fm);
 
     /* D-Bus settings notifications */
@@ -999,6 +998,10 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtRealizeWidget(fm->toplevel);
 
+    /* XDND init must be after realize — Shell.c calls ISWXdndEnable
+     * during realize, so the XDND state exists only after this point. */
+    dnd_init(fm);
+
     fileview_populate(fm);
     navbar_update(fm);
 
@@ -1015,6 +1018,7 @@ void fm_run(Fm *fm)
 void fm_cleanup(Fm *fm)
 {
     isde_dbus_free(fm->dbus);
+    dnd_cleanup(fm);
     clipboard_cleanup(fm);
     browser_free_entries(fm);
     fileview_cleanup(fm);
