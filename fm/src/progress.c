@@ -129,7 +129,8 @@ static void create_dialog(FmJob *job)
 
     /* Cancel button */
     n = 0;
-    Widget cancel = XtCreateManagedWidget("Cancel", commandWidgetClass,
+    XtSetArg(args[n], XtNlabel, "Cancel");  n++;
+    Widget cancel = XtCreateManagedWidget("cancelBtn", commandWidgetClass,
                                            vbox, args, n);
     XtAddCallback(cancel, XtNcallback, cancel_cb, job);
 

@@ -74,7 +74,8 @@ static char *resolve_conflict(const char *dst)
 
 /* ---------- copy a single file ---------- */
 
-static int copy_file(const char *src, const char *dst)
+static int copy_file_cancellable(const char *src, const char *dst,
+                                 atomic_int *cancelled)
 {
     int fd_in = open(src, O_RDONLY);
     if (fd_in < 0) return -1;
@@ -90,22 +91,30 @@ static int copy_file(const char *src, const char *dst)
 
     char buf[65536];
     ssize_t nread;
+    int ret = 0;
     while ((nread = read(fd_in, buf, sizeof(buf))) > 0) {
+        if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
         ssize_t written = 0;
         while (written < nread) {
             ssize_t w = write(fd_out, buf + written, nread - written);
-            if (w < 0) {
-                close(fd_in);
-                close(fd_out);
-                return -1;
-            }
+            if (w < 0) { ret = -1; goto done; }
             written += w;
         }
     }
+    if (nread < 0) ret = -1;
 
+done:
     close(fd_in);
     close(fd_out);
-    return nread < 0 ? -1 : 0;
+    if (ret != 0 && cancelled && atomic_load(cancelled))
+        unlink(dst);  /* clean up partial file */
+    return ret;
+}
+
+/* Non-cancellable wrapper for the original API */
+static int copy_file(const char *src, const char *dst)
+{
+    return copy_file_cancellable(src, dst, NULL);
 }
 
 /* ---------- recursive file counting ---------- */
@@ -194,7 +203,7 @@ static int copy_recursive_cb(const char *src, const char *dst,
         return ret;
 
     } else {
-        int ret = copy_file(src, dst);
+        int ret = copy_file_cancellable(src, dst, cancelled);
         if (done) atomic_fetch_add(done, 1);
         return ret;
     }
