@@ -208,7 +208,7 @@ static void app_selected(Widget w, XtPointer client_data,
 static xcb_key_symbols_t *key_syms;
 
 static void menu_key_handler(Widget w, XtPointer client_data,
-                             XEvent *xev, Boolean *cont)
+                             xcb_generic_event_t *xev, Boolean *cont)
 {
     (void)w; (void)cont;
     Panel *p = (Panel *)client_data;

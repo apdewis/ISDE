@@ -173,7 +173,7 @@ static void title_press_callback(Widget w, XtPointer client_data,
 /* ---------- event handlers for drag ---------- */
 
 static void title_button_handler(Widget w, XtPointer client_data,
-                                 XEvent *event, Boolean *cont)
+                                 xcb_generic_event_t *event, Boolean *cont)
 {
     (void)w;
     (void)cont;

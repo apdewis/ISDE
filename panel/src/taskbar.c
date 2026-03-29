@@ -297,7 +297,7 @@ static void close_all_callback(Widget w, XtPointer client_data,
 }
 
 static void context_menu_handler(Widget w, XtPointer client_data,
-                                 XEvent *event, Boolean *cont)
+                                 xcb_generic_event_t *event, Boolean *cont)
 {
     (void)cont;
     if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
