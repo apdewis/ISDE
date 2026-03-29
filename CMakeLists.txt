@@ -5,6 +5,14 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
+
+# FreeBSD (and other systems) install to /usr/local; ensure pkg-config finds
+# .pc files there.  This is a no-op when the path doesn't exist.
+if(EXISTS "/usr/local/libdata/pkgconfig")
+    set(ENV{PKG_CONFIG_PATH}
+        "$ENV{PKG_CONFIG_PATH}:/usr/local/libdata/pkgconfig:/usr/local/lib/pkgconfig")
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 # --- Core dependencies (all components) ---
