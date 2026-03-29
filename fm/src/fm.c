@@ -19,6 +19,10 @@ XContext fm_window_context = 0;
 
 static void fm_delete_selected(Fm *fm);
 static void fm_delete_selected_permanent(Fm *fm);
+static void act_new_window(Widget, xcb_generic_event_t *, String *, Cardinal *);
+static void act_close_window(Widget, xcb_generic_event_t *, String *, Cardinal *);
+static void app_remove_window(FmApp *app, Fm *fm);
+static void ctx_free_dynamic(Fm *fm);
 
 /* ---------- rename dialog ---------- */
 
@@ -753,6 +757,8 @@ static XtActionsRec fm_actions[] = {
     {"fm-dismiss-rename", act_dismiss_rename},
     {"fm-dismiss-delete", act_dismiss_delete},
     {"fm-dismiss-empty-trash", act_dismiss_empty_trash},
+    {"fm-new-window", act_new_window},
+    {"fm-close-window", act_close_window},
 };
 
 static char fm_translations[] =
@@ -768,7 +774,8 @@ static char fm_translations[] =
     "Alt<Key>Left:       fm-go-back()\n"
     "Alt<Key>Right:      fm-go-fwd()\n"
     "<Key>F5:            fm-refresh()\n"
-    "Ctrl<Key>h:        fm-toggle-hidden()\n";
+    "Ctrl<Key>h:        fm-toggle-hidden()\n"
+    "Ctrl<Key>n:        fm-new-window()\n";
 
 void fm_install_shortcuts(Widget w)
 {
@@ -823,25 +830,64 @@ static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
 
 /* ---------- close handling ---------- */
 
+/* WM_DELETE_WINDOW action — close just this window */
+static void act_close_window(Widget w, xcb_generic_event_t *ev,
+                             String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) fm_window_destroy(fm);
+}
+
 static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
-    fm->app_state->running = 0;
-    XtAppSetExitFlag(fm->app_state->app);
+    /* Remove from window list (may trigger app exit) but don't
+     * double-free — the widget tree is already being destroyed. */
+    FmApp *app = fm->app_state;
+    app_remove_window(app, fm);
+    /* Free per-window state (widgets are destroyed by Xt) */
+    fm_dismiss_context(fm);
+    ctx_free_dynamic(fm);
+    dnd_cleanup(fm);
+    clipboard_cleanup(fm);
+    browser_free_entries(fm);
+    fileview_cleanup(fm);
+    places_cleanup(fm);
+    free(fm->cwd);
+    for (int i = 0; i < fm->hist_count; i++)
+        free(fm->history[i]);
+    free(fm);
 }
 
-/* ---------- init ---------- */
+/* ---------- window tracking ---------- */
 
-int fm_init(Fm *fm, int *argc, char **argv)
+static void app_add_window(FmApp *app, Fm *fm)
 {
-    memset(fm, 0, sizeof(*fm));
-    memset(&g_app, 0, sizeof(g_app));
-    fm->app_state = &g_app;
-    fm->rename_index = -1;
-    fm->last_click_index = -1;
+    app->windows = realloc(app->windows,
+                           (app->nwindows + 1) * sizeof(Fm *));
+    app->windows[app->nwindows++] = fm;
+}
 
-    /* Load config */
+static void app_remove_window(FmApp *app, Fm *fm)
+{
+    for (int i = 0; i < app->nwindows; i++) {
+        if (app->windows[i] == fm) {
+            app->windows[i] = app->windows[--app->nwindows];
+            break;
+        }
+    }
+    if (app->nwindows == 0) {
+        app->running = 0;
+        XtAppSetExitFlag(app->app);
+    }
+}
+
+/* ---------- per-window config ---------- */
+
+static void load_window_config(Fm *fm)
+{
     fm->double_click = 1;
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("fm.toml", errbuf, sizeof(errbuf));
@@ -855,20 +901,144 @@ int fm_init(Fm *fm, int *argc, char **argv)
         }
         isde_config_free(cfg);
     }
+}
+
+/* ---------- new window action (Ctrl+N) ---------- */
+
+static void act_new_window(Widget w, xcb_generic_event_t *ev,
+                           String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) fm_window_new(fm->app_state, fm->cwd);
+}
+
+/* ---------- app init / run / cleanup ---------- */
+
+int fm_app_init(FmApp *app, int *argc, char **argv)
+{
+    memset(app, 0, sizeof(*app));
+
+    /* Initialize context key for fm_from_widget lookups */
+    fm_window_context = IswUniqueContext();
 
     char **fallbacks = isde_theme_build_resources();
-    fm->toplevel = XtAppInitialize(&g_app.app, "ISDE-FM",
-                                   NULL, 0, argc, argv,
-                                   fallbacks, NULL, 0);
-    g_app.first_toplevel = fm->toplevel;
+    app->first_toplevel = XtAppInitialize(&app->app, "ISDE-FM",
+                                          NULL, 0, argc, argv,
+                                          fallbacks, NULL, 0);
 
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(700));  n++;
-    XtSetArg(args[n], XtNheight, isde_scale(500)); n++;
-    XtSetValues(fm->toplevel, args, n);
+    /* Register actions globally (once) */
+    XtAppAddActions(app->app, fm_actions, XtNumber(fm_actions));
+
+    /* Shared caches */
+    icons_init(app);
+
+    /* Cache desktop entries for "Open with" */
+    {
+        static const char *app_dirs[] = {
+            "/usr/share/applications",
+            "/usr/local/share/applications",
+            NULL
+        };
+        const char *home_env = getenv("HOME");
+        char local_apps[512] = "";
+        if (home_env)
+            snprintf(local_apps, sizeof(local_apps),
+                     "%s/.local/share/applications", home_env);
+
+        int cap = 0;
+        for (int d = -1; app_dirs[d + 1] || d < 0; d++) {
+            const char *dir = (d < 0) ? local_apps : app_dirs[d];
+            if (!dir[0]) continue;
+            int count = 0;
+            IsdeDesktopEntry **batch = isde_desktop_scan_dir(dir, &count);
+            if (!batch) continue;
+            if (app->ndesktop + count > cap) {
+                cap = app->ndesktop + count + 64;
+                app->desktop_entries = realloc(app->desktop_entries,
+                                               cap * sizeof(IsdeDesktopEntry *));
+            }
+            for (int i = 0; i < count; i++)
+                app->desktop_entries[app->ndesktop++] = batch[i];
+            free(batch);
+        }
+    }
+
+    /* D-Bus settings notifications (shared) */
+    app->dbus = isde_dbus_init();
+    if (app->dbus) {
+        int dbus_fd = isde_dbus_get_fd(app->dbus);
+        if (dbus_fd >= 0)
+            XtAppAddInput(app->app, dbus_fd,
+                          (XtPointer)XtInputReadMask,
+                          dbus_input_cb, app->dbus);
+    }
+
+    /* Open initial window */
+    const char *path = NULL;
+    /* Check for path argument (after Xt consumed its args) */
+    for (int i = 1; i < *argc; i++) {
+        if (argv[i] && argv[i][0] != '-') {
+            path = argv[i];
+            break;
+        }
+    }
+    if (!path) {
+        const char *home = getenv("HOME");
+        path = home ? home : "/";
+    }
+
+    Fm *first = fm_window_new(app, path);
+    if (!first) return -1;
+
+    /* Subscribe D-Bus settings for first window (TODO: broadcast to all) */
+    if (app->dbus)
+        isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
+
+    app->running = 1;
+    return 0;
+}
+
+Fm *fm_window_new(FmApp *app, const char *path)
+{
+    Fm *fm = calloc(1, sizeof(Fm));
+    if (!fm) return NULL;
+    fm->app_state = app;
+    fm->rename_index = -1;
+    fm->last_click_index = -1;
+
+    load_window_config(fm);
+
+    /* Create toplevel shell — first window reuses XtAppInitialize's shell,
+     * subsequent windows create new application shells. */
+    if (app->nwindows == 0) {
+        fm->toplevel = app->first_toplevel;
+    } else {
+        Arg args[20];
+        Cardinal n = 0;
+        XtSetArg(args[n], XtNwidth, isde_scale(700));  n++;
+        XtSetArg(args[n], XtNheight, isde_scale(500)); n++;
+        fm->toplevel = XtAppCreateShell("isde-fm", "ISDE-FM",
+                                        applicationShellWidgetClass,
+                                        XtDisplay(app->first_toplevel),
+                                        args, n);
+    }
+
+    if (app->nwindows == 0) {
+        Arg args[20];
+        Cardinal n = 0;
+        XtSetArg(args[n], XtNwidth, isde_scale(700));  n++;
+        XtSetArg(args[n], XtNheight, isde_scale(500)); n++;
+        XtSetValues(fm->toplevel, args, n);
+    }
 
     XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);
+
+    /* Override Shell's default WM_DELETE_WINDOW handler (which calls
+     * XtAppSetExitFlag, killing all windows) with one that only
+     * closes this window. */
+    XtOverrideTranslations(fm->toplevel, XtParseTranslationTable(
+        "<Message>WM_PROTOCOLS: fm-close-window()\n"));
 
     /* MainWindow */
     fm->main_window = XtCreateManagedWidget("mainWin", mainWindowWidgetClass,
@@ -876,7 +1046,8 @@ int fm_init(Fm *fm, int *argc, char **argv)
     XtUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
 
     /* Outer FlexBox: vertical */
-    n = 0;
+    Arg args[20];
+    Cardinal n = 0;
     XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     fm->vbox = XtCreateManagedWidget("vbox", flexBoxWidgetClass,
@@ -892,67 +1063,13 @@ int fm_init(Fm *fm, int *argc, char **argv)
     fm->hbox = XtCreateManagedWidget("hbox", flexBoxWidgetClass,
                                       fm->vbox, args, n);
 
-    /* Initialize context key for fm_from_widget lookups */
-    if (fm_window_context == 0)
-        fm_window_context = IswUniqueContext();
-
-    icons_init(&g_app);
     places_init(fm);
     fileview_init(fm);
-
-    /* Keyboard shortcuts — register actions globally (once) */
-    XtAppAddActions(g_app.app, fm_actions, XtNumber(fm_actions));
-
-    /* Clipboard init */
     clipboard_init(fm);
 
-    /* D-Bus settings notifications */
-    g_app.dbus = isde_dbus_init();
-    if (g_app.dbus) {
-        isde_dbus_settings_subscribe(g_app.dbus, on_settings_changed, fm);
-        int dbus_fd = isde_dbus_get_fd(g_app.dbus);
-        if (dbus_fd >= 0)
-            XtAppAddInput(g_app.app, dbus_fd,
-                          (XtPointer)XtInputReadMask,
-                          dbus_input_cb, g_app.dbus);
-    }
-
-    /* Cache desktop entries for "Open with" */
-    {
-        static const char *app_dirs[] = {
-            "/usr/share/applications",
-            "/usr/local/share/applications",
-            NULL
-        };
-        const char *home_env = getenv("HOME");
-        char local_apps[512] = "";
-        if (home_env)
-            snprintf(local_apps, sizeof(local_apps),
-                     "%s/.local/share/applications", home_env);
-
-        g_app.desktop_entries = NULL;
-        g_app.ndesktop = 0;
-        int cap = 0;
-        for (int d = -1; app_dirs[d + 1] || d < 0; d++) {
-            const char *dir = (d < 0) ? local_apps : app_dirs[d];
-            if (!dir[0]) continue;
-            int count = 0;
-            IsdeDesktopEntry **batch = isde_desktop_scan_dir(dir, &count);
-            if (!batch) continue;
-            if (g_app.ndesktop + count > cap) {
-                cap = g_app.ndesktop + count + 64;
-                g_app.desktop_entries = realloc(g_app.desktop_entries,
-                                              cap * sizeof(IsdeDesktopEntry *));
-            }
-            for (int i = 0; i < count; i++)
-                g_app.desktop_entries[g_app.ndesktop++] = batch[i];
-            free(batch);
-        }
-    }
-
-    const char *home = getenv("HOME");
-    fm->cwd = strdup(home ? home : "/");
-    fm->history[0] = strdup(fm->cwd);
+    /* Navigate to initial path */
+    fm->cwd = strdup(path);
+    fm->history[0] = strdup(path);
     fm->hist_pos = 0;
     fm->hist_count = 1;
 
@@ -960,7 +1077,7 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtRealizeWidget(fm->toplevel);
 
-    /* Store Fm* on the toplevel for fm_from_widget lookups */
+    /* Store Fm* for fm_from_widget lookups */
     fm_set_context(fm->toplevel, fm);
 
     /* XDND init must be after realize */
@@ -969,33 +1086,36 @@ int fm_init(Fm *fm, int *argc, char **argv)
     fileview_populate(fm);
     navbar_update(fm);
 
-    g_app.running = 1;
-    return 0;
+    app_add_window(app, fm);
+    return fm;
 }
 
-void fm_run(Fm *fm)
+void fm_window_destroy(Fm *fm)
 {
-    FmApp *app = fm->app_state;
+    /* All actual cleanup happens in fm_destroy_cb (the XtNdestroyCallback).
+     * This just triggers the widget destruction. */
+    XtDestroyWidget(fm->toplevel);
+}
+
+void fm_app_run(FmApp *app)
+{
     while (app->running && !XtAppGetExitFlag(app->app))
         XtAppProcessEvent(app->app, XtIMAll);
 }
 
-void fm_cleanup(Fm *fm)
+void fm_app_cleanup(FmApp *app)
 {
-    FmApp *app = fm->app_state;
+    /* Destroy any remaining windows */
+    while (app->nwindows > 0) {
+        Fm *fm = app->windows[0];
+        XtDestroyWidget(fm->toplevel);
+    }
+    free(app->windows);
+
     isde_dbus_free(app->dbus);
-    dnd_cleanup(fm);
-    clipboard_cleanup(fm);
-    browser_free_entries(fm);
-    fileview_cleanup(fm);
-    places_cleanup(fm);
     icons_cleanup(app);
-    free(fm->cwd);
-    for (int i = 0; i < fm->hist_count; i++)
-        free(fm->history[i]);
     for (int i = 0; i < app->ndesktop; i++)
         isde_desktop_free(app->desktop_entries[i]);
     free(app->desktop_entries);
-    ctx_free_dynamic(fm);
     XtDestroyApplicationContext(app->app);
 }

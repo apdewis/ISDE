@@ -104,6 +104,7 @@ typedef struct FmApp {
     /* Window tracking */
     struct Fm    **windows;
     int            nwindows;
+    struct Fm     *clipboard_owner;  /* which window owns CLIPBOARD */
 
     int            running;
 } FmApp;
@@ -221,15 +222,17 @@ static inline Fm *fm_from_widget(Widget w)
 }
 
 /* ---------- fm.c ---------- */
-int   fm_init(Fm *fm, int *argc, char **argv);
-void  fm_run(Fm *fm);
-void  fm_cleanup(Fm *fm);
-void  fm_navigate(Fm *fm, const char *path);
-void  fm_refresh(Fm *fm);
-void  fm_register_context_menu(Fm *fm, Widget w);
-void  fm_install_shortcuts(Widget w);
-void  fm_dismiss_context(Fm *fm);
-void  show_rename_dialog(Fm *fm);
+int    fm_app_init(FmApp *app, int *argc, char **argv);
+void   fm_app_run(FmApp *app);
+void   fm_app_cleanup(FmApp *app);
+Fm    *fm_window_new(FmApp *app, const char *path);
+void   fm_window_destroy(Fm *fm);
+void   fm_navigate(Fm *fm, const char *path);
+void   fm_refresh(Fm *fm);
+void   fm_register_context_menu(Fm *fm, Widget w);
+void   fm_install_shortcuts(Widget w);
+void   fm_dismiss_context(Fm *fm);
+void   show_rename_dialog(Fm *fm);
 
 /* ---------- browser.c ---------- */
 int   browser_read_dir(Fm *fm, const char *path);

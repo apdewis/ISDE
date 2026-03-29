@@ -102,6 +102,7 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
     FmApp *app = fm->app_state;
     XtOwnSelection(fm->toplevel, app->atom_clipboard, XCB_CURRENT_TIME,
                     convert_selection, lose_selection, NULL);
+    app->clipboard_owner = fm;
 }
 
 /* ---------- selection request handler ---------- */
@@ -153,10 +154,13 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
 
 static void lose_selection(Widget w, Atom *selection)
 {
-    (void)w;
     (void)selection;
-    /* Another client took the clipboard — our data is stale but
-     * keep it around for internal use until replaced */
+    Fm *fm = fm_from_widget(w);
+    if (fm) {
+        FmApp *app = fm->app_state;
+        if (app->clipboard_owner == fm)
+            app->clipboard_owner = NULL;
+    }
 }
 
 /* ---------- paste: request clipboard from owner ---------- */
@@ -272,9 +276,10 @@ void clipboard_paste(Fm *fm)
 {
     FmApp *app = fm->app_state;
 
-    /* Fast path: if we own the clipboard, use local data directly
-     * instead of round-tripping through X selections */
-    if (fm->clipboard.npaths > 0) {
+    /* Fast path: if THIS window owns the clipboard, use local data
+     * directly instead of round-tripping through X selections.
+     * Another window in the same process goes through the selection. */
+    if (app->clipboard_owner == fm && fm->clipboard.npaths > 0) {
         for (int i = 0; i < fm->clipboard.npaths; i++)
             do_file_op(fm, fm->clipboard.paths[i], fm->clipboard.op);
         fm_refresh(fm);
