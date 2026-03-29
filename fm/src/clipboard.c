@@ -163,32 +163,16 @@ static void lose_selection(Widget w, Atom *selection)
     }
 }
 
-/* ---------- paste: request clipboard from owner ---------- */
+/* ---------- paste: submit file operations ---------- */
 
-static void do_file_op(Fm *fm, const char *src_path, FmClipOp op)
+static void submit_paste_job(Fm *fm, char **paths, int npaths, FmClipOp op)
 {
-    const char *base = strrchr(src_path, '/');
-    base = base ? base + 1 : src_path;
-
-    size_t dlen = strlen(fm->cwd) + 1 + strlen(base) + 1;
-    char *dest = malloc(dlen);
-    snprintf(dest, dlen, "%s/%s", fm->cwd, base);
-
-    if (op == FM_CLIP_CUT) {
-        /* Move to same location is a no-op */
-        if (strcmp(src_path, dest) == 0) {
-            free(dest);
-            return;
-        }
-        if (rename(src_path, dest) != 0) {
-            /* Cross-device: copy then delete source */
-            if (fileops_copy(src_path, dest) == 0)
-                fileops_delete(fm, src_path);
-        }
-    } else {
-        fileops_copy(src_path, dest);
-    }
-    free(dest);
+    if (npaths <= 0) return;
+    FmApp *app = fm->app_state;
+    if (op == FM_CLIP_CUT)
+        jobqueue_submit_move(app, fm, paths, npaths, fm->cwd);
+    else
+        jobqueue_submit_copy(app, fm, paths, npaths, fm->cwd);
 }
 
 static void receive_paste(Widget w, XtPointer client_data,
@@ -230,20 +214,29 @@ static void receive_paste(Widget w, XtPointer client_data,
         }
     }
 
-    /* Parse URIs and perform operations */
+    /* Parse URIs and collect paths */
+    int cap = 16, npaths = 0;
+    char **paths = malloc(cap * sizeof(char *));
+
     char *saveptr = NULL;
     char *line = strtok_r(data, "\r\n", &saveptr);
     while (line) {
         const char *path = line;
         if (strncmp(path, "file://", 7) == 0)
             path += 7;
-        if (path[0] == '/')
-            do_file_op(fm, path, op);
+        if (path[0] == '/') {
+            if (npaths >= cap) {
+                cap *= 2;
+                paths = realloc(paths, cap * sizeof(char *));
+            }
+            paths[npaths++] = (char *)path;
+        }
         line = strtok_r(NULL, "\r\n", &saveptr);
     }
 
+    submit_paste_job(fm, paths, npaths, op);
+    free(paths);
     free(buf);
-    fm_refresh(fm);
 }
 
 /* ---------- public API ---------- */
@@ -280,9 +273,8 @@ void clipboard_paste(Fm *fm)
      * directly instead of round-tripping through X selections.
      * Another window in the same process goes through the selection. */
     if (app->clipboard_owner == fm && fm->clipboard.npaths > 0) {
-        for (int i = 0; i < fm->clipboard.npaths; i++)
-            do_file_op(fm, fm->clipboard.paths[i], fm->clipboard.op);
-        fm_refresh(fm);
+        submit_paste_job(fm, fm->clipboard.paths, fm->clipboard.npaths,
+                         fm->clipboard.op);
         return;
     }
 

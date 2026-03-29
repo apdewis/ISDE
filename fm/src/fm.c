@@ -132,13 +132,19 @@ static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
-    for (int i = nsel - 1; i >= 0; i--) {
-        int idx = indices[i];
-        if (idx >= 0 && idx < fm->nentries)
-            fileops_trash(fm->entries[idx].full_path);
+    if (nsel > 0) {
+        char **paths = malloc(nsel * sizeof(char *));
+        int npaths = 0;
+        for (int i = 0; i < nsel; i++) {
+            int idx = indices[i];
+            if (idx >= 0 && idx < fm->nentries)
+                paths[npaths++] = fm->entries[idx].full_path;
+        }
+        if (npaths > 0)
+            jobqueue_submit_trash(fm->app_state, fm, paths, npaths);
+        free(paths);
     }
     free(indices);
-    if (nsel > 0) fm_refresh(fm);
     dismiss_delete_dialog(fm);
 }
 
@@ -150,13 +156,19 @@ static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
-    for (int i = nsel - 1; i >= 0; i--) {
-        int idx = indices[i];
-        if (idx >= 0 && idx < fm->nentries)
-            fileops_delete(fm, fm->entries[idx].full_path);
+    if (nsel > 0) {
+        char **paths = malloc(nsel * sizeof(char *));
+        int npaths = 0;
+        for (int i = 0; i < nsel; i++) {
+            int idx = indices[i];
+            if (idx >= 0 && idx < fm->nentries)
+                paths[npaths++] = fm->entries[idx].full_path;
+        }
+        if (npaths > 0)
+            jobqueue_submit_delete(fm->app_state, fm, paths, npaths);
+        free(paths);
     }
     free(indices);
-    if (nsel > 0) fm_refresh(fm);
     dismiss_delete_dialog(fm);
 }
 
@@ -247,11 +259,7 @@ static void empty_trash_ok(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
-    fileops_empty_trash();
-    char *trash_p = fileops_trash_path();
-    if (strncmp(fm->cwd, trash_p, strlen(trash_p)) == 0)
-        fm_refresh(fm);
-    free(trash_p);
+    jobqueue_submit_empty_trash(fm->app_state, fm);
     if (fm->empty_trash_shell) {
         XtPopdown(fm->empty_trash_shell);
         XtDestroyWidget(fm->empty_trash_shell);
@@ -946,6 +954,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         app->initial_path = strdup(path);
     }
 
+    /* Background file operations */
+    jobqueue_init(app);
+
     /* Shared caches */
     icons_init(app);
     {
@@ -1125,6 +1136,7 @@ void fm_app_cleanup(FmApp *app)
     }
     free(app->windows);
 
+    jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
     free(app->initial_path);

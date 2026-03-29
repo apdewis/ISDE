@@ -223,6 +223,11 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
 
     const char *target_dir = fm->cwd;
 
+    /* Collect valid file paths */
+    int cap = d->num_uris;
+    char **paths = malloc(cap * sizeof(char *));
+    int npaths = 0;
+
     fm->dnd_drop_was_noop = True;
 
     for (int i = 0; i < d->num_uris; i++) {
@@ -233,7 +238,6 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
         if (path[0] != '/')
             continue;
 
-        /* Check if source and target are in the same directory */
         const char *src_slash = strrchr(path, '/');
         if (!src_slash)
             continue;
@@ -241,21 +245,16 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
         int same_dir = (strlen(target_dir) == src_dir_len &&
                         strncmp(target_dir, path, src_dir_len) == 0);
 
-        /* Same-dir move is a no-op */
         if (same_dir && d->action == ISW_DND_ACTION_MOVE)
             continue;
 
-        const char *base = src_slash + 1;
-        size_t dlen = strlen(target_dir) + 1 + strlen(base) + 1;
-        char *dest = malloc(dlen);
-        snprintf(dest, dlen, "%s/%s", target_dir, base);
-
-        fileops_copy(path, dest);
-        free(dest);
+        paths[npaths++] = (char *)path;
         fm->dnd_drop_was_noop = False;
     }
 
-    fm_refresh(fm);
+    if (npaths > 0)
+        jobqueue_submit_copy(fm->app_state, fm, paths, npaths, target_dir);
+    free(paths);
 }
 
 /* ---------- public API ---------- */

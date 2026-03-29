@@ -28,6 +28,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <time.h>
+#include <stdatomic.h>
+#include <pthread.h>
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
@@ -68,6 +70,35 @@ typedef struct {
     char     *gnome_data;  /* cached x-special/gnome-copied-files string */
 } FmClipboard;
 
+/* ---------- Job queue for async file operations ---------- */
+typedef enum {
+    FM_JOB_COPY,
+    FM_JOB_MOVE,
+    FM_JOB_DELETE,
+    FM_JOB_TRASH,
+    FM_JOB_EMPTY_TRASH
+} FmJobType;
+
+typedef struct FmJob {
+    FmJobType       type;
+    char          **src_paths;
+    int             nsrc;
+    char           *dst_dir;       /* NULL for delete/trash/empty_trash */
+    atomic_int      files_done;
+    atomic_int      files_total;
+    atomic_int      cancelled;
+    atomic_int      finished;
+    int             error;         /* errno of first failure */
+    struct Fm      *origin_win;    /* window that started this op */
+    /* Progress UI (managed by progress.c, main thread only) */
+    Widget          progress_shell;
+    Widget          progress_bar;
+    Widget          progress_label;
+    XtIntervalId    progress_timer;    /* polls atomic counters */
+    XtIntervalId    show_delay_timer;  /* 500ms before showing dialog */
+    struct FmJob   *next;
+} FmJob;
+
 /* ---------- Context menu action function ---------- */
 struct Fm;
 typedef void (*CtxAction)(struct Fm *);
@@ -105,6 +136,16 @@ typedef struct FmApp {
     struct Fm    **windows;
     int            nwindows;
     struct Fm     *clipboard_owner;  /* which window owns CLIPBOARD */
+
+    /* Job queue */
+    pthread_mutex_t job_mutex;
+    pthread_cond_t  job_cond;
+    FmJob          *job_head;
+    FmJob          *job_tail;
+    pthread_t       worker_thread;
+    int             worker_running;
+    int             notify_pipe[2]; /* worker writes, main loop reads */
+    XtInputId       notify_input_id;
 
     char          *initial_path;  /* from argv, used by fm_app_init */
     int            running;
@@ -269,6 +310,12 @@ int   fileops_restore(const char *trash_name);
 int   fileops_empty_trash(void);
 char *fileops_trash_path(void);
 
+int   fileops_count_files(const char *path);
+int   fileops_copy_progress(const char *src, const char *dst,
+                            atomic_int *done, atomic_int *cancelled);
+int   fileops_delete_progress(const char *path,
+                              atomic_int *done, atomic_int *cancelled);
+
 /* ---------- clipboard.c ---------- */
 void  clipboard_init(Fm *fm);
 void  clipboard_copy(Fm *fm);
@@ -279,6 +326,23 @@ void  clipboard_cleanup(Fm *fm);
 /* ---------- dnd.c ---------- */
 void  dnd_init(Fm *fm);
 void  dnd_cleanup(Fm *fm);
+
+/* ---------- progress.c ---------- */
+void  progress_start(FmApp *app, FmJob *job);
+void  progress_stop(FmJob *job);
+
+/* ---------- jobqueue.c ---------- */
+void   jobqueue_init(FmApp *app);
+void   jobqueue_shutdown(FmApp *app);
+FmJob *jobqueue_submit_copy(FmApp *app, Fm *win,
+                            char **srcs, int nsrc, const char *dst_dir);
+FmJob *jobqueue_submit_move(FmApp *app, Fm *win,
+                            char **srcs, int nsrc, const char *dst_dir);
+FmJob *jobqueue_submit_delete(FmApp *app, Fm *win,
+                              char **srcs, int nsrc);
+FmJob *jobqueue_submit_trash(FmApp *app, Fm *win,
+                             char **srcs, int nsrc);
+FmJob *jobqueue_submit_empty_trash(FmApp *app, Fm *win);
 
 /* ---------- instance.c ---------- */
 int   instance_try_primary(FmApp *app, const char *path);

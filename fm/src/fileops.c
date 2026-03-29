@@ -108,7 +108,143 @@ static int copy_file(const char *src, const char *dst)
     return nread < 0 ? -1 : 0;
 }
 
-/* ---------- recursive copy ---------- */
+/* ---------- recursive file counting ---------- */
+
+static int count_recursive(const char *path)
+{
+    struct stat st;
+    if (lstat(path, &st) != 0)
+        return 0;
+
+    if (!S_ISDIR(st.st_mode))
+        return 1;
+
+    int count = 0;
+    DIR *dir = opendir(path);
+    if (!dir) return 0;
+
+    struct dirent *de;
+    while ((de = readdir(dir))) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            continue;
+        size_t len = strlen(path) + 1 + strlen(de->d_name) + 1;
+        char *child = malloc(len);
+        snprintf(child, len, "%s/%s", path, de->d_name);
+        count += count_recursive(child);
+        free(child);
+    }
+    closedir(dir);
+    return count;
+}
+
+/* ---------- progress-aware recursive copy ---------- */
+
+static int copy_recursive_cb(const char *src, const char *dst,
+                              atomic_int *done, atomic_int *cancelled)
+{
+    if (cancelled && atomic_load(cancelled))
+        return -1;
+
+    struct stat st;
+    if (lstat(src, &st) != 0)
+        return -1;
+
+    if (S_ISDIR(st.st_mode)) {
+        if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST)
+            return -1;
+
+        DIR *dir = opendir(src);
+        if (!dir) return -1;
+
+        struct dirent *de;
+        int ret = 0;
+        while ((de = readdir(dir))) {
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+                continue;
+            if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
+
+            size_t slen = strlen(src) + 1 + strlen(de->d_name) + 1;
+            size_t dlen = strlen(dst) + 1 + strlen(de->d_name) + 1;
+            char *child_src = malloc(slen);
+            char *child_dst_base = malloc(dlen);
+            snprintf(child_src, slen, "%s/%s", src, de->d_name);
+            snprintf(child_dst_base, dlen, "%s/%s", dst, de->d_name);
+
+            char *child_dst = resolve_conflict(child_dst_base);
+            free(child_dst_base);
+
+            if (copy_recursive_cb(child_src, child_dst, done, cancelled) != 0)
+                ret = -1;
+
+            free(child_src);
+            free(child_dst);
+        }
+        closedir(dir);
+        return ret;
+
+    } else if (S_ISLNK(st.st_mode)) {
+        char link_target[PATH_MAX];
+        ssize_t len = readlink(src, link_target, sizeof(link_target) - 1);
+        if (len < 0) return -1;
+        link_target[len] = '\0';
+        char *resolved = resolve_conflict(dst);
+        int ret = symlink(link_target, resolved);
+        free(resolved);
+        if (done) atomic_fetch_add(done, 1);
+        return ret;
+
+    } else {
+        int ret = copy_file(src, dst);
+        if (done) atomic_fetch_add(done, 1);
+        return ret;
+    }
+}
+
+/* ---------- progress-aware recursive delete ---------- */
+
+static int delete_recursive_cb(const char *path,
+                                atomic_int *done, atomic_int *cancelled)
+{
+    if (cancelled && atomic_load(cancelled))
+        return -1;
+
+    struct stat st;
+    if (lstat(path, &st) != 0)
+        return -1;
+
+    if (S_ISDIR(st.st_mode)) {
+        DIR *dir = opendir(path);
+        if (!dir) return -1;
+
+        struct dirent *de;
+        int ret = 0;
+        while ((de = readdir(dir))) {
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+                continue;
+            if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
+
+            size_t len = strlen(path) + 1 + strlen(de->d_name) + 1;
+            char *child = malloc(len);
+            snprintf(child, len, "%s/%s", path, de->d_name);
+
+            if (delete_recursive_cb(child, done, cancelled) != 0)
+                ret = -1;
+            free(child);
+        }
+        closedir(dir);
+
+        if (rmdir(path) != 0)
+            ret = -1;
+        return ret;
+
+    } else {
+        int ret = unlink(path);
+        if (done) atomic_fetch_add(done, 1);
+        return ret;
+    }
+}
+
+/* ---------- recursive copy (original, no progress) ---------- */
 
 static int copy_recursive(const char *src, const char *dst)
 {
@@ -505,4 +641,26 @@ int fileops_rename(Fm *fm, const char *oldpath, const char *newname)
     free(dir);
     free(newpath);
     return ret;
+}
+
+/* ---------- progress-aware public API ---------- */
+
+int fileops_count_files(const char *path)
+{
+    return count_recursive(path);
+}
+
+int fileops_copy_progress(const char *src, const char *dst,
+                          atomic_int *done, atomic_int *cancelled)
+{
+    char *resolved = resolve_conflict(dst);
+    int ret = copy_recursive_cb(src, resolved, done, cancelled);
+    free(resolved);
+    return ret;
+}
+
+int fileops_delete_progress(const char *path,
+                            atomic_int *done, atomic_int *cancelled)
+{
+    return delete_recursive_cb(path, done, cancelled);
 }
