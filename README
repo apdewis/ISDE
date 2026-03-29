@@ -1,0 +1,30 @@
+# ISDE
+
+The InfiSystems Desktop Environment, is a deliberately simplistic X11 DE. 
+It is a loosely coupled set of basic components suhc as
+A WM, a file manager, session manager and a panel.
+The design goal is to remain minimal while allowing the user to add or replace 
+components as desired.
+
+## Caveats and Warnings
+
+- It works but it's ugly
+- Almost entirely produced by Claude code and a lot of sarcasm directed at said.
+
+## TODO
+
+### General
+- HIG guidlines
+- Terminal app or integrations
+- Compositor integrations
+- Some more native ISW apps to round out basic functionality
+- Arcan support
+
+### Panel
+- modular component loading
+
+### Settings
+- modular panels that apps can also present directly
+
+### File manager
+- preview thumbnails
