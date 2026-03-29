@@ -106,6 +106,7 @@ typedef struct FmApp {
     int            nwindows;
     struct Fm     *clipboard_owner;  /* which window owns CLIPBOARD */
 
+    char          *initial_path;  /* from argv, used by fm_app_init */
     int            running;
 } FmApp;
 
@@ -278,5 +279,8 @@ void  clipboard_cleanup(Fm *fm);
 /* ---------- dnd.c ---------- */
 void  dnd_init(Fm *fm);
 void  dnd_cleanup(Fm *fm);
+
+/* ---------- instance.c ---------- */
+int   instance_try_primary(FmApp *app, const char *path);
 
 #endif /* ISDE_FM_H */

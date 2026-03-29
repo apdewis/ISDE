@@ -930,10 +930,24 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     /* Register actions globally (once) */
     XtAppAddActions(app->app, fm_actions, XtNumber(fm_actions));
 
+    /* Determine path to open */
+    {
+        const char *path = NULL;
+        for (int i = 1; i < *argc; i++) {
+            if (argv[i] && argv[i][0] != '-') {
+                path = argv[i];
+                break;
+            }
+        }
+        if (!path) {
+            const char *home = getenv("HOME");
+            path = home ? home : "/";
+        }
+        app->initial_path = strdup(path);
+    }
+
     /* Shared caches */
     icons_init(app);
-
-    /* Cache desktop entries for "Open with" */
     {
         static const char *app_dirs[] = {
             "/usr/share/applications",
@@ -975,21 +989,20 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     }
 
     /* Open initial window */
-    const char *path = NULL;
-    /* Check for path argument (after Xt consumed its args) */
-    for (int i = 1; i < *argc; i++) {
-        if (argv[i] && argv[i][0] != '-') {
-            path = argv[i];
-            break;
-        }
-    }
-    if (!path) {
-        const char *home = getenv("HOME");
-        path = home ? home : "/";
-    }
-
-    Fm *first = fm_window_new(app, path);
+    Fm *first = fm_window_new(app, app->initial_path);
     if (!first) return -1;
+
+    /* Single-instance check — now that the first window is realized,
+     * use its toplevel for the selection ownership. */
+    int rc = instance_try_primary(app, app->initial_path);
+    if (rc == 0) {
+        /* Another instance will handle the path — tear down and exit */
+        fm_window_destroy(first);
+        free(app->initial_path);
+        app->initial_path = NULL;
+        XtDestroyApplicationContext(app->app);
+        return 1;
+    }
 
     /* Subscribe D-Bus settings for first window (TODO: broadcast to all) */
     if (app->dbus)
@@ -1114,6 +1127,7 @@ void fm_app_cleanup(FmApp *app)
 
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
+    free(app->initial_path);
     for (int i = 0; i < app->ndesktop; i++)
         isde_desktop_free(app->desktop_entries[i]);
     free(app->desktop_entries);
