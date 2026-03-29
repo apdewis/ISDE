@@ -12,22 +12,19 @@
 
 /* ---------- double-click tracking ---------- */
 
-static int    last_click_index = -1;
-static struct timespec last_click_time;
-
-static int is_double_click(int index)
+static int is_double_click(Fm *fm, int index)
 {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
 
-    long ms = (now.tv_sec - last_click_time.tv_sec) * 1000 +
-              (now.tv_nsec - last_click_time.tv_nsec) / 1000000;
+    long ms = (now.tv_sec - fm->last_click_time.tv_sec) * 1000 +
+              (now.tv_nsec - fm->last_click_time.tv_nsec) / 1000000;
 
-    int dbl = (index == last_click_index &&
+    int dbl = (index == fm->last_click_index &&
                ms < isde_config_double_click_ms());
 
-    last_click_index = index;
-    last_click_time = now;
+    fm->last_click_index = index;
+    fm->last_click_time = now;
 
     return dbl;
 }
@@ -40,7 +37,7 @@ static void iconview_callback(Widget w, XtPointer client_data,
     Fm *fm = (Fm *)client_data;
     IswIconViewCallbackData *d = (IswIconViewCallbackData *)call_data;
 
-    fm_dismiss_context();
+    fm_dismiss_context(fm);
 
     /* Check if triggered by keyboard (Enter/Return) — always open */
     xcb_generic_event_t *ev = XtLastEventProcessed(XtDisplay(w));
@@ -51,7 +48,7 @@ static void iconview_callback(Widget w, XtPointer client_data,
     }
 
     if (fm->double_click) {
-        if (is_double_click(d->index))
+        if (is_double_click(fm, d->index))
             browser_open_entry(fm, d->index);
     } else {
         browser_open_entry(fm, d->index);
@@ -67,9 +64,9 @@ void fileview_init(Fm *fm)
     Cardinal n = 0;
     XtSetArg(args[n], XtNallowVert, True);          n++;
     XtSetArg(args[n], XtNallowHoriz, True);         n++;
-    XtSetArg(args[n], XtNuseRight, True);           n++;
-    XtSetArg(args[n], XtNborderWidth, 0);           n++;
-    XtSetArg(args[n], XtNflexGrow, 1);              n++;
+    XtSetArg(args[n], XtNuseRight, True);            n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNflexGrow, 1);               n++;
     fm->viewport = XtCreateManagedWidget("viewport", viewportWidgetClass,
                                          fm->hbox, args, n);
 
@@ -100,41 +97,35 @@ void fileview_init(Fm *fm)
 void fileview_populate(Fm *fm)
 {
     if (fm->iconview) {
-        /* Build arrays for IconView — must stay alive since
-         * IconView stores pointers, not copies */
-        static String *labels = NULL;
-        static String *icons  = NULL;
-        static char **trunc_names = NULL;
-        static int trunc_count = 0;
-
         /* Free previous truncated names */
-        for (int i = 0; i < trunc_count; i++)
-            free(trunc_names[i]);
-        free(trunc_names);
-        free(labels);
-        free(icons);
+        for (int i = 0; i < fm->fv_trunc_count; i++)
+            free(fm->fv_trunc_names[i]);
+        free(fm->fv_trunc_names);
+        free(fm->fv_labels);
+        free(fm->fv_icons);
 
         #define MAX_LABEL_LEN 12
 
-        labels = malloc((fm->nentries + 1) * sizeof(String));
-        icons  = malloc((fm->nentries + 1) * sizeof(String));
-        trunc_names = malloc(fm->nentries * sizeof(char *));
-        trunc_count = fm->nentries;
+        fm->fv_labels = malloc((fm->nentries + 1) * sizeof(String));
+        fm->fv_icons  = malloc((fm->nentries + 1) * sizeof(String));
+        fm->fv_trunc_names = malloc(fm->nentries * sizeof(char *));
+        fm->fv_trunc_count = fm->nentries;
 
         for (int i = 0; i < fm->nentries; i++) {
             const char *name = fm->entries[i].name;
             if (strlen(name) > MAX_LABEL_LEN) {
-                trunc_names[i] = malloc(MAX_LABEL_LEN + 4);
-                memcpy(trunc_names[i], name, MAX_LABEL_LEN);
-                strcpy(trunc_names[i] + MAX_LABEL_LEN, "...");
-                labels[i] = trunc_names[i];
+                fm->fv_trunc_names[i] = malloc(MAX_LABEL_LEN + 4);
+                memcpy(fm->fv_trunc_names[i], name, MAX_LABEL_LEN);
+                strcpy(fm->fv_trunc_names[i] + MAX_LABEL_LEN, "...");
+                fm->fv_labels[i] = fm->fv_trunc_names[i];
             } else {
-                trunc_names[i] = NULL;
-                labels[i] = (String)name;
+                fm->fv_trunc_names[i] = NULL;
+                fm->fv_labels[i] = (String)name;
             }
-            icons[i] = (String)fm->entries[i].mime_icon;
+            fm->fv_icons[i] = (String)fm->entries[i].mime_icon;
         }
-        IswIconViewSetItems(fm->iconview, labels, icons, fm->nentries);
+        IswIconViewSetItems(fm->iconview, fm->fv_labels, fm->fv_icons,
+                            fm->nentries);
     }
 
     /* Update status bar */
@@ -154,6 +145,13 @@ void fileview_populate(Fm *fm)
 
 void fileview_cleanup(Fm *fm)
 {
-    (void)fm;
-    /* Widgets destroyed with app context */
+    for (int i = 0; i < fm->fv_trunc_count; i++)
+        free(fm->fv_trunc_names[i]);
+    free(fm->fv_trunc_names);
+    free(fm->fv_labels);
+    free(fm->fv_icons);
+    fm->fv_trunc_names = NULL;
+    fm->fv_labels = NULL;
+    fm->fv_icons = NULL;
+    fm->fv_trunc_count = 0;
 }

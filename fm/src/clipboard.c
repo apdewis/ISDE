@@ -99,14 +99,12 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
     }
 
     /* Own the CLIPBOARD selection via Xt so convert_selection is called */
-    XtOwnSelection(fm->toplevel, fm->atom_clipboard, XCB_CURRENT_TIME,
+    FmApp *app = fm->app_state;
+    XtOwnSelection(fm->toplevel, app->atom_clipboard, XCB_CURRENT_TIME,
                     convert_selection, lose_selection, NULL);
 }
 
 /* ---------- selection request handler ---------- */
-
-/* Global FM pointer for selection callbacks */
-static Fm *g_fm = NULL;
 
 /* Called by Xt when another client requests our clipboard data */
 static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
@@ -114,18 +112,19 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
                                  unsigned long *length_return,
                                  int *format_return)
 {
-    (void)w;
     (void)selection;
-    Fm *fm = g_fm;
+    Fm *fm = fm_from_widget(w);
     if (!fm || fm->clipboard.npaths == 0)
         return False;
 
-    if (*target == fm->atom_targets) {
+    FmApp *app = fm->app_state;
+
+    if (*target == app->atom_targets) {
         /* Return list of supported targets */
         static xcb_atom_t targets[3];
-        targets[0] = fm->atom_targets;
-        targets[1] = fm->atom_uri_list;
-        targets[2] = fm->atom_gnome_files;
+        targets[0] = app->atom_targets;
+        targets[1] = app->atom_uri_list;
+        targets[2] = app->atom_gnome_files;
         *type_return = XCB_ATOM_ATOM;
         *value_return = (XtPointer)targets;
         *length_return = 3;
@@ -133,16 +132,16 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
         return True;
     }
 
-    if (*target == fm->atom_uri_list && fm->clipboard.uri_data) {
-        *type_return = fm->atom_uri_list;
+    if (*target == app->atom_uri_list && fm->clipboard.uri_data) {
+        *type_return = app->atom_uri_list;
         *value_return = (XtPointer)fm->clipboard.uri_data;
         *length_return = strlen(fm->clipboard.uri_data);
         *format_return = 8;
         return True;
     }
 
-    if (*target == fm->atom_gnome_files && fm->clipboard.gnome_data) {
-        *type_return = fm->atom_gnome_files;
+    if (*target == app->atom_gnome_files && fm->clipboard.gnome_data) {
+        *type_return = app->atom_gnome_files;
         *value_return = (XtPointer)fm->clipboard.gnome_data;
         *length_return = strlen(fm->clipboard.gnome_data);
         *format_return = 8;
@@ -197,12 +196,13 @@ static void receive_paste(Widget w, XtPointer client_data,
     (void)selection;
     (void)format;
     Fm *fm = (Fm *)client_data;
+    FmApp *app = fm->app_state;
 
     if (!value || *length == 0 || *type == XCB_ATOM_NONE) {
         /* Try text/uri-list as fallback */
         if (*type == XCB_ATOM_NONE || !value) {
-            XtGetSelectionValue(fm->toplevel, fm->atom_clipboard,
-                                fm->atom_uri_list,
+            XtGetSelectionValue(fm->toplevel, app->atom_clipboard,
+                                app->atom_uri_list,
                                 receive_paste, fm, XCB_CURRENT_TIME);
         }
         return;
@@ -216,7 +216,7 @@ static void receive_paste(Widget w, XtPointer client_data,
     char *data = buf;
     FmClipOp op = FM_CLIP_COPY;
 
-    if (*type == fm->atom_gnome_files) {
+    if (*type == app->atom_gnome_files) {
         if (strncmp(data, "cut\n", 4) == 0) {
             op = FM_CLIP_CUT;
             data += 4;
@@ -246,13 +246,16 @@ static void receive_paste(Widget w, XtPointer client_data,
 
 void clipboard_init(Fm *fm)
 {
-    g_fm = fm;
     xcb_connection_t *conn = XtDisplay(fm->toplevel);
-    fm->atom_clipboard   = intern(conn, "CLIPBOARD");
-    fm->atom_targets     = intern(conn, "TARGETS");
-    fm->atom_uri_list    = intern(conn, "text/uri-list");
-    fm->atom_gnome_files = intern(conn, "x-special/gnome-copied-files");
-    fm->atom_utf8_string = intern(conn, "UTF8_STRING");
+    FmApp *app = fm->app_state;
+    app->atom_clipboard   = intern(conn, "CLIPBOARD");
+    app->atom_targets     = intern(conn, "TARGETS");
+    app->atom_uri_list    = intern(conn, "text/uri-list");
+    app->atom_gnome_files = intern(conn, "x-special/gnome-copied-files");
+    app->atom_utf8_string = intern(conn, "UTF8_STRING");
+
+    /* Fm* is stored on the toplevel via fm_set_context in fm_init,
+     * recovered in convert_selection via fm_from_widget. */
 }
 
 void clipboard_copy(Fm *fm)
@@ -267,6 +270,8 @@ void clipboard_cut(Fm *fm)
 
 void clipboard_paste(Fm *fm)
 {
+    FmApp *app = fm->app_state;
+
     /* Fast path: if we own the clipboard, use local data directly
      * instead of round-tripping through X selections */
     if (fm->clipboard.npaths > 0) {
@@ -277,8 +282,8 @@ void clipboard_paste(Fm *fm)
     }
 
     /* Otherwise request from external clipboard owner */
-    XtGetSelectionValue(fm->toplevel, fm->atom_clipboard,
-                        fm->atom_gnome_files,
+    XtGetSelectionValue(fm->toplevel, app->atom_clipboard,
+                        app->atom_gnome_files,
                         receive_paste, fm, XCB_CURRENT_TIME);
 }
 

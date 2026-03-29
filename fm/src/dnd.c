@@ -15,7 +15,6 @@
  */
 #include "fm.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,28 +23,15 @@
 
 #define DND_THRESHOLD 5  /* pixels of motion before drag starts */
 
-/* ---------- drag state ---------- */
-
-static Fm     *drag_fm;
-static xcb_button_press_event_t saved_press;
-static Boolean press_valid;
-
-/* Paths of files being dragged (for convert + finished callbacks) */
-static char  **drag_paths;
-static int     ndrag_paths;
-
-/* Set by drop_cb when all URIs were skipped (same-dir move) */
-static Boolean drop_was_noop;
-
 /* ---------- drag path helpers ---------- */
 
-static void free_drag_paths(void)
+static void free_drag_paths(Fm *fm)
 {
-    for (int i = 0; i < ndrag_paths; i++)
-        free(drag_paths[i]);
-    free(drag_paths);
-    drag_paths = NULL;
-    ndrag_paths = 0;
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+        free(fm->dnd_drag_paths[i]);
+    free(fm->dnd_drag_paths);
+    fm->dnd_drag_paths = NULL;
+    fm->dnd_ndrag_paths = 0;
 }
 
 /* ---------- drag source: convert callback ---------- */
@@ -60,22 +46,20 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
     Fm *fm = (Fm *)client_data;
     xcb_atom_t uri_atom = ISWXdndInternType(fm->iconview, "text/uri-list");
 
-    fprintf(stderr, "DND convert: target_type=%u uri_atom=%u ndrag=%d\n",
-            target_type, uri_atom, ndrag_paths);
     if (target_type != uri_atom)
         return False;
 
-    if (ndrag_paths <= 0)
+    if (fm->dnd_ndrag_paths <= 0)
         return False;
 
     size_t total = 0;
-    for (int i = 0; i < ndrag_paths; i++)
-        total += 7 + strlen(drag_paths[i]) + 2;
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+        total += 7 + strlen(fm->dnd_drag_paths[i]) + 2;
 
     char *buf = XtMalloc(total + 1);
     char *p = buf;
-    for (int i = 0; i < ndrag_paths; i++)
-        p += sprintf(p, "file://%s\r\n", drag_paths[i]);
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+        p += sprintf(p, "file://%s\r\n", fm->dnd_drag_paths[i]);
 
     *data_return = (XtPointer)buf;
     *length_return = p - buf;
@@ -90,28 +74,26 @@ static void drag_finished(Widget w, IswDndAction action,
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
-    fprintf(stderr, "DND finished: action=%d accepted=%d noop=%d\n",
-            action, accepted, drop_was_noop);
 
     if (accepted && action == ISW_DND_ACTION_MOVE &&
-        !drop_was_noop && drag_paths) {
-        for (int i = 0; i < ndrag_paths; i++) {
+        !fm->dnd_drop_was_noop && fm->dnd_drag_paths) {
+        for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
             struct stat st;
-            if (lstat(drag_paths[i], &st) == 0)
-                fileops_delete(fm, drag_paths[i]);
+            if (lstat(fm->dnd_drag_paths[i], &st) == 0)
+                fileops_delete(fm, fm->dnd_drag_paths[i]);
         }
         fm_refresh(fm);
     }
 
-    free_drag_paths();
+    free_drag_paths(fm);
 }
 
 /* ---------- drag source: initiate ---------- */
 
 static void start_drag(Fm *fm)
 {
-    free_drag_paths();
-    drop_was_noop = False;
+    free_drag_paths(fm);
+    fm->dnd_drop_was_noop = False;
 
     /* Snapshot selected file paths for convert + finished callbacks.
      * By this point SelectItem has already run on the Btn1Down event,
@@ -123,16 +105,17 @@ static void start_drag(Fm *fm)
         return;
     }
 
-    drag_paths = malloc(nsel * sizeof(char *));
+    fm->dnd_drag_paths = malloc(nsel * sizeof(char *));
     for (int i = 0; i < nsel; i++) {
         int idx = indices[i];
         if (idx >= 0 && idx < fm->nentries)
-            drag_paths[ndrag_paths++] = strdup(fm->entries[idx].full_path);
+            fm->dnd_drag_paths[fm->dnd_ndrag_paths++] =
+                strdup(fm->entries[idx].full_path);
     }
     free(indices);
 
-    if (ndrag_paths <= 0) {
-        free_drag_paths();
+    if (fm->dnd_ndrag_paths <= 0) {
+        free_drag_paths(fm);
         return;
     }
 
@@ -148,9 +131,7 @@ static void start_drag(Fm *fm)
     desc.finished    = drag_finished;
     desc.client_data = fm;
 
-    fprintf(stderr, "DND start_drag: %d paths, calling ISWXdndStartDrag\n", ndrag_paths);
-    ISWXdndStartDrag(fm->iconview, &saved_press, &desc);
-    fprintf(stderr, "DND start_drag: returned\n");
+    ISWXdndStartDrag(fm->iconview, &fm->dnd_saved_press, &desc);
 }
 
 /* ---------- Xt action procedures for drag initiation ---------- */
@@ -170,32 +151,34 @@ static void start_drag(Fm *fm)
 static void act_dnd_press(Widget w, xcb_generic_event_t *ev,
                           String *params, Cardinal *num_params)
 {
-    (void)w; (void)params; (void)num_params;
+    (void)params; (void)num_params;
+    Fm *fm = fm_from_widget(w);
+    if (!fm) return;
 
     uint8_t type = ev->response_type & ~0x80;
     if (type != XCB_BUTTON_PRESS) {
-        press_valid = False;
+        fm->dnd_press_valid = False;
         return;
     }
 
     xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
     if (bp->detail != 1) {
-        press_valid = False;
+        fm->dnd_press_valid = False;
         return;
     }
 
-    memcpy(&saved_press, bp, sizeof(saved_press));
-    press_valid = True;
-    fprintf(stderr, "DND press: btn=%d x=%d y=%d time=%u\n",
-            bp->detail, bp->event_x, bp->event_y, bp->time);
+    memcpy(&fm->dnd_saved_press, bp, sizeof(fm->dnd_saved_press));
+    fm->dnd_press_valid = True;
 }
 
 static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
                           String *params, Cardinal *num_params)
 {
-    (void)w; (void)params; (void)num_params;
+    (void)params; (void)num_params;
+    Fm *fm = fm_from_widget(w);
+    if (!fm) return;
 
-    if (!press_valid)
+    if (!fm->dnd_press_valid)
         return;
 
     uint8_t type = ev->response_type & ~0x80;
@@ -203,25 +186,23 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
         return;
 
     xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)ev;
-    int dx = motion->event_x - saved_press.event_x;
-    int dy = motion->event_y - saved_press.event_y;
+    int dx = motion->event_x - fm->dnd_saved_press.event_x;
+    int dy = motion->event_y - fm->dnd_saved_press.event_y;
     if (dx * dx + dy * dy < DND_THRESHOLD * DND_THRESHOLD)
         return;
 
     /* Only start drag if something is selected (not rubber band) */
-    int sel = IswIconViewGetSelected(drag_fm->iconview);
-    fprintf(stderr, "DND check: dist_sq=%d sel=%d\n", dx*dx + dy*dy, sel);
+    int sel = IswIconViewGetSelected(fm->iconview);
     if (sel < 0)
         return;
 
     /* Use the motion event's timestamp for the grab — Xephyr rejects
      * the original press timestamp because it matches the passive
      * grab's activation time (not strictly "later than"). */
-    saved_press.time = motion->time;
+    fm->dnd_saved_press.time = motion->time;
 
-    press_valid = False;
-    fprintf(stderr, "DND check: starting drag, time=%u\n", saved_press.time);
-    start_drag(drag_fm);
+    fm->dnd_press_valid = False;
+    start_drag(fm);
 }
 
 static XtActionsRec dnd_actions[] = {
@@ -237,16 +218,12 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
     Fm *fm = (Fm *)cd;
     IswDropCallbackData *d = (IswDropCallbackData *)call;
 
-    fprintf(stderr, "DND drop_cb: num_uris=%d action=%d x=%d y=%d\n",
-            d->num_uris, d->action, d->x, d->y);
     if (d->num_uris <= 0 || !d->uris)
         return;
-    for (int i = 0; i < d->num_uris; i++)
-        fprintf(stderr, "  uri[%d]: %s\n", i, d->uris[i]);
 
     const char *target_dir = fm->cwd;
 
-    drop_was_noop = True;
+    fm->dnd_drop_was_noop = True;
 
     for (int i = 0; i < d->num_uris; i++) {
         const char *uri = d->uris[i];
@@ -275,7 +252,7 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
 
         fileops_copy(path, dest);
         free(dest);
-        drop_was_noop = False;
+        fm->dnd_drop_was_noop = False;
     }
 
     fm_refresh(fm);
@@ -285,9 +262,10 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
 
 void dnd_init(Fm *fm)
 {
-    drag_fm = fm;
-    press_valid = False;
-    drop_was_noop = False;
+    fm->dnd_press_valid = False;
+    fm->dnd_drop_was_noop = False;
+    fm->dnd_drag_paths = NULL;
+    fm->dnd_ndrag_paths = 0;
 
     /* Register the shell as drop target.  The Viewport's clip window
      * is not a Composite, so FindDropChild can't traverse past it
@@ -302,7 +280,7 @@ void dnd_init(Fm *fm)
 
     /* Register drag actions and override IconView translations to
      * chain our press/motion handlers before SelectItem/BandDrag. */
-    XtAppAddActions(fm->app, dnd_actions, XtNumber(dnd_actions));
+    XtAppAddActions(fm->app_state->app, dnd_actions, XtNumber(dnd_actions));
     XtOverrideTranslations(fm->iconview, XtParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectItem()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"));
@@ -310,6 +288,5 @@ void dnd_init(Fm *fm)
 
 void dnd_cleanup(Fm *fm)
 {
-    (void)fm;
-    free_drag_paths();
+    free_drag_paths(fm);
 }

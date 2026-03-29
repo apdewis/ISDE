@@ -9,70 +9,74 @@
 #include <string.h>
 #include <unistd.h>
 
+/* App-wide shared state (will move to separate allocation in phase 2) */
+static FmApp g_app;
+
+/* Context key for storing Fm* on shell windows */
+XContext fm_window_context = 0;
+
 /* ---------- forward declarations ---------- */
 
 static void fm_delete_selected(Fm *fm);
+static void fm_delete_selected_permanent(Fm *fm);
 
 /* ---------- rename dialog ---------- */
-
-static Widget rename_shell = NULL;
-static Fm    *rename_fm = NULL;
-static int    rename_index = -1;
 
 static void rename_ok_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Widget dialog = (Widget)cd;
+    Fm *fm = fm_from_widget(dialog);
+    if (!fm) return;
     char *newname = IswDialogGetValueString(dialog);
-    if (newname && newname[0] && rename_fm && rename_index >= 0 &&
-        rename_index < rename_fm->nentries) {
-        fileops_rename(rename_fm, rename_fm->entries[rename_index].full_path,
+    if (newname && newname[0] && fm->rename_index >= 0 &&
+        fm->rename_index < fm->nentries) {
+        fileops_rename(fm, fm->entries[fm->rename_index].full_path,
                        newname);
-        fm_refresh(rename_fm);
+        fm_refresh(fm);
     }
-    if (rename_shell) {
-        XtPopdown(rename_shell);
-        XtDestroyWidget(rename_shell);
-        rename_shell = NULL;
+    if (fm->rename_shell) {
+        XtPopdown(fm->rename_shell);
+        XtDestroyWidget(fm->rename_shell);
+        fm->rename_shell = NULL;
     }
 }
 
 static void rename_cancel_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    if (rename_shell) {
-        XtPopdown(rename_shell);
-        XtDestroyWidget(rename_shell);
-        rename_shell = NULL;
+    Fm *fm = fm_from_widget(w);
+    if (fm && fm->rename_shell) {
+        XtPopdown(fm->rename_shell);
+        XtDestroyWidget(fm->rename_shell);
+        fm->rename_shell = NULL;
     }
 }
 
 static void act_dismiss_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (rename_shell) {
-        XtPopdown(rename_shell);
-        XtDestroyWidget(rename_shell);
-        rename_shell = NULL;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm && fm->rename_shell) {
+        XtPopdown(fm->rename_shell);
+        XtDestroyWidget(fm->rename_shell);
+        fm->rename_shell = NULL;
     }
 }
 
 void show_rename_dialog(Fm *fm)
 {
-    /* Get selected index */
     int sel = -1;
     if (fm->iconview)
         sel = IswIconViewGetSelected(fm->iconview);
     if (sel < 0 || sel >= fm->nentries)
         return;
 
-    rename_fm = fm;
-    rename_index = sel;
+    fm->rename_index = sel;
 
-    /* Destroy previous dialog if open */
-    if (rename_shell) {
-        XtDestroyWidget(rename_shell);
-        rename_shell = NULL;
+    if (fm->rename_shell) {
+        XtDestroyWidget(fm->rename_shell);
+        fm->rename_shell = NULL;
     }
 
     Arg args[20];
@@ -80,50 +84,47 @@ void show_rename_dialog(Fm *fm)
     XtSetArg(args[n], XtNwidth, 300);              n++;
     XtSetArg(args[n], XtNheight, 120);             n++;
     XtSetArg(args[n], XtNborderWidth, 1);          n++;
-    rename_shell = XtCreatePopupShell("renameShell",
+    fm->rename_shell = XtCreatePopupShell("renameShell",
                                       transientShellWidgetClass,
                                       fm->toplevel, args, n);
-    XtOverrideTranslations(rename_shell, XtParseTranslationTable(
+    XtOverrideTranslations(fm->rename_shell, XtParseTranslationTable(
         "<Message>WM_PROTOCOLS: fm-dismiss-rename()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Rename:");         n++;
     XtSetArg(args[n], XtNvalue, fm->entries[sel].name); n++;
     Widget dialog = XtCreateManagedWidget("renameDialog", dialogWidgetClass,
-                                          rename_shell, args, n);
+                                          fm->rename_shell, args, n);
 
     IswDialogAddButton(dialog, "OK", rename_ok_cb, (XtPointer)dialog);
     IswDialogAddButton(dialog, "Cancel", rename_cancel_cb, NULL);
 
-    XtPopup(rename_shell, XtGrabNone);
+    XtPopup(fm->rename_shell, XtGrabNone);
 }
 
 /* ---------- delete with confirmation ---------- */
 
-static Widget delete_shell = NULL;
-static Fm   *delete_fm = NULL;
-
-static void dismiss_delete_dialog(void)
+static void dismiss_delete_dialog(Fm *fm)
 {
-    if (delete_shell) {
-        XtPopdown(delete_shell);
-        XtDestroyWidget(delete_shell);
-        delete_shell = NULL;
+    if (fm->delete_shell) {
+        XtPopdown(fm->delete_shell);
+        XtDestroyWidget(fm->delete_shell);
+        fm->delete_shell = NULL;
     }
 }
 
-/* WM_DELETE_WINDOW action for dialog shells — dismiss instead of exit */
 static void act_dismiss_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    dismiss_delete_dialog();
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) dismiss_delete_dialog(fm);
 }
 
 static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)cd; (void)call;
-    Fm *fm = delete_fm;
-    if (!fm || !fm->iconview) { dismiss_delete_dialog(); return; }
+    (void)cd; (void)call;
+    Fm *fm = fm_from_widget(w);
+    if (!fm || !fm->iconview) { if (fm) dismiss_delete_dialog(fm); return; }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -134,14 +135,14 @@ static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
     }
     free(indices);
     if (nsel > 0) fm_refresh(fm);
-    dismiss_delete_dialog();
+    dismiss_delete_dialog(fm);
 }
 
 static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)cd; (void)call;
-    Fm *fm = delete_fm;
-    if (!fm || !fm->iconview) { dismiss_delete_dialog(); return; }
+    (void)cd; (void)call;
+    Fm *fm = fm_from_widget(w);
+    if (!fm || !fm->iconview) { if (fm) dismiss_delete_dialog(fm); return; }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -152,16 +153,16 @@ static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
     }
     free(indices);
     if (nsel > 0) fm_refresh(fm);
-    dismiss_delete_dialog();
+    dismiss_delete_dialog(fm);
 }
 
 static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)cd; (void)call;
-    dismiss_delete_dialog();
+    (void)cd; (void)call;
+    Fm *fm = fm_from_widget(w);
+    if (fm) dismiss_delete_dialog(fm);
 }
 
-/* permanent = 0: trash mode (Delete key), permanent = 1: permanent mode (Shift+Delete) */
 static void fm_delete_confirm(Fm *fm, int permanent)
 {
     if (!fm->iconview) return;
@@ -177,10 +178,8 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
     free(trash_path);
 
-    /* In trash or shift+delete: permanent mode */
     if (in_trash) permanent = 1;
 
-    /* Build confirmation message */
     char msg[256];
     if (nsel == 1) {
         int idx = indices[0];
@@ -198,28 +197,26 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     }
     free(indices);
 
-    delete_fm = fm;
-
-    if (delete_shell) {
-        XtDestroyWidget(delete_shell);
-        delete_shell = NULL;
+    if (fm->delete_shell) {
+        XtDestroyWidget(fm->delete_shell);
+        fm->delete_shell = NULL;
     }
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(300));  n++;
-    XtSetArg(args[n], XtNheight, isde_scale(120)); n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(300));   n++;
+    XtSetArg(args[n], XtNheight, isde_scale(120));  n++;
     XtSetArg(args[n], XtNborderWidth, 1);           n++;
-    delete_shell = XtCreatePopupShell("deleteShell",
+    fm->delete_shell = XtCreatePopupShell("deleteShell",
                                        transientShellWidgetClass,
                                        fm->toplevel, args, n);
-    XtOverrideTranslations(delete_shell, XtParseTranslationTable(
+    XtOverrideTranslations(fm->delete_shell, XtParseTranslationTable(
         "<Message>WM_PROTOCOLS: fm-dismiss-delete()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, msg); n++;
     Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
-                                           delete_shell, args, n);
+                                           fm->delete_shell, args, n);
 
     if (permanent)
         IswDialogAddButton(dialog, "Delete", delete_do_permanent, NULL);
@@ -227,7 +224,7 @@ static void fm_delete_confirm(Fm *fm, int permanent)
         IswDialogAddButton(dialog, "Move", delete_do_trash, NULL);
     IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
 
-    XtPopup(delete_shell, XtGrabNone);
+    XtPopup(fm->delete_shell, XtGrabNone);
 }
 
 static void fm_delete_selected(Fm *fm)
@@ -242,8 +239,6 @@ static void fm_delete_selected_permanent(Fm *fm)
 
 /* ---------- empty trash ---------- */
 
-static Widget empty_trash_shell = NULL;
-
 static void empty_trash_ok(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
@@ -253,60 +248,62 @@ static void empty_trash_ok(Widget w, XtPointer cd, XtPointer call)
     if (strncmp(fm->cwd, trash_p, strlen(trash_p)) == 0)
         fm_refresh(fm);
     free(trash_p);
-    if (empty_trash_shell) {
-        XtPopdown(empty_trash_shell);
-        XtDestroyWidget(empty_trash_shell);
-        empty_trash_shell = NULL;
+    if (fm->empty_trash_shell) {
+        XtPopdown(fm->empty_trash_shell);
+        XtDestroyWidget(fm->empty_trash_shell);
+        fm->empty_trash_shell = NULL;
     }
 }
 
 static void empty_trash_cancel(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    if (empty_trash_shell) {
-        XtPopdown(empty_trash_shell);
-        XtDestroyWidget(empty_trash_shell);
-        empty_trash_shell = NULL;
+    Fm *fm = fm_from_widget(w);
+    if (fm && fm->empty_trash_shell) {
+        XtPopdown(fm->empty_trash_shell);
+        XtDestroyWidget(fm->empty_trash_shell);
+        fm->empty_trash_shell = NULL;
     }
 }
 
 static void act_dismiss_empty_trash(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (empty_trash_shell) {
-        XtPopdown(empty_trash_shell);
-        XtDestroyWidget(empty_trash_shell);
-        empty_trash_shell = NULL;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm && fm->empty_trash_shell) {
+        XtPopdown(fm->empty_trash_shell);
+        XtDestroyWidget(fm->empty_trash_shell);
+        fm->empty_trash_shell = NULL;
     }
 }
 
 static void ctx_empty_trash(Fm *fm)
 {
-    if (empty_trash_shell) {
-        XtDestroyWidget(empty_trash_shell);
-        empty_trash_shell = NULL;
+    if (fm->empty_trash_shell) {
+        XtDestroyWidget(fm->empty_trash_shell);
+        fm->empty_trash_shell = NULL;
     }
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(300));  n++;
-    XtSetArg(args[n], XtNheight, isde_scale(120)); n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(300));   n++;
+    XtSetArg(args[n], XtNheight, isde_scale(120));  n++;
     XtSetArg(args[n], XtNborderWidth, 1);           n++;
-    empty_trash_shell = XtCreatePopupShell("emptyTrashShell",
+    fm->empty_trash_shell = XtCreatePopupShell("emptyTrashShell",
                                             transientShellWidgetClass,
                                             fm->toplevel, args, n);
-    XtOverrideTranslations(empty_trash_shell, XtParseTranslationTable(
+    XtOverrideTranslations(fm->empty_trash_shell, XtParseTranslationTable(
         "<Message>WM_PROTOCOLS: fm-dismiss-empty-trash()\n"));
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Permanently delete all items in Trash?"); n++;
     Widget dialog = XtCreateManagedWidget("emptyTrashDialog", dialogWidgetClass,
-                                           empty_trash_shell, args, n);
+                                           fm->empty_trash_shell, args, n);
 
     IswDialogAddButton(dialog, "Empty Trash", empty_trash_ok, fm);
     IswDialogAddButton(dialog, "Cancel", empty_trash_cancel, NULL);
 
-    XtPopup(empty_trash_shell, XtGrabNone);
+    XtPopup(fm->empty_trash_shell, XtGrabNone);
 }
 
 static void ctx_open_terminal(Fm *fm)
@@ -321,11 +318,6 @@ static void ctx_open_terminal(Fm *fm)
 
 /* ---------- right-click context menu (List-based) ---------- */
 
-static Widget  ctx_shell = NULL;
-static Widget  ctx_list  = NULL;
-static Fm     *ctx_fm    = NULL;
-
-/* Menu items — parallel arrays: labels for display, callbacks for action */
 typedef void (*CtxAction)(Fm *);
 
 static void ctx_cut(Fm *fm)    { clipboard_cut(fm); }
@@ -372,68 +364,29 @@ static CtxAction ctx_trash_actions[] = {
 };
 #define CTX_TRASH_NITEMS 4
 
-static int ctx_in_trash = 0;
-
-/* Dynamic menu state — freed on dismiss */
-static String    *dyn_labels;
-static CtxAction *dyn_actions;
-static int        dyn_nitems;
-
-/* "Open with" app entries — desktop entry indices into fm->desktop_entries */
-#define MAX_OPEN_WITH 16
-static int   ow_indices[MAX_OPEN_WITH];  /* desktop_entries[] index */
-static int   ow_count;
-static char *ow_label_buf[MAX_OPEN_WITH]; /* "Open with AppName" strings */
-static char *ow_file_path;               /* path of file to open */
-
-static void ctx_open_with(Fm *fm)
+static void ctx_free_dynamic(Fm *fm)
 {
-    /* Determine which "Open with" entry was selected — the callback index
-     * is embedded in dyn_actions; we find it via a range of stub functions.
-     * Instead, we use a single action and store the app index separately. */
+    free(fm->dyn_labels);
+    fm->dyn_labels = NULL;
+    free(fm->dyn_actions);
+    fm->dyn_actions = NULL;
+    fm->dyn_nitems = 0;
+    for (int i = 0; i < fm->ow_count; i++)
+        free(fm->ow_label_buf[i]);
+    fm->ow_count = 0;
+    free(fm->ow_file_path);
+    fm->ow_file_path = NULL;
 }
 
-static void ctx_free_dynamic(void)
+void fm_dismiss_context(Fm *fm)
 {
-    free(dyn_labels);
-    dyn_labels = NULL;
-    free(dyn_actions);
-    dyn_actions = NULL;
-    dyn_nitems = 0;
-    for (int i = 0; i < ow_count; i++)
-        free(ow_label_buf[i]);
-    ow_count = 0;
-    free(ow_file_path);
-    ow_file_path = NULL;
-}
-
-void fm_dismiss_context(void)
-{
-    if (ctx_shell) {
-        XtPopdown(ctx_shell);
-        XtDestroyWidget(ctx_shell);
-        ctx_shell = NULL;
-        ctx_list = NULL;
+    if (fm->ctx_shell) {
+        XtPopdown(fm->ctx_shell);
+        XtDestroyWidget(fm->ctx_shell);
+        fm->ctx_shell = NULL;
+        fm->ctx_list = NULL;
     }
-    ctx_free_dynamic();
-}
-
-static void ctx_launch_open_with(Fm *fm, int ow_idx)
-{
-    if (ow_idx < 0 || ow_idx >= ow_count) return;
-    IsdeDesktopEntry *de = fm->desktop_entries[ow_indices[ow_idx]];
-    const char *file = ow_file_path;
-    if (!file) return;
-
-    char *cmd = isde_desktop_build_exec(de, &file, 1);
-    if (!cmd) return;
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-        _exit(127);
-    }
-    free(cmd);
+    ctx_free_dynamic(fm);
 }
 
 static void ctx_select_cb(Widget w, XtPointer client_data,
@@ -444,31 +397,31 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
     int idx = ret->list_index;
 
-    /* Save what we need before dismiss destroys the dynamic state */
-    Fm *fm = ctx_fm;
-    int in_trash = ctx_in_trash;
+    /* Recover Fm from context menu's shell */
+    Fm *fm = fm_from_widget(w);
+    if (!fm) return;
+    int in_trash = fm->ctx_in_trash;
 
-    if (!fm || idx < 0)  {
-        fm_dismiss_context();
+    if (idx < 0) {
+        fm_dismiss_context(fm);
         return;
     }
 
     if (in_trash) {
-        fm_dismiss_context();
+        fm_dismiss_context(fm);
         if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx])
             ctx_trash_actions[idx](fm);
         return;
     }
 
     /* Check if this is an "Open with" entry */
-    if (idx < ow_count) {
-        /* Save values before dismiss frees them */
-        int ow_idx = idx;
-        int de_idx = ow_indices[ow_idx];
-        IsdeDesktopEntry *de = fm->desktop_entries[de_idx];
-        char *file = ow_file_path ? strdup(ow_file_path) : NULL;
+    if (idx < fm->ow_count) {
+        int de_idx = fm->ow_indices[idx];
+        FmApp *app = fm->app_state;
+        IsdeDesktopEntry *de = app->desktop_entries[de_idx];
+        char *file = fm->ow_file_path ? strdup(fm->ow_file_path) : NULL;
 
-        fm_dismiss_context();
+        fm_dismiss_context(fm);
 
         if (file && de) {
             char *cmd = isde_desktop_build_exec(de, (const char **)&file, 1);
@@ -486,8 +439,8 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
     }
 
     /* Adjust index past "Open with" entries + separator */
-    int base_idx = idx - (ow_count > 0 ? ow_count + 1 : 0);
-    fm_dismiss_context();
+    int base_idx = idx - (fm->ow_count > 0 ? fm->ow_count + 1 : 0);
+    fm_dismiss_context(fm);
 
     if (base_idx >= 0 && base_idx < BASE_NITEMS) {
         CtxAction action = base_actions[base_idx];
@@ -496,10 +449,10 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
     }
 }
 
-/* Build "Open with" entries for the selected file */
 static void ctx_build_open_with(Fm *fm)
 {
-    ow_count = 0;
+    fm->ow_count = 0;
+    FmApp *app = fm->app_state;
 
     if (!fm->iconview) return;
     int sel = IswIconViewGetSelected(fm->iconview);
@@ -511,55 +464,52 @@ static void ctx_build_open_with(Fm *fm)
     const char *mime = isde_mime_type_for_file(e->name);
     if (!mime || strcmp(mime, "application/octet-stream") == 0) return;
 
-    free(ow_file_path);
-    ow_file_path = strdup(e->full_path);
+    free(fm->ow_file_path);
+    fm->ow_file_path = strdup(e->full_path);
 
-    for (int i = 0; i < fm->ndesktop && ow_count < MAX_OPEN_WITH; i++) {
-        IsdeDesktopEntry *de = fm->desktop_entries[i];
+    for (int i = 0; i < app->ndesktop && fm->ow_count < MAX_OPEN_WITH; i++) {
+        IsdeDesktopEntry *de = app->desktop_entries[i];
         if (!de) continue;
         if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) continue;
         if (!isde_desktop_handles_mime(de, mime)) continue;
         const char *name = isde_desktop_name(de);
         if (!name) continue;
 
-        ow_indices[ow_count] = i;
+        fm->ow_indices[fm->ow_count] = i;
         char buf[256];
         snprintf(buf, sizeof(buf), "Open with %s", name);
-        ow_label_buf[ow_count] = strdup(buf);
-        ow_count++;
+        fm->ow_label_buf[fm->ow_count] = strdup(buf);
+        fm->ow_count++;
     }
 }
 
-/* Build the dynamic labels/actions arrays */
 static void ctx_build_menu(Fm *fm)
 {
-    int total = (ow_count > 0 ? ow_count + 1 : 0) + BASE_NITEMS;
+    int total = (fm->ow_count > 0 ? fm->ow_count + 1 : 0) + BASE_NITEMS;
 
-    dyn_labels = malloc((total + 1) * sizeof(String));
-    dyn_actions = malloc(total * sizeof(CtxAction));
-    dyn_nitems = total;
+    fm->dyn_labels = malloc((total + 1) * sizeof(String));
+    fm->dyn_actions = malloc(total * sizeof(CtxAction));
+    fm->dyn_nitems = total;
 
     int pos = 0;
 
-    /* "Open with" entries */
-    for (int i = 0; i < ow_count; i++) {
-        dyn_labels[pos] = ow_label_buf[i];
-        dyn_actions[pos] = NULL; /* handled specially in ctx_select_cb */
+    for (int i = 0; i < fm->ow_count; i++) {
+        fm->dyn_labels[pos] = fm->ow_label_buf[i];
+        fm->dyn_actions[pos] = NULL;
         pos++;
     }
-    if (ow_count > 0) {
-        dyn_labels[pos] = "---";
-        dyn_actions[pos] = NULL;
+    if (fm->ow_count > 0) {
+        fm->dyn_labels[pos] = "---";
+        fm->dyn_actions[pos] = NULL;
         pos++;
     }
 
-    /* Base items */
     for (int i = 0; i < BASE_NITEMS; i++) {
-        dyn_labels[pos] = base_labels[i];
-        dyn_actions[pos] = base_actions[i];
+        fm->dyn_labels[pos] = base_labels[i];
+        fm->dyn_actions[pos] = base_actions[i];
         pos++;
     }
-    dyn_labels[pos] = NULL;
+    fm->dyn_labels[pos] = NULL;
 }
 
 static void ctx_handler(Widget w, XtPointer client_data,
@@ -573,53 +523,61 @@ static void ctx_handler(Widget w, XtPointer client_data,
         return;
 
     Fm *fm = (Fm *)client_data;
-    ctx_fm = fm;
 
-    /* Dismiss any existing context menu */
-    fm_dismiss_context();
+    fm_dismiss_context(fm);
 
-    /* Build "Open with" entries and dynamic menu */
-    ctx_build_open_with(fm);
-    ctx_build_menu(fm);
+    /* Check if we're in trash */
+    char *trash_path = fileops_trash_path();
+    fm->ctx_in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
+    free(trash_path);
 
-    /* Compute position at click */
+    if (fm->ctx_in_trash) {
+        /* Trash context menu */
+        fm->dyn_labels = NULL;
+        fm->dyn_actions = NULL;
+        fm->dyn_nitems = CTX_TRASH_NITEMS;
+    } else {
+        ctx_build_open_with(fm);
+        ctx_build_menu(fm);
+    }
+
     Position rx, ry;
     XtTranslateCoords(w, ev->event_x, ev->event_y, &rx, &ry);
 
-    /* Create popup shell */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, rx);                   n++;
-    XtSetArg(args[n], XtNy, ry);                   n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);   n++;
-    XtSetArg(args[n], XtNborderWidth, 1);           n++;
-    ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
+    XtSetArg(args[n], XtNx, rx);                    n++;
+    XtSetArg(args[n], XtNy, ry);                    n++;
+    XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
+    XtSetArg(args[n], XtNborderWidth, 1);            n++;
+    fm->ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, args, n);
 
-    /* List of menu items */
-    n = 0;
-    XtSetArg(args[n], XtNlist, dyn_labels);          n++;
-    XtSetArg(args[n], XtNnumberStrings, dyn_nitems); n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);          n++;
-    XtSetArg(args[n], XtNforceColumns, True);         n++;
-    XtSetArg(args[n], XtNverticalList, True);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNcursor, None);               n++;
-    ctx_list = XtCreateManagedWidget("ctxList", listWidgetClass,
-                                     ctx_shell, args, n);
-    XtAddCallback(ctx_list, XtNcallback, ctx_select_cb, NULL);
+    String *labels = fm->ctx_in_trash ? ctx_trash_labels : fm->dyn_labels;
+    int nitems = fm->ctx_in_trash ? CTX_TRASH_NITEMS : fm->dyn_nitems;
 
-    /* Hover-to-highlight, click-to-select */
+    n = 0;
+    XtSetArg(args[n], XtNlist, labels);              n++;
+    XtSetArg(args[n], XtNnumberStrings, nitems);     n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);         n++;
+    XtSetArg(args[n], XtNforceColumns, True);        n++;
+    XtSetArg(args[n], XtNverticalList, True);        n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNcursor, None);              n++;
+    fm->ctx_list = XtCreateManagedWidget("ctxList", listWidgetClass,
+                                     fm->ctx_shell, args, n);
+    XtAddCallback(fm->ctx_list, XtNcallback, ctx_select_cb, NULL);
+
     static char ctxTranslations[] =
         "<EnterWindow>: Set()\n"
         "<LeaveWindow>: Unset()\n"
         "<Motion>:      Set()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
-    XtOverrideTranslations(ctx_list,
+    XtOverrideTranslations(fm->ctx_list,
                            XtParseTranslationTable(ctxTranslations));
 
-    XtPopup(ctx_shell, XtGrabNone);
+    XtPopup(fm->ctx_shell, XtGrabNone);
 }
 
 void fm_register_context_menu(Fm *fm, Widget w)
@@ -631,11 +589,10 @@ void fm_register_context_menu(Fm *fm, Widget w)
 
 void fm_navigate(Fm *fm, const char *path)
 {
-    fm_dismiss_context();
+    fm_dismiss_context(fm);
 
     char *new_path = strdup(path);
 
-    /* Clear view before freeing old entries */
     if (fm->iconview)
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
 
@@ -647,7 +604,6 @@ void fm_navigate(Fm *fm, const char *path)
     free(fm->cwd);
     fm->cwd = new_path;
 
-    /* Push to history, discarding forward entries */
     fm->hist_pos++;
     if (fm->hist_pos < FM_HISTORY_MAX) {
         for (int i = fm->hist_pos; i < fm->hist_count; i++)
@@ -662,10 +618,8 @@ void fm_navigate(Fm *fm, const char *path)
 
 void fm_refresh(Fm *fm)
 {
-    fm_dismiss_context();
+    fm_dismiss_context(fm);
 
-    /* Clear the view before freeing entries — the IconView holds
-     * pointers to the old label/icon strings */
     if (fm->iconview)
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
 
@@ -676,48 +630,52 @@ void fm_refresh(Fm *fm)
 
 /* ---------- keyboard shortcuts ---------- */
 
-static Fm *shortcut_fm = NULL;  /* single instance for Xt actions */
-
 static void act_copy(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) clipboard_copy(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) clipboard_copy(fm);
 }
 
 static void act_cut(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) clipboard_cut(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) clipboard_cut(fm);
 }
 
 static void act_paste(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) clipboard_paste(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) clipboard_paste(fm);
 }
 
 static void act_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) fm_delete_selected(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) fm_delete_selected(fm);
 }
 
 static void act_delete_permanent(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) fm_delete_selected_permanent(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) fm_delete_selected_permanent(fm);
 }
 
 static void act_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) show_rename_dialog(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) show_rename_dialog(fm);
 }
 
 static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    Fm *fm = shortcut_fm;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
     if (!fm) return;
     char *parent = strdup(fm->cwd);
     char *slash = strrchr(parent, '/');
@@ -733,8 +691,8 @@ static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 
 static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    Fm *fm = shortcut_fm;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
     if (!fm || fm->hist_pos <= 0) return;
     fm->hist_pos--;
     free(fm->cwd);
@@ -744,8 +702,8 @@ static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *
 
 static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    Fm *fm = shortcut_fm;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
     if (!fm || fm->hist_pos >= fm->hist_count - 1) return;
     fm->hist_pos++;
     free(fm->cwd);
@@ -755,14 +713,15 @@ static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n
 
 static void act_refresh(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    if (shortcut_fm) fm_refresh(shortcut_fm);
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) fm_refresh(fm);
 }
 
 static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    Fm *fm = shortcut_fm;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
     if (!fm || !fm->iconview) return;
     int sel = IswIconViewGetSelected(fm->iconview);
     if (sel >= 0 && sel < fm->nentries)
@@ -771,8 +730,8 @@ static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 
 static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
-    (void)w; (void)ev; (void)p; (void)n;
-    Fm *fm = shortcut_fm;
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
     if (!fm) return;
     fm->show_hidden = !fm->show_hidden;
     fm_refresh(fm);
@@ -841,13 +800,14 @@ static void on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Fm *fm = (Fm *)user_data;
+    FmApp *app = fm->app_state;
     if (strcmp(section, "general") == 0 ||
         strcmp(section, "input") == 0 ||
         strcmp(section, "appearance") == 0 ||
         strcmp(section, "*") == 0) {
         if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
             isde_theme_reload();
-            icons_init(); /* re-scan with new theme */
+            icons_init(app);
         }
         fm_reload_config(fm);
     }
@@ -867,8 +827,8 @@ static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
-    fm->running = 0;
-    XtAppSetExitFlag(fm->app);
+    fm->app_state->running = 0;
+    XtAppSetExitFlag(fm->app_state->app);
 }
 
 /* ---------- init ---------- */
@@ -876,9 +836,13 @@ static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
 int fm_init(Fm *fm, int *argc, char **argv)
 {
     memset(fm, 0, sizeof(*fm));
+    memset(&g_app, 0, sizeof(g_app));
+    fm->app_state = &g_app;
+    fm->rename_index = -1;
+    fm->last_click_index = -1;
 
     /* Load config */
-    fm->double_click = 1; /* default */
+    fm->double_click = 1;
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("fm.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -893,9 +857,10 @@ int fm_init(Fm *fm, int *argc, char **argv)
     }
 
     char **fallbacks = isde_theme_build_resources();
-    fm->toplevel = XtAppInitialize(&fm->app, "ISDE-FM",
+    fm->toplevel = XtAppInitialize(&g_app.app, "ISDE-FM",
                                    NULL, 0, argc, argv,
                                    fallbacks, NULL, 0);
+    g_app.first_toplevel = fm->toplevel;
 
     Arg args[20];
     Cardinal n = 0;
@@ -905,22 +870,21 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);
 
-    /* MainWindow — no menu bar, content only */
+    /* MainWindow */
     fm->main_window = XtCreateManagedWidget("mainWin", mainWindowWidgetClass,
                                             fm->toplevel, NULL, 0);
     XtUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
 
-    /* Outer FlexBox: vertical — navbar on top, body fills remainder */
+    /* Outer FlexBox: vertical */
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     fm->vbox = XtCreateManagedWidget("vbox", flexBoxWidgetClass,
                                       fm->main_window, args, n);
 
-    /* Navigation bar — no grow, gets its preferred height */
     navbar_init(fm);
 
-    /* Content area: horizontal FlexBox (sidebar | fileview) */
+    /* Content area: horizontal FlexBox */
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                   n++;
@@ -928,32 +892,31 @@ int fm_init(Fm *fm, int *argc, char **argv)
     fm->hbox = XtCreateManagedWidget("hbox", flexBoxWidgetClass,
                                       fm->vbox, args, n);
 
-    /* Places sidebar — fixed width, no grow */
-    icons_init();
-    places_init(fm);
+    /* Initialize context key for fm_from_widget lookups */
+    if (fm_window_context == 0)
+        fm_window_context = IswUniqueContext();
 
-    /* File view — grows to fill remaining width */
+    icons_init(&g_app);
+    places_init(fm);
     fileview_init(fm);
 
-    /* Keyboard shortcuts — register actions globally */
-    shortcut_fm = fm;
-    XtAppAddActions(fm->app, fm_actions, XtNumber(fm_actions));
+    /* Keyboard shortcuts — register actions globally (once) */
+    XtAppAddActions(g_app.app, fm_actions, XtNumber(fm_actions));
 
-    /* Clipboard init (atoms only — no XDND dependency) */
+    /* Clipboard init */
     clipboard_init(fm);
 
     /* D-Bus settings notifications */
-    fm->dbus = isde_dbus_init();
-    if (fm->dbus) {
-        isde_dbus_settings_subscribe(fm->dbus, on_settings_changed, fm);
-        int dbus_fd = isde_dbus_get_fd(fm->dbus);
+    g_app.dbus = isde_dbus_init();
+    if (g_app.dbus) {
+        isde_dbus_settings_subscribe(g_app.dbus, on_settings_changed, fm);
+        int dbus_fd = isde_dbus_get_fd(g_app.dbus);
         if (dbus_fd >= 0)
-            XtAppAddInput(fm->app, dbus_fd,
+            XtAppAddInput(g_app.app, dbus_fd,
                           (XtPointer)XtInputReadMask,
-                          dbus_input_cb, fm->dbus);
+                          dbus_input_cb, g_app.dbus);
     }
 
-    /* Start in home directory */
     /* Cache desktop entries for "Open with" */
     {
         static const char *app_dirs[] = {
@@ -961,15 +924,14 @@ int fm_init(Fm *fm, int *argc, char **argv)
             "/usr/local/share/applications",
             NULL
         };
-        /* Also check $HOME/.local/share/applications */
         const char *home_env = getenv("HOME");
         char local_apps[512] = "";
         if (home_env)
             snprintf(local_apps, sizeof(local_apps),
                      "%s/.local/share/applications", home_env);
 
-        fm->desktop_entries = NULL;
-        fm->ndesktop = 0;
+        g_app.desktop_entries = NULL;
+        g_app.ndesktop = 0;
         int cap = 0;
         for (int d = -1; app_dirs[d + 1] || d < 0; d++) {
             const char *dir = (d < 0) ? local_apps : app_dirs[d];
@@ -977,13 +939,13 @@ int fm_init(Fm *fm, int *argc, char **argv)
             int count = 0;
             IsdeDesktopEntry **batch = isde_desktop_scan_dir(dir, &count);
             if (!batch) continue;
-            if (fm->ndesktop + count > cap) {
-                cap = fm->ndesktop + count + 64;
-                fm->desktop_entries = realloc(fm->desktop_entries,
+            if (g_app.ndesktop + count > cap) {
+                cap = g_app.ndesktop + count + 64;
+                g_app.desktop_entries = realloc(g_app.desktop_entries,
                                               cap * sizeof(IsdeDesktopEntry *));
             }
             for (int i = 0; i < count; i++)
-                fm->desktop_entries[fm->ndesktop++] = batch[i];
+                g_app.desktop_entries[g_app.ndesktop++] = batch[i];
             free(batch);
         }
     }
@@ -998,37 +960,42 @@ int fm_init(Fm *fm, int *argc, char **argv)
 
     XtRealizeWidget(fm->toplevel);
 
-    /* XDND init must be after realize — Shell.c calls ISWXdndEnable
-     * during realize, so the XDND state exists only after this point. */
+    /* Store Fm* on the toplevel for fm_from_widget lookups */
+    fm_set_context(fm->toplevel, fm);
+
+    /* XDND init must be after realize */
     dnd_init(fm);
 
     fileview_populate(fm);
     navbar_update(fm);
 
-    fm->running = 1;
+    g_app.running = 1;
     return 0;
 }
 
 void fm_run(Fm *fm)
 {
-    while (fm->running && !XtAppGetExitFlag(fm->app))
-        XtAppProcessEvent(fm->app, XtIMAll);
+    FmApp *app = fm->app_state;
+    while (app->running && !XtAppGetExitFlag(app->app))
+        XtAppProcessEvent(app->app, XtIMAll);
 }
 
 void fm_cleanup(Fm *fm)
 {
-    isde_dbus_free(fm->dbus);
+    FmApp *app = fm->app_state;
+    isde_dbus_free(app->dbus);
     dnd_cleanup(fm);
     clipboard_cleanup(fm);
     browser_free_entries(fm);
     fileview_cleanup(fm);
     places_cleanup(fm);
-    icons_cleanup();
+    icons_cleanup(app);
     free(fm->cwd);
     for (int i = 0; i < fm->hist_count; i++)
         free(fm->history[i]);
-    for (int i = 0; i < fm->ndesktop; i++)
-        isde_desktop_free(fm->desktop_entries[i]);
-    free(fm->desktop_entries);
-    XtDestroyApplicationContext(fm->app);
+    for (int i = 0; i < app->ndesktop; i++)
+        isde_desktop_free(app->desktop_entries[i]);
+    free(app->desktop_entries);
+    ctx_free_dynamic(fm);
+    XtDestroyApplicationContext(app->app);
 }

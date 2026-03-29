@@ -86,7 +86,7 @@ int browser_read_dir(Fm *fm, const char *path)
             e->is_dir = S_ISDIR(st.st_mode);
         }
 
-        e->mime_icon = icons_for_entry(e);
+        e->mime_icon = icons_for_entry(fm->app_state, e);
         fm->nentries++;
     }
 

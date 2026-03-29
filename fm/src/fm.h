@@ -22,10 +22,12 @@
 #include <ISW/Dialog.h>
 #include <ISW/ISWSVG.h>
 #include <ISW/ISWXdnd.h>
+#include <ISW/ISWContext.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <time.h>
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
@@ -37,6 +39,7 @@
 /* ---------- Constants ---------- */
 #define FM_ICON_SIZE     48
 #define FM_HISTORY_MAX   64
+#define MAX_OPEN_WITH    16
 
 /* ---------- File entry ---------- */
 typedef struct {
@@ -65,9 +68,49 @@ typedef struct {
     char     *gnome_data;  /* cached x-special/gnome-copied-files string */
 } FmClipboard;
 
-/* ---------- File manager state ---------- */
-typedef struct Fm {
+/* ---------- Context menu action function ---------- */
+struct Fm;
+typedef void (*CtxAction)(struct Fm *);
+
+/* ---------- Places sidebar data (opaque, defined in places.c) ---------- */
+typedef struct FmPlacesData FmPlacesData;
+
+/* ---------- App-wide shared state ---------- */
+typedef struct FmApp {
     XtAppContext   app;
+    Widget         first_toplevel;  /* from XtAppInitialize */
+
+    /* Desktop entry cache (shared across windows) */
+    IsdeDesktopEntry **desktop_entries;
+    int                ndesktop;
+
+    /* D-Bus for settings notifications */
+    IsdeDBus      *dbus;
+
+    /* Icon cache (moved from icons.c statics) */
+    char *icon_folder;
+    char *icon_file;
+    char *icon_exec;
+    char *icon_image;
+    char *icon_theme;
+
+    /* Clipboard atoms (per-display, shared) */
+    xcb_atom_t     atom_clipboard;
+    xcb_atom_t     atom_targets;
+    xcb_atom_t     atom_uri_list;
+    xcb_atom_t     atom_gnome_files;
+    xcb_atom_t     atom_utf8_string;
+
+    /* Window tracking */
+    struct Fm    **windows;
+    int            nwindows;
+
+    int            running;
+} FmApp;
+
+/* ---------- Per-window file manager state ---------- */
+typedef struct Fm {
+    FmApp         *app_state;
     Widget         toplevel;
     Widget         main_window;
 
@@ -81,6 +124,7 @@ typedef struct Fm {
     /* Places sidebar */
     Widget         places_vp;
     Widget         places_box;
+    FmPlacesData  *places_data;
 
     /* Main content */
     Widget         vbox;         /* outer FlexBox (vertical) */
@@ -103,23 +147,78 @@ typedef struct Fm {
     int            hist_pos;
     int            hist_count;
 
-    /* Desktop entry cache (for "Open with") */
-    IsdeDesktopEntry **desktop_entries;
-    int                ndesktop;
-
-    /* D-Bus for settings notifications */
-    IsdeDBus      *dbus;
-
     /* Clipboard */
     FmClipboard    clipboard;
-    xcb_atom_t     atom_clipboard;
-    xcb_atom_t     atom_targets;
-    xcb_atom_t     atom_uri_list;
-    xcb_atom_t     atom_gnome_files;
-    xcb_atom_t     atom_utf8_string;
 
-    int            running;
+    /* Rename dialog (per-window) */
+    Widget         rename_shell;
+    int            rename_index;
+
+    /* Delete confirmation dialog (per-window) */
+    Widget         delete_shell;
+
+    /* Empty trash dialog (per-window) */
+    Widget         empty_trash_shell;
+
+    /* Context menu (per-window) */
+    Widget         ctx_shell;
+    Widget         ctx_list;
+    int            ctx_in_trash;
+    String        *dyn_labels;
+    CtxAction     *dyn_actions;
+    int            dyn_nitems;
+
+    /* "Open with" state (per-window) */
+    int            ow_indices[MAX_OPEN_WITH];
+    int            ow_count;
+    char          *ow_label_buf[MAX_OPEN_WITH];
+    char          *ow_file_path;
+
+    /* Fileview backing arrays (per-window) */
+    String        *fv_labels;
+    String        *fv_icons;
+    char         **fv_trunc_names;
+    int            fv_trunc_count;
+
+    /* Double-click tracking (per-window) */
+    int            last_click_index;
+    struct timespec last_click_time;
+
+    /* DnD state (per-window) */
+    xcb_button_press_event_t dnd_saved_press;
+    Boolean        dnd_press_valid;
+    char         **dnd_drag_paths;
+    int            dnd_ndrag_paths;
+    Boolean        dnd_drop_was_noop;
 } Fm;
+
+/* ---------- Context for storing Fm* on shell windows ---------- */
+extern XContext fm_window_context;  /* initialized once in fm_init */
+
+/* Store Fm* on a shell widget's window */
+static inline void fm_set_context(Widget shell, Fm *fm)
+{
+    IswSaveContext(XtDisplay(shell), XtWindow(shell),
+                   fm_window_context, (void *)fm);
+}
+
+/* Recover Fm* from any widget by walking up through shells ---------- */
+static inline Fm *fm_from_widget(Widget w)
+{
+    /* Walk up through the widget tree, checking each shell for
+     * a stored Fm context.  Transient/override shells (dialogs,
+     * context menus) won't have one, but their parent toplevel will. */
+    while (w) {
+        if (XtIsShell(w) && XtIsRealized(w)) {
+            void *data = NULL;
+            if (IswFindContext(XtDisplay(w), XtWindow(w),
+                               fm_window_context, &data) == 0 && data)
+                return (Fm *)data;
+        }
+        w = XtParent(w);
+    }
+    return NULL;
+}
 
 /* ---------- fm.c ---------- */
 int   fm_init(Fm *fm, int *argc, char **argv);
@@ -129,7 +228,7 @@ void  fm_navigate(Fm *fm, const char *path);
 void  fm_refresh(Fm *fm);
 void  fm_register_context_menu(Fm *fm, Widget w);
 void  fm_install_shortcuts(Widget w);
-void  fm_dismiss_context(void);
+void  fm_dismiss_context(Fm *fm);
 void  show_rename_dialog(Fm *fm);
 
 /* ---------- browser.c ---------- */
@@ -151,9 +250,9 @@ void  places_init(Fm *fm);
 void  places_cleanup(Fm *fm);
 
 /* ---------- icons.c ---------- */
-void        icons_init(void);
-const char *icons_for_entry(const FmEntry *e);
-void        icons_cleanup(void);
+void        icons_init(FmApp *app);
+const char *icons_for_entry(FmApp *app, const FmEntry *e);
+void        icons_cleanup(FmApp *app);
 
 /* ---------- fileops.c ---------- */
 int   fileops_copy(const char *src, const char *dst);

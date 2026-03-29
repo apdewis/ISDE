@@ -2,13 +2,18 @@
 #include "fm.h"
 #include <stdio.h>
 #include <signal.h>
+#include <stdlib.h>
 
 static Fm fm;
 
 static void on_signal(int sig)
 {
     (void)sig;
-    fm.running = 0;
+    /* fm might not be initialized yet (app_state NULL before fm_init) */
+    if (fm.app_state)
+        fm.app_state->running = 0;
+    else
+        exit(1);
 }
 
 int main(int argc, char **argv)

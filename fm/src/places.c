@@ -19,10 +19,6 @@ typedef struct {
     int   is_header;    /* section header, not clickable */
 } PlaceEntry;
 
-static PlaceEntry *places = NULL;
-static int          nplaces = 0;
-static int          places_cap = 0;
-
 /* ---------- Section tracking ---------- */
 
 typedef struct {
@@ -33,86 +29,94 @@ typedef struct {
     String *labels;     /* string array owned by us, pointed to by List */
 } PlaceSection;
 
-static PlaceSection *sections = NULL;
-static int            nsections = 0;
+/* ---------- Per-window places data ---------- */
 
-static void places_add(const char *label, const char *path,
+struct FmPlacesData {
+    PlaceEntry   *places;
+    int           nplaces;
+    int           places_cap;
+
+    PlaceSection *sections;
+    int           nsections;
+};
+
+static void places_add(FmPlacesData *pd, const char *label, const char *path,
                         const char *icon_name, int is_header)
 {
-    if (nplaces >= places_cap) {
-        places_cap = places_cap ? places_cap * 2 : 32;
-        places = realloc(places, places_cap * sizeof(PlaceEntry));
+    if (pd->nplaces >= pd->places_cap) {
+        pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
+        pd->places = realloc(pd->places, pd->places_cap * sizeof(PlaceEntry));
     }
-    PlaceEntry *p = &places[nplaces++];
+    PlaceEntry *p = &pd->places[pd->nplaces++];
     p->label = strdup(label);
     p->path = path ? strdup(path) : NULL;
     p->icon_name = icon_name ? strdup(icon_name) : NULL;
     p->is_header = is_header;
 }
 
-static void places_free_entries(void)
+static void places_free_entries(FmPlacesData *pd)
 {
-    for (int i = 0; i < nplaces; i++) {
-        free(places[i].label);
-        free(places[i].path);
-        free(places[i].icon_name);
+    for (int i = 0; i < pd->nplaces; i++) {
+        free(pd->places[i].label);
+        free(pd->places[i].path);
+        free(pd->places[i].icon_name);
     }
-    free(places);
-    places = NULL;
-    nplaces = 0;
-    places_cap = 0;
+    free(pd->places);
+    pd->places = NULL;
+    pd->nplaces = 0;
+    pd->places_cap = 0;
 }
 
-static void sections_free(void)
+static void sections_free(FmPlacesData *pd)
 {
-    for (int i = 0; i < nsections; i++)
-        free(sections[i].labels);
-    free(sections);
-    sections = NULL;
-    nsections = 0;
+    for (int i = 0; i < pd->nsections; i++)
+        free(pd->sections[i].labels);
+    free(pd->sections);
+    pd->sections = NULL;
+    pd->nsections = 0;
 }
 
 /* ---------- Build place list ---------- */
 
-static void add_xdg_dir(const char *xdg_name, const char *label,
-                         const char *icon_name)
+static void add_xdg_dir(FmPlacesData *pd, const char *xdg_name,
+                         const char *label, const char *icon_name)
 {
     char *path = isde_xdg_user_dir(xdg_name);
     if (path) {
         struct stat st;
         if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
-            places_add(label, path, icon_name, 0);
+            places_add(pd, label, path, icon_name, 0);
         }
         free(path);
     }
 }
 
-static void build_places_list(void)
+static void build_places_list(FmPlacesData *pd)
 {
-    places_free_entries();
+    places_free_entries(pd);
 
     /* --- Places section --- */
-    places_add("Places", NULL, NULL, 1);
+    places_add(pd, "Places", NULL, NULL, 1);
 
     const char *home = getenv("HOME");
     if (home)
-        places_add("Home", home, "user-home", 0);
+        places_add(pd, "Home", home, "user-home", 0);
 
-    add_xdg_dir("DESKTOP",   "Desktop",   "user-desktop");
-    add_xdg_dir("DOCUMENTS", "Documents", "folder-documents");
-    add_xdg_dir("DOWNLOAD",  "Downloads", "folder-download");
-    add_xdg_dir("MUSIC",     "Music",     "folder-music");
-    add_xdg_dir("PICTURES",  "Pictures",  "folder-pictures");
-    add_xdg_dir("VIDEOS",    "Videos",    "folder-videos");
+    add_xdg_dir(pd, "DESKTOP",   "Desktop",   "user-desktop");
+    add_xdg_dir(pd, "DOCUMENTS", "Documents", "folder-documents");
+    add_xdg_dir(pd, "DOWNLOAD",  "Downloads", "folder-download");
+    add_xdg_dir(pd, "MUSIC",     "Music",     "folder-music");
+    add_xdg_dir(pd, "PICTURES",  "Pictures",  "folder-pictures");
+    add_xdg_dir(pd, "VIDEOS",    "Videos",    "folder-videos");
 
     /* Trash */
     char *trash_path = fileops_trash_path();
-    places_add("Trash", trash_path, "user-trash", 0);
+    places_add(pd, "Trash", trash_path, "user-trash", 0);
     free(trash_path);
 
     /* --- Devices section --- */
-    places_add("Devices", NULL, NULL, 1);
-    places_add("File System", "/", "drive-harddisk", 0);
+    places_add(pd, "Devices", NULL, NULL, 1);
+    places_add(pd, "File System", "/", "drive-harddisk", 0);
 
     /* Scan mounts for removable/user media */
     FILE *fp = setmntent("/proc/mounts", "r");
@@ -126,7 +130,7 @@ static void build_places_list(void)
                 /* Use last path component as label */
                 const char *name = strrchr(me->mnt_dir, '/');
                 name = name ? name + 1 : me->mnt_dir;
-                places_add(name, me->mnt_dir, "drive-removable-media", 0);
+                places_add(pd, name, me->mnt_dir, "drive-removable-media", 0);
             }
         }
         endmntent(fp);
@@ -181,7 +185,7 @@ static void build_places_list(void)
                 continue;
 
             if (!header_added) {
-                places_add("Bookmarks", NULL, NULL, 1);
+                places_add(pd, "Bookmarks", NULL, NULL, 1);
                 header_added = 1;
             }
 
@@ -189,7 +193,7 @@ static void build_places_list(void)
                 label = strrchr(path, '/');
                 label = label ? label + 1 : path;
             }
-            places_add(label, path, "folder-bookmark", 0);
+            places_add(pd, label, path, "folder-bookmark", 0);
         }
         fclose(fp);
     }
@@ -197,34 +201,34 @@ static void build_places_list(void)
 
 /* ---------- Build sections from flat place list ---------- */
 
-static void build_sections(void)
+static void build_sections(FmPlacesData *pd)
 {
-    sections_free();
+    sections_free(pd);
 
     /* Count sections (headers) */
     int count = 0;
-    for (int i = 0; i < nplaces; i++)
-        if (places[i].is_header) count++;
+    for (int i = 0; i < pd->nplaces; i++)
+        if (pd->places[i].is_header) count++;
 
-    sections = calloc(count, sizeof(PlaceSection));
-    nsections = 0;
+    pd->sections = calloc(count, sizeof(PlaceSection));
+    pd->nsections = 0;
 
-    for (int i = 0; i < nplaces; i++) {
-        if (!places[i].is_header)
+    for (int i = 0; i < pd->nplaces; i++) {
+        if (!pd->places[i].is_header)
             continue;
 
-        PlaceSection *s = &sections[nsections++];
+        PlaceSection *s = &pd->sections[pd->nsections++];
         s->start_idx = i + 1;
 
         /* Count items until next header or end */
         s->nitems = 0;
-        for (int j = i + 1; j < nplaces && !places[j].is_header; j++)
+        for (int j = i + 1; j < pd->nplaces && !pd->places[j].is_header; j++)
             s->nitems++;
 
         /* Build label array for the List widget */
         s->labels = calloc(s->nitems, sizeof(String));
         for (int j = 0; j < s->nitems; j++)
-            s->labels[j] = places[s->start_idx + j].label;
+            s->labels[j] = pd->places[s->start_idx + j].label;
     }
 }
 
@@ -234,32 +238,36 @@ static void place_list_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w;
     Fm *fm = (Fm *)cd;
+    FmPlacesData *pd = fm->places_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call;
 
     if (ret->list_index == XAW_LIST_NONE)
         return;
 
     /* Find which section this List widget belongs to */
-    for (int i = 0; i < nsections; i++) {
-        if (sections[i].list != w)
+    for (int i = 0; i < pd->nsections; i++) {
+        if (pd->sections[i].list != w)
             continue;
 
-        int idx = sections[i].start_idx + ret->list_index;
-        if (idx < nplaces && places[idx].path)
-            fm_navigate(fm, places[idx].path);
+        int idx = pd->sections[i].start_idx + ret->list_index;
+        if (idx < pd->nplaces && pd->places[idx].path)
+            fm_navigate(fm, pd->places[idx].path);
 
         /* Unhighlight all other section lists */
-        for (int j = 0; j < nsections; j++)
-            if (j != i && sections[j].list)
-                IswListUnhighlight(sections[j].list);
+        for (int j = 0; j < pd->nsections; j++)
+            if (j != i && pd->sections[j].list)
+                IswListUnhighlight(pd->sections[j].list);
         return;
     }
 }
 
 void places_init(Fm *fm)
 {
-    build_places_list();
-    build_sections();
+    FmPlacesData *pd = calloc(1, sizeof(FmPlacesData));
+    fm->places_data = pd;
+
+    build_places_list(pd);
+    build_sections(pd);
 
     /* Create sidebar viewport */
     Arg args[20];
@@ -282,14 +290,14 @@ void places_init(Fm *fm)
 
     /* Create header + list for each section */
     char wname[32];
-    for (int i = 0; i < nsections; i++) {
-        PlaceSection *s = &sections[i];
+    for (int i = 0; i < pd->nsections; i++) {
+        PlaceSection *s = &pd->sections[i];
         int hdr_idx = s->start_idx - 1;
 
         /* Section header label */
         n = 0;
         snprintf(wname, sizeof(wname), "placeHdr%d", i);
-        XtSetArg(args[n], XtNlabel, places[hdr_idx].label); n++;
+        XtSetArg(args[n], XtNlabel, pd->places[hdr_idx].label); n++;
         XtSetArg(args[n], XtNborderWidth, 0);                n++;
         XtSetArg(args[n], XtNinternalWidth, isde_scale(6));  n++;
         XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
@@ -318,7 +326,11 @@ void places_init(Fm *fm)
 
 void places_cleanup(Fm *fm)
 {
-    (void)fm;
-    sections_free();
-    places_free_entries();
+    FmPlacesData *pd = fm->places_data;
+    if (!pd)
+        return;
+    sections_free(pd);
+    places_free_entries(pd);
+    free(pd);
+    fm->places_data = NULL;
 }

@@ -3,19 +3,14 @@
  * icons.c — icon resolution for file entries
  *
  * Loads SVG icons from the ISDE theme. Falls back to embedded SVG
- * if theme icons are not found.
+ * if theme icons are not found. Icon data is stored in FmApp
+ * and shared across all windows.
  */
 #include "fm.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* Cached icon paths/data */
-static char *icon_folder_data = NULL;
-static char *icon_file_data   = NULL;
-static char *icon_exec_data   = NULL;
-static char *icon_image_data  = NULL;
 
 /* Embedded fallbacks */
 static const char *FALLBACK_FOLDER =
@@ -61,15 +56,11 @@ static char *read_svg_file(const char *path)
     return buf;
 }
 
-static char *configured_icon_theme = NULL;
-
-static char *load_icon(const char *category, const char *name,
-                       const char *fallback)
+static char *load_icon(const char *theme, const char *category,
+                       const char *name, const char *fallback)
 {
-    /* Try configured icon theme first */
-    if (configured_icon_theme) {
-        char *path = isde_icon_theme_lookup(configured_icon_theme,
-                                             category, name);
+    if (theme) {
+        char *path = isde_icon_theme_lookup(theme, category, name);
         if (path) {
             char *data = read_svg_file(path);
             free(path);
@@ -77,7 +68,6 @@ static char *load_icon(const char *category, const char *name,
         }
     }
 
-    /* Try ISDE's own icon set */
     char *path = isde_icon_find(category, name);
     if (path) {
         char *data = read_svg_file(path);
@@ -87,14 +77,12 @@ static char *load_icon(const char *category, const char *name,
     return strdup(fallback);
 }
 
-void icons_init(void)
+void icons_init(FmApp *app)
 {
-    /* Free previous data if reloading */
-    icons_cleanup();
+    icons_cleanup(app);
 
-    /* Read configured icon theme from config */
-    free(configured_icon_theme);
-    configured_icon_theme = NULL;
+    free(app->icon_theme);
+    app->icon_theme = NULL;
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -103,46 +91,48 @@ void icons_init(void)
         if (appear) {
             const char *theme = isde_config_string(appear, "icon_theme", NULL);
             if (theme)
-                configured_icon_theme = strdup(theme);
+                app->icon_theme = strdup(theme);
         }
         isde_config_free(cfg);
     }
 
-    icon_folder_data = load_icon("places", "folder", FALLBACK_FOLDER);
-    icon_file_data   = load_icon("mimetypes", "text-plain", FALLBACK_FILE);
-    icon_exec_data   = load_icon("mimetypes", "application-x-executable",
-                                 FALLBACK_EXEC);
-    icon_image_data  = load_icon("mimetypes", "image-generic", FALLBACK_FILE);
+    app->icon_folder = load_icon(app->icon_theme, "places", "folder",
+                                 FALLBACK_FOLDER);
+    app->icon_file   = load_icon(app->icon_theme, "mimetypes", "text-plain",
+                                 FALLBACK_FILE);
+    app->icon_exec   = load_icon(app->icon_theme, "mimetypes",
+                                 "application-x-executable", FALLBACK_EXEC);
+    app->icon_image  = load_icon(app->icon_theme, "mimetypes", "image-generic",
+                                 FALLBACK_FILE);
 }
 
-const char *icons_for_entry(const FmEntry *e)
+const char *icons_for_entry(FmApp *app, const FmEntry *e)
 {
     if (e->is_dir)
-        return icon_folder_data;
+        return app->icon_folder;
     if (e->mode & S_IXUSR)
-        return icon_exec_data;
+        return app->icon_exec;
 
-    /* Basic extension-based matching */
     const char *dot = strrchr(e->name, '.');
     if (dot) {
         if (strcmp(dot, ".png") == 0 || strcmp(dot, ".jpg") == 0 ||
             strcmp(dot, ".jpeg") == 0 || strcmp(dot, ".gif") == 0 ||
             strcmp(dot, ".svg") == 0 || strcmp(dot, ".bmp") == 0 ||
             strcmp(dot, ".webp") == 0)
-            return icon_image_data;
+            return app->icon_image;
     }
 
-    return icon_file_data;
+    return app->icon_file;
 }
 
-void icons_cleanup(void)
+void icons_cleanup(FmApp *app)
 {
-    free(icon_folder_data);
-    free(icon_file_data);
-    free(icon_exec_data);
-    free(icon_image_data);
-    icon_folder_data = NULL;
-    icon_file_data = NULL;
-    icon_exec_data = NULL;
-    icon_image_data = NULL;
+    free(app->icon_folder);
+    free(app->icon_file);
+    free(app->icon_exec);
+    free(app->icon_image);
+    app->icon_folder = NULL;
+    app->icon_file = NULL;
+    app->icon_exec = NULL;
+    app->icon_image = NULL;
 }
