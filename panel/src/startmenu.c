@@ -371,10 +371,15 @@ void startmenu_init(Panel *p)
 
     /* Start menu shell */
     n = 0;
+    const IsdeColorScheme *scheme_border = isde_theme_current();
+    Pixel border_px = scheme_border
+        ? start_color_pixel(p, scheme_border->border)
+        : XtScreen(p->start_btn)->white_pixel;
     XtSetArg(args[n], XtNwidth, MENU_WIDTH);          n++;
     XtSetArg(args[n], XtNheight, MENU_HEIGHT);         n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);      n++;
     XtSetArg(args[n], XtNborderWidth, 1);              n++;
+    XtSetArg(args[n], XtNborderColor, border_px);      n++;
     p->start_shell = XtCreatePopupShell("startMenu",
                                         overrideShellWidgetClass,
                                         p->start_btn, args, n);

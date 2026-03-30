@@ -19,6 +19,7 @@
 /* ---------- helpers ---------- */
 
 static char *get_window_title(Panel *p, xcb_window_t win);
+static Pixel taskbar_pixel(Panel *p, unsigned int rgb);
 
 static char *get_wm_class(Panel *p, xcb_window_t win)
 {
@@ -165,10 +166,15 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     wl_titles[g->nwindows] = NULL;
 
     /* Create popup shell */
+    const IsdeColorScheme *s = isde_theme_current();
+    Pixel border_px = s ? taskbar_pixel(p, s->border)
+                        : p->screen->white_pixel;
+
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNoverrideRedirect, True);   n++;
-    XtSetArg(args[n], XtNborderWidth, 1);           n++;
+    XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
+    XtSetArg(args[n], XtNborderWidth, 1);            n++;
+    XtSetArg(args[n], XtNborderColor, border_px);    n++;
     wl_shell = XtCreatePopupShell("winListMenu", overrideShellWidgetClass,
                                   g->button, args, n);
 
@@ -360,8 +366,15 @@ static void context_menu_handler(Widget w, XtPointer client_data,
         return;
     }
 
+    const IsdeColorScheme *s = isde_theme_current();
+    Pixel border_px = s ? taskbar_pixel(p, s->border)
+                        : p->screen->white_pixel;
+    Arg cargs[20];
+    Cardinal cn = 0;
+    XtSetArg(cargs[cn], XtNborderWidth, 1);          cn++;
+    XtSetArg(cargs[cn], XtNborderColor, border_px);  cn++;
     Widget ctx = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
-                                    w, NULL, 0);
+                                    w, cargs, cn);
 
     Arg args[20];
 
