@@ -2,4 +2,4 @@
 Name=ISDE
 Comment=Infi Systems Desktop Environment
 Exec=isde-session
-Type=XSession
+Type=Application
