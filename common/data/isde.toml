@@ -17,7 +17,7 @@ repeat_interval = 30
 [appearance]
 color_scheme = "default-light"
 # cursor_theme = "default"
-# icon_theme = "hicolor"
+icon_theme = "hicolor"
 
 [wm.desktops]
 rows = 1

@@ -127,7 +127,8 @@ char *isde_xdg_find_data(const char *name)
 
 char *isde_icon_find(const char *category, const char *name)
 {
-    /* Try configured icon theme first */
+    /* Try configured icon theme, falling back to hicolor */
+    char theme_buf[128] = "hicolor";
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -136,14 +137,14 @@ char *isde_icon_find(const char *category, const char *name)
         if (appear) {
             const char *theme = isde_config_string(appear, "icon_theme", NULL);
             if (theme) {
-                char *path = isde_icon_theme_lookup(theme, category, name);
-                if (path) {
-                    isde_config_free(cfg);
-                    return path;
-                }
+                snprintf(theme_buf, sizeof(theme_buf), "%s", theme);
             }
         }
         isde_config_free(cfg);
+    }
+    char *path = isde_icon_theme_lookup(theme_buf, category, name);
+    if (path) {
+        return path;
     }
 
     /* Fallback: ISDE bundled icons in isde/icons/<category>/<name>.svg */
