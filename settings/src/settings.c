@@ -24,7 +24,9 @@
 static void register_panel(Settings *s, const IsdeSettingsPanel *panel,
                            void *dl_handle)
 {
-    if (s->npanels >= MAX_PANELS) return;
+    if (s->npanels >= MAX_PANELS) {
+        return;
+    }
     int idx = s->npanels;
     s->panels[idx] = panel;
     s->plugin_handles[idx] = dl_handle;
@@ -35,19 +37,24 @@ static void register_panel(Settings *s, const IsdeSettingsPanel *panel,
 static void load_plugins_from_dir(Settings *s, const char *dir)
 {
     DIR *d = opendir(dir);
-    if (!d) return;
+    if (!d) {
+        return;
+    }
 
     struct dirent *de;
     while ((de = readdir(d))) {
         size_t nlen = strlen(de->d_name);
-        if (nlen < 4 || strcmp(de->d_name + nlen - 3, ".so") != 0)
+        if (nlen < 4 || strcmp(de->d_name + nlen - 3, ".so") != 0) {
             continue;
+        }
 
         char path[512];
         snprintf(path, sizeof(path), "%s/%s", dir, de->d_name);
 
         void *handle = dlopen(path, RTLD_LAZY);
-        if (!handle) continue;
+        if (!handle) {
+            continue;
+        }
 
         IsdeSettingsPanelFunc fn = (IsdeSettingsPanelFunc)
             dlsym(handle, ISDE_SETTINGS_PANEL_SYMBOL);
@@ -89,8 +96,12 @@ static void load_plugins(Settings *s)
 static int check_unsaved(Settings *s)
 {
     int idx = s->active_panel;
-    if (idx < 0 || idx >= s->npanels) return 0;
-    if (!s->panels[idx]->has_changes) return 0;
+    if (idx < 0 || idx >= s->npanels) {
+        return 0;
+    }
+    if (!s->panels[idx]->has_changes) {
+        return 0;
+    }
     return s->panels[idx]->has_changes();
 }
 
@@ -100,24 +111,30 @@ static void common_save_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Settings *s = (Settings *)cd;
-    if (s->active_panel >= 0 && s->panels[s->active_panel]->apply)
+    if (s->active_panel >= 0 && s->panels[s->active_panel]->apply) {
         s->panels[s->active_panel]->apply();
+    }
 }
 
 static void common_revert_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Settings *s = (Settings *)cd;
-    if (s->active_panel >= 0 && s->panels[s->active_panel]->revert)
+    if (s->active_panel >= 0 && s->panels[s->active_panel]->revert) {
         s->panels[s->active_panel]->revert();
+    }
 }
 
 /* ---------- panel switching ---------- */
 
 void settings_switch_panel(Settings *s, int index)
 {
-    if (index < 0 || index >= s->npanels) return;
-    if (index == s->active_panel && s->panel_widgets[index]) return;
+    if (index < 0 || index >= s->npanels) {
+        return;
+    }
+    if (index == s->active_panel && s->panel_widgets[index]) {
+        return;
+    }
 
     /* Check for unsaved changes in current panel */
     if (check_unsaved(s)) {
@@ -125,8 +142,9 @@ void settings_switch_panel(Settings *s, int index)
     }
 
     /* Unmanage current panel */
-    if (s->active_panel >= 0 && s->panel_widgets[s->active_panel])
+    if (s->active_panel >= 0 && s->panel_widgets[s->active_panel]) {
         XtUnmanageChild(s->panel_widgets[s->active_panel]);
+    }
 
     s->active_panel = index;
 
@@ -145,8 +163,9 @@ void settings_switch_panel(Settings *s, int index)
         Cardinal sn = 0;
         if (cw > 0) { XtSetArg(sa[sn], XtNwidth, cw);  sn++; }
         if (ch > 0) { XtSetArg(sa[sn], XtNheight, ch); sn++; }
-        if (sn > 0)
+        if (sn > 0) {
             XtSetValues(s->panel_widgets[index], sa, sn);
+        }
     }
 
     XtManageChild(s->panel_widgets[index]);
@@ -159,8 +178,9 @@ static void panel_list_cb(Widget w, XtPointer cd, XtPointer call)
     (void)w;
     Settings *s = (Settings *)cd;
     IswListReturnStruct *ret = (IswListReturnStruct *)call;
-    if (ret->list_index >= 0 && ret->list_index < s->npanels)
+    if (ret->list_index >= 0 && ret->list_index < s->npanels) {
         settings_switch_panel(s, ret->list_index);
+    }
 }
 
 /* ---------- D-Bus ---------- */
@@ -223,8 +243,9 @@ int settings_init(Settings *s, int *argc, char **argv)
     static String *panel_names = NULL;
     free(panel_names);
     panel_names = malloc((s->npanels + 1) * sizeof(String));
-    for (int i = 0; i < s->npanels; i++)
+    for (int i = 0; i < s->npanels; i++) {
         panel_names[i] = (String)s->panels[i]->name;
+    }
     panel_names[s->npanels] = NULL;
 
     n = 0;
@@ -321,9 +342,10 @@ int settings_init(Settings *s, int *argc, char **argv)
     s->dbus = isde_dbus_init();
     if (s->dbus) {
         int fd = isde_dbus_get_fd(s->dbus);
-        if (fd >= 0)
+        if (fd >= 0) {
             XtAppAddInput(s->app, fd, (XtPointer)XtInputReadMask,
                           settings_dbus_input_cb, s->dbus);
+        }
         panel_appearance_set_dbus(s->dbus);
         panel_fonts_set_dbus(s->dbus);
         panel_display_set_dbus(s->dbus);
@@ -333,8 +355,9 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtRealizeWidget(s->toplevel);
 
     /* Show first panel by default */
-    if (s->npanels > 0)
+    if (s->npanels > 0) {
         settings_switch_panel(s, 0);
+    }
 
     s->running = 1;
     return 0;
@@ -342,17 +365,20 @@ int settings_init(Settings *s, int *argc, char **argv)
 
 void settings_run(Settings *s)
 {
-    while (s->running && !XtAppGetExitFlag(s->app))
+    while (s->running && !XtAppGetExitFlag(s->app)) {
         XtAppProcessEvent(s->app, XtIMAll);
+    }
 }
 
 void settings_cleanup(Settings *s)
 {
     for (int i = 0; i < s->npanels; i++) {
-        if (s->panels[i]->destroy)
+        if (s->panels[i]->destroy) {
             s->panels[i]->destroy();
-        if (s->plugin_handles[i])
+        }
+        if (s->plugin_handles[i]) {
             dlclose(s->plugin_handles[i]);
+        }
     }
     isde_dbus_free(s->dbus);
     XtDestroyApplicationContext(s->app);

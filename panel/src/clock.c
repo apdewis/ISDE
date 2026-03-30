@@ -36,10 +36,12 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
 void clock_init(Panel *p)
 {
     /* Load format from config, or use defaults */
-    if (!p->clock_time_fmt)
+    if (!p->clock_time_fmt) {
         p->clock_time_fmt = strdup("%H:%M");
-    if (!p->clock_date_fmt)
+    }
+    if (!p->clock_date_fmt) {
         p->clock_date_fmt = strdup("%Y-%m-%d");
+    }
 
     /* Load configured formats from isde.toml [panel.clock] if available */
     char errbuf[256];
@@ -52,10 +54,16 @@ void clock_init(Panel *p)
             if (clock_cfg) {
                 const char *tf = isde_config_string(clock_cfg,
                                                      "time_format", NULL);
-                if (tf) { free(p->clock_time_fmt); p->clock_time_fmt = strdup(tf); }
+                if (tf) {
+                    free(p->clock_time_fmt);
+                    p->clock_time_fmt = strdup(tf);
+                }
                 const char *df = isde_config_string(clock_cfg,
                                                      "date_format", NULL);
-                if (df) { free(p->clock_date_fmt); p->clock_date_fmt = strdup(df); }
+                if (df) {
+                    free(p->clock_date_fmt);
+                    p->clock_date_fmt = strdup(df);
+                }
             }
         }
         isde_config_free(cfg);
@@ -68,7 +76,9 @@ void clock_init(Panel *p)
      * so available text height is (half - 4) pixels.
      * Convert back to pt: pt = px * 72 / 96 = px * 3 / 4 */
     int avail_px = half - isde_scale(4);
-    if (avail_px < isde_scale(6)) avail_px = isde_scale(6);
+    if (avail_px < isde_scale(6)) {
+        avail_px = isde_scale(6);
+    }
     int time_pt = (avail_px * 3) / (4 * isde_scale(1));
     int date_pt = time_pt > 2 ? time_pt - 2 : time_pt;
 
@@ -114,8 +124,9 @@ void clock_init(Panel *p)
 
 void clock_cleanup(Panel *p)
 {
-    if (p->clock_timer)
+    if (p->clock_timer) {
         XtRemoveTimeOut(p->clock_timer);
+    }
     free(p->clock_time_fmt);
     free(p->clock_date_fmt);
     p->clock_time_fmt = NULL;

@@ -46,16 +46,20 @@ void wm_ewmh_setup(Wm *wm)
 void wm_ewmh_update_client_list(Wm *wm)
 {
     int count = 0;
-    for (WmClient *c = wm->clients; c; c = c->next)
+    for (WmClient *c = wm->clients; c; c = c->next) {
         count++;
+    }
 
     xcb_window_t *wins = NULL;
     if (count > 0) {
         wins = malloc(count * sizeof(xcb_window_t));
-        if (!wins) return;
+        if (!wins) {
+            return;
+        }
         int i = 0;
-        for (WmClient *c = wm->clients; c; c = c->next)
+        for (WmClient *c = wm->clients; c; c = c->next) {
             wins[i++] = c->client;
+        }
     }
 
     isde_ewmh_set_client_list(wm->ewmh, wins, count);

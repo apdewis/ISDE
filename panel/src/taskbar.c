@@ -125,8 +125,9 @@ static void wl_select_callback(Widget w, XtPointer client_data,
     (void)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
     if (!wl_group || ret->list_index < 0 ||
-        ret->list_index >= wl_group->nwindows)
+        ret->list_index >= wl_group->nwindows) {
         return;
+    }
 
     focus_window(wl_panel, wl_group->windows[ret->list_index]);
     panel_dismiss_popup(wl_panel);
@@ -161,8 +162,9 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 
     /* Build title array — must stay alive while list is shown */
     wl_titles = malloc((g->nwindows + 1) * sizeof(String));
-    for (int i = 0; i < g->nwindows; i++)
+    for (int i = 0; i < g->nwindows; i++) {
         wl_titles[i] = get_window_title(p, g->windows[i]);
+    }
     wl_titles[g->nwindows] = NULL;
 
     /* Create popup shell */
@@ -260,7 +262,9 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
 static void save_pinned(Panel *p)
 {
     char *path = isde_xdg_config_path("pinned");
-    if (!path) return;
+    if (!path) {
+        return;
+    }
 
     /* Ensure directory exists */
     char *dir = isde_xdg_config_path("");
@@ -271,9 +275,11 @@ static void save_pinned(Panel *p)
 
     FILE *fp = fopen(path, "w");
     if (fp) {
-        for (TaskGroup *g = p->groups; g; g = g->next)
-            if (g->pinned)
+        for (TaskGroup *g = p->groups; g; g = g->next) {
+            if (g->pinned) {
                 fprintf(fp, "%s\n", g->wm_class);
+            }
+        }
         fclose(fp);
     }
     free(path);
@@ -282,18 +288,26 @@ static void save_pinned(Panel *p)
 static void load_pinned_file(Panel *p)
 {
     char *path = isde_xdg_config_path("pinned");
-    if (!path) return;
+    if (!path) {
+        return;
+    }
 
     FILE *fp = fopen(path, "r");
     free(path);
-    if (!fp) return;
+    if (!fp) {
+        return;
+    }
 
     char line[256];
     while (fgets(line, sizeof(line), fp)) {
         /* Strip newline */
         char *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
-        if (!line[0]) continue;
+        if (nl) {
+            *nl = '\0';
+        }
+        if (!line[0]) {
+            continue;
+        }
 
         p->pinned_classes = realloc(p->pinned_classes,
                                     (p->npinned + 1) * sizeof(char *));
@@ -341,20 +355,23 @@ static void close_all_callback(Widget w, XtPointer client_data,
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
     panel_dismiss_popup(p);
-    for (int i = 0; i < g->nwindows; i++)
+    for (int i = 0; i < g->nwindows; i++) {
         isde_ewmh_request_close_window(p->ewmh, g->windows[i]);
+    }
 }
 
 static void context_menu_handler(Widget w, XtPointer client_data,
                                  xcb_generic_event_t *event, Boolean *cont)
 {
     (void)cont;
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
         return;
+    }
 
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3)
+    if (ev->detail != 3) {
         return;
+    }
 
     TaskClosure *tc = (TaskClosure *)client_data;
     Panel *p = tc->panel;
@@ -384,7 +401,9 @@ static void context_menu_handler(Widget w, XtPointer client_data,
         int nactions = isde_desktop_action_count(de);
         for (int i = 0; i < nactions; i++) {
             const IsdeDesktopAction *a = isde_desktop_action(de, i);
-            if (!a->name || !a->exec) continue;
+            if (!a->name || !a->exec) {
+                continue;
+            }
             XtSetArg(args[0], XtNlabel, a->name);
             Widget entry = XtCreateManagedWidget("action", smeBSBObjectClass,
                                                   ctx, args, 1);
@@ -395,8 +414,9 @@ static void context_menu_handler(Widget w, XtPointer client_data,
         }
 
         /* Separator if we added actions */
-        if (nactions > 0)
+        if (nactions > 0) {
             XtCreateManagedWidget("sep", smeLineObjectClass, ctx, NULL, 0);
+        }
     }
 
     /* New instance */
@@ -456,9 +476,11 @@ static void context_menu_handler(Widget w, XtPointer client_data,
 
 TaskGroup *taskbar_find_group(Panel *p, const char *wm_class)
 {
-    for (TaskGroup *g = p->groups; g; g = g->next)
-        if (g->wm_class && strcmp(g->wm_class, wm_class) == 0)
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (g->wm_class && strcmp(g->wm_class, wm_class) == 0) {
             return g;
+        }
+    }
     return NULL;
 }
 
@@ -476,9 +498,10 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
      * Second pass: fall back to matching Exec basename. */
     char cls_lower[128];
     int j;
-    for (j = 0; wm_class[j] && j < 126; j++)
+    for (j = 0; wm_class[j] && j < 126; j++) {
         cls_lower[j] = (wm_class[j] >= 'A' && wm_class[j] <= 'Z')
                      ? wm_class[j] + 32 : wm_class[j];
+    }
     cls_lower[j] = '\0';
 
     int match = -1;
@@ -486,12 +509,15 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     /* Pass 1: StartupWMClass */
     for (int i = 0; i < p->ndesktop && match < 0; i++) {
         const char *swc = isde_desktop_startup_wm_class(p->desktop_entries[i]);
-        if (!swc) continue;
+        if (!swc) {
+            continue;
+        }
 
         char swc_lower[128];
-        for (j = 0; swc[j] && j < 126; j++)
+        for (j = 0; swc[j] && j < 126; j++) {
             swc_lower[j] = (swc[j] >= 'A' && swc[j] <= 'Z')
                           ? swc[j] + 32 : swc[j];
+        }
         swc_lower[j] = '\0';
 
         if (strcmp(cls_lower, swc_lower) == 0) {
@@ -502,14 +528,17 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     /* Pass 2: Exec basename */
     for (int i = 0; i < p->ndesktop && match < 0; i++) {
         const char *exec = isde_desktop_exec(p->desktop_entries[i]);
-        if (!exec) continue;
+        if (!exec) {
+            continue;
+        }
         const char *base = strrchr(exec, '/');
         base = base ? base + 1 : exec;
 
         char exec_lower[128];
-        for (j = 0; base[j] && base[j] != ' ' && j < 126; j++)
+        for (j = 0; base[j] && base[j] != ' ' && j < 126; j++) {
             exec_lower[j] = (base[j] >= 'A' && base[j] <= 'Z')
                            ? base[j] + 32 : base[j];
+        }
         exec_lower[j] = '\0';
 
         if (strcmp(cls_lower, exec_lower) == 0) {
@@ -524,9 +553,13 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
             g->display_name = strdup(name);
         }
         const char *icon = isde_desktop_icon(p->desktop_entries[match]);
-        if (icon) g->desktop_icon = strdup(icon);
+        if (icon) {
+            g->desktop_icon = strdup(icon);
+        }
         const char *exec = isde_desktop_exec(p->desktop_entries[match]);
-        if (exec) g->desktop_exec = strdup(exec);
+        if (exec) {
+            g->desktop_exec = strdup(exec);
+        }
         g->desktop_index = match;
     }
 
@@ -574,8 +607,11 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
 
 static void group_add_window(TaskGroup *g, xcb_window_t win)
 {
-    for (int i = 0; i < g->nwindows; i++)
-        if (g->windows[i] == win) return;
+    for (int i = 0; i < g->nwindows; i++) {
+        if (g->windows[i] == win) {
+            return;
+        }
+    }
 
     if (g->nwindows >= g->cap_windows) {
         g->cap_windows *= 2;
@@ -590,8 +626,9 @@ static void group_add_window(TaskGroup *g, xcb_window_t win)
 void taskbar_update(Panel *p)
 {
     /* Clear window lists from all groups */
-    for (TaskGroup *g = p->groups; g; g = g->next)
+    for (TaskGroup *g = p->groups; g; g = g->next) {
         g->nwindows = 0;
+    }
 
     /* Get current client list from WM */
     xcb_window_t *wins = NULL;
@@ -600,8 +637,9 @@ void taskbar_update(Panel *p)
     for (int i = 0; i < nwins; i++) {
         char *cls = get_wm_class(p, wins[i]);
         TaskGroup *g = taskbar_find_group(p, cls);
-        if (!g)
+        if (!g) {
             g = taskbar_add_group(p, cls);
+        }
         group_add_window(g, wins[i]);
         free(cls);
     }
@@ -613,8 +651,12 @@ void taskbar_update(Panel *p)
         TaskGroup *g = *pp;
         if (g->nwindows == 0 && !g->pinned) {
             *pp = g->next;
-            if (g->button) XtDestroyWidget(g->button);
-            if (g->menu) XtDestroyWidget(g->menu);
+            if (g->button) {
+                XtDestroyWidget(g->button);
+            }
+            if (g->menu) {
+                XtDestroyWidget(g->menu);
+            }
             free(g->wm_class);
             free(g->display_name);
             free(g->desktop_exec);
@@ -639,7 +681,9 @@ static Pixel taskbar_pixel(Panel *p, unsigned int rgb)
                         ((rgb >> 8)  & 0xFF) * 257,
                         ( rgb        & 0xFF) * 257),
         NULL);
-    if (!reply) return p->screen->white_pixel;
+    if (!reply) {
+        return p->screen->white_pixel;
+    }
     Pixel px = reply->pixel;
     free(reply);
     return px;
@@ -648,26 +692,32 @@ static Pixel taskbar_pixel(Panel *p, unsigned int rgb)
 void taskbar_highlight_active(Panel *p)
 {
     const IsdeColorScheme *s = isde_theme_current();
-    if (!s) return;
+    if (!s) {
+        return;
+    }
 
     xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
     char *active_class = NULL;
-    if (active != XCB_WINDOW_NONE)
+    if (active != XCB_WINDOW_NONE) {
         active_class = get_wm_class(p, active);
+    }
 
     for (TaskGroup *g = p->groups; g; g = g->next) {
-        if (!g->button) continue;
+        if (!g->button) {
+            continue;
+        }
 
         int is_focused = (active_class && g->wm_class &&
                           strcmp(g->wm_class, active_class) == 0);
 
         const IsdeElementColors *ec;
-        if (is_focused)
+        if (is_focused) {
             ec = &s->taskbar_button_focus;
-        else if (g->nwindows > 0)
+        } else if (g->nwindows > 0) {
             ec = &s->taskbar_button_active;
-        else
+        } else {
             ec = &s->taskbar_button;
+        }
 
         Arg args[20];
         Cardinal n = 0;

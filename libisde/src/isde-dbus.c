@@ -41,8 +41,9 @@ filter_func(DBusConnection *conn, DBusMessage *msg, void *user_data)
                                   DBUS_TYPE_STRING, &section,
                                   DBUS_TYPE_STRING, &key,
                                   DBUS_TYPE_INVALID)) {
-            for (int i = 0; i < bus->nsubs; i++)
+            for (int i = 0; i < bus->nsubs; i++) {
                 bus->subs[i].cb(section, key, bus->subs[i].user_data);
+            }
         }
         dbus_error_free(&err);
         return DBUS_HANDLER_RESULT_HANDLED;
@@ -64,8 +65,9 @@ IsdeDBus *isde_dbus_init(void)
         dbus_error_free(&err);
         return NULL;
     }
-    if (!conn)
+    if (!conn) {
         return NULL;
+    }
 
     /* Don't exit the process if D-Bus disconnects */
     dbus_connection_set_exit_on_disconnect(conn, FALSE);
@@ -87,8 +89,9 @@ IsdeDBus *isde_dbus_init(void)
 
     /* Extract the underlying fd for event loop integration */
     int fd = -1;
-    if (dbus_connection_get_unix_fd(conn, &fd))
+    if (dbus_connection_get_unix_fd(conn, &fd)) {
         bus->fd = fd;
+    }
 
     /* Install message filter */
     dbus_connection_add_filter(conn, filter_func, bus, NULL);
@@ -101,7 +104,7 @@ IsdeDBus *isde_dbus_init(void)
 
 void isde_dbus_free(IsdeDBus *bus)
 {
-    if (!bus) return;
+    if (!bus) { return; }
     if (bus->conn) {
         dbus_connection_remove_filter(bus->conn, filter_func, bus);
         dbus_connection_unref(bus->conn);
@@ -116,25 +119,26 @@ int isde_dbus_get_fd(IsdeDBus *bus)
 
 void isde_dbus_dispatch(IsdeDBus *bus)
 {
-    if (!bus || !bus->conn) return;
+    if (!bus || !bus->conn) { return; }
 
     /* Read incoming data and dispatch messages */
     dbus_connection_read_write(bus->conn, 0);
-    while (dbus_connection_dispatch(bus->conn) == DBUS_DISPATCH_DATA_REMAINS)
+    while (dbus_connection_dispatch(bus->conn) == DBUS_DISPATCH_DATA_REMAINS) {
         ;
+    }
 }
 
 void isde_dbus_settings_notify(IsdeDBus *bus,
                                 const char *section,
                                 const char *key)
 {
-    if (!bus || !bus->conn) return;
+    if (!bus || !bus->conn) { return; }
 
     DBusMessage *msg = dbus_message_new_signal(
         ISDE_DBUS_PATH,
         ISDE_DBUS_INTERFACE,
         ISDE_DBUS_SIGNAL);
-    if (!msg) return;
+    if (!msg) { return; }
 
     dbus_message_append_args(msg,
                              DBUS_TYPE_STRING, &section,
@@ -150,7 +154,7 @@ void isde_dbus_settings_subscribe(IsdeDBus *bus,
                                    IsdeSettingsChangedCb cb,
                                    void *user_data)
 {
-    if (!bus || bus->nsubs >= MAX_SUBSCRIBERS) return;
+    if (!bus || bus->nsubs >= MAX_SUBSCRIBERS) { return; }
     bus->subs[bus->nsubs].cb = cb;
     bus->subs[bus->nsubs].user_data = user_data;
     bus->nsubs++;

@@ -27,7 +27,7 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
 
     /* Parent — track the child */
     Child *c = calloc(1, sizeof(*c));
-    if (!c) return NULL;
+    if (!c) { return NULL; }
 
     c->pid     = pid;
     c->command = strdup(command);
@@ -42,16 +42,17 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
 
 Child *child_find_pid(Session *s, pid_t pid)
 {
-    for (Child *c = s->children; c; c = c->next)
-        if (c->pid == pid) return c;
+    for (Child *c = s->children; c; c = c->next) {
+        if (c->pid == pid) { return c; }
+    }
     return NULL;
 }
 
 void child_remove(Session *s, Child *c)
 {
     Child **pp = &s->children;
-    while (*pp && *pp != c) pp = &(*pp)->next;
-    if (*pp) *pp = c->next;
+    while (*pp && *pp != c) { pp = &(*pp)->next; }
+    if (*pp) { *pp = c->next; }
     free(c->command);
     free(c);
 }
@@ -63,7 +64,7 @@ void child_reap(Session *s)
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         Child *c = child_find_pid(s, pid);
-        if (!c) continue;
+        if (!c) { continue; }
 
         if (WIFEXITED(status)) {
             fprintf(stderr, "isde-session: '%s' exited (status %d)\n",
@@ -80,7 +81,7 @@ void child_reap(Session *s)
             int is_panel = c->is_panel;
             child_remove(s, c);
             Child *nc = child_spawn(s, cmd, 1, is_wm);
-            if (nc) nc->is_panel = is_panel;
+            if (nc) { nc->is_panel = is_panel; }
             free(cmd);
         } else {
             child_remove(s, c);
@@ -100,13 +101,15 @@ void child_kill_all(Session *s)
     usleep(500000);
 
     /* Force kill any remaining */
-    for (Child *c = s->children; c; c = c->next)
+    for (Child *c = s->children; c; c = c->next) {
         kill(c->pid, SIGKILL);
+    }
 
     /* Reap all */
     int status;
-    while (waitpid(-1, &status, WNOHANG) > 0)
+    while (waitpid(-1, &status, WNOHANG) > 0) {
         ;
+    }
 
     /* Free the list */
     while (s->children) {

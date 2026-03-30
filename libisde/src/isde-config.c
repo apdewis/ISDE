@@ -33,8 +33,9 @@ static int table_pool_next = 0;
 
 static IsdeConfigTable *wrap_table(toml_table_t *t)
 {
-    if (!t)
+    if (!t) {
         return NULL;
+    }
     IsdeConfigTable *h = &table_pool[table_pool_next % TABLE_POOL_SIZE];
     table_pool_next++;
     h->tbl = t;
@@ -46,8 +47,9 @@ IsdeConfig *isde_config_load(const char *path, char *errbuf, int errbufsz)
 {
     FILE *fp = fopen(path, "r");
     if (!fp) {
-        if (errbuf)
+        if (errbuf) {
             snprintf(errbuf, errbufsz, "cannot open %s", path);
+        }
         return NULL;
     }
 
@@ -56,8 +58,9 @@ IsdeConfig *isde_config_load(const char *path, char *errbuf, int errbufsz)
     fclose(fp);
 
     if (!root) {
-        if (errbuf)
+        if (errbuf) {
             snprintf(errbuf, errbufsz, "%s: %s", path, err);
+        }
         return NULL;
     }
 
@@ -81,7 +84,7 @@ IsdeConfig *isde_config_load_xdg(const char *name, char *errbuf, int errbufsz)
         if (len > 0) {
             exe_dir[len] = '\0';
             char *slash = strrchr(exe_dir, '/');
-            if (slash) *slash = '\0';
+            if (slash) { *slash = '\0'; }
             size_t total = strlen(exe_dir) + strlen("/../../common/data/")
                          + strlen(name) + 1;
             path = malloc(total);
@@ -96,8 +99,9 @@ IsdeConfig *isde_config_load_xdg(const char *name, char *errbuf, int errbufsz)
     }
 
     if (!path) {
-        if (errbuf)
+        if (errbuf) {
             snprintf(errbuf, errbufsz, "%s not found in XDG config dirs", name);
+        }
         return NULL;
     }
     IsdeConfig *cfg = isde_config_load(path, errbuf, errbufsz);
@@ -107,10 +111,12 @@ IsdeConfig *isde_config_load_xdg(const char *name, char *errbuf, int errbufsz)
 
 void isde_config_free(IsdeConfig *cfg)
 {
-    if (!cfg)
+    if (!cfg) {
         return;
-    for (int i = 0; i < cfg->str_cache_count; i++)
+    }
+    for (int i = 0; i < cfg->str_cache_count; i++) {
         free(cfg->str_cache[i]);
+    }
     free(cfg->str_cache);
     toml_free(cfg->root);
     free(cfg);
@@ -123,19 +129,22 @@ IsdeConfigTable *isde_config_root(IsdeConfig *cfg)
 
 IsdeConfigTable *isde_config_table(IsdeConfigTable *parent, const char *key)
 {
-    if (!parent || !parent->tbl)
+    if (!parent || !parent->tbl) {
         return NULL;
+    }
     return wrap_table(toml_table_in(parent->tbl, key));
 }
 
 const char *isde_config_string(IsdeConfigTable *tbl, const char *key,
                                const char *def)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return def;
+    }
     toml_datum_t d = toml_string_in(tbl->tbl, key);
-    if (!d.ok)
+    if (!d.ok) {
         return def;
+    }
     /* d.u.s is malloc'd by tomlc99 — we need to keep it alive but also
      * return a stable pointer.  We don't have the IsdeConfig here for
      * caching, so the caller must be aware strings are valid until
@@ -148,32 +157,36 @@ const char *isde_config_string(IsdeConfigTable *tbl, const char *key,
 
 int64_t isde_config_int(IsdeConfigTable *tbl, const char *key, int64_t def)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return def;
+    }
     toml_datum_t d = toml_int_in(tbl->tbl, key);
     return d.ok ? d.u.i : def;
 }
 
 int isde_config_bool(IsdeConfigTable *tbl, const char *key, int def)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return def;
+    }
     toml_datum_t d = toml_bool_in(tbl->tbl, key);
     return d.ok ? d.u.b : def;
 }
 
 double isde_config_double(IsdeConfigTable *tbl, const char *key, double def)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return def;
+    }
     toml_datum_t d = toml_double_in(tbl->tbl, key);
     return d.ok ? d.u.d : def;
 }
 
 int isde_config_array_count(IsdeConfigTable *tbl, const char *key)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return 0;
+    }
     toml_array_t *arr = toml_array_in(tbl->tbl, key);
     return arr ? toml_array_nelem(arr) : 0;
 }
@@ -181,11 +194,13 @@ int isde_config_array_count(IsdeConfigTable *tbl, const char *key)
 IsdeConfigTable *isde_config_array_table(IsdeConfigTable *tbl, const char *key,
                                          int index)
 {
-    if (!tbl || !tbl->tbl)
+    if (!tbl || !tbl->tbl) {
         return NULL;
+    }
     toml_array_t *arr = toml_array_in(tbl->tbl, key);
-    if (!arr)
+    if (!arr) {
         return NULL;
+    }
     return wrap_table(toml_table_at(arr, index));
 }
 
@@ -193,7 +208,7 @@ static int dclick_cached = -1;
 
 int isde_config_double_click_ms(void)
 {
-    if (dclick_cached >= 0) return dclick_cached;
+    if (dclick_cached >= 0) { return dclick_cached; }
 
     dclick_cached = 400; /* default */
     char errbuf[128];
@@ -201,8 +216,9 @@ int isde_config_double_click_ms(void)
     if (cfg) {
         IsdeConfigTable *root = isde_config_root(cfg);
         IsdeConfigTable *input = isde_config_table(root, "input");
-        if (input)
+        if (input) {
             dclick_cached = (int)isde_config_int(input, "double_click_ms", 400);
+        }
         isde_config_free(cfg);
     }
     return dclick_cached;
@@ -216,22 +232,27 @@ void isde_config_invalidate_cache(void)
 int isde_config_string_array(IsdeConfigTable *tbl, const char *key,
                              char ***out)
 {
-    if (!tbl || !tbl->tbl || !out)
+    if (!tbl || !tbl->tbl || !out) {
         return 0;
+    }
     toml_array_t *arr = toml_array_in(tbl->tbl, key);
-    if (!arr)
+    if (!arr) {
         return 0;
+    }
     int n = toml_array_nelem(arr);
-    if (n <= 0)
+    if (n <= 0) {
         return 0;
+    }
     char **result = calloc(n, sizeof(char *));
-    if (!result)
+    if (!result) {
         return 0;
+    }
     int count = 0;
     for (int i = 0; i < n; i++) {
         toml_datum_t d = toml_string_at(arr, i);
-        if (d.ok)
+        if (d.ok) {
             result[count++] = d.u.s;
+        }
     }
     *out = result;
     return count;

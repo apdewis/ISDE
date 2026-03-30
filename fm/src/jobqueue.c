@@ -23,24 +23,27 @@ static FmJob *job_alloc(FmJobType type, Fm *win,
                         char **srcs, int nsrc, const char *dst_dir)
 {
     FmJob *job = calloc(1, sizeof(FmJob));
-    if (!job) return NULL;
+    if (!job) { return NULL; }
     job->type = type;
     job->origin_win = win;
     job->nsrc = nsrc;
-    if (dst_dir)
+    if (dst_dir) {
         job->dst_dir = strdup(dst_dir);
+    }
     if (nsrc > 0 && srcs) {
         job->src_paths = malloc(nsrc * sizeof(char *));
-        for (int i = 0; i < nsrc; i++)
+        for (int i = 0; i < nsrc; i++) {
             job->src_paths[i] = strdup(srcs[i]);
+        }
     }
     return job;
 }
 
 static void job_free(FmJob *job)
 {
-    for (int i = 0; i < job->nsrc; i++)
+    for (int i = 0; i < job->nsrc; i++) {
         free(job->src_paths[i]);
+    }
     free(job->src_paths);
     free(job->dst_dir);
     free(job);
@@ -50,10 +53,11 @@ static void job_free(FmJob *job)
 static void enqueue_pending(FmApp *app, FmJob *job)
 {
     pthread_mutex_lock(&app->job_mutex);
-    if (app->job_tail)
+    if (app->job_tail) {
         app->job_tail->next = job;
-    else
+    } else {
         app->job_head = job;
+    }
     app->job_tail = job;
     pthread_cond_signal(&app->job_cond);
     pthread_mutex_unlock(&app->job_mutex);
@@ -62,13 +66,15 @@ static void enqueue_pending(FmApp *app, FmJob *job)
 static FmJob *dequeue_pending(FmApp *app)
 {
     pthread_mutex_lock(&app->job_mutex);
-    while (!app->job_head && app->worker_running)
+    while (!app->job_head && app->worker_running) {
         pthread_cond_wait(&app->job_cond, &app->job_mutex);
+    }
     FmJob *job = app->job_head;
     if (job) {
         app->job_head = job->next;
-        if (!app->job_head)
+        if (!app->job_head) {
             app->job_tail = NULL;
+        }
         job->next = NULL;
     }
     pthread_mutex_unlock(&app->job_mutex);
@@ -101,12 +107,13 @@ static void exec_copy(FmJob *job)
 {
     /* Pre-count total files for accurate progress */
     int total = 0;
-    for (int i = 0; i < job->nsrc; i++)
+    for (int i = 0; i < job->nsrc; i++) {
         total += fileops_count_files(job->src_paths[i]);
+    }
     atomic_store(&job->files_total, total);
 
     for (int i = 0; i < job->nsrc; i++) {
-        if (atomic_load(&job->cancelled)) break;
+        if (atomic_load(&job->cancelled)) { break; }
 
         const char *src = job->src_paths[i];
         const char *base = strrchr(src, '/');
@@ -119,8 +126,9 @@ static void exec_copy(FmJob *job)
         int ret = fileops_copy_progress(src, dest,
                                         &job->files_done, &job->cancelled);
         free(dest);
-        if (ret != 0 && job->error == 0)
+        if (ret != 0 && job->error == 0) {
             job->error = errno;
+        }
     }
 }
 
@@ -128,12 +136,13 @@ static void exec_move(FmJob *job)
 {
     /* For move, pre-count in case we need cross-device copy+delete */
     int total = 0;
-    for (int i = 0; i < job->nsrc; i++)
+    for (int i = 0; i < job->nsrc; i++) {
         total += fileops_count_files(job->src_paths[i]);
+    }
     atomic_store(&job->files_total, total);
 
     for (int i = 0; i < job->nsrc; i++) {
-        if (atomic_load(&job->cancelled)) break;
+        if (atomic_load(&job->cancelled)) { break; }
 
         const char *src = job->src_paths[i];
         const char *base = strrchr(src, '/');
@@ -160,11 +169,13 @@ static void exec_move(FmJob *job)
             /* Cross-device: progress-aware copy then delete */
             ret = fileops_copy_progress(src, dest,
                                         &job->files_done, &job->cancelled);
-            if (ret == 0)
+            if (ret == 0) {
                 fileops_delete(NULL, src);
+            }
         }
-        if (ret != 0 && job->error == 0)
+        if (ret != 0 && job->error == 0) {
             job->error = errno;
+        }
         free(dest);
     }
 }
@@ -172,16 +183,18 @@ static void exec_move(FmJob *job)
 static void exec_delete(FmJob *job)
 {
     int total = 0;
-    for (int i = 0; i < job->nsrc; i++)
+    for (int i = 0; i < job->nsrc; i++) {
         total += fileops_count_files(job->src_paths[i]);
+    }
     atomic_store(&job->files_total, total);
 
     for (int i = 0; i < job->nsrc; i++) {
-        if (atomic_load(&job->cancelled)) break;
+        if (atomic_load(&job->cancelled)) { break; }
         int ret = fileops_delete_progress(job->src_paths[i],
                                           &job->files_done, &job->cancelled);
-        if (ret != 0 && job->error == 0)
+        if (ret != 0 && job->error == 0) {
             job->error = errno;
+        }
     }
 }
 
@@ -190,10 +203,11 @@ static void exec_trash(FmJob *job)
     /* Trash moves whole items — count top-level items, not recursive */
     atomic_store(&job->files_total, job->nsrc);
     for (int i = 0; i < job->nsrc; i++) {
-        if (atomic_load(&job->cancelled)) break;
+        if (atomic_load(&job->cancelled)) { break; }
         int ret = fileops_trash(job->src_paths[i]);
-        if (ret != 0 && job->error == 0)
+        if (ret != 0 && job->error == 0) {
             job->error = errno;
+        }
         atomic_store(&job->files_done, i + 1);
     }
 }
@@ -202,8 +216,9 @@ static void exec_empty_trash(FmJob *job)
 {
     atomic_store(&job->files_total, 1);
     int ret = fileops_empty_trash();
-    if (ret != 0 && job->error == 0)
+    if (ret != 0 && job->error == 0) {
         job->error = errno;
+    }
     atomic_store(&job->files_done, 1);
 }
 
@@ -215,7 +230,7 @@ static void *worker_func(void *arg)
 
     while (1) {
         FmJob *job = dequeue_pending(app);
-        if (!job) break;  /* shutdown sentinel */
+        if (!job) { break; }  /* shutdown sentinel */
 
         switch (job->type) {
         case FM_JOB_COPY:        exec_copy(job);        break;
@@ -328,8 +343,9 @@ void jobqueue_shutdown(FmApp *app)
     }
     done_head = NULL;
 
-    if (app->notify_input_id)
+    if (app->notify_input_id) {
         XtRemoveInput(app->notify_input_id);
+    }
     close(app->notify_pipe[0]);
     close(app->notify_pipe[1]);
 

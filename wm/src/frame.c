@@ -27,7 +27,9 @@ static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
                         ((rgb >> 8)  & 0xFF) * 257,
                         ( rgb        & 0xFF) * 257),
         NULL);
-    if (!reply) return wm->screen->white_pixel;
+    if (!reply) {
+        return wm->screen->white_pixel;
+    }
     Pixel px = reply->pixel;
     free(reply);
     return px;
@@ -39,7 +41,9 @@ static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
 void frame_apply_theme(Wm *wm, WmClient *c)
 {
     const IsdeColorScheme *s = isde_theme_current();
-    if (!s) return;
+    if (!s) {
+        return;
+    }
 
     const IsdeElementColors *tb = c->focused
         ? &s->titlebar_active : &s->titlebar;
@@ -180,8 +184,9 @@ static void title_button_handler(Widget w, XtPointer client_data,
     Wm *wm = ((void **)client_data)[0];
     WmClient *c = ((void **)client_data)[1];
 
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
         return;
+    }
 
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
     wm_focus_client(wm, c);
@@ -211,8 +216,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     /* Get client geometry */
     xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(
         wm->conn, xcb_get_geometry(wm->conn, client), NULL);
-    if (!geo)
+    if (!geo) {
         return NULL;
+    }
 
     WmClient *c = calloc(1, sizeof(*c));
     if (!c) { free(geo); return NULL; }
@@ -256,7 +262,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     int btn_area = 3 * WM_TITLE_HEIGHT;
     int title_w = fw - btn_area;
-    if (title_w < 1) title_w = 1;
+    if (title_w < 1) { title_w = 1; }
 
     /* Title bar label */
     n = 0;
@@ -273,8 +279,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Minimize button */
     n = 0;
-    if (icon_minimize)
-        { XtSetArg(args[n], XtNsvgFile, icon_minimize); n++; }
+    if (icon_minimize) {
+        XtSetArg(args[n], XtNsvgFile, icon_minimize); n++;
+    }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
     XtSetArg(args[n], XtNinternalWidth, 0);            n++;
@@ -285,8 +292,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Maximize / restore button */
     n = 0;
-    if (icon_maximize)
-        { XtSetArg(args[n], XtNsvgFile, icon_maximize); n++; }
+    if (icon_maximize) {
+        XtSetArg(args[n], XtNsvgFile, icon_maximize); n++;
+    }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
     XtSetArg(args[n], XtNinternalWidth, 0);            n++;
@@ -297,8 +305,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Close button */
     n = 0;
-    if (icon_close)
-        { XtSetArg(args[n], XtNsvgFile, icon_close); n++; }
+    if (icon_close) {
+        XtSetArg(args[n], XtNsvgFile, icon_close); n++;
+    }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
     XtSetArg(args[n], XtNinternalWidth, 0);            n++;
@@ -359,8 +368,9 @@ void frame_destroy(Wm *wm, WmClient *c)
     xcb_reparent_window(wm->conn, c->client, wm->root, c->x, c->y);
     xcb_flush(wm->conn);
 
-    if (c->shell)
+    if (c->shell) {
         XtDestroyWidget(c->shell);
+    }
 
     free(c->title);
     free(c);
@@ -393,7 +403,7 @@ void frame_configure(Wm *wm, WmClient *c)
     /* Title bar inset by border width; spans inner width */
     int inner_w = c->width;
     int title_w = inner_w - btn_area;
-    if (title_w < 1) title_w = 1;
+    if (title_w < 1) { title_w = 1; }
     int bx = WM_BORDER_WIDTH;
     int by = WM_BORDER_WIDTH;
     XtConfigureWidget(c->title_label, bx, by,
@@ -412,8 +422,9 @@ void frame_configure(Wm *wm, WmClient *c)
                          cvals);
 
     /* Update grip positions */
-    if (c->grip[0])
+    if (c->grip[0]) {
         frame_update_grips(wm, c);
+    }
 
     xcb_flush(wm->conn);
 }
@@ -435,17 +446,21 @@ void frame_update_title(Wm *wm, WmClient *c)
 
 void frame_init_cursors(Wm *wm)
 {
-    if (wm->cursors[0]) return;
-    xcb_cursor_context_t *ctx;
-    if (xcb_cursor_context_new(wm->conn, wm->screen, &ctx) < 0)
+    if (wm->cursors[0]) {
         return;
+    }
+    xcb_cursor_context_t *ctx;
+    if (xcb_cursor_context_new(wm->conn, wm->screen, &ctx) < 0) {
+        return;
+    }
     static const char *names[8] = {
         "top_side", "bottom_side", "left_side", "right_side",
         "top_left_corner", "top_right_corner",
         "bottom_left_corner", "bottom_right_corner"
     };
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 8; i++) {
         wm->cursors[i] = xcb_cursor_load_cursor(ctx, names[i]);
+    }
     xcb_cursor_context_free(ctx);
 }
 

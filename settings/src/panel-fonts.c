@@ -112,7 +112,7 @@ static void dismiss_chooser(void)
 static void chooser_ok_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)cd; (void)call;
-    if (!chooser_widget) return;
+    if (!chooser_widget) { return; }
 
     String family = IswFontChooserGetFamily(chooser_widget);
     int size = IswFontChooserGetSize(chooser_widget);
@@ -121,8 +121,9 @@ static void chooser_ok_cb(Widget w, XtPointer cd, XtPointer call)
         snprintf(current[chooser_slot].family,
                  sizeof(current[chooser_slot].family), "%s", family);
     }
-    if (size > 0)
+    if (size > 0) {
         current[chooser_slot].size = size;
+    }
 
     update_desc_label(chooser_slot);
     dismiss_chooser();
@@ -216,8 +217,9 @@ static Widget fonts_create(Widget parent, XtAppContext app)
 
     /* Find toplevel for popup shells */
     toplevel_cache = parent;
-    while (toplevel_cache && !XtIsShell(toplevel_cache))
+    while (toplevel_cache && !XtIsShell(toplevel_cache)) {
         toplevel_cache = XtParent(toplevel_cache);
+    }
 
     Arg args[20];
     Cardinal n;
@@ -244,13 +246,15 @@ static Widget fonts_create(Widget parent, XtAppContext app)
             for (int i = 0; i < NUM_FONTS; i++) {
                 const char *fam = isde_config_string(fonts,
                     font_family_keys[i], NULL);
-                if (fam)
+                if (fam) {
                     snprintf(current[i].family, sizeof(current[i].family),
                              "%s", fam);
+                }
                 int sz = (int)isde_config_int(fonts,
                     font_size_keys[i], 0);
-                if (sz > 0)
+                if (sz > 0) {
                     current[i].size = sz;
+                }
             }
         }
         isde_config_free(cfg);
@@ -305,7 +309,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
 static void fonts_apply(void)
 {
     char *path = isde_xdg_config_path("isde.toml");
-    if (!path) return;
+    if (!path) { return; }
 
     for (int i = 0; i < NUM_FONTS; i++) {
         isde_config_write_string(path, "fonts",
@@ -317,15 +321,17 @@ static void fonts_apply(void)
     free(path);
     memcpy(saved, current, sizeof(saved));
 
-    if (panel_dbus)
+    if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "fonts", "*");
+    }
 }
 
 static void fonts_revert(void)
 {
     memcpy(current, saved, sizeof(current));
-    for (int i = 0; i < NUM_FONTS; i++)
+    for (int i = 0; i < NUM_FONTS; i++) {
         update_desc_label(i);
+    }
 }
 
 static int fonts_has_changes(void)
@@ -336,8 +342,9 @@ static int fonts_has_changes(void)
 static void fonts_destroy(void)
 {
     dismiss_chooser();
-    for (int i = 0; i < NUM_FONTS; i++)
+    for (int i = 0; i < NUM_FONTS; i++) {
         desc_labels[i] = NULL;
+    }
 }
 
 void panel_fonts_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }

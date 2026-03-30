@@ -26,11 +26,11 @@ static int         glob_loaded;
 
 static void load_globs(void)
 {
-    if (glob_loaded) return;
+    if (glob_loaded) { return; }
     glob_loaded = 1;
 
     FILE *fp = fopen("/usr/share/mime/globs2", "r");
-    if (!fp) return;
+    if (!fp) { return; }
 
     int cap = 512;
     glob_table = malloc(cap * sizeof(GlobEntry));
@@ -38,25 +38,27 @@ static void load_globs(void)
 
     char line[512];
     while (fgets(line, sizeof(line), fp)) {
-        if (line[0] == '#') continue;
+        if (line[0] == '#') { continue; }
 
         /* Format: weight:mime:pattern */
         char *p1 = strchr(line, ':');
-        if (!p1) continue;
+        if (!p1) { continue; }
         char *p2 = strchr(p1 + 1, ':');
-        if (!p2) continue;
+        if (!p2) { continue; }
 
         /* Only handle *.ext patterns */
         char *pattern = p2 + 1;
         /* Strip trailing newline */
         char *nl = strchr(pattern, '\n');
-        if (nl) *nl = '\0';
+        if (nl) { *nl = '\0'; }
 
-        if (pattern[0] != '*' || pattern[1] != '.')
+        if (pattern[0] != '*' || pattern[1] != '.') {
             continue;
+        }
         /* Skip patterns with wildcards in the extension */
-        if (strchr(pattern + 2, '*') || strchr(pattern + 2, '?'))
+        if (strchr(pattern + 2, '*') || strchr(pattern + 2, '?')) {
             continue;
+        }
 
         if (glob_count >= cap) {
             cap *= 2;
@@ -79,9 +81,9 @@ const char *isde_mime_type_for_file(const char *filename)
 {
     load_globs();
 
-    if (!filename) return "application/octet-stream";
+    if (!filename) { return "application/octet-stream"; }
     const char *dot = strrchr(filename, '.');
-    if (!dot || !dot[1]) return "application/octet-stream";
+    if (!dot || !dot[1]) { return "application/octet-stream"; }
     const char *ext = dot + 1;
 
     /* Find highest-weight match */
@@ -107,7 +109,7 @@ const char *isde_mime_type_for_file(const char *filename)
 static char *search_mimeapps(const char *path, const char *mime)
 {
     FILE *fp = fopen(path, "r");
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     size_t mlen = strlen(mime);
     int in_defaults = 0;
@@ -118,28 +120,30 @@ static char *search_mimeapps(const char *path, const char *mime)
         /* Strip trailing whitespace */
         char *end = line + strlen(line);
         while (end > line && (end[-1] == '\n' || end[-1] == '\r' ||
-                              end[-1] == ' ' || end[-1] == '\t'))
+                              end[-1] == ' ' || end[-1] == '\t')) {
             *--end = '\0';
+        }
 
         if (line[0] == '[') {
             in_defaults = (strcmp(line, "[Default Applications]") == 0);
             continue;
         }
-        if (!in_defaults || line[0] == '#' || !line[0])
+        if (!in_defaults || line[0] == '#' || !line[0]) {
             continue;
+        }
 
         /* mime=desktop.desktop;other.desktop;... */
         char *eq = strchr(line, '=');
-        if (!eq) continue;
+        if (!eq) { continue; }
 
         if ((size_t)(eq - line) == mlen && strncmp(line, mime, mlen) == 0) {
             /* Take the first entry (before any semicolon) */
             char *val = eq + 1;
             char *semi = strchr(val, ';');
-            if (semi) *semi = '\0';
+            if (semi) { *semi = '\0'; }
             /* Strip whitespace from value */
-            while (*val == ' ' || *val == '\t') val++;
-            if (*val) result = strdup(val);
+            while (*val == ' ' || *val == '\t') { val++; }
+            if (*val) { result = strdup(val); }
             break;
         }
     }
@@ -150,7 +154,7 @@ static char *search_mimeapps(const char *path, const char *mime)
 
 char *isde_mime_default_app(const char *mime)
 {
-    if (!mime) return NULL;
+    if (!mime) { return NULL; }
     char *result;
 
     /* 1. User config */
@@ -159,24 +163,24 @@ char *isde_mime_default_app(const char *mime)
         char path[512];
         snprintf(path, sizeof(path), "%s/.config/mimeapps.list", home);
         result = search_mimeapps(path, mime);
-        if (result) return result;
+        if (result) { return result; }
 
         /* Also check XDG_CONFIG_HOME if set */
         const char *xdg_config = getenv("XDG_CONFIG_HOME");
         if (xdg_config) {
             snprintf(path, sizeof(path), "%s/mimeapps.list", xdg_config);
             result = search_mimeapps(path, mime);
-            if (result) return result;
+            if (result) { return result; }
         }
     }
 
     /* 2. System applications */
     result = search_mimeapps("/usr/share/applications/mimeapps.list", mime);
-    if (result) return result;
+    if (result) { return result; }
 
     result = search_mimeapps("/usr/local/share/applications/mimeapps.list",
                              mime);
-    if (result) return result;
+    if (result) { return result; }
 
     /* 3. Legacy defaults.list */
     result = search_mimeapps("/usr/share/applications/defaults.list", mime);
@@ -185,7 +189,7 @@ char *isde_mime_default_app(const char *mime)
 
 char *isde_mime_find_desktop(const char *desktop_id)
 {
-    if (!desktop_id) return NULL;
+    if (!desktop_id) { return NULL; }
 
     static const char *search_dirs[] = {
         NULL, /* placeholder for ~/.local/share/applications */
@@ -195,29 +199,31 @@ char *isde_mime_find_desktop(const char *desktop_id)
 
     char local_dir[512] = "";
     const char *home = getenv("HOME");
-    if (home)
+    if (home) {
         snprintf(local_dir, sizeof(local_dir),
                  "%s/.local/share/applications", home);
+    }
 
     for (int i = 0; i < 3; i++) {
         const char *dir = (i == 0) ? local_dir : search_dirs[i];
-        if (!dir[0]) continue;
+        if (!dir[0]) { continue; }
 
         char path[1024];
         snprintf(path, sizeof(path), "%s/%s", dir, desktop_id);
 
-        if (access(path, R_OK) == 0)
+        if (access(path, R_OK) == 0) {
             return strdup(path);
+        }
     }
     return NULL;
 }
 
 int isde_mime_set_default(const char *mime, const char *desktop_id)
 {
-    if (!mime || !desktop_id) return -1;
+    if (!mime || !desktop_id) { return -1; }
 
     const char *home = getenv("HOME");
-    if (!home) return -1;
+    if (!home) { return -1; }
 
     char path[512];
     snprintf(path, sizeof(path), "%s/.config/mimeapps.list", home);
@@ -243,6 +249,7 @@ int isde_mime_set_default(const char *mime, const char *desktop_id)
             /* Check if this is the key we want to update */
             if (in_defaults && !found) {
                 size_t mlen = strlen(mime);
+
                 char *eq = strchr(line, '=');
                 if (eq && (size_t)(eq - line) == mlen &&
                     strncmp(line, mime, mlen) == 0) {
@@ -256,16 +263,18 @@ int isde_mime_set_default(const char *mime, const char *desktop_id)
             }
 
             if (line[0] == '[') {
-                if (in_defaults && !found)
+                if (in_defaults && !found) {
                     section_end = nlines; /* before this new section */
+                }
                 in_defaults = (strncmp(line, "[Default Applications]", 22) == 0);
-                if (in_defaults) has_section = 1;
+                if (in_defaults) { has_section = 1; }
             }
 
             lines[nlines++] = strdup(line);
         }
-        if (in_defaults && !found)
+        if (in_defaults && !found) {
             section_end = nlines;
+        }
         fclose(fp);
     }
 
@@ -280,7 +289,7 @@ int isde_mime_set_default(const char *mime, const char *desktop_id)
                 cap += 4;
                 lines = realloc(lines, cap * sizeof(char *));
             }
-            if (nlines > 0) lines[nlines++] = strdup("\n");
+            if (nlines > 0) { lines[nlines++] = strdup("\n"); }
             lines[nlines++] = strdup("[Default Applications]\n");
             lines[nlines++] = strdup(buf);
         } else if (section_end >= 0) {
@@ -299,7 +308,7 @@ int isde_mime_set_default(const char *mime, const char *desktop_id)
     /* Write back */
     fp = fopen(path, "w");
     if (!fp) {
-        for (int i = 0; i < nlines; i++) free(lines[i]);
+        for (int i = 0; i < nlines; i++) { free(lines[i]); }
         free(lines);
         return -1;
     }
@@ -307,6 +316,7 @@ int isde_mime_set_default(const char *mime, const char *desktop_id)
         fputs(lines[i], fp);
         free(lines[i]);
     }
+
     free(lines);
     fclose(fp);
     return 0;

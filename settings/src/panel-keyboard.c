@@ -19,7 +19,7 @@ static xcb_connection_t *panel_conn;
 
 static void apply_keyboard(int delay, int interval)
 {
-    if (!panel_conn) return;
+    if (!panel_conn) { return; }
     xcb_xkb_use_extension(panel_conn, 1, 0);
     xcb_xkb_set_controls(panel_conn,
         XCB_XKB_ID_USE_CORE_KBD,
@@ -33,7 +33,7 @@ static void apply_keyboard(int delay, int interval)
 
 static void read_current_keyboard(void)
 {
-    if (!panel_conn) return;
+    if (!panel_conn) { return; }
     xcb_xkb_use_extension(panel_conn, 1, 0);
     xcb_xkb_get_controls_reply_t *reply =
         xcb_xkb_get_controls_reply(panel_conn,
@@ -63,8 +63,9 @@ static void keyboard_apply(void)
     saved_repeat_delay = delay;
     saved_repeat_interval = interval;
 
-    if (panel_dbus)
+    if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "keyboard", "*");
+    }
 }
 
 static void keyboard_revert(void)
@@ -141,7 +142,7 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
 
 static int keyboard_has_changes(void)
 {
-    if (!scale_repeat_delay) return 0;
+    if (!scale_repeat_delay) { return 0; }
     return IswScaleGetValue(scale_repeat_delay) != saved_repeat_delay ||
            IswScaleGetValue(scale_repeat_interval) != saved_repeat_interval;
 }

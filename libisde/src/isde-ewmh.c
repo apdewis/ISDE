@@ -18,8 +18,9 @@ struct IsdeEwmh {
 IsdeEwmh *isde_ewmh_init(xcb_connection_t *conn, int screen)
 {
     IsdeEwmh *e = calloc(1, sizeof(*e));
-    if (!e)
+    if (!e) {
         return NULL;
+    }
 
     e->conn = conn;
     e->screen_num = screen;
@@ -40,8 +41,9 @@ IsdeEwmh *isde_ewmh_init(xcb_connection_t *conn, int screen)
 
 void isde_ewmh_free(IsdeEwmh *e)
 {
-    if (!e)
+    if (!e) {
         return;
+    }
     xcb_ewmh_connection_wipe(&e->ewmh);
     free(e);
 }
@@ -130,15 +132,17 @@ int isde_ewmh_get_client_list(IsdeEwmh *e, xcb_window_t **wins)
     if (!xcb_ewmh_get_client_list_reply(
             &e->ewmh,
             xcb_ewmh_get_client_list(&e->ewmh, e->screen_num),
-            &reply, NULL))
+            &reply, NULL)) {
         return 0;
+    }
 
     int count = reply.windows_len;
     *wins = malloc(count * sizeof(xcb_window_t));
-    if (*wins)
+    if (*wins) {
         memcpy(*wins, reply.windows, count * sizeof(xcb_window_t));
-    else
+    } else {
         count = 0;
+    }
     xcb_ewmh_get_windows_reply_wipe(&reply);
     return count;
 }
@@ -149,8 +153,9 @@ xcb_atom_t isde_ewmh_get_window_type(IsdeEwmh *e, xcb_window_t win)
     if (!xcb_ewmh_get_wm_window_type_reply(
             &e->ewmh,
             xcb_ewmh_get_wm_window_type(&e->ewmh, win),
-            &reply, NULL))
+            &reply, NULL)) {
         return XCB_ATOM_NONE;
+    }
 
     xcb_atom_t type = reply.atoms_len > 0 ? reply.atoms[0] : XCB_ATOM_NONE;
     xcb_ewmh_get_atoms_reply_wipe(&reply);
@@ -164,8 +169,9 @@ int isde_ewmh_get_wm_class(IsdeEwmh *e, xcb_window_t win,
     if (!xcb_icccm_get_wm_class_reply(
             e->conn,
             xcb_icccm_get_wm_class(e->conn, win),
-            &reply, NULL))
+            &reply, NULL)) {
         return 0;
+    }
 
     *instance_out = strdup(reply.instance_name);
     *class_out = strdup(reply.class_name);

@@ -78,8 +78,9 @@ static void places_free_entries(FmPlacesData *pd)
 
 static void sections_free(FmPlacesData *pd)
 {
-    for (int i = 0; i < pd->nsections; i++)
+    for (int i = 0; i < pd->nsections; i++) {
         free(pd->sections[i].labels);
+    }
     free(pd->sections);
     pd->sections = NULL;
     pd->nsections = 0;
@@ -108,8 +109,9 @@ static void build_places_list(FmPlacesData *pd)
     places_add(pd, "Places", NULL, NULL, 1);
 
     const char *home = getenv("HOME");
-    if (home)
+    if (home) {
         places_add(pd, "Home", home, "user-home", 0);
+    }
 
     add_xdg_dir(pd, "DESKTOP",   "Desktop",   "user-desktop");
     add_xdg_dir(pd, "DOCUMENTS", "Documents", "folder-documents");
@@ -180,9 +182,10 @@ static void build_places_list(FmPlacesData *pd)
         while (fgets(line, sizeof(line), fp)) {
             /* Strip newline */
             char *nl = strchr(line, '\n');
-            if (nl) *nl = '\0';
-            if (line[0] == '\0')
+            if (nl) { *nl = '\0'; }
+            if (line[0] == '\0') {
                 continue;
+            }
 
             /* Format: file:///path [optional label] */
             char *uri = line;
@@ -193,8 +196,8 @@ static void build_places_list(FmPlacesData *pd)
             if (space) {
                 *space = '\0';
                 label = space + 1;
-                while (*label == ' ') label++;
-                if (*label == '\0') label = NULL;
+                while (*label == ' ') { label++; }
+                if (*label == '\0') { label = NULL; }
             }
 
             /* Convert file:// URI to path */
@@ -208,8 +211,9 @@ static void build_places_list(FmPlacesData *pd)
             }
 
             struct stat st;
-            if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))
+            if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
                 continue;
+            }
 
             if (!header_added) {
                 places_add(pd, "Bookmarks", NULL, NULL, 1);
@@ -234,28 +238,32 @@ static void build_sections(FmPlacesData *pd)
 
     /* Count sections (headers) */
     int count = 0;
-    for (int i = 0; i < pd->nplaces; i++)
-        if (pd->places[i].is_header) count++;
+    for (int i = 0; i < pd->nplaces; i++) {
+        if (pd->places[i].is_header) { count++; }
+    }
 
     pd->sections = calloc(count, sizeof(PlaceSection));
     pd->nsections = 0;
 
     for (int i = 0; i < pd->nplaces; i++) {
-        if (!pd->places[i].is_header)
+        if (!pd->places[i].is_header) {
             continue;
+        }
 
         PlaceSection *s = &pd->sections[pd->nsections++];
         s->start_idx = i + 1;
 
         /* Count items until next header or end */
         s->nitems = 0;
-        for (int j = i + 1; j < pd->nplaces && !pd->places[j].is_header; j++)
+        for (int j = i + 1; j < pd->nplaces && !pd->places[j].is_header; j++) {
             s->nitems++;
+        }
 
         /* Build label array for the List widget */
         s->labels = calloc(s->nitems, sizeof(String));
-        for (int j = 0; j < s->nitems; j++)
+        for (int j = 0; j < s->nitems; j++) {
             s->labels[j] = pd->places[s->start_idx + j].label;
+        }
     }
 }
 
@@ -268,22 +276,27 @@ static void place_list_cb(Widget w, XtPointer cd, XtPointer call)
     FmPlacesData *pd = fm->places_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call;
 
-    if (ret->list_index == XAW_LIST_NONE)
+    if (ret->list_index == XAW_LIST_NONE) {
         return;
+    }
 
     /* Find which section this List widget belongs to */
     for (int i = 0; i < pd->nsections; i++) {
-        if (pd->sections[i].list != w)
+        if (pd->sections[i].list != w) {
             continue;
+        }
 
         int idx = pd->sections[i].start_idx + ret->list_index;
-        if (idx < pd->nplaces && pd->places[idx].path)
+        if (idx < pd->nplaces && pd->places[idx].path) {
             fm_navigate(fm, pd->places[idx].path);
+        }
 
         /* Unhighlight all other section lists */
-        for (int j = 0; j < pd->nsections; j++)
-            if (j != i && pd->sections[j].list)
+        for (int j = 0; j < pd->nsections; j++) {
+            if (j != i && pd->sections[j].list) {
                 IswListUnhighlight(pd->sections[j].list);
+            }
+        }
         return;
     }
 }
@@ -354,8 +367,9 @@ void places_init(Fm *fm)
 void places_cleanup(Fm *fm)
 {
     FmPlacesData *pd = fm->places_data;
-    if (!pd)
+    if (!pd) {
         return;
+    }
     sections_free(pd);
     places_free_entries(pd);
     free(pd);

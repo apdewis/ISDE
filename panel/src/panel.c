@@ -15,7 +15,9 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
     xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, strlen(name), name);
     xcb_intern_atom_reply_t *r  = xcb_intern_atom_reply(c, ck, NULL);
-    if (!r) return XCB_ATOM_NONE;
+    if (!r) {
+        return XCB_ATOM_NONE;
+    }
     xcb_atom_t a = r->atom;
     free(r);
     return a;
@@ -25,7 +27,9 @@ static void load_pinned(Panel *p)
 {
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return;
+    if (!cfg) {
+        return;
+    }
 
     IsdeConfigTable *root = isde_config_root(cfg);
     IsdeConfigTable *panel_cfg = isde_config_table(root, "panel");
@@ -59,8 +63,9 @@ static void load_desktop_entries(Panel *p)
             if (entries && count > 0) {
                 p->desktop_entries = realloc(p->desktop_entries,
                     (p->ndesktop + count) * sizeof(IsdeDesktopEntry *));
-                for (int i = 0; i < count; i++)
+                for (int i = 0; i < count; i++) {
                     p->desktop_entries[p->ndesktop++] = entries[i];
+                }
                 free(entries);
             }
         }
@@ -76,8 +81,9 @@ static void load_desktop_entries(Panel *p)
     if (entries && count > 0) {
         p->desktop_entries = realloc(p->desktop_entries,
             (p->ndesktop + count) * sizeof(IsdeDesktopEntry *));
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < count; i++) {
             p->desktop_entries[p->ndesktop++] = entries[i];
+        }
         free(entries);
     }
 }
@@ -87,33 +93,40 @@ static void load_desktop_entries(Panel *p)
 static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
                                                  const char *wm_class)
 {
-    if (!wm_class) return NULL;
+    if (!wm_class) {
+        return NULL;
+    }
     /* TODO: match StartupWMClass field when we add it to the parser.
      * For now, try matching the lowercase exec basename against
      * the lowercase class name. */
     char class_lower[128];
     int i;
-    for (i = 0; wm_class[i] && i < 126; i++)
+    for (i = 0; wm_class[i] && i < 126; i++) {
         class_lower[i] = (wm_class[i] >= 'A' && wm_class[i] <= 'Z')
                         ? wm_class[i] + 32 : wm_class[i];
+    }
     class_lower[i] = '\0';
 
     for (int j = 0; j < p->ndesktop; j++) {
         const char *exec = isde_desktop_exec(p->desktop_entries[j]);
-        if (!exec) continue;
+        if (!exec) {
+            continue;
+        }
         /* Get basename of exec */
         const char *base = strrchr(exec, '/');
         base = base ? base + 1 : exec;
         /* Strip any arguments */
         char name[128];
         int k;
-        for (k = 0; base[k] && base[k] != ' ' && k < 126; k++)
+        for (k = 0; base[k] && base[k] != ' ' && k < 126; k++) {
             name[k] = (base[k] >= 'A' && base[k] <= 'Z')
                      ? base[k] + 32 : base[k];
+        }
         name[k] = '\0';
 
-        if (strcmp(name, class_lower) == 0)
+        if (strcmp(name, class_lower) == 0) {
             return p->desktop_entries[j];
+        }
     }
     return NULL;
 }
@@ -131,34 +144,39 @@ static void query_primary_monitor(Panel *p)
     xcb_randr_get_output_primary_reply_t *primary =
         xcb_randr_get_output_primary_reply(p->conn,
             xcb_randr_get_output_primary(p->conn, p->root), NULL);
-    if (!primary)
+    if (!primary) {
         return;
+    }
 
     xcb_randr_output_t pout = primary->output;
     free(primary);
 
-    if (pout == XCB_NONE)
+    if (pout == XCB_NONE) {
         return;
+    }
 
     xcb_randr_get_output_info_reply_t *oinfo =
         xcb_randr_get_output_info_reply(p->conn,
             xcb_randr_get_output_info(p->conn, pout, XCB_CURRENT_TIME),
             NULL);
-    if (!oinfo)
+    if (!oinfo) {
         return;
+    }
 
     xcb_randr_crtc_t crtc = oinfo->crtc;
     free(oinfo);
 
-    if (crtc == XCB_NONE)
+    if (crtc == XCB_NONE) {
         return;
+    }
 
     xcb_randr_get_crtc_info_reply_t *cinfo =
         xcb_randr_get_crtc_info_reply(p->conn,
             xcb_randr_get_crtc_info(p->conn, crtc, XCB_CURRENT_TIME),
             NULL);
-    if (!cinfo)
+    if (!cinfo) {
         return;
+    }
 
     p->mon_x = cinfo->x;
     p->mon_y = cinfo->y;
@@ -183,8 +201,9 @@ int panel_init(Panel *p, int *argc, char **argv)
                                   fallbacks, NULL, 0);
 
     p->conn = XtDisplay(p->toplevel);
-    if (xcb_connection_has_error(p->conn))
+    if (xcb_connection_has_error(p->conn)) {
         return -1;
+    }
 
     p->screen = XtScreen(p->toplevel);
     p->root = p->screen->root;
@@ -292,10 +311,11 @@ int panel_init(Panel *p, int *argc, char **argv)
     if (p->dbus) {
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
         int dbus_fd = isde_dbus_get_fd(p->dbus);
-        if (dbus_fd >= 0)
+        if (dbus_fd >= 0) {
             XtAppAddInput(p->app, dbus_fd,
                           (XtPointer)XtInputReadMask,
                           panel_dbus_input_cb, p->dbus);
+        }
     }
 
     p->running = 1;
@@ -311,8 +331,9 @@ static void panel_reconfigure(Panel *p)
 
     query_primary_monitor(p);
 
-    if (p->mon_x == old_x && p->mon_w == old_w && p->mon_h == old_h)
+    if (p->mon_x == old_x && p->mon_w == old_w && p->mon_h == old_h) {
         return;
+    }
 
     int panel_y = p->mon_y + p->mon_h - PANEL_HEIGHT;
 
@@ -353,7 +374,9 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
                         ((rgb >> 8)  & 0xFF) * 257,
                         ( rgb        & 0xFF) * 257),
         NULL);
-    if (!reply) return p->screen->white_pixel;
+    if (!reply) {
+        return p->screen->white_pixel;
+    }
     Pixel px = reply->pixel;
     free(reply);
     return px;
@@ -432,7 +455,9 @@ void panel_show_popup(Panel *p, Widget popup)
 
 void panel_dismiss_popup(Panel *p)
 {
-    if (!p->active_popup) return;
+    if (!p->active_popup) {
+        return;
+    }
 
     /* Reset start button to inactive state and release keyboard grab */
     if (p->active_popup == p->start_shell) {
@@ -450,8 +475,9 @@ void panel_dismiss_popup(Panel *p)
     }
 
     ShellWidget sw = (ShellWidget)p->active_popup;
-    if (sw->shell.popped_up)
+    if (sw->shell.popped_up) {
         XtPopdown(p->active_popup);
+    }
 
     p->active_popup = NULL;
 }
@@ -476,12 +502,14 @@ void panel_cleanup(Panel *p)
     taskbar_cleanup(p);
     startmenu_cleanup(p);
 
-    for (int i = 0; i < p->ndesktop; i++)
+    for (int i = 0; i < p->ndesktop; i++) {
         isde_desktop_free(p->desktop_entries[i]);
+    }
     free(p->desktop_entries);
 
-    for (int i = 0; i < p->npinned; i++)
+    for (int i = 0; i < p->npinned; i++) {
         free(p->pinned_classes[i]);
+    }
     free(p->pinned_classes);
 
     isde_dbus_free(p->dbus);

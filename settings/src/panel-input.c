@@ -21,7 +21,7 @@ static xcb_connection_t *panel_conn;
 
 static void apply_mouse(int accel_num, int threshold)
 {
-    if (!panel_conn) return;
+    if (!panel_conn) { return; }
     xcb_change_pointer_control(panel_conn,
                                accel_num, 1, threshold, 1, 1);
     xcb_flush(panel_conn);
@@ -29,7 +29,7 @@ static void apply_mouse(int accel_num, int threshold)
 
 static void read_current_mouse(void)
 {
-    if (!panel_conn) return;
+    if (!panel_conn) { return; }
     xcb_get_pointer_control_reply_t *reply =
         xcb_get_pointer_control_reply(panel_conn,
             xcb_get_pointer_control(panel_conn), NULL);
@@ -61,8 +61,9 @@ static void input_apply(void)
     saved_threshold = thresh;
 
     isde_config_invalidate_cache();
-    if (panel_dbus)
+    if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "input", "*");
+    }
 }
 
 static void input_revert(void)
@@ -143,7 +144,7 @@ static Widget input_create(Widget parent, XtAppContext app)
 
 static int input_has_changes(void)
 {
-    if (!scale_dclick) return 0;
+    if (!scale_dclick) { return 0; }
     return IswScaleGetValue(scale_dclick) != saved_dclick ||
            IswScaleGetValue(scale_accel) != saved_accel_num ||
            IswScaleGetValue(scale_threshold) != saved_threshold;

@@ -98,8 +98,9 @@ void fileview_populate(Fm *fm)
 {
     if (fm->iconview) {
         /* Free previous truncated names */
-        for (int i = 0; i < fm->fv_trunc_count; i++)
+        for (int i = 0; i < fm->fv_trunc_count; i++) {
             free(fm->fv_trunc_names[i]);
+        }
         free(fm->fv_trunc_names);
         free(fm->fv_labels);
         free(fm->fv_icons);
@@ -133,8 +134,11 @@ void fileview_populate(Fm *fm)
         char buf[128];
         int ndirs = 0, nfiles = 0;
         for (int i = 0; i < fm->nentries; i++) {
-            if (fm->entries[i].is_dir) ndirs++;
-            else nfiles++;
+            if (fm->entries[i].is_dir) {
+                ndirs++;
+            } else {
+                nfiles++;
+            }
         }
         snprintf(buf, sizeof(buf), "%d folders, %d files", ndirs, nfiles);
         Arg args[20];
@@ -145,8 +149,9 @@ void fileview_populate(Fm *fm)
 
 void fileview_cleanup(Fm *fm)
 {
-    for (int i = 0; i < fm->fv_trunc_count; i++)
+    for (int i = 0; i < fm->fv_trunc_count; i++) {
         free(fm->fv_trunc_names[i]);
+    }
     free(fm->fv_trunc_names);
     free(fm->fv_labels);
     free(fm->fv_icons);

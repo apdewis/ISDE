@@ -15,8 +15,9 @@ static int entry_cmp(const void *a, const void *b)
     const FmEntry *eb = (const FmEntry *)b;
 
     /* Directories first */
-    if (ea->is_dir != eb->is_dir)
+    if (ea->is_dir != eb->is_dir) {
         return eb->is_dir - ea->is_dir;
+    }
 
     /* Then alphabetical, case-insensitive */
     return strcasecmp(ea->name, eb->name);
@@ -50,12 +51,14 @@ int browser_read_dir(Fm *fm, const char *path)
     struct dirent *de;
     while ((de = readdir(dir))) {
         /* Skip . and .. */
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
             continue;
+        }
 
         int hidden = (de->d_name[0] == '.');
-        if (hidden && !fm->show_hidden)
+        if (hidden && !fm->show_hidden) {
             continue;
+        }
 
         if (fm->nentries >= cap) {
             cap *= 2;
@@ -71,11 +74,12 @@ int browser_read_dir(Fm *fm, const char *path)
         size_t plen = strlen(path);
         size_t nlen = strlen(de->d_name);
         e->full_path = malloc(plen + 1 + nlen + 1);
-        if (plen > 1)
+        if (plen > 1) {
             snprintf(e->full_path, plen + 1 + nlen + 1, "%s/%s",
                      path, de->d_name);
-        else
+        } else {
             snprintf(e->full_path, plen + 1 + nlen + 1, "/%s", de->d_name);
+        }
 
         /* Stat for metadata */
         struct stat st;
@@ -100,8 +104,9 @@ int browser_read_dir(Fm *fm, const char *path)
 
 void browser_open_entry(Fm *fm, int index)
 {
-    if (index < 0 || index >= fm->nentries)
+    if (index < 0 || index >= fm->nentries) {
         return;
+    }
 
     FmEntry *e = &fm->entries[index];
 

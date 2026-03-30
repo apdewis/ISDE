@@ -31,8 +31,9 @@
 static char *resolve_conflict(const char *dst)
 {
     struct stat st;
-    if (lstat(dst, &st) != 0)
+    if (lstat(dst, &st) != 0) {
         return strdup(dst); /* no conflict */
+    }
 
     /* Split into dir, base, extension */
     const char *slash = strrchr(dst, '/');
@@ -65,8 +66,9 @@ static char *resolve_conflict(const char *dst)
                      (int)name_len, base_start,
                      i);
         }
-        if (lstat(candidate, &st) != 0)
+        if (lstat(candidate, &st) != 0) {
             return candidate; /* this name is free */
+        }
         free(candidate);
     }
 
@@ -79,7 +81,9 @@ static int copy_file_cancellable(const char *src, const char *dst,
                                  atomic_int *cancelled)
 {
     int fd_in = open(src, O_RDONLY);
-    if (fd_in < 0) return -1;
+    if (fd_in < 0) {
+        return -1;
+    }
 
     struct stat st;
     fstat(fd_in, &st);
@@ -94,21 +98,30 @@ static int copy_file_cancellable(const char *src, const char *dst,
     ssize_t nread;
     int ret = 0;
     while ((nread = read(fd_in, buf, sizeof(buf))) > 0) {
-        if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
+        if (cancelled && atomic_load(cancelled)) {
+            ret = -1;
+            break;
+        }
         ssize_t written = 0;
         while (written < nread) {
             ssize_t w = write(fd_out, buf + written, nread - written);
-            if (w < 0) { ret = -1; goto done; }
+            if (w < 0) {
+                ret = -1;
+                goto done;
+            }
             written += w;
         }
     }
-    if (nread < 0) ret = -1;
+    if (nread < 0) {
+        ret = -1;
+    }
 
 done:
     close(fd_in);
     close(fd_out);
-    if (ret != 0 && cancelled && atomic_load(cancelled))
+    if (ret != 0 && cancelled && atomic_load(cancelled)) {
         unlink(dst);  /* clean up partial file */
+    }
     return ret;
 }
 
@@ -123,20 +136,25 @@ static int copy_file(const char *src, const char *dst)
 static int count_recursive(const char *path)
 {
     struct stat st;
-    if (lstat(path, &st) != 0)
+    if (lstat(path, &st) != 0) {
         return 0;
+    }
 
-    if (!S_ISDIR(st.st_mode))
+    if (!S_ISDIR(st.st_mode)) {
         return 1;
+    }
 
     int count = 0;
     DIR *dir = opendir(path);
-    if (!dir) return 0;
+    if (!dir) {
+        return 0;
+    }
 
     struct dirent *de;
     while ((de = readdir(dir))) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
             continue;
+        }
         size_t len = strlen(path) + 1 + strlen(de->d_name) + 1;
         char *child = malloc(len);
         snprintf(child, len, "%s/%s", path, de->d_name);
@@ -152,26 +170,35 @@ static int count_recursive(const char *path)
 static int copy_recursive_cb(const char *src, const char *dst,
                               atomic_int *done, atomic_int *cancelled)
 {
-    if (cancelled && atomic_load(cancelled))
+    if (cancelled && atomic_load(cancelled)) {
         return -1;
+    }
 
     struct stat st;
-    if (lstat(src, &st) != 0)
+    if (lstat(src, &st) != 0) {
         return -1;
+    }
 
     if (S_ISDIR(st.st_mode)) {
-        if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST)
+        if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST) {
             return -1;
+        }
 
         DIR *dir = opendir(src);
-        if (!dir) return -1;
+        if (!dir) {
+            return -1;
+        }
 
         struct dirent *de;
         int ret = 0;
         while ((de = readdir(dir))) {
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                 continue;
-            if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
+            }
+            if (cancelled && atomic_load(cancelled)) {
+                ret = -1;
+                break;
+            }
 
             size_t slen = strlen(src) + 1 + strlen(de->d_name) + 1;
             size_t dlen = strlen(dst) + 1 + strlen(de->d_name) + 1;
@@ -183,8 +210,9 @@ static int copy_recursive_cb(const char *src, const char *dst,
             char *child_dst = resolve_conflict(child_dst_base);
             free(child_dst_base);
 
-            if (copy_recursive_cb(child_src, child_dst, done, cancelled) != 0)
+            if (copy_recursive_cb(child_src, child_dst, done, cancelled) != 0) {
                 ret = -1;
+            }
 
             free(child_src);
             free(child_dst);
@@ -195,17 +223,23 @@ static int copy_recursive_cb(const char *src, const char *dst,
     } else if (S_ISLNK(st.st_mode)) {
         char link_target[PATH_MAX];
         ssize_t len = readlink(src, link_target, sizeof(link_target) - 1);
-        if (len < 0) return -1;
+        if (len < 0) {
+            return -1;
+        }
         link_target[len] = '\0';
         char *resolved = resolve_conflict(dst);
         int ret = symlink(link_target, resolved);
         free(resolved);
-        if (done) atomic_fetch_add(done, 1);
+        if (done) {
+            atomic_fetch_add(done, 1);
+        }
         return ret;
 
     } else {
         int ret = copy_file_cancellable(src, dst, cancelled);
-        if (done) atomic_fetch_add(done, 1);
+        if (done) {
+            atomic_fetch_add(done, 1);
+        }
         return ret;
     }
 }
@@ -215,41 +249,53 @@ static int copy_recursive_cb(const char *src, const char *dst,
 static int delete_recursive_cb(const char *path,
                                 atomic_int *done, atomic_int *cancelled)
 {
-    if (cancelled && atomic_load(cancelled))
+    if (cancelled && atomic_load(cancelled)) {
         return -1;
+    }
 
     struct stat st;
-    if (lstat(path, &st) != 0)
+    if (lstat(path, &st) != 0) {
         return -1;
+    }
 
     if (S_ISDIR(st.st_mode)) {
         DIR *dir = opendir(path);
-        if (!dir) return -1;
+        if (!dir) {
+            return -1;
+        }
 
         struct dirent *de;
         int ret = 0;
         while ((de = readdir(dir))) {
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                 continue;
-            if (cancelled && atomic_load(cancelled)) { ret = -1; break; }
+            }
+            if (cancelled && atomic_load(cancelled)) {
+                ret = -1;
+                break;
+            }
 
             size_t len = strlen(path) + 1 + strlen(de->d_name) + 1;
             char *child = malloc(len);
             snprintf(child, len, "%s/%s", path, de->d_name);
 
-            if (delete_recursive_cb(child, done, cancelled) != 0)
+            if (delete_recursive_cb(child, done, cancelled) != 0) {
                 ret = -1;
+            }
             free(child);
         }
         closedir(dir);
 
-        if (rmdir(path) != 0)
+        if (rmdir(path) != 0) {
             ret = -1;
+        }
         return ret;
 
     } else {
         int ret = unlink(path);
-        if (done) atomic_fetch_add(done, 1);
+        if (done) {
+            atomic_fetch_add(done, 1);
+        }
         return ret;
     }
 }
@@ -259,23 +305,28 @@ static int delete_recursive_cb(const char *path,
 static int copy_recursive(const char *src, const char *dst)
 {
     struct stat st;
-    if (lstat(src, &st) != 0)
+    if (lstat(src, &st) != 0) {
         return -1;
+    }
 
     if (S_ISDIR(st.st_mode)) {
         /* Directories merge — create if missing, recurse into children */
-        if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST)
+        if (mkdir(dst, st.st_mode) != 0 && errno != EEXIST) {
             return -1;
+        }
 
         DIR *dir = opendir(src);
-        if (!dir) return -1;
+        if (!dir) {
+            return -1;
+        }
 
         struct dirent *de;
         int ret = 0;
         while ((de = readdir(dir))) {
             if (strcmp(de->d_name, ".") == 0 ||
-                strcmp(de->d_name, "..") == 0)
+                strcmp(de->d_name, "..") == 0) {
                 continue;
+            }
 
             size_t slen = strlen(src) + 1 + strlen(de->d_name) + 1;
             size_t dlen = strlen(dst) + 1 + strlen(de->d_name) + 1;
@@ -288,8 +339,9 @@ static int copy_recursive(const char *src, const char *dst)
             char *child_dst = resolve_conflict(child_dst_base);
             free(child_dst_base);
 
-            if (copy_recursive(child_src, child_dst) != 0)
+            if (copy_recursive(child_src, child_dst) != 0) {
                 ret = -1;
+            }
 
             free(child_src);
             free(child_dst);
@@ -300,7 +352,9 @@ static int copy_recursive(const char *src, const char *dst)
     } else if (S_ISLNK(st.st_mode)) {
         char link_target[PATH_MAX];
         ssize_t len = readlink(src, link_target, sizeof(link_target) - 1);
-        if (len < 0) return -1;
+        if (len < 0) {
+            return -1;
+        }
         link_target[len] = '\0';
         /* Resolve conflict for symlinks too */
         char *resolved = resolve_conflict(dst);
@@ -318,32 +372,38 @@ static int copy_recursive(const char *src, const char *dst)
 static int delete_recursive(const char *path)
 {
     struct stat st;
-    if (lstat(path, &st) != 0)
+    if (lstat(path, &st) != 0) {
         return -1;
+    }
 
     if (S_ISDIR(st.st_mode)) {
         DIR *dir = opendir(path);
-        if (!dir) return -1;
+        if (!dir) {
+            return -1;
+        }
 
         struct dirent *de;
         int ret = 0;
         while ((de = readdir(dir))) {
             if (strcmp(de->d_name, ".") == 0 ||
-                strcmp(de->d_name, "..") == 0)
+                strcmp(de->d_name, "..") == 0) {
                 continue;
+            }
 
             size_t len = strlen(path) + 1 + strlen(de->d_name) + 1;
             char *child = malloc(len);
             snprintf(child, len, "%s/%s", path, de->d_name);
 
-            if (delete_recursive(child) != 0)
+            if (delete_recursive(child) != 0) {
                 ret = -1;
+            }
             free(child);
         }
         closedir(dir);
 
-        if (rmdir(path) != 0)
+        if (rmdir(path) != 0) {
             ret = -1;
+        }
         return ret;
 
     } else {
@@ -365,14 +425,17 @@ static char *get_trash_dir(void)
 static int ensure_trash_dirs(const char *trash_dir)
 {
     char path[PATH_MAX];
-    if (mkdir(trash_dir, 0700) != 0 && errno != EEXIST)
+    if (mkdir(trash_dir, 0700) != 0 && errno != EEXIST) {
         return -1;
+    }
     snprintf(path, sizeof(path), "%s/files", trash_dir);
-    if (mkdir(path, 0700) != 0 && errno != EEXIST)
+    if (mkdir(path, 0700) != 0 && errno != EEXIST) {
         return -1;
+    }
     snprintf(path, sizeof(path), "%s/info", trash_dir);
-    if (mkdir(path, 0700) != 0 && errno != EEXIST)
+    if (mkdir(path, 0700) != 0 && errno != EEXIST) {
         return -1;
+    }
     return 0;
 }
 
@@ -380,7 +443,9 @@ static char *url_encode_path(const char *path)
 {
     size_t len = strlen(path);
     char *enc = malloc(len * 3 + 1);
-    if (!enc) return NULL;
+    if (!enc) {
+        return NULL;
+    }
     char *p = enc;
     for (size_t i = 0; i < len; i++) {
         unsigned char c = (unsigned char)path[i];
@@ -402,8 +467,9 @@ static char *unique_trash_name(const char *trash_dir, const char *basename)
     char path[PATH_MAX];
     struct stat st;
     snprintf(path, sizeof(path), "%s/files/%s", trash_dir, basename);
-    if (lstat(path, &st) != 0)
+    if (lstat(path, &st) != 0) {
         return strdup(basename);
+    }
 
     const char *dot = strchr(basename, '.');
     size_t name_len = dot ? (size_t)(dot - basename) : strlen(basename);
@@ -414,8 +480,9 @@ static char *unique_trash_name(const char *trash_dir, const char *basename)
         snprintf(candidate, sizeof(candidate), "%.*s.%d%s",
                  (int)name_len, basename, i, ext);
         snprintf(path, sizeof(path), "%s/files/%s", trash_dir, candidate);
-        if (lstat(path, &st) != 0)
+        if (lstat(path, &st) != 0) {
             return strdup(candidate);
+        }
     }
     return strdup(basename);
 }
@@ -440,8 +507,9 @@ int fileops_trash(const char *path)
         ret = 0;
     } else if (errno == EXDEV) {
         ret = copy_recursive(path, dst);
-        if (ret == 0)
+        if (ret == 0) {
             delete_recursive(path);
+        }
     } else {
         free(trash_name);
         free(trash_dir);
@@ -474,14 +542,18 @@ int fileops_trash(const char *path)
 static char *read_trashinfo_path(const char *info_path)
 {
     FILE *fp = fopen(info_path, "r");
-    if (!fp) return NULL;
+    if (!fp) {
+        return NULL;
+    }
     char line[PATH_MAX];
     char *result = NULL;
     while (fgets(line, sizeof(line), fp)) {
         if (strncmp(line, "Path=", 5) == 0) {
             char *val = line + 5;
             char *nl = strchr(val, '\n');
-            if (nl) *nl = '\0';
+            if (nl) {
+                *nl = '\0';
+            }
             size_t len = strlen(val);
             result = malloc(len + 1);
             char *out = result;
@@ -509,14 +581,21 @@ int fileops_restore(const char *trash_name)
     snprintf(info_path, sizeof(info_path), "%s/info/%s.trashinfo",
              trash_dir, trash_name);
     char *orig_path = read_trashinfo_path(info_path);
-    if (!orig_path) { free(trash_dir); return -1; }
+    if (!orig_path) {
+        free(trash_dir);
+        return -1;
+    }
 
     char *parent = strdup(orig_path);
     char *pslash = strrchr(parent, '/');
     if (pslash && pslash != parent) {
         *pslash = '\0';
         for (char *p = parent + 1; *p; p++) {
-            if (*p == '/') { *p = '\0'; mkdir(parent, 0755); *p = '/'; }
+            if (*p == '/') {
+                *p = '\0';
+                mkdir(parent, 0755);
+                *p = '/';
+            }
         }
         mkdir(parent, 0755);
     }
@@ -531,12 +610,16 @@ int fileops_restore(const char *trash_name)
         ret = 0;
     } else if (errno == EXDEV) {
         ret = copy_recursive(src, dst);
-        if (ret == 0) delete_recursive(src);
+        if (ret == 0) {
+            delete_recursive(src);
+        }
     } else {
         ret = -1;
     }
 
-    if (ret == 0) unlink(info_path);
+    if (ret == 0) {
+        unlink(info_path);
+    }
 
     free(orig_path);
     free(dst);
@@ -555,11 +638,14 @@ int fileops_empty_trash(void)
     if (dir) {
         struct dirent *de;
         while ((de = readdir(dir))) {
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                 continue;
+            }
             char child[PATH_MAX];
             snprintf(child, sizeof(child), "%s/%s", path, de->d_name);
-            if (delete_recursive(child) != 0) ret = -1;
+            if (delete_recursive(child) != 0) {
+                ret = -1;
+            }
         }
         closedir(dir);
     }
@@ -569,8 +655,9 @@ int fileops_empty_trash(void)
     if (dir) {
         struct dirent *de;
         while ((de = readdir(dir))) {
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
                 continue;
+            }
             char child[PATH_MAX];
             snprintf(child, sizeof(child), "%s/%s", path, de->d_name);
             unlink(child);
@@ -636,9 +723,9 @@ int fileops_rename(Fm *fm, const char *oldpath, const char *newname)
 {
     char *dir = strdup(oldpath);
     char *slash = strrchr(dir, '/');
-    if (slash)
+    if (slash) {
         *(slash + 1) = '\0';
-    else {
+    } else {
         free(dir);
         dir = strdup(fm->cwd);
     }

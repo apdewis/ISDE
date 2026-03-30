@@ -24,7 +24,9 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
     xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, strlen(name), name);
     xcb_intern_atom_reply_t *r  = xcb_intern_atom_reply(c, ck, NULL);
-    if (!r) return XCB_ATOM_NONE;
+    if (!r) {
+        return XCB_ATOM_NONE;
+    }
     xcb_atom_t a = r->atom;
     free(r);
     return a;
@@ -49,8 +51,11 @@ static void send_xembed_notify(Panel *p, xcb_window_t icon)
 static void tray_dock_icon(Panel *p, xcb_window_t icon)
 {
     /* Check for duplicates */
-    for (int i = 0; i < p->ntray; i++)
-        if (p->tray_icons[i] == icon) return;
+    for (int i = 0; i < p->ntray; i++) {
+        if (p->tray_icons[i] == icon) {
+            return;
+        }
+    }
 
     if (p->ntray >= p->cap_tray) {
         p->cap_tray = p->cap_tray ? p->cap_tray * 2 : 8;
@@ -101,12 +106,15 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
     for (int i = 0; i < p->ntray; i++) {
         if (p->tray_icons[i] == icon) { found = i; break; }
     }
-    if (found < 0) return;
+    if (found < 0) {
+        return;
+    }
 
     /* Remove from array */
     p->ntray--;
-    for (int i = found; i < p->ntray; i++)
+    for (int i = found; i < p->ntray; i++) {
         p->tray_icons[i] = p->tray_icons[i + 1];
+    }
 
     /* Reposition remaining icons */
     int icon_size = PANEL_HEIGHT - 4;
@@ -220,13 +228,15 @@ void tray_handle_event(Panel *p, xcb_generic_event_t *ev)
 void tray_cleanup(Panel *p)
 {
     /* Release selection */
-    if (p->atom_tray_sel != XCB_ATOM_NONE)
+    if (p->atom_tray_sel != XCB_ATOM_NONE) {
         xcb_set_selection_owner(p->conn, XCB_NONE,
                                 p->atom_tray_sel, XCB_CURRENT_TIME);
+    }
 
     /* Reparent icons back to root */
-    for (int i = 0; i < p->ntray; i++)
+    for (int i = 0; i < p->ntray; i++) {
         xcb_reparent_window(p->conn, p->tray_icons[i], p->root, 0, 0);
+    }
 
     free(p->tray_icons);
     p->tray_icons = NULL;

@@ -31,7 +31,9 @@ static void rename_ok_cb(Widget w, XtPointer cd, XtPointer call)
     (void)w; (void)call;
     Widget dialog = (Widget)cd;
     Fm *fm = fm_from_widget(dialog);
-    if (!fm) return;
+    if (!fm) {
+        return;
+    }
     char *newname = IswDialogGetValueString(dialog);
     if (newname && newname[0] && fm->rename_index >= 0 &&
         fm->rename_index < fm->nentries) {
@@ -71,10 +73,12 @@ static void act_dismiss_rename(Widget w, xcb_generic_event_t *ev, String *p, Car
 void show_rename_dialog(Fm *fm)
 {
     int sel = -1;
-    if (fm->iconview)
+    if (fm->iconview) {
         sel = IswIconViewGetSelected(fm->iconview);
-    if (sel < 0 || sel >= fm->nentries)
+    }
+    if (sel < 0 || sel >= fm->nentries) {
         return;
+    }
 
     fm->rename_index = sel;
 
@@ -121,14 +125,21 @@ static void act_dismiss_delete(Widget w, xcb_generic_event_t *ev, String *p, Car
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) dismiss_delete_dialog(fm);
+    if (fm) {
+        dismiss_delete_dialog(fm);
+    }
 }
 
 static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
 {
     (void)cd; (void)call;
     Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) { if (fm) dismiss_delete_dialog(fm); return; }
+    if (!fm || !fm->iconview) {
+        if (fm) {
+            dismiss_delete_dialog(fm);
+        }
+        return;
+    }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -137,11 +148,13 @@ static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
         int npaths = 0;
         for (int i = 0; i < nsel; i++) {
             int idx = indices[i];
-            if (idx >= 0 && idx < fm->nentries)
+            if (idx >= 0 && idx < fm->nentries) {
                 paths[npaths++] = fm->entries[idx].full_path;
+            }
         }
-        if (npaths > 0)
+        if (npaths > 0) {
             jobqueue_submit_trash(fm->app_state, fm, paths, npaths);
+        }
         free(paths);
     }
     free(indices);
@@ -152,7 +165,12 @@ static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
 {
     (void)cd; (void)call;
     Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) { if (fm) dismiss_delete_dialog(fm); return; }
+    if (!fm || !fm->iconview) {
+        if (fm) {
+            dismiss_delete_dialog(fm);
+        }
+        return;
+    }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -161,11 +179,13 @@ static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
         int npaths = 0;
         for (int i = 0; i < nsel; i++) {
             int idx = indices[i];
-            if (idx >= 0 && idx < fm->nentries)
+            if (idx >= 0 && idx < fm->nentries) {
                 paths[npaths++] = fm->entries[idx].full_path;
+            }
         }
-        if (npaths > 0)
+        if (npaths > 0) {
             jobqueue_submit_delete(fm->app_state, fm, paths, npaths);
+        }
         free(paths);
     }
     free(indices);
@@ -176,12 +196,16 @@ static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
 {
     (void)cd; (void)call;
     Fm *fm = fm_from_widget(w);
-    if (fm) dismiss_delete_dialog(fm);
+    if (fm) {
+        dismiss_delete_dialog(fm);
+    }
 }
 
 static void fm_delete_confirm(Fm *fm, int permanent)
 {
-    if (!fm->iconview) return;
+    if (!fm->iconview) {
+        return;
+    }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -194,22 +218,26 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
     free(trash_path);
 
-    if (in_trash) permanent = 1;
+    if (in_trash) {
+        permanent = 1;
+    }
 
     char msg[256];
     if (nsel == 1) {
         int idx = indices[0];
         const char *name = (idx >= 0 && idx < fm->nentries)
                            ? fm->entries[idx].name : "selected item";
-        if (permanent)
+        if (permanent) {
             snprintf(msg, sizeof(msg), "Permanently delete \"%s\"?", name);
-        else
+        } else {
             snprintf(msg, sizeof(msg), "Move \"%s\" to Trash?", name);
+        }
     } else {
-        if (permanent)
+        if (permanent) {
             snprintf(msg, sizeof(msg), "Permanently delete %d items?", nsel);
-        else
+        } else {
             snprintf(msg, sizeof(msg), "Move %d items to Trash?", nsel);
+        }
     }
     free(indices);
 
@@ -234,10 +262,11 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
                                            fm->delete_shell, args, n);
 
-    if (permanent)
+    if (permanent) {
         IswDialogAddButton(dialog, "Delete", delete_do_permanent, NULL);
-    else
+    } else {
         IswDialogAddButton(dialog, "Move", delete_do_trash, NULL);
+    }
     IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
 
     XtPopup(fm->delete_shell, XtGrabNone);
@@ -344,16 +373,21 @@ static void ctx_new_folder(Fm *fm) {
     fm_refresh(fm);
 }
 static void ctx_restore(Fm *fm) {
-    if (!fm->iconview) return;
+    if (!fm->iconview) {
+        return;
+    }
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
     for (int i = 0; i < nsel; i++) {
         int idx = indices[i];
-        if (idx >= 0 && idx < fm->nentries)
+        if (idx >= 0 && idx < fm->nentries) {
             fileops_restore(fm->entries[idx].name);
+        }
     }
     free(indices);
-    if (nsel > 0) fm_refresh(fm);
+    if (nsel > 0) {
+        fm_refresh(fm);
+    }
 }
 
 static String base_labels[] = {
@@ -383,8 +417,9 @@ static void ctx_free_dynamic(Fm *fm)
     free(fm->dyn_actions);
     fm->dyn_actions = NULL;
     fm->dyn_nitems = 0;
-    for (int i = 0; i < fm->ow_count; i++)
+    for (int i = 0; i < fm->ow_count; i++) {
         free(fm->ow_label_buf[i]);
+    }
     fm->ow_count = 0;
     free(fm->ow_file_path);
     fm->ow_file_path = NULL;
@@ -411,7 +446,9 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
 
     /* Recover Fm from context menu's shell */
     Fm *fm = fm_from_widget(w);
-    if (!fm) return;
+    if (!fm) {
+        return;
+    }
     int in_trash = fm->ctx_in_trash;
 
     if (idx < 0) {
@@ -421,8 +458,9 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
 
     if (in_trash) {
         fm_dismiss_context(fm);
-        if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx])
+        if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx]) {
             ctx_trash_actions[idx](fm);
+        }
         return;
     }
 
@@ -456,8 +494,9 @@ static void ctx_select_cb(Widget w, XtPointer client_data,
 
     if (base_idx >= 0 && base_idx < BASE_NITEMS) {
         CtxAction action = base_actions[base_idx];
-        if (action)
+        if (action) {
             action(fm);
+        }
     }
 }
 
@@ -466,26 +505,42 @@ static void ctx_build_open_with(Fm *fm)
     fm->ow_count = 0;
     FmApp *app = fm->app_state;
 
-    if (!fm->iconview) return;
+    if (!fm->iconview) {
+        return;
+    }
     int sel = IswIconViewGetSelected(fm->iconview);
-    if (sel < 0 || sel >= fm->nentries) return;
+    if (sel < 0 || sel >= fm->nentries) {
+        return;
+    }
 
     FmEntry *e = &fm->entries[sel];
-    if (e->is_dir) return;
+    if (e->is_dir) {
+        return;
+    }
 
     const char *mime = isde_mime_type_for_file(e->name);
-    if (!mime || strcmp(mime, "application/octet-stream") == 0) return;
+    if (!mime || strcmp(mime, "application/octet-stream") == 0) {
+        return;
+    }
 
     free(fm->ow_file_path);
     fm->ow_file_path = strdup(e->full_path);
 
     for (int i = 0; i < app->ndesktop && fm->ow_count < MAX_OPEN_WITH; i++) {
         IsdeDesktopEntry *de = app->desktop_entries[i];
-        if (!de) continue;
-        if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) continue;
-        if (!isde_desktop_handles_mime(de, mime)) continue;
+        if (!de) {
+            continue;
+        }
+        if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) {
+            continue;
+        }
+        if (!isde_desktop_handles_mime(de, mime)) {
+            continue;
+        }
         const char *name = isde_desktop_name(de);
-        if (!name) continue;
+        if (!name) {
+            continue;
+        }
 
         fm->ow_indices[fm->ow_count] = i;
         char buf[256];
@@ -528,11 +583,13 @@ static void ctx_handler(Widget w, XtPointer client_data,
                         xcb_generic_event_t *event, Boolean *cont)
 {
     (void)cont;
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
         return;
+    }
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3)
+    if (ev->detail != 3) {
         return;
+    }
 
     Fm *fm = (Fm *)client_data;
 
@@ -605,8 +662,9 @@ void fm_navigate(Fm *fm, const char *path)
 
     char *new_path = strdup(path);
 
-    if (fm->iconview)
+    if (fm->iconview) {
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
+    }
 
     if (browser_read_dir(fm, new_path) != 0) {
         free(new_path);
@@ -618,8 +676,9 @@ void fm_navigate(Fm *fm, const char *path)
 
     fm->hist_pos++;
     if (fm->hist_pos < FM_HISTORY_MAX) {
-        for (int i = fm->hist_pos; i < fm->hist_count; i++)
+        for (int i = fm->hist_pos; i < fm->hist_count; i++) {
             free(fm->history[i]);
+        }
         fm->history[fm->hist_pos] = strdup(new_path);
         fm->hist_count = fm->hist_pos + 1;
     }
@@ -632,8 +691,9 @@ void fm_refresh(Fm *fm)
 {
     fm_dismiss_context(fm);
 
-    if (fm->iconview)
+    if (fm->iconview) {
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
+    }
 
     browser_read_dir(fm, fm->cwd);
     fileview_populate(fm);
@@ -646,54 +706,68 @@ static void act_copy(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) clipboard_copy(fm);
+    if (fm) {
+        clipboard_copy(fm);
+    }
 }
 
 static void act_cut(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) clipboard_cut(fm);
+    if (fm) {
+        clipboard_cut(fm);
+    }
 }
 
 static void act_paste(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) clipboard_paste(fm);
+    if (fm) {
+        clipboard_paste(fm);
+    }
 }
 
 static void act_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) fm_delete_selected(fm);
+    if (fm) {
+        fm_delete_selected(fm);
+    }
 }
 
 static void act_delete_permanent(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) fm_delete_selected_permanent(fm);
+    if (fm) {
+        fm_delete_selected_permanent(fm);
+    }
 }
 
 static void act_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) show_rename_dialog(fm);
+    if (fm) {
+        show_rename_dialog(fm);
+    }
 }
 
 static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm) return;
+    if (!fm) {
+        return;
+    }
     char *parent = strdup(fm->cwd);
     char *slash = strrchr(parent, '/');
-    if (slash && slash != parent)
+    if (slash && slash != parent) {
         *slash = '\0';
-    else {
+    } else {
         free(parent);
         parent = strdup("/");
     }
@@ -705,7 +779,9 @@ static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm || fm->hist_pos <= 0) return;
+    if (!fm || fm->hist_pos <= 0) {
+        return;
+    }
     fm->hist_pos--;
     free(fm->cwd);
     fm->cwd = strdup(fm->history[fm->hist_pos]);
@@ -716,7 +792,9 @@ static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm || fm->hist_pos >= fm->hist_count - 1) return;
+    if (!fm || fm->hist_pos >= fm->hist_count - 1) {
+        return;
+    }
     fm->hist_pos++;
     free(fm->cwd);
     fm->cwd = strdup(fm->history[fm->hist_pos]);
@@ -727,24 +805,31 @@ static void act_refresh(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) fm_refresh(fm);
+    if (fm) {
+        fm_refresh(fm);
+    }
 }
 
 static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) return;
+    if (!fm || !fm->iconview) {
+        return;
+    }
     int sel = IswIconViewGetSelected(fm->iconview);
-    if (sel >= 0 && sel < fm->nentries)
+    if (sel >= 0 && sel < fm->nentries) {
         browser_open_entry(fm, sel);
+    }
 }
 
 static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm) return;
+    if (!fm) {
+        return;
+    }
     fm->show_hidden = !fm->show_hidden;
     fm_refresh(fm);
 }
@@ -844,7 +929,9 @@ static void act_close_window(Widget w, xcb_generic_event_t *ev,
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) fm_window_destroy(fm);
+    if (fm) {
+        fm_window_destroy(fm);
+    }
 }
 
 static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
@@ -864,8 +951,9 @@ static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
     fileview_cleanup(fm);
     places_cleanup(fm);
     free(fm->cwd);
-    for (int i = 0; i < fm->hist_count; i++)
+    for (int i = 0; i < fm->hist_count; i++) {
         free(fm->history[i]);
+    }
     free(fm);
 }
 
@@ -918,7 +1006,9 @@ static void act_new_window(Widget w, xcb_generic_event_t *ev,
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (fm) fm_window_new(fm->app_state, fm->cwd);
+    if (fm) {
+        fm_window_new(fm->app_state, fm->cwd);
+    }
 }
 
 /* ---------- app init / run / cleanup ---------- */
@@ -967,24 +1057,30 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         };
         const char *home_env = getenv("HOME");
         char local_apps[512] = "";
-        if (home_env)
+        if (home_env) {
             snprintf(local_apps, sizeof(local_apps),
                      "%s/.local/share/applications", home_env);
+        }
 
         int cap = 0;
         for (int d = -1; app_dirs[d + 1] || d < 0; d++) {
             const char *dir = (d < 0) ? local_apps : app_dirs[d];
-            if (!dir[0]) continue;
+            if (!dir[0]) {
+                continue;
+            }
             int count = 0;
             IsdeDesktopEntry **batch = isde_desktop_scan_dir(dir, &count);
-            if (!batch) continue;
+            if (!batch) {
+                continue;
+            }
             if (app->ndesktop + count > cap) {
                 cap = app->ndesktop + count + 64;
                 app->desktop_entries = realloc(app->desktop_entries,
                                                cap * sizeof(IsdeDesktopEntry *));
             }
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < count; i++) {
                 app->desktop_entries[app->ndesktop++] = batch[i];
+            }
             free(batch);
         }
     }
@@ -993,15 +1089,18 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     app->dbus = isde_dbus_init();
     if (app->dbus) {
         int dbus_fd = isde_dbus_get_fd(app->dbus);
-        if (dbus_fd >= 0)
+        if (dbus_fd >= 0) {
             XtAppAddInput(app->app, dbus_fd,
                           (XtPointer)XtInputReadMask,
                           dbus_input_cb, app->dbus);
+        }
     }
 
     /* Open initial window */
     Fm *first = fm_window_new(app, app->initial_path);
-    if (!first) return -1;
+    if (!first) {
+        return -1;
+    }
 
     /* Single-instance check — now that the first window is realized,
      * use its toplevel for the selection ownership. */
@@ -1016,8 +1115,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     }
 
     /* Subscribe D-Bus settings for first window (TODO: broadcast to all) */
-    if (app->dbus)
+    if (app->dbus) {
         isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
+    }
 
     app->running = 1;
     return 0;
@@ -1026,7 +1126,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
 Fm *fm_window_new(FmApp *app, const char *path)
 {
     Fm *fm = calloc(1, sizeof(Fm));
-    if (!fm) return NULL;
+    if (!fm) {
+        return NULL;
+    }
     fm->app_state = app;
     fm->rename_index = -1;
     fm->last_click_index = -1;
@@ -1123,8 +1225,9 @@ void fm_window_destroy(Fm *fm)
 
 void fm_app_run(FmApp *app)
 {
-    while (app->running && !XtAppGetExitFlag(app->app))
+    while (app->running && !XtAppGetExitFlag(app->app)) {
         XtAppProcessEvent(app->app, XtIMAll);
+    }
 }
 
 void fm_app_cleanup(FmApp *app)
@@ -1140,8 +1243,9 @@ void fm_app_cleanup(FmApp *app)
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
     free(app->initial_path);
-    for (int i = 0; i < app->ndesktop; i++)
+    for (int i = 0; i < app->ndesktop; i++) {
         isde_desktop_free(app->desktop_entries[i]);
+    }
     free(app->desktop_entries);
     XtDestroyApplicationContext(app->app);
 }

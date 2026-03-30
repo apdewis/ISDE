@@ -33,8 +33,9 @@ int main(int argc, char **argv)
         int restart = wm.restart;
         wm_cleanup(&wm);
 
-        if (!restart)
+        if (!restart) {
             break;
+        }
 
         fprintf(stderr, "isde-wm: restarting\n");
     } while (1);

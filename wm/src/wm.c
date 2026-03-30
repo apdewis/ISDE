@@ -16,7 +16,9 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
     xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, strlen(name), name);
     xcb_intern_atom_reply_t *r  = xcb_intern_atom_reply(c, ck, NULL);
-    if (!r) return XCB_ATOM_NONE;
+    if (!r) {
+        return XCB_ATOM_NONE;
+    }
     xcb_atom_t a = r->atom;
     free(r);
     return a;
@@ -100,8 +102,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
     wm->dbus = isde_dbus_init();
-    if (wm->dbus)
+    if (wm->dbus) {
         isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
+    }
 
     /* Key bindings */
     wm->keysyms = xcb_key_symbols_alloc(wm->conn);
@@ -151,25 +154,33 @@ int wm_init(Wm *wm, int *argc, char **argv)
 
 WmClient *wm_find_client_by_frame(Wm *wm, xcb_window_t frame)
 {
-    for (WmClient *c = wm->clients; c; c = c->next)
-        if (c->shell && XtWindow(c->shell) == frame) return c;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->shell && XtWindow(c->shell) == frame) {
+            return c;
+        }
+    }
     return NULL;
 }
 
 WmClient *wm_find_client_by_widget(Wm *wm, Widget w)
 {
-    for (WmClient *c = wm->clients; c; c = c->next)
+    for (WmClient *c = wm->clients; c; c = c->next) {
         if (c->shell == w || c->title_label == w ||
             c->minimize_btn == w || c->maximize_btn == w ||
-            c->close_btn == w)
+            c->close_btn == w) {
             return c;
+        }
+    }
     return NULL;
 }
 
 WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win)
 {
-    for (WmClient *c = wm->clients; c; c = c->next)
-        if (c->client == win) return c;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->client == win) {
+            return c;
+        }
+    }
     return NULL;
 }
 
@@ -206,11 +217,16 @@ void wm_focus_client(Wm *wm, WmClient *c)
 void wm_remove_client(Wm *wm, WmClient *c)
 {
     WmClient **pp = &wm->clients;
-    while (*pp && *pp != c) pp = &(*pp)->next;
-    if (*pp) *pp = c->next;
+    while (*pp && *pp != c) {
+        pp = &(*pp)->next;
+    }
+    if (*pp) {
+        *pp = c->next;
+    }
 
-    if (wm->focused == c)
+    if (wm->focused == c) {
         wm->focused = NULL;
+    }
     if (wm->drag_client == c) {
         wm->drag_client = NULL;
         wm->drag_mode = DRAG_NONE;
@@ -220,8 +236,9 @@ void wm_remove_client(Wm *wm, WmClient *c)
     wm_ewmh_update_client_list(wm);
     wm_ewmh_update_active(wm);
 
-    if (!wm->focused && wm->clients)
+    if (!wm->focused && wm->clients) {
         wm_focus_client(wm, wm->clients);
+    }
 }
 
 /* ---------- close client via WM_DELETE_WINDOW ---------- */
@@ -271,10 +288,10 @@ static void check_strut(xcb_ewmh_connection_t *ewmh, xcb_window_t win,
     if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
             xcb_ewmh_get_wm_strut_partial(ewmh, win),
             &strut, NULL)) {
-        if ((int)strut.top > *top)       *top = strut.top;
-        if ((int)strut.bottom > *bottom) *bottom = strut.bottom;
-        if ((int)strut.left > *left)     *left = strut.left;
-        if ((int)strut.right > *right)   *right = strut.right;
+        if ((int)strut.top > *top)       { *top = strut.top; }
+        if ((int)strut.bottom > *bottom) { *bottom = strut.bottom; }
+        if ((int)strut.left > *left)     { *left = strut.left; }
+        if ((int)strut.right > *right)   { *right = strut.right; }
     }
 }
 
@@ -284,8 +301,9 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
 
     /* Check managed clients — struts are on client windows, not frames */
-    for (WmClient *c = wm->clients; c; c = c->next)
+    for (WmClient *c = wm->clients; c; c = c->next) {
         check_strut(ewmh, c->client, &top, &bottom, &left, &right);
+    }
 
     /* Also check direct root children in case a window set struts
      * before being managed (e.g. override-redirect panels) */
@@ -294,8 +312,9 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
     if (tree) {
         xcb_window_t *children = xcb_query_tree_children(tree);
         int nchildren = xcb_query_tree_children_length(tree);
-        for (int i = 0; i < nchildren; i++)
+        for (int i = 0; i < nchildren; i++) {
             check_strut(ewmh, children[i], &top, &bottom, &left, &right);
+        }
         free(tree);
     }
 
@@ -326,14 +345,14 @@ static int detect_snap_zone(Wm *wm, int rx, int ry)
     int at_top    = (ry <= t);
     int at_bottom = (ry >= sh - t - 1);
 
-    if (at_left  && at_top)    return SNAP_TL;
-    if (at_right && at_top)    return SNAP_TR;
-    if (at_left  && at_bottom) return SNAP_BL;
-    if (at_right && at_bottom) return SNAP_BR;
-    if (at_left)               return SNAP_LEFT;
-    if (at_right)              return SNAP_RIGHT;
-    if (at_top)                return SNAP_TOP;
-    if (at_bottom)             return SNAP_BOTTOM;
+    if (at_left  && at_top)    { return SNAP_TL; }
+    if (at_right && at_top)    { return SNAP_TR; }
+    if (at_left  && at_bottom) { return SNAP_BL; }
+    if (at_right && at_bottom) { return SNAP_BR; }
+    if (at_left)               { return SNAP_LEFT; }
+    if (at_right)              { return SNAP_RIGHT; }
+    if (at_top)                { return SNAP_TOP; }
+    if (at_bottom)             { return SNAP_BOTTOM; }
     return SNAP_NONE;
 }
 
@@ -422,8 +441,9 @@ void wm_minimize_client(Wm *wm, WmClient *c)
 {
     /* Placeholder: unmap the frame. A proper implementation would
      * add the window to a taskbar/dock list for restoring later. */
-    if (c->shell)
+    if (c->shell) {
         XtPopdown(c->shell);
+    }
     xcb_unmap_window(wm->conn, c->client);
     xcb_flush(wm->conn);
 
@@ -444,8 +464,9 @@ void wm_minimize_client(Wm *wm, WmClient *c)
 
 static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 {
-    if (wm_find_client_by_window(wm, ev->window))
+    if (wm_find_client_by_window(wm, ev->window)) {
         return;
+    }
 
     xcb_get_window_attributes_reply_t *attr =
         xcb_get_window_attributes_reply(
@@ -453,7 +474,10 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             xcb_get_window_attributes(wm->conn, ev->window),
             NULL);
     if (attr) {
-        if (attr->override_redirect) { free(attr); return; }
+        if (attr->override_redirect) {
+            free(attr);
+            return;
+        }
         free(attr);
     }
 
@@ -472,9 +496,11 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 
 static WmClient *find_grip_client(Wm *wm, xcb_window_t win, int *edge)
 {
-    for (WmClient *c = wm->clients; c; c = c->next)
-        for (int i = 0; i < 8; i++)
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        for (int i = 0; i < 8; i++) {
             if (c->grip[i] == win) { *edge = i; return c; }
+        }
+    }
     *edge = -1;
     return NULL;
 }
@@ -483,7 +509,9 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
 {
     int edge;
     WmClient *c = find_grip_client(wm, ev->event, &edge);
-    if (!c || edge < 0) return;
+    if (!c || edge < 0) {
+        return;
+    }
 
     wm_focus_client(wm, c);
     wm->drag_mode    = DRAG_RESIZE;
@@ -508,26 +536,30 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
-        if (ev->value_mask & XCB_CONFIG_WINDOW_X)
+        if (ev->value_mask & XCB_CONFIG_WINDOW_X) {
             c->x = ev->x;
-        if (ev->value_mask & XCB_CONFIG_WINDOW_Y)
+        }
+        if (ev->value_mask & XCB_CONFIG_WINDOW_Y) {
             c->y = ev->y;
-        if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH)
+        }
+        if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
             c->width = ev->width;
-        if (ev->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
+        }
+        if (ev->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
             c->height = ev->height;
+        }
         frame_configure(wm, c);
     } else {
         uint32_t vals[7];
         int i = 0;
         uint16_t mask = ev->value_mask;
-        if (mask & XCB_CONFIG_WINDOW_X)           vals[i++] = ev->x;
-        if (mask & XCB_CONFIG_WINDOW_Y)           vals[i++] = ev->y;
-        if (mask & XCB_CONFIG_WINDOW_WIDTH)       vals[i++] = ev->width;
-        if (mask & XCB_CONFIG_WINDOW_HEIGHT)      vals[i++] = ev->height;
-        if (mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) vals[i++] = ev->border_width;
-        if (mask & XCB_CONFIG_WINDOW_SIBLING)     vals[i++] = ev->sibling;
-        if (mask & XCB_CONFIG_WINDOW_STACK_MODE)  vals[i++] = ev->stack_mode;
+        if (mask & XCB_CONFIG_WINDOW_X)           { vals[i++] = ev->x; }
+        if (mask & XCB_CONFIG_WINDOW_Y)           { vals[i++] = ev->y; }
+        if (mask & XCB_CONFIG_WINDOW_WIDTH)       { vals[i++] = ev->width; }
+        if (mask & XCB_CONFIG_WINDOW_HEIGHT)      { vals[i++] = ev->height; }
+        if (mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) { vals[i++] = ev->border_width; }
+        if (mask & XCB_CONFIG_WINDOW_SIBLING)     { vals[i++] = ev->sibling; }
+        if (mask & XCB_CONFIG_WINDOW_STACK_MODE)  { vals[i++] = ev->stack_mode; }
         xcb_configure_window(wm->conn, ev->window, mask, vals);
     }
     xcb_flush(wm->conn);
@@ -536,15 +568,17 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 static void on_unmap_notify(Wm *wm, xcb_unmap_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
-    if (c && c->shell && ev->event == XtWindow(c->shell))
+    if (c && c->shell && ev->event == XtWindow(c->shell)) {
         wm_remove_client(wm, c);
+    }
 }
 
 static void on_destroy_notify(Wm *wm, xcb_destroy_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
-    if (c)
+    if (c) {
         wm_remove_client(wm, c);
+    }
 }
 
 static void on_button_release(Wm *wm, xcb_button_release_event_t *ev);
@@ -552,7 +586,9 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev);
 static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
 {
     WmClient *c = wm->drag_client;
-    if (!c || wm->drag_mode == DRAG_NONE) return;
+    if (!c || wm->drag_mode == DRAG_NONE) {
+        return;
+    }
 
     /* Coalesce: drain any queued motion events and use the latest one */
     xcb_generic_event_t *next;
@@ -640,10 +676,13 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
 static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
-    if (!c) return;
+    if (!c) {
+        return;
+    }
 
-    if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name)
+    if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name) {
         frame_update_title(wm, c);
+    }
 }
 
 /* Returns 1 if handled, 0 if Xt should dispatch it */
@@ -653,18 +692,20 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
 
     if (ev->type == ewmh->_NET_ACTIVE_WINDOW) {
         WmClient *c = wm_find_client_by_window(wm, ev->window);
-        if (!c) return 1;
+        if (!c) { return 1; }
 
-        if (c->shell && !XtIsRealized(c->shell))
+        if (c->shell && !XtIsRealized(c->shell)) {
             XtRealizeWidget(c->shell);
+        }
         XtPopup(c->shell, XtGrabNone);
         xcb_map_window(wm->conn, c->client);
         wm_focus_client(wm, c);
         return 1;
     } else if (ev->type == ewmh->_NET_CLOSE_WINDOW) {
         WmClient *c = wm_find_client_by_window(wm, ev->window);
-        if (c)
+        if (c) {
             wm_close_client(wm, c);
+        }
         return 1;
     }
 
@@ -680,8 +721,9 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
 
     uint32_t cmd;
     if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
-        if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT)
+        if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT) {
             wm->running = 0;
+        }
         return;
     }
 
@@ -699,20 +741,23 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         on_destroy_notify(wm, (xcb_destroy_notify_event_t *)ev);
         break;
     case XCB_CLIENT_MESSAGE:
-        if (!on_client_message(wm, (xcb_client_message_event_t *)ev))
+        if (!on_client_message(wm, (xcb_client_message_event_t *)ev)) {
             XtDispatchEvent(ev, wm->conn);
+        }
         break;
     case XCB_MOTION_NOTIFY:
-        if (wm->drag_mode != DRAG_NONE)
+        if (wm->drag_mode != DRAG_NONE) {
             on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
-        else
+        } else {
             XtDispatchEvent(ev, wm->conn);
+        }
         break;
     case XCB_BUTTON_RELEASE:
-        if (wm->drag_mode != DRAG_NONE)
+        if (wm->drag_mode != DRAG_NONE) {
             on_button_release(wm, (xcb_button_release_event_t *)ev);
-        else
+        } else {
             XtDispatchEvent(ev, wm->conn);
+        }
         break;
     case XCB_BUTTON_PRESS: {
         xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
@@ -752,12 +797,14 @@ void wm_run(Wm *wm)
 
     while (wm->running) {
         /* Process any pending Xt work (widget events, timers) */
-        while (XtAppPending(wm->app))
+        while (XtAppPending(wm->app)) {
             XtAppProcessEvent(wm->app, XtIMAll);
+        }
 
         /* D-Bus dispatch */
-        if (wm->dbus)
+        if (wm->dbus) {
             isde_dbus_dispatch(wm->dbus);
+        }
 
         /* Wait for data on the XCB fd, with a short timeout
          * so Xt timers (OSD hide, etc.) get a chance to fire */
@@ -777,12 +824,14 @@ void wm_run(Wm *wm)
 
 void wm_cleanup(Wm *wm)
 {
-    while (wm->clients)
+    while (wm->clients) {
         wm_remove_client(wm, wm->clients);
+    }
     xcb_flush(wm->conn);
 
-    if (wm->keysyms)
+    if (wm->keysyms) {
         xcb_key_symbols_free(wm->keysyms);
+    }
     isde_dbus_free(wm->dbus);
     isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);

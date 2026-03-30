@@ -38,7 +38,7 @@ static IsdeDBus *panel_dbus;
 static void appearance_apply(void)
 {
     char *path = isde_xdg_config_path("isde.toml");
-    if (!path) return;
+    if (!path) { return; }
 
     /* Colour scheme */
     IswListReturnStruct *sr = IswListShowCurrent(scheme_list);
@@ -66,27 +66,32 @@ static void appearance_apply(void)
 
     free(path);
 
-    if (panel_dbus)
+    if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "appearance", "*");
+    }
 }
 
 static void appearance_revert(void)
 {
-    if (saved_scheme_idx >= 0)
+    if (saved_scheme_idx >= 0) {
         IswListHighlight(scheme_list, saved_scheme_idx);
-    if (saved_cursor_idx >= 0)
+    }
+    if (saved_cursor_idx >= 0) {
         IswListHighlight(cursor_list, saved_cursor_idx);
-    if (saved_icon_idx >= 0)
+    }
+    if (saved_icon_idx >= 0) {
         IswListHighlight(icon_list, saved_icon_idx);
+    }
 }
 
 /* ---------- find index of a name in an array ---------- */
 
 static int find_index(String *arr, int count, const char *name)
 {
-    if (!name) return 0;
-    for (int i = 0; i < count; i++)
-        if (strcmp(arr[i], name) == 0) return i;
+    if (!name) { return 0; }
+    for (int i = 0; i < count; i++) {
+        if (strcmp(arr[i], name) == 0) { return i; }
+    }
     return 0;
 }
 
@@ -120,11 +125,11 @@ static Widget appearance_create(Widget parent, XtAppContext app)
         if (appear) {
             const char *s;
             s = isde_config_string(appear, "color_scheme", NULL);
-            if (s) cur_scheme = strdup(s);
+            if (s) { cur_scheme = strdup(s); }
             s = isde_config_string(appear, "cursor_theme", NULL);
-            if (s) cur_cursor = strdup(s);
+            if (s) { cur_cursor = strdup(s); }
             s = isde_config_string(appear, "icon_theme", NULL);
-            if (s) cur_icon = strdup(s);
+            if (s) { cur_icon = strdup(s); }
         }
         isde_config_free(cfg);
     }

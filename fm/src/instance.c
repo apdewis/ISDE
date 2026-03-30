@@ -21,7 +21,7 @@ static xcb_atom_t intern_atom(xcb_connection_t *conn, const char *name)
 {
     xcb_intern_atom_cookie_t ck = xcb_intern_atom(conn, 0, strlen(name), name);
     xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(conn, ck, NULL);
-    if (!r) return XCB_ATOM_NONE;
+    if (!r) { return XCB_ATOM_NONE; }
     xcb_atom_t a = r->atom;
     free(r);
     return a;
@@ -36,12 +36,14 @@ static void instance_event_handler(Widget w, XtPointer closure,
     FmApp *app = (FmApp *)closure;
 
     uint8_t type = ev->response_type & ~0x80;
-    if (type != XCB_CLIENT_MESSAGE)
+    if (type != XCB_CLIENT_MESSAGE) {
         return;
+    }
 
     xcb_client_message_event_t *cm = (xcb_client_message_event_t *)ev;
-    if (cm->type != atom_open_path)
+    if (cm->type != atom_open_path) {
         return;
+    }
 
     /* Read the path from the _ISDE_FM_OPEN_PATH property on our window */
     xcb_connection_t *conn = XtDisplay(w);
@@ -49,8 +51,9 @@ static void instance_event_handler(Widget w, XtPointer closure,
         xcb_get_property(conn, True, XtWindow(w),
                          atom_open_path, XCB_ATOM_STRING, 0, 4096);
     xcb_get_property_reply_t *reply = xcb_get_property_reply(conn, cookie, NULL);
-    if (!reply)
+    if (!reply) {
         return;
+    }
 
     int len = xcb_get_property_value_length(reply);
     if (len > 0) {
@@ -103,12 +106,14 @@ int instance_try_primary(FmApp *app, const char *path)
 
     atom_instance  = intern_atom(conn, "_ISDE_FM_INSTANCE");
     atom_open_path = intern_atom(conn, "_ISDE_FM_OPEN_PATH");
-    if (atom_instance == XCB_ATOM_NONE || atom_open_path == XCB_ATOM_NONE)
+    if (atom_instance == XCB_ATOM_NONE || atom_open_path == XCB_ATOM_NONE) {
         return -1;
+    }
 
     /* The shell must be realized so it has a window */
-    if (!XtIsRealized(shell))
+    if (!XtIsRealized(shell)) {
         XtRealizeWidget(shell);
+    }
 
     /* Try to own the selection */
     xcb_set_selection_owner(conn, XtWindow(shell), atom_instance,
@@ -120,8 +125,9 @@ int instance_try_primary(FmApp *app, const char *path)
         xcb_get_selection_owner(conn, atom_instance);
     xcb_get_selection_owner_reply_t *owner_reply =
         xcb_get_selection_owner_reply(conn, ck, NULL);
-    if (!owner_reply)
+    if (!owner_reply) {
         return -1;
+    }
 
     xcb_window_t owner = owner_reply->owner;
     free(owner_reply);

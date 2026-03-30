@@ -24,6 +24,7 @@ static void ensure_dir(const char *path)
     free(dir);
 }
 
+
 static int write_value(const char *path, const char *section,
                        const char *key, const char *value_str)
 {
@@ -33,7 +34,7 @@ static int write_value(const char *path, const char *section,
     if (!in) {
         /* File doesn't exist — create from scratch */
         FILE *fp = fopen(path, "w");
-        if (!fp) return -1;
+        if (!fp) { return -1; }
         fprintf(fp, "[%s]\n%s = %s\n", section, key, value_str);
         fclose(fp);
         return 0;
@@ -49,8 +50,9 @@ static int write_value(const char *path, const char *section,
     while (fgets(buf, sizeof(buf), in)) {
         /* Strip trailing newline */
         size_t len = strlen(buf);
-        if (len > 0 && buf[len - 1] == '\n')
+        if (len > 0 && buf[len - 1] == '\n') {
             buf[len - 1] = '\0';
+        }
         if (nlines >= cap) {
             cap *= 2;
             lines = realloc(lines, cap * sizeof(char *));
@@ -71,34 +73,40 @@ static int write_value(const char *path, const char *section,
 
     for (int i = 0; i < nlines; i++) {
         const char *trimmed = lines[i];
-        while (*trimmed && isspace((unsigned char)*trimmed))
+        while (*trimmed && isspace((unsigned char)*trimmed)) {
             trimmed++;
+        }
 
         if (trimmed[0] == '[') {
-            if (in_target && key_line < 0)
+            if (in_target && key_line < 0) {
                 section_end = i; /* key not found, insert before this section */
+            }
             in_target = (strncmp(trimmed, section_header, sh_len) == 0 &&
                         (trimmed[sh_len] == '\0' || isspace((unsigned char)trimmed[sh_len])));
-            if (in_target)
+            if (in_target) {
                 section_start = i;
+            }
         } else if (in_target && key_line < 0 &&
                    trimmed[0] != '#' && trimmed[0] != '\0') {
             if (strncmp(trimmed, key, key_len) == 0) {
                 const char *after = trimmed + key_len;
-                while (*after && isspace((unsigned char)*after))
+                while (*after && isspace((unsigned char)*after)) {
                     after++;
-                if (*after == '=')
+                }
+                if (*after == '=') {
                     key_line = i;
+                }
             }
         }
     }
-    if (in_target && section_end < 0)
+    if (in_target && section_end < 0) {
         section_end = nlines; /* section goes to end of file */
+    }
 
     /* Write output */
     FILE *out = fopen(path, "w");
     if (!out) {
-        for (int i = 0; i < nlines; i++) free(lines[i]);
+        for (int i = 0; i < nlines; i++) { free(lines[i]); }
         free(lines);
         return -1;
     }
@@ -130,7 +138,7 @@ static int write_value(const char *path, const char *section,
     }
 
     fclose(out);
-    for (int i = 0; i < nlines; i++) free(lines[i]);
+    for (int i = 0; i < nlines; i++) { free(lines[i]); }
     free(lines);
     return 0;
 }

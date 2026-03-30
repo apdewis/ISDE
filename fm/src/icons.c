@@ -36,7 +36,7 @@ static const char *FALLBACK_EXEC =
 static char *read_svg_file(const char *path)
 {
     FILE *fp = fopen(path, "r");
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     fseek(fp, 0, SEEK_END);
     long len = ftell(fp);
@@ -64,7 +64,7 @@ static char *load_icon(const char *theme, const char *category,
         if (path) {
             char *data = read_svg_file(path);
             free(path);
-            if (data) return data;
+            if (data) { return data; }
         }
     }
 
@@ -72,7 +72,7 @@ static char *load_icon(const char *theme, const char *category,
     if (path) {
         char *data = read_svg_file(path);
         free(path);
-        if (data) return data;
+        if (data) { return data; }
     }
     return strdup(fallback);
 }
@@ -90,8 +90,9 @@ void icons_init(FmApp *app)
         IsdeConfigTable *appear = isde_config_table(root, "appearance");
         if (appear) {
             const char *theme = isde_config_string(appear, "icon_theme", NULL);
-            if (theme)
+            if (theme) {
                 app->icon_theme = strdup(theme);
+            }
         }
         isde_config_free(cfg);
     }
@@ -108,18 +109,21 @@ void icons_init(FmApp *app)
 
 const char *icons_for_entry(FmApp *app, const FmEntry *e)
 {
-    if (e->is_dir)
+    if (e->is_dir) {
         return app->icon_folder;
-    if (e->mode & S_IXUSR)
+    }
+    if (e->mode & S_IXUSR) {
         return app->icon_exec;
+    }
 
     const char *dot = strrchr(e->name, '.');
     if (dot) {
         if (strcmp(dot, ".png") == 0 || strcmp(dot, ".jpg") == 0 ||
             strcmp(dot, ".jpeg") == 0 || strcmp(dot, ".gif") == 0 ||
             strcmp(dot, ".svg") == 0 || strcmp(dot, ".bmp") == 0 ||
-            strcmp(dot, ".webp") == 0)
+            strcmp(dot, ".webp") == 0) {
             return app->icon_image;
+        }
     }
 
     return app->icon_file;

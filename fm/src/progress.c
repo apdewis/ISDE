@@ -48,13 +48,14 @@ static void poll_timer_cb(XtPointer closure, XtIntervalId *id)
     FmJob *job = (FmJob *)closure;
     job->progress_timer = 0;
 
-    if (atomic_load(&job->finished))
+    if (atomic_load(&job->finished)) {
         return;  /* completion handler will clean up */
+    }
 
     int done  = atomic_load(&job->files_done);
     int total = atomic_load(&job->files_total);
     int pct   = (total > 0) ? (done * 100 / total) : 0;
-    if (pct > 100) pct = 100;
+    if (pct > 100) { pct = 100; }
 
     /* Update progress bar */
     if (job->progress_bar) {
@@ -86,7 +87,7 @@ static void poll_timer_cb(XtPointer closure, XtIntervalId *id)
 static void create_dialog(FmJob *job)
 {
     Fm *win = job->origin_win;
-    if (!win) return;
+    if (!win) { return; }
 
     int total = atomic_load(&job->files_total);
     char msg[128];
@@ -144,8 +145,9 @@ static void show_delay_cb(XtPointer closure, XtIntervalId *id)
     job->show_delay_timer = 0;
 
     /* If job finished during the delay, don't show anything */
-    if (atomic_load(&job->finished))
+    if (atomic_load(&job->finished)) {
         return;
+    }
 
     create_dialog(job);
 

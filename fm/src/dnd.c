@@ -27,8 +27,9 @@
 
 static void free_drag_paths(Fm *fm)
 {
-    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
         free(fm->dnd_drag_paths[i]);
+    }
     free(fm->dnd_drag_paths);
     fm->dnd_drag_paths = NULL;
     fm->dnd_ndrag_paths = 0;
@@ -46,20 +47,24 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
     Fm *fm = (Fm *)client_data;
     xcb_atom_t uri_atom = ISWXdndInternType(fm->iconview, "text/uri-list");
 
-    if (target_type != uri_atom)
+    if (target_type != uri_atom) {
         return False;
+    }
 
-    if (fm->dnd_ndrag_paths <= 0)
+    if (fm->dnd_ndrag_paths <= 0) {
         return False;
+    }
 
     size_t total = 0;
-    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
         total += 7 + strlen(fm->dnd_drag_paths[i]) + 2;
+    }
 
     char *buf = XtMalloc(total + 1);
     char *p = buf;
-    for (int i = 0; i < fm->dnd_ndrag_paths; i++)
+    for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
         p += sprintf(p, "file://%s\r\n", fm->dnd_drag_paths[i]);
+    }
 
     *data_return = (XtPointer)buf;
     *length_return = p - buf;
@@ -79,8 +84,9 @@ static void drag_finished(Widget w, IswDndAction action,
         !fm->dnd_drop_was_noop && fm->dnd_drag_paths) {
         for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
             struct stat st;
-            if (lstat(fm->dnd_drag_paths[i], &st) == 0)
+            if (lstat(fm->dnd_drag_paths[i], &st) == 0) {
                 fileops_delete(fm, fm->dnd_drag_paths[i]);
+            }
         }
         fm_refresh(fm);
     }
@@ -108,9 +114,10 @@ static void start_drag(Fm *fm)
     fm->dnd_drag_paths = malloc(nsel * sizeof(char *));
     for (int i = 0; i < nsel; i++) {
         int idx = indices[i];
-        if (idx >= 0 && idx < fm->nentries)
+        if (idx >= 0 && idx < fm->nentries) {
             fm->dnd_drag_paths[fm->dnd_ndrag_paths++] =
                 strdup(fm->entries[idx].full_path);
+        }
     }
     free(indices);
 
@@ -153,7 +160,7 @@ static void act_dnd_press(Widget w, xcb_generic_event_t *ev,
 {
     (void)params; (void)num_params;
     Fm *fm = fm_from_widget(w);
-    if (!fm) return;
+    if (!fm) { return; }
 
     uint8_t type = ev->response_type & ~0x80;
     if (type != XCB_BUTTON_PRESS) {
@@ -176,25 +183,29 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
 {
     (void)params; (void)num_params;
     Fm *fm = fm_from_widget(w);
-    if (!fm) return;
+    if (!fm) { return; }
 
-    if (!fm->dnd_press_valid)
+    if (!fm->dnd_press_valid) {
         return;
+    }
 
     uint8_t type = ev->response_type & ~0x80;
-    if (type != XCB_MOTION_NOTIFY)
+    if (type != XCB_MOTION_NOTIFY) {
         return;
+    }
 
     xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)ev;
     int dx = motion->event_x - fm->dnd_saved_press.event_x;
     int dy = motion->event_y - fm->dnd_saved_press.event_y;
-    if (dx * dx + dy * dy < DND_THRESHOLD * DND_THRESHOLD)
+    if (dx * dx + dy * dy < DND_THRESHOLD * DND_THRESHOLD) {
         return;
+    }
 
     /* Only start drag if something is selected (not rubber band) */
     int sel = IswIconViewGetSelected(fm->iconview);
-    if (sel < 0)
+    if (sel < 0) {
         return;
+    }
 
     /* Use the motion event's timestamp for the grab — Xephyr rejects
      * the original press timestamp because it matches the passive
@@ -218,8 +229,9 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
     Fm *fm = (Fm *)cd;
     IswDropCallbackData *d = (IswDropCallbackData *)call;
 
-    if (d->num_uris <= 0 || !d->uris)
+    if (d->num_uris <= 0 || !d->uris) {
         return;
+    }
 
     const char *target_dir = fm->cwd;
 
@@ -233,27 +245,32 @@ static void drop_cb(Widget w, XtPointer cd, XtPointer call)
     for (int i = 0; i < d->num_uris; i++) {
         const char *uri = d->uris[i];
         const char *path = uri;
-        if (strncmp(path, "file://", 7) == 0)
+        if (strncmp(path, "file://", 7) == 0) {
             path += 7;
-        if (path[0] != '/')
+        }
+        if (path[0] != '/') {
             continue;
+        }
 
         const char *src_slash = strrchr(path, '/');
-        if (!src_slash)
+        if (!src_slash) {
             continue;
+        }
         size_t src_dir_len = src_slash - path;
         int same_dir = (strlen(target_dir) == src_dir_len &&
                         strncmp(target_dir, path, src_dir_len) == 0);
 
-        if (same_dir && d->action == ISW_DND_ACTION_MOVE)
+        if (same_dir && d->action == ISW_DND_ACTION_MOVE) {
             continue;
+        }
 
         paths[npaths++] = (char *)path;
         fm->dnd_drop_was_noop = False;
     }
 
-    if (npaths > 0)
+    if (npaths > 0) {
         jobqueue_submit_copy(fm->app_state, fm, paths, npaths, target_dir);
+    }
     free(paths);
 }
 

@@ -19,8 +19,9 @@ static xcb_atom_t intern_atom(xcb_connection_t *conn, const char *name)
         xcb_intern_atom(conn, 0, strlen(name), name);
     xcb_intern_atom_reply_t *reply =
         xcb_intern_atom_reply(conn, cookie, NULL);
-    if (!reply)
+    if (!reply) {
         return XCB_ATOM_NONE;
+    }
     xcb_atom_t atom = reply->atom;
     free(reply);
     return atom;
@@ -29,8 +30,9 @@ static xcb_atom_t intern_atom(xcb_connection_t *conn, const char *name)
 IsdeIpc *isde_ipc_init(xcb_connection_t *conn, int screen)
 {
     IsdeIpc *ipc = calloc(1, sizeof(*ipc));
-    if (!ipc)
+    if (!ipc) {
         return NULL;
+    }
 
     ipc->conn = conn;
 
@@ -82,17 +84,19 @@ int isde_ipc_decode(IsdeIpc *ipc, xcb_generic_event_t *ev,
                     uint32_t *command,
                     uint32_t *d0, uint32_t *d1, uint32_t *d2, uint32_t *d3)
 {
-    if ((ev->response_type & ~0x80) != XCB_CLIENT_MESSAGE)
+    if ((ev->response_type & ~0x80) != XCB_CLIENT_MESSAGE) {
         return 0;
+    }
 
     xcb_client_message_event_t *cm = (xcb_client_message_event_t *)ev;
-    if (cm->type != ipc->atom)
+    if (cm->type != ipc->atom) {
         return 0;
+    }
 
-    if (command) *command = cm->data.data32[0];
-    if (d0)      *d0 = cm->data.data32[1];
-    if (d1)      *d1 = cm->data.data32[2];
-    if (d2)      *d2 = cm->data.data32[3];
-    if (d3)      *d3 = cm->data.data32[4];
+    if (command) { *command = cm->data.data32[0]; }
+    if (d0)      { *d0 = cm->data.data32[1]; }
+    if (d1)      { *d1 = cm->data.data32[2]; }
+    if (d2)      { *d2 = cm->data.data32[3]; }
+    if (d3)      { *d3 = cm->data.data32[4]; }
     return 1;
 }

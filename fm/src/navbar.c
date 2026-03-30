@@ -10,7 +10,7 @@
 /* Navigate to a history entry without pushing new history */
 static void navigate_history(Fm *fm, int pos)
 {
-    if (pos < 0 || pos >= fm->hist_count) return;
+    if (pos < 0 || pos >= fm->hist_count) { return; }
     fm->hist_pos = pos;
     free(fm->cwd);
     fm->cwd = strdup(fm->history[pos]);
@@ -21,16 +21,18 @@ static void back_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
-    if (fm->hist_pos > 0)
+    if (fm->hist_pos > 0) {
         navigate_history(fm, fm->hist_pos - 1);
+    }
 }
 
 static void fwd_cb(Widget w, XtPointer cd, XtPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
-    if (fm->hist_pos < fm->hist_count - 1)
+    if (fm->hist_pos < fm->hist_count - 1) {
         navigate_history(fm, fm->hist_pos + 1);
+    }
 }
 
 static void up_cb(Widget w, XtPointer cd, XtPointer call)
@@ -39,9 +41,9 @@ static void up_cb(Widget w, XtPointer cd, XtPointer call)
     Fm *fm = (Fm *)cd;
     char *parent = strdup(fm->cwd);
     char *slash = strrchr(parent, '/');
-    if (slash && slash != parent)
+    if (slash && slash != parent) {
         *slash = '\0';
-    else {
+    } else {
         free(parent);
         parent = strdup("/");
     }

@@ -31,8 +31,8 @@ void wm_desktops_init(Wm *wm)
         if (desk) {
             int r = (int)isde_config_int(desk, "rows", 0);
             int c = (int)isde_config_int(desk, "columns", 0);
-            if (r > 0) wm->desk_rows = r;
-            if (c > 0) wm->desk_cols = c;
+            if (r > 0) { wm->desk_rows = r; }
+            if (c > 0) { wm->desk_cols = c; }
         }
         isde_config_free(cfg);
     }
@@ -53,10 +53,12 @@ void wm_desktops_init(Wm *wm)
 
 void wm_desktops_switch(Wm *wm, uint32_t desktop)
 {
-    if (desktop >= (uint32_t)wm->num_desktops)
+    if (desktop >= (uint32_t)wm->num_desktops) {
         return;
-    if (desktop == wm->current_desktop)
+    }
+    if (desktop == wm->current_desktop) {
         return;
+    }
 
     uint32_t old = wm->current_desktop;
     wm->current_desktop = desktop;
@@ -64,17 +66,20 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
     /* Map/unmap windows based on desktop assignment */
     for (WmClient *c = wm->clients; c; c = c->next) {
         /* Sticky windows (0xFFFFFFFF) are always visible */
-        if (c->desktop == 0xFFFFFFFF)
+        if (c->desktop == 0xFFFFFFFF) {
             continue;
+        }
 
         if (c->desktop == old && c->desktop != desktop) {
             /* Hide: unmap the frame */
-            if (c->shell && XtIsRealized(c->shell))
+            if (c->shell && XtIsRealized(c->shell)) {
                 xcb_unmap_window(wm->conn, XtWindow(c->shell));
+            }
         } else if (c->desktop == desktop && c->desktop != old) {
             /* Show: map the frame */
-            if (c->shell && XtIsRealized(c->shell))
+            if (c->shell && XtIsRealized(c->shell)) {
                 xcb_map_window(wm->conn, XtWindow(c->shell));
+            }
         }
     }
 
@@ -105,10 +110,10 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
     row += dy;
 
     /* Wrap */
-    if (col < 0) col = wm->desk_cols - 1;
-    if (col >= wm->desk_cols) col = 0;
-    if (row < 0) row = wm->desk_rows - 1;
-    if (row >= wm->desk_rows) row = 0;
+    if (col < 0) { col = wm->desk_cols - 1; }
+    if (col >= wm->desk_cols) { col = 0; }
+    if (row < 0) { row = wm->desk_rows - 1; }
+    if (row >= wm->desk_rows) { row = 0; }
 
     uint32_t target = row * wm->desk_cols + col;
     wm_desktops_switch(wm, target);
@@ -125,8 +130,9 @@ static void osd_hide_cb(XtPointer client_data, XtIntervalId *id)
 {
     (void)id;
     Wm *wm = (Wm *)client_data;
-    if (wm->desk_osd && XtIsRealized(wm->desk_osd))
+    if (wm->desk_osd && XtIsRealized(wm->desk_osd)) {
         XtPopdown(wm->desk_osd);
+    }
     wm->desk_osd_timer = 0;
 }
 

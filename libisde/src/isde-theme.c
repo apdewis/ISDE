@@ -17,15 +17,15 @@
 
 static unsigned int parse_hex_color(const char *s)
 {
-    while (*s && isspace((unsigned char)*s)) s++;
-    if (*s == '#') s++;
-    if (*s == '"') s++;
+    while (*s && isspace((unsigned char)*s)) { s++; }
+    if (*s == '#') { s++; }
+    if (*s == '"') { s++; }
     unsigned int val = 0;
     for (int i = 0; i < 6 && *s; i++, s++) {
         val <<= 4;
-        if (*s >= '0' && *s <= '9') val |= *s - '0';
-        else if (*s >= 'a' && *s <= 'f') val |= *s - 'a' + 10;
-        else if (*s >= 'A' && *s <= 'F') val |= *s - 'A' + 10;
+        if (*s >= '0' && *s <= '9') { val |= *s - '0'; }
+        else if (*s >= 'a' && *s <= 'f') { val |= *s - 'a' + 10; }
+        else if (*s >= 'A' && *s <= 'F') { val |= *s - 'A' + 10; }
     }
     return val;
 }
@@ -33,8 +33,9 @@ static unsigned int parse_hex_color(const char *s)
 static void add_name(char ***names, int *count, int *cap, const char *name)
 {
     /* Check for duplicates */
-    for (int i = 0; i < *count; i++)
-        if (strcmp((*names)[i], name) == 0) return;
+    for (int i = 0; i < *count; i++) {
+        if (strcmp((*names)[i], name) == 0) { return; }
+    }
 
     if (*count >= *cap) {
         *cap *= 2;
@@ -49,7 +50,7 @@ static void add_name(char ***names, int *count, int *cap, const char *name)
 static char *find_theme_file(const char *rel)
 {
     char *path = isde_xdg_find_data(rel);
-    if (path) return path;
+    if (path) { return path; }
 
     /* Dev build fallback: check relative to executable */
     char exe_dir[512] = {0};
@@ -57,12 +58,13 @@ static char *find_theme_file(const char *rel)
     if (len > 0) {
         exe_dir[len] = '\0';
         char *slash = strrchr(exe_dir, '/');
-        if (slash) *slash = '\0';
+        if (slash) { *slash = '\0'; }
         char devpath[512];
         snprintf(devpath, sizeof(devpath),
                  "%s/../../common/data/%s", exe_dir, rel);
-        if (access(devpath, R_OK) == 0)
+        if (access(devpath, R_OK) == 0) {
             return strdup(devpath);
+        }
     }
     return NULL;
 }
@@ -72,22 +74,22 @@ static void parse_element(IsdeElementColors *el, const char *key,
                           const char *val)
 {
     unsigned int c = parse_hex_color(val);
-    if      (strcmp(key, "Background")      == 0) el->bg       = c;
-    else if (strcmp(key, "Foreground")       == 0) el->fg       = c;
-    else if (strcmp(key, "Border")           == 0) el->border   = c;
-    else if (strcmp(key, "HoverBackground")  == 0) el->hover_bg = c;
-    else if (strcmp(key, "HoverForeground")  == 0) el->hover_fg = c;
+    if      (strcmp(key, "Background")      == 0) { el->bg       = c; }
+    else if (strcmp(key, "Foreground")       == 0) { el->fg       = c; }
+    else if (strcmp(key, "Border")           == 0) { el->border   = c; }
+    else if (strcmp(key, "HoverBackground")  == 0) { el->hover_bg = c; }
+    else if (strcmp(key, "HoverForeground")  == 0) { el->hover_fg = c; }
 }
 
 /* Fill in element defaults from global scheme values where not explicitly set */
 static void element_defaults(IsdeElementColors *el, unsigned int bg,
                              unsigned int fg, unsigned int border_c)
 {
-    if (!el->bg)       el->bg       = bg;
-    if (!el->fg)       el->fg       = fg;
-    if (!el->border)   el->border   = border_c;
-    if (!el->hover_bg) el->hover_bg = el->bg;
-    if (!el->hover_fg) el->hover_fg = el->fg;
+    if (!el->bg)       { el->bg       = bg; }
+    if (!el->fg)       { el->fg       = fg; }
+    if (!el->border)   { el->border   = border_c; }
+    if (!el->hover_bg) { el->hover_bg = el->bg; }
+    if (!el->hover_fg) { el->hover_fg = el->fg; }
 }
 
 IsdeColorScheme *isde_scheme_load(const char *name)
@@ -97,11 +99,11 @@ IsdeColorScheme *isde_scheme_load(const char *name)
     snprintf(rel, sizeof(rel), "themes/%s.theme", name);
 
     char *path = find_theme_file(rel);
-    if (!path) return NULL;
+    if (!path) { return NULL; }
 
     FILE *fp = fopen(path, "r");
     free(path);
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     IsdeColorScheme *s = calloc(1, sizeof(*s));
     char line[256];
@@ -116,53 +118,53 @@ IsdeColorScheme *isde_scheme_load(const char *name)
 
     while (fgets(line, sizeof(line), fp)) {
         char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+        while (end > line && isspace((unsigned char)end[-1])) { *--end = '\0'; }
 
         if (line[0] == '[') {
-            if      (strcmp(line, "[Color Scheme]")   == 0) section = SEC_SCHEME;
-            else if (strcmp(line, "[Colors]")          == 0) section = SEC_COLORS;
-            else if (strcmp(line, "[TitleBar]")        == 0) section = SEC_TITLEBAR;
-            else if (strcmp(line, "[TitleBarActive]")  == 0) section = SEC_TITLEBAR_ACTIVE;
-            else if (strcmp(line, "[TitleBarButton]")  == 0) section = SEC_TITLEBAR_BUTTON;
-            else if (strcmp(line, "[CloseButton]")     == 0) section = SEC_CLOSE_BUTTON;
-            else if (strcmp(line, "[Menu]")            == 0) section = SEC_MENU;
-            else if (strcmp(line, "[MenuItem]")        == 0) section = SEC_MENU_ITEM;
-            else if (strcmp(line, "[Taskbar]")         == 0) section = SEC_TASKBAR;
-            else if (strcmp(line, "[TaskbarButton]")       == 0) section = SEC_TASKBAR_BUTTON;
-            else if (strcmp(line, "[TaskbarButtonActive]") == 0) section = SEC_TASKBAR_BUTTON_ACTIVE;
-            else if (strcmp(line, "[TaskbarButtonFocus]")  == 0) section = SEC_TASKBAR_BUTTON_FOCUS;
-            else section = SEC_NONE;
+            if      (strcmp(line, "[Color Scheme]")   == 0) { section = SEC_SCHEME; }
+            else if (strcmp(line, "[Colors]")          == 0) { section = SEC_COLORS; }
+            else if (strcmp(line, "[TitleBar]")        == 0) { section = SEC_TITLEBAR; }
+            else if (strcmp(line, "[TitleBarActive]")  == 0) { section = SEC_TITLEBAR_ACTIVE; }
+            else if (strcmp(line, "[TitleBarButton]")  == 0) { section = SEC_TITLEBAR_BUTTON; }
+            else if (strcmp(line, "[CloseButton]")     == 0) { section = SEC_CLOSE_BUTTON; }
+            else if (strcmp(line, "[Menu]")            == 0) { section = SEC_MENU; }
+            else if (strcmp(line, "[MenuItem]")        == 0) { section = SEC_MENU_ITEM; }
+            else if (strcmp(line, "[Taskbar]")         == 0) { section = SEC_TASKBAR; }
+            else if (strcmp(line, "[TaskbarButton]")       == 0) { section = SEC_TASKBAR_BUTTON; }
+            else if (strcmp(line, "[TaskbarButtonActive]") == 0) { section = SEC_TASKBAR_BUTTON_ACTIVE; }
+            else if (strcmp(line, "[TaskbarButtonFocus]")  == 0) { section = SEC_TASKBAR_BUTTON_FOCUS; }
+            else { section = SEC_NONE; }
             continue;
         }
 
         char *eq = strchr(line, '=');
-        if (!eq) continue;
+        if (!eq) { continue; }
         *eq = '\0';
         char *key = line;
         char *val = eq + 1;
 
         switch (section) {
         case SEC_SCHEME:
-            if      (strcmp(key, "Name")   == 0) s->name   = strdup(val);
-            else if (strcmp(key, "Author") == 0) s->author = strdup(val);
+            if      (strcmp(key, "Name")   == 0) { s->name   = strdup(val); }
+            else if (strcmp(key, "Author") == 0) { s->author = strdup(val); }
             break;
 
         case SEC_COLORS: {
             unsigned int c = parse_hex_color(val);
-            if      (strcmp(key, "Background")          == 0) s->bg        = c;
-            else if (strcmp(key, "BackgroundLight")      == 0) s->bg_light  = c;
-            else if (strcmp(key, "BackgroundBright")     == 0) s->bg_bright = c;
-            else if (strcmp(key, "Foreground")           == 0) s->fg        = c;
-            else if (strcmp(key, "ForegroundDim")        == 0) s->fg_dim    = c;
-            else if (strcmp(key, "ForegroundLight")      == 0) s->fg_light  = c;
-            else if (strcmp(key, "Border")               == 0) s->border    = c;
-            else if (strcmp(key, "SelectionBackground")  == 0) s->select_bg = c;
-            else if (strcmp(key, "SelectionForeground")  == 0) s->select_fg = c;
-            else if (strcmp(key, "Error")                == 0) s->error     = c;
-            else if (strcmp(key, "Warning")              == 0) s->warning   = c;
-            else if (strcmp(key, "Success")              == 0) s->success   = c;
-            else if (strcmp(key, "Active")               == 0) s->active    = c;
-            else if (strcmp(key, "Accent")               == 0) s->accent    = c;
+            if      (strcmp(key, "Background")          == 0) { s->bg        = c; }
+            else if (strcmp(key, "BackgroundLight")      == 0) { s->bg_light  = c; }
+            else if (strcmp(key, "BackgroundBright")     == 0) { s->bg_bright = c; }
+            else if (strcmp(key, "Foreground")           == 0) { s->fg        = c; }
+            else if (strcmp(key, "ForegroundDim")        == 0) { s->fg_dim    = c; }
+            else if (strcmp(key, "ForegroundLight")      == 0) { s->fg_light  = c; }
+            else if (strcmp(key, "Border")               == 0) { s->border    = c; }
+            else if (strcmp(key, "SelectionBackground")  == 0) { s->select_bg = c; }
+            else if (strcmp(key, "SelectionForeground")  == 0) { s->select_fg = c; }
+            else if (strcmp(key, "Error")                == 0) { s->error     = c; }
+            else if (strcmp(key, "Warning")              == 0) { s->warning   = c; }
+            else if (strcmp(key, "Success")              == 0) { s->success   = c; }
+            else if (strcmp(key, "Active")               == 0) { s->active    = c; }
+            else if (strcmp(key, "Accent")               == 0) { s->accent    = c; }
             break;
         }
 
@@ -182,8 +184,9 @@ IsdeColorScheme *isde_scheme_load(const char *name)
 
     fclose(fp);
 
-    if (!s->name)
+    if (!s->name) {
         s->name = strdup(name);
+    }
 
     /* Fill defaults for element sections that weren't specified */
     element_defaults(&s->titlebar,        s->bg_light, s->fg,       s->border);
@@ -202,7 +205,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
 
 void isde_scheme_free(IsdeColorScheme *scheme)
 {
-    if (!scheme) return;
+    if (!scheme) { return; }
     free(scheme->name);
     free(scheme->author);
     free(scheme);
@@ -212,13 +215,14 @@ static void scan_schemes_in_dir(const char *dir, char ***names,
                                 int *count, int *cap)
 {
     DIR *d = opendir(dir);
-    if (!d) return;
+    if (!d) { return; }
 
     struct dirent *de;
     while ((de = readdir(d))) {
         size_t nlen = strlen(de->d_name);
-        if (nlen < 7 || strcmp(de->d_name + nlen - 6, ".theme") != 0)
+        if (nlen < 7 || strcmp(de->d_name + nlen - 6, ".theme") != 0) {
             continue;
+        }
         /* Strip .theme extension for the name */
         char name[256];
         snprintf(name, sizeof(name), "%.*s", (int)(nlen - 6), de->d_name);
@@ -255,7 +259,7 @@ int isde_scheme_list(char ***names)
     if (len > 0) {
         exe_dir[len] = '\0';
         char *slash = strrchr(exe_dir, '/');
-        if (slash) *slash = '\0';
+        if (slash) { *slash = '\0'; }
         snprintf(path, sizeof(path), "%s/../../common/data/themes", exe_dir);
         scan_schemes_in_dir(path, names, &count, &cap);
     }
@@ -271,7 +275,7 @@ static int theme_has_directories(const char *icons_dir, const char *theme_name)
     char path[512];
     snprintf(path, sizeof(path), "%s/%s/index.theme", icons_dir, theme_name);
     FILE *fp = fopen(path, "r");
-    if (!fp) return 0;
+    if (!fp) { return 0; }
     char line[4096];
     int found = 0;
     while (fgets(line, sizeof(line), fp)) {
@@ -285,22 +289,24 @@ static void scan_cursor_themes(const char *icons_dir, char ***names,
                                int *count, int *cap)
 {
     DIR *d = opendir(icons_dir);
-    if (!d) return;
+    if (!d) { return; }
 
     struct dirent *de;
     while ((de = readdir(d))) {
-        if (de->d_name[0] == '.') continue;
+        if (de->d_name[0] == '.') { continue; }
 
         /* Must have a cursors/ subdirectory */
         char cursors_path[512];
         snprintf(cursors_path, sizeof(cursors_path), "%s/%s/cursors",
                  icons_dir, de->d_name);
-        if (access(cursors_path, R_OK | X_OK) != 0)
+        if (access(cursors_path, R_OK | X_OK) != 0) {
             continue;
+        }
 
         /* Exclude icon themes (have Directories= in index.theme) */
-        if (theme_has_directories(icons_dir, de->d_name))
+        if (theme_has_directories(icons_dir, de->d_name)) {
             continue;
+        }
 
         add_name(names, count, cap, de->d_name);
     }
@@ -346,14 +352,14 @@ int isde_cursor_theme_list(char ***names)
 static char *read_theme_name(const char *index_path)
 {
     FILE *fp = fopen(index_path, "r");
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     char line[512];
     int in_icon_theme = 0;
 
     while (fgets(line, sizeof(line), fp)) {
         char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+        while (end > line && isspace((unsigned char)end[-1])) { *--end = '\0'; }
 
         if (strcmp(line, "[Icon Theme]") == 0) {
             in_icon_theme = 1;
@@ -376,15 +382,16 @@ static void scan_icon_themes(const char *icons_dir, char ***names,
                              int *count, int *cap)
 {
     DIR *d = opendir(icons_dir);
-    if (!d) return;
+    if (!d) { return; }
 
     struct dirent *de;
     while ((de = readdir(d))) {
-        if (de->d_name[0] == '.') continue;
+        if (de->d_name[0] == '.') { continue; }
 
         /* Must have Directories= to be an icon theme */
-        if (!theme_has_directories(icons_dir, de->d_name))
+        if (!theme_has_directories(icons_dir, de->d_name)) {
             continue;
+        }
 
         char index_path[512];
         snprintf(index_path, sizeof(index_path), "%s/%s/index.theme",
@@ -477,7 +484,7 @@ static char *search_theme_base(const char *base, const char *icon_name)
     snprintf(idx_path, sizeof(idx_path), "%s/index.theme", base);
 
     FILE *fp = fopen(idx_path, "r");
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     char *directories = NULL;
     char line[8192];
@@ -485,7 +492,7 @@ static char *search_theme_base(const char *base, const char *icon_name)
 
     while (fgets(line, sizeof(line), fp)) {
         char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+        while (end > line && isspace((unsigned char)end[-1])) { *--end = '\0'; }
 
         if (strcmp(line, "[Icon Theme]") == 0) { in_theme = 1; continue; }
         if (line[0] == '[') { in_theme = 0; continue; }
@@ -493,10 +500,11 @@ static char *search_theme_base(const char *base, const char *icon_name)
             directories = strdup(line + 12);
             break;
         }
+
     }
     fclose(fp);
 
-    if (!directories) return NULL;
+    if (!directories) { return NULL; }
 
     /* Names to try: exact name, then -symbolic variant */
     const char *names[2];
@@ -541,7 +549,7 @@ static char *read_theme_inherits(const char *base)
     snprintf(idx_path, sizeof(idx_path), "%s/index.theme", base);
 
     FILE *fp = fopen(idx_path, "r");
-    if (!fp) return NULL;
+    if (!fp) { return NULL; }
 
     char *inherits = NULL;
     char line[1024];
@@ -549,7 +557,7 @@ static char *read_theme_inherits(const char *base)
 
     while (fgets(line, sizeof(line), fp)) {
         char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1])) *--end = '\0';
+        while (end > line && isspace((unsigned char)end[-1])) { *--end = '\0'; }
 
         if (strcmp(line, "[Icon Theme]") == 0) { in_theme = 1; continue; }
         if (line[0] == '[') { in_theme = 0; continue; }
@@ -569,7 +577,7 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
 
     /* Prevent infinite loops in broken theme chains */
     static int depth = 0;
-    if (depth > 8) return NULL;
+    if (depth > 8) { return NULL; }
 
     char *base = find_theme_base(theme);
     if (!base) {
@@ -585,7 +593,10 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
 
     /* Search this theme's directories */
     char *path = search_theme_base(base, icon_name);
-    if (path) { free(base); return path; }
+    if (path) {
+        free(base);
+        return path;
+    }
 
     /* Follow Inherits= chain */
     char *inherits = read_theme_inherits(base);
@@ -602,7 +613,10 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
                 depth++;
                 path = isde_icon_theme_lookup(parent, category, icon_name);
                 depth--;
-                if (path) { free(inherits); return path; }
+                if (path) {
+                    free(inherits);
+                    return path;
+                }
             }
             ip = comma ? comma + 1 : NULL;
         }
@@ -626,24 +640,26 @@ static IsdeColorScheme *g_scheme = NULL;
 
 const IsdeColorScheme *isde_theme_current(void)
 {
-    if (g_scheme) return g_scheme;
+    if (g_scheme) { return g_scheme; }
 
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return NULL;
+    if (!cfg) { return NULL; }
 
     IsdeConfigTable *root = isde_config_root(cfg);
     IsdeConfigTable *appear = isde_config_table(root, "appearance");
     if (appear) {
         const char *name = isde_config_string(appear, "color_scheme", NULL);
-        if (name)
+        if (name) {
             g_scheme = isde_scheme_load(name);
+        }
     }
     isde_config_free(cfg);
 
     /* Default to light if no scheme configured */
-    if (!g_scheme)
+    if (!g_scheme) {
         g_scheme = isde_scheme_load("default-light");
+    }
 
     return g_scheme;
 }
@@ -681,7 +697,7 @@ static char *fmt_font(const char *resource, const char *family, int size)
 char **isde_theme_build_resources(void)
 {
     const IsdeColorScheme *s = isde_theme_current();
-    if (!s) return NULL;
+    if (!s) { return NULL; }
 
     char **res = calloc(128, sizeof(char *));
     int i = 0;
@@ -876,9 +892,10 @@ char **isde_theme_build_resources(void)
 
 void isde_theme_free_resources(char **resources)
 {
-    if (!resources) return;
-    for (int i = 0; resources[i]; i++)
+    if (!resources) { return; }
+    for (int i = 0; resources[i]; i++) {
         free(resources[i]);
+    }
     free(resources);
 }
 
@@ -888,7 +905,7 @@ static int g_font_sizes_loaded = 0;
 
 static void load_font_sizes(void)
 {
-    if (g_font_sizes_loaded) return;
+    if (g_font_sizes_loaded) { return; }
     g_font_sizes_loaded = 1;
 
     /* Defaults */
@@ -912,7 +929,7 @@ static void load_font_sizes(void)
         if (fonts) {
             for (int i = 0; i < 6; i++) {
                 int sz = (int)isde_config_int(fonts, keys[i], 0);
-                if (sz > 0) g_font_sizes[i] = sz;
+                if (sz > 0) { g_font_sizes[i] = sz; }
             }
         }
         isde_config_free(cfg);
@@ -924,11 +941,11 @@ int isde_font_height(const char *category, int padding)
     load_font_sizes();
 
     int idx = 0; /* general */
-    if      (strcmp(category, "fixed")   == 0) idx = 1;
-    else if (strcmp(category, "small")   == 0) idx = 2;
-    else if (strcmp(category, "toolbar") == 0) idx = 3;
-    else if (strcmp(category, "menu")    == 0) idx = 4;
-    else if (strcmp(category, "title")   == 0) idx = 5;
+    if      (strcmp(category, "fixed")   == 0) { idx = 1; }
+    else if (strcmp(category, "small")   == 0) { idx = 2; }
+    else if (strcmp(category, "toolbar") == 0) { idx = 3; }
+    else if (strcmp(category, "menu")    == 0) { idx = 4; }
+    else if (strcmp(category, "title")   == 0) { idx = 5; }
 
     /* Convert point size to pixel height:
      * pixels = pt * (96 / 72) = pt * 4/3, then add padding and scale */

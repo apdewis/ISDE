@@ -32,8 +32,9 @@ int main(int argc, char **argv)
         int restart = panel.restart;
         panel_cleanup(&panel);
 
-        if (!restart)
+        if (!restart) {
             break;
+        }
 
         fprintf(stderr, "isde-panel: restarting\n");
     } while (1);

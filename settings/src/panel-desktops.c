@@ -30,8 +30,9 @@ static void desktops_apply(void)
     saved_rows = rows;
     saved_cols = cols;
 
-    if (panel_dbus)
+    if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "wm.desktops", "*");
+    }
 }
 
 static void desktops_revert(void)
@@ -84,8 +85,8 @@ static Widget desktops_create(Widget parent, XtAppContext app)
         if (desk) {
             int r = (int)isde_config_int(desk, "rows", 1);
             int c = (int)isde_config_int(desk, "columns", 2);
-            if (r > 0) saved_rows = r;
-            if (c > 0) saved_cols = c;
+            if (r > 0) { saved_rows = r; }
+            if (c > 0) { saved_cols = c; }
         }
         isde_config_free(cfg);
     }
@@ -108,7 +109,7 @@ static Widget desktops_create(Widget parent, XtAppContext app)
 
 static int desktops_has_changes(void)
 {
-    if (!scale_rows) return 0;
+    if (!scale_rows) { return 0; }
     return IswScaleGetValue(scale_rows) != saved_rows ||
            IswScaleGetValue(scale_cols) != saved_cols;
 }

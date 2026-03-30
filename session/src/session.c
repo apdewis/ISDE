@@ -20,7 +20,7 @@ static void apply_appearance_settings(void)
 {
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return;
+    if (!cfg) { return; }
 
     IsdeConfigTable *root = isde_config_root(cfg);
     IsdeConfigTable *appear = isde_config_table(root, "appearance");
@@ -31,8 +31,9 @@ static void apply_appearance_settings(void)
             fprintf(stderr, "isde-session: cursor theme=%s\n", cursor);
         }
         const char *cursor_size = isde_config_string(appear, "cursor_size", NULL);
-        if (cursor_size)
+        if (cursor_size) {
             setenv("XCURSOR_SIZE", cursor_size, 1);
+        }
     }
 
     /* Set ISW_SCALE_FACTOR for HiDPI scaling */
@@ -54,7 +55,7 @@ static void apply_input_settings(void)
 {
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return;
+    if (!cfg) { return; }
 
     IsdeConfigTable *root = isde_config_root(cfg);
     IsdeConfigTable *input = isde_config_table(root, "input");
@@ -121,16 +122,18 @@ static void on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Session *s = (Session *)user_data;
-    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0)
+    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
         s->reload_appearance = 1;
+    }
 }
 
 static void restart_ui_children(Session *s)
 {
     /* SIGTERM the WM and panel — child_reap will respawn them */
     for (Child *c = s->children; c; c = c->next) {
-        if (c->is_wm || c->is_panel)
+        if (c->is_wm || c->is_panel) {
             kill(c->pid, SIGTERM);
+        }
     }
 }
 
@@ -155,13 +158,13 @@ int session_init(Session *s)
         IsdeConfigTable *sess = isde_config_table(root, "session");
         if (sess) {
             const char *wm = isde_config_string(sess, "window_manager", NULL);
-            if (wm) s->wm_command = strdup(wm);
+            if (wm) { s->wm_command = strdup(wm); }
 
             const char *panel = isde_config_string(sess, "panel", NULL);
-            if (panel) s->panel_command = strdup(panel);
+            if (panel) { s->panel_command = strdup(panel); }
 
             const char *fm = isde_config_string(sess, "file_manager", NULL);
-            if (fm) s->fm_command = strdup(fm);
+            if (fm) { s->fm_command = strdup(fm); }
         }
         isde_config_free(cfg);
     } else {
@@ -169,10 +172,12 @@ int session_init(Session *s)
     }
 
     /* Defaults if not configured */
-    if (!s->wm_command)
+    if (!s->wm_command) {
         s->wm_command = strdup("isde-wm");
-    if (!s->panel_command)
+    }
+    if (!s->panel_command) {
         s->panel_command = strdup("isde-panel");
+    }
 
     /* Load autostart file */
     char *autostart_path = isde_xdg_find_config("autostart");
@@ -197,8 +202,9 @@ int session_init(Session *s)
 
     /* D-Bus for settings change notifications */
     s->dbus = isde_dbus_init();
-    if (s->dbus)
+    if (s->dbus) {
         isde_dbus_settings_subscribe(s->dbus, on_settings_changed, s);
+    }
 
     s->running = 1;
     return 0;
@@ -221,7 +227,7 @@ void session_run(Session *s)
         fprintf(stderr, "isde-session: starting panel: %s\n",
                 s->panel_command);
         Child *panel = child_spawn(s, s->panel_command, 1, 0);
-        if (panel) panel->is_panel = 1;
+        if (panel) { panel->is_panel = 1; }
     }
 
     /* Phase 3: Start file manager if configured */
@@ -269,8 +275,9 @@ void session_run(Session *s)
         if (dbus_fd >= 0) {
             struct pollfd pfd = { .fd = dbus_fd, .events = POLLIN };
             poll(&pfd, 1, 100);
-            if (pfd.revents & POLLIN)
+            if (pfd.revents & POLLIN) {
                 isde_dbus_dispatch(s->dbus);
+            }
         } else {
             pause();
         }

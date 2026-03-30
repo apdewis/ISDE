@@ -33,7 +33,9 @@ static xcb_keycode_t *keysym_to_keycode(xcb_key_symbols_t *syms,
 static void grab_key(Wm *wm, xcb_keysym_t keysym, uint16_t mod)
 {
     xcb_keycode_t *codes = keysym_to_keycode(wm->keysyms, keysym);
-    if (!codes) return;
+    if (!codes) {
+        return;
+    }
     for (int i = 0; codes[i] != XCB_NO_SYMBOL; i++) {
         xcb_grab_key(wm->conn, 1, wm->root, mod, codes[i],
                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
@@ -63,7 +65,9 @@ void wm_keys_setup(Wm *wm)
 
 static void cycle_focus(Wm *wm)
 {
-    if (!wm->clients) return;
+    if (!wm->clients) {
+        return;
+    }
 
     if (!wm->focused) {
         wm_focus_client(wm, wm->clients);
@@ -72,7 +76,9 @@ static void cycle_focus(Wm *wm)
 
     /* Move to next client, wrapping around */
     WmClient *next = wm->focused->next;
-    if (!next) next = wm->clients;
+    if (!next) {
+        next = wm->clients;
+    }
     wm_focus_client(wm, next);
 }
 
@@ -85,8 +91,9 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
                                 XCB_MOD_MASK_CONTROL | MOD_SUPER);
 
     if (sym == XK_F4 && (mod & XCB_MOD_MASK_1)) {
-        if (wm->focused)
+        if (wm->focused) {
             wm_close_client(wm, wm->focused);
+        }
         return;
     }
 

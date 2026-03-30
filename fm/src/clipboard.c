@@ -17,7 +17,7 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
     xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, strlen(name), name);
     xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(c, ck, NULL);
-    if (!r) return XCB_ATOM_NONE;
+    if (!r) { return XCB_ATOM_NONE; }
     xcb_atom_t a = r->atom;
     free(r);
     return a;
@@ -30,8 +30,9 @@ static void lose_selection(Widget, Atom *);
 
 static void clip_free(FmClipboard *clip)
 {
-    for (int i = 0; i < clip->npaths; i++)
+    for (int i = 0; i < clip->npaths; i++) {
         free(clip->paths[i]);
+    }
     free(clip->paths);
     free(clip->uri_data);
     free(clip->gnome_data);
@@ -75,8 +76,9 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
 
     /* Build text/uri-list */
     size_t uri_len = 0;
-    for (int i = 0; i < fm->clipboard.npaths; i++)
+    for (int i = 0; i < fm->clipboard.npaths; i++) {
         uri_len += strlen("file://") + strlen(fm->clipboard.paths[i]) + 2;
+    }
     fm->clipboard.uri_data = malloc(uri_len + 1);
     fm->clipboard.uri_data[0] = '\0';
     for (int i = 0; i < fm->clipboard.npaths; i++) {
@@ -94,8 +96,9 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
     for (int i = 0; i < fm->clipboard.npaths; i++) {
         strcat(fm->clipboard.gnome_data, "file://");
         strcat(fm->clipboard.gnome_data, fm->clipboard.paths[i]);
-        if (i < fm->clipboard.npaths - 1)
+        if (i < fm->clipboard.npaths - 1) {
             strcat(fm->clipboard.gnome_data, "\n");
+        }
     }
 
     /* Own the CLIPBOARD selection via Xt so convert_selection is called */
@@ -158,8 +161,9 @@ static void lose_selection(Widget w, Atom *selection)
     Fm *fm = fm_from_widget(w);
     if (fm) {
         FmApp *app = fm->app_state;
-        if (app->clipboard_owner == fm)
+        if (app->clipboard_owner == fm) {
             app->clipboard_owner = NULL;
+        }
     }
 }
 
@@ -167,12 +171,13 @@ static void lose_selection(Widget w, Atom *selection)
 
 static void submit_paste_job(Fm *fm, char **paths, int npaths, FmClipOp op)
 {
-    if (npaths <= 0) return;
+    if (npaths <= 0) { return; }
     FmApp *app = fm->app_state;
-    if (op == FM_CLIP_CUT)
+    if (op == FM_CLIP_CUT) {
         jobqueue_submit_move(app, fm, paths, npaths, fm->cwd);
-    else
+    } else {
         jobqueue_submit_copy(app, fm, paths, npaths, fm->cwd);
+    }
 }
 
 static void receive_paste(Widget w, XtPointer client_data,
@@ -222,8 +227,9 @@ static void receive_paste(Widget w, XtPointer client_data,
     char *line = strtok_r(data, "\r\n", &saveptr);
     while (line) {
         const char *path = line;
-        if (strncmp(path, "file://", 7) == 0)
+        if (strncmp(path, "file://", 7) == 0) {
             path += 7;
+        }
         if (path[0] == '/') {
             if (npaths >= cap) {
                 cap *= 2;

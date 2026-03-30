@@ -44,8 +44,9 @@ static IsdeDBus *display_dbus;
 
 static void free_outputs(void)
 {
-    for (int i = 0; i < noutputs; i++)
+    for (int i = 0; i < noutputs; i++) {
         free(outputs[i].name);
+    }
     free(outputs);
     free(output_names);
     outputs = NULL;
@@ -66,7 +67,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
     int cap = 4;
     outputs = malloc(cap * sizeof(OutputInfo));
 
-    if (!res) goto fallback;
+    if (!res) { goto fallback; }
 
     xcb_randr_get_output_primary_reply_t *pri =
         xcb_randr_get_output_primary_reply(conn,
@@ -82,7 +83,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
             xcb_randr_get_output_info_reply(conn,
                 xcb_randr_get_output_info(conn, outs[i], XCB_CURRENT_TIME),
                 NULL);
-        if (!oinfo) continue;
+        if (!oinfo) { continue; }
 
         /* Only show connected outputs */
         if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED) {
@@ -119,7 +120,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
         free(oinfo);
     }
 
-    if (res) free(res);
+    if (res) { free(res); }
 
 fallback:
     /* Fallback: if RandR returned nothing, use the X screen */
@@ -151,20 +152,21 @@ static int load_scale_from_config(void)
 {
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return 100;
+    if (!cfg) { return 100; }
 
     IsdeConfigTable *root = isde_config_root(cfg);
     IsdeConfigTable *disp = isde_config_table(root, "display");
     int val = 100;
-    if (disp)
+    if (disp) {
         val = (int)isde_config_int(disp, "scale_percent", 100);
+    }
     isde_config_free(cfg);
     return val;
 }
 
 static void update_scale_label(int percent)
 {
-    if (!scale_label) return;
+    if (!scale_label) { return; }
     char buf[32];
     snprintf(buf, sizeof(buf), "Scale: %d%%", percent);
     Arg a[1];
@@ -174,8 +176,9 @@ static void update_scale_label(int percent)
 
 static void update_res_label(void)
 {
-    if (!res_label || selected_output < 0 || selected_output >= noutputs)
+    if (!res_label || selected_output < 0 || selected_output >= noutputs) {
         return;
+    }
     OutputInfo *o = &outputs[selected_output];
     char buf[64];
     snprintf(buf, sizeof(buf), "Resolution: %ux%u", o->width, o->height);
@@ -207,14 +210,15 @@ static void scale_changed_cb(Widget w, XtPointer cd, XtPointer call)
 static void display_apply(void)
 {
     char *path = isde_xdg_config_path("isde.toml");
-    if (!path) return;
+    if (!path) { return; }
 
     isde_config_write_int(path, "display", "scale_percent", current_scale);
     saved_scale = current_scale;
     free(path);
 
-    if (display_dbus)
+    if (display_dbus) {
         isde_dbus_settings_notify(display_dbus, "display", "scale_percent");
+    }
 }
 
 static void display_revert(void)

@@ -43,68 +43,76 @@ struct IsdeDesktopEntry {
 
 static char *strip(char *s)
 {
-    while (*s && isspace((unsigned char)*s))
+    while (*s && isspace((unsigned char)*s)) {
         s++;
+    }
     char *end = s + strlen(s);
-    while (end > s && isspace((unsigned char)end[-1]))
+    while (end > s && isspace((unsigned char)end[-1])) {
         *--end = '\0';
+    }
     return s;
 }
 
 static void set_field(IsdeDesktopEntry *e, const char *key, const char *val)
 {
-    if (strcmp(key, "Name") == 0)
+    if (strcmp(key, "Name") == 0) {
         e->name = strdup(val);
-    else if (strcmp(key, "GenericName") == 0)
+    } else if (strcmp(key, "GenericName") == 0) {
         e->generic_name = strdup(val);
-    else if (strcmp(key, "Comment") == 0)
+    } else if (strcmp(key, "Comment") == 0) {
         e->comment = strdup(val);
-    else if (strcmp(key, "Exec") == 0)
+    } else if (strcmp(key, "Exec") == 0) {
         e->exec = strdup(val);
-    else if (strcmp(key, "Icon") == 0)
+    } else if (strcmp(key, "Icon") == 0) {
         e->icon = strdup(val);
-    else if (strcmp(key, "Type") == 0)
+    } else if (strcmp(key, "Type") == 0) {
         e->type = strdup(val);
-    else if (strcmp(key, "Categories") == 0)
+    } else if (strcmp(key, "Categories") == 0) {
         e->categories = strdup(val);
-    else if (strcmp(key, "MimeType") == 0)
+    } else if (strcmp(key, "MimeType") == 0) {
         e->mime_types = strdup(val);
-    else if (strcmp(key, "OnlyShowIn") == 0)
+    } else if (strcmp(key, "OnlyShowIn") == 0) {
         e->only_show_in = strdup(val);
-    else if (strcmp(key, "NotShowIn") == 0)
+    } else if (strcmp(key, "NotShowIn") == 0) {
         e->not_show_in = strdup(val);
-    else if (strcmp(key, "Terminal") == 0)
+    } else if (strcmp(key, "Terminal") == 0) {
         e->terminal = (strcmp(val, "true") == 0);
-    else if (strcmp(key, "NoDisplay") == 0)
+    } else if (strcmp(key, "NoDisplay") == 0) {
         e->no_display = (strcmp(val, "true") == 0);
-    else if (strcmp(key, "Hidden") == 0)
+    } else if (strcmp(key, "Hidden") == 0) {
         e->hidden = (strcmp(val, "true") == 0);
-    else if (strcmp(key, "StartupWMClass") == 0)
+    } else if (strcmp(key, "StartupWMClass") == 0) {
         e->startup_wm_class = strdup(val);
-    else if (strcmp(key, "Actions") == 0)
+    } else if (strcmp(key, "Actions") == 0) {
         e->actions_str = strdup(val);
+    }
 }
 
 /* Find an action by ID in the pre-allocated actions array */
 static DesktopAction *find_action(IsdeDesktopEntry *e, const char *id)
 {
-    for (int i = 0; i < e->nactions; i++)
-        if (e->actions[i].id && strcmp(e->actions[i].id, id) == 0)
+    for (int i = 0; i < e->nactions; i++) {
+        if (e->actions[i].id && strcmp(e->actions[i].id, id) == 0) {
             return &e->actions[i];
+        }
+    }
     return NULL;
 }
 
 /* Parse the Actions= string and allocate action slots */
 static void parse_action_ids(IsdeDesktopEntry *e)
 {
-    if (!e->actions_str) return;
+    if (!e->actions_str) { return; }
 
     /* Count semicolons to estimate action count */
     int count = 0;
     const char *p = e->actions_str;
     while (*p) {
-        if (*p == ';') count++;
-        else if (!count || p[-1] == ';') count++;
+        if (*p == ';') {
+            count++;
+        } else if (!count || p[-1] == ';') {
+            count++;
+        }
         p++;
     }
 
@@ -128,8 +136,9 @@ static void parse_action_ids(IsdeDesktopEntry *e)
 IsdeDesktopEntry *isde_desktop_load(const char *path)
 {
     FILE *fp = fopen(path, "r");
-    if (!fp)
+    if (!fp) {
         return NULL;
+    }
 
     IsdeDesktopEntry *e = calloc(1, sizeof(*e));
     if (!e) {
@@ -143,8 +152,9 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
 
     while (fgets(line, sizeof(line), fp)) {
         char *s = strip(line);
-        if (!*s || *s == '#')
+        if (!*s || *s == '#') {
             continue;
+        }
 
         /* Group header */
         if (*s == '[') {
@@ -167,10 +177,12 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
 
         /* Key=Value — skip localized keys (contain '[') */
         char *eq = strchr(s, '=');
-        if (!eq)
+        if (!eq) {
             continue;
-        if (memchr(s, '[', eq - s))
+        }
+        if (memchr(s, '[', eq - s)) {
             continue;
+        }
 
         *eq = '\0';
         char *key = strip(s);
@@ -189,12 +201,13 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
             }
             DesktopAction *a = find_action(e, current_action_id);
             if (a) {
-                if (strcmp(key, "Name") == 0)
+                if (strcmp(key, "Name") == 0) {
                     a->name = strdup(val);
-                else if (strcmp(key, "Exec") == 0)
+                } else if (strcmp(key, "Exec") == 0) {
                     a->exec = strdup(val);
-                else if (strcmp(key, "Icon") == 0)
+                } else if (strcmp(key, "Icon") == 0) {
                     a->icon = strdup(val);
+                }
             }
         }
     }
@@ -204,16 +217,18 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
 
     /* Ensure actions are parsed even if [Desktop Action] groups
      * appeared before the Actions= key (unlikely but possible) */
-    if (!e->actions && e->actions_str)
+    if (!e->actions && e->actions_str) {
         parse_action_ids(e);
+    }
 
     return e;
 }
 
 void isde_desktop_free(IsdeDesktopEntry *e)
 {
-    if (!e)
+    if (!e) {
         return;
+    }
     free(e->name);
     free(e->generic_name);
     free(e->comment);
@@ -244,8 +259,9 @@ int isde_desktop_action_count(const IsdeDesktopEntry *e)
 const IsdeDesktopAction *isde_desktop_action(const IsdeDesktopEntry *e,
                                               int index)
 {
-    if (!e || index < 0 || index >= e->nactions)
+    if (!e || index < 0 || index >= e->nactions) {
         return NULL;
+    }
     DesktopAction *a = &e->actions[index];
     /* Return a pointer that matches the public struct layout —
      * DesktopAction and IsdeDesktopAction have the same fields */
@@ -268,15 +284,17 @@ int         isde_desktop_hidden(const IsdeDesktopEntry *e)       { return e->hid
 /* Check if a semicolon-separated list contains an entry */
 static int list_contains(const char *list, const char *item)
 {
-    if (!list)
+    if (!list) {
         return 0;
+    }
     size_t ilen = strlen(item);
     const char *p = list;
     while (*p) {
         const char *semi = strchr(p, ';');
         size_t elen = semi ? (size_t)(semi - p) : strlen(p);
-        if (elen == ilen && strncmp(p, item, ilen) == 0)
+        if (elen == ilen && strncmp(p, item, ilen) == 0) {
             return 1;
+        }
         p = semi ? semi + 1 : p + elen;
     }
     return 0;
@@ -284,37 +302,44 @@ static int list_contains(const char *list, const char *item)
 
 int isde_desktop_should_show(const IsdeDesktopEntry *e, const char *desktop)
 {
-    if (e->hidden || e->no_display)
+    if (e->hidden || e->no_display) {
         return 0;
-    if (e->only_show_in)
+    }
+    if (e->only_show_in) {
         return list_contains(e->only_show_in, desktop);
-    if (e->not_show_in)
+    }
+    if (e->not_show_in) {
         return !list_contains(e->not_show_in, desktop);
+    }
     return 1;
 }
 
 int isde_desktop_handles_mime(const IsdeDesktopEntry *e, const char *mime)
 {
-    if (!e || !e->mime_types || !mime)
+    if (!e || !e->mime_types || !mime) {
         return 0;
+    }
     return list_contains(e->mime_types, mime);
 }
 
 char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
                               const char **files, int nfiles)
 {
-    if (!e || !e->exec)
+    if (!e || !e->exec) {
         return NULL;
+    }
 
     const char *src = e->exec;
     /* Estimate output size */
     size_t cap = strlen(src) + 256;
-    for (int i = 0; i < nfiles; i++)
+    for (int i = 0; i < nfiles; i++) {
         cap += strlen(files[i]) + 3; /* space + quotes */
+    }
 
     char *out = malloc(cap);
-    if (!out)
+    if (!out) {
         return NULL;
+    }
 
     size_t pos = 0;
     while (*src) {
@@ -323,30 +348,35 @@ char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
             switch (*src) {
             case 'f': case 'u':
                 /* Single file/URL */
-                if (nfiles > 0)
+                if (nfiles > 0) {
                     pos += snprintf(out + pos, cap - pos, "'%s'", files[0]);
+                }
                 break;
             case 'F': case 'U':
                 /* Multiple files/URLs */
-                for (int i = 0; i < nfiles; i++)
+                for (int i = 0; i < nfiles; i++) {
                     pos += snprintf(out + pos, cap - pos, "%s'%s'",
                                     i ? " " : "", files[i]);
+                }
                 break;
             case 'i':
-                if (e->icon)
+                if (e->icon) {
                     pos += snprintf(out + pos, cap - pos, "--icon '%s'",
                                     e->icon);
+                }
                 break;
             case 'c':
-                if (e->name)
+                if (e->name) {
                     pos += snprintf(out + pos, cap - pos, "'%s'", e->name);
+                }
                 break;
             case 'k':
                 /* Desktop file path — not available here, skip */
                 break;
             case '%':
-                if (pos < cap - 1)
+                if (pos < cap - 1) {
                     out[pos++] = '%';
+                }
                 break;
             default:
                 /* Unknown code, skip */
@@ -354,8 +384,9 @@ char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
             }
             src++;
         } else {
-            if (pos < cap - 1)
+            if (pos < cap - 1) {
                 out[pos++] = *src;
+            }
             src++;
         }
     }
@@ -367,8 +398,9 @@ IsdeDesktopEntry **isde_desktop_scan_dir(const char *dirpath, int *count)
 {
     *count = 0;
     DIR *dir = opendir(dirpath);
-    if (!dir)
+    if (!dir) {
         return NULL;
+    }
 
     int cap = 64;
     IsdeDesktopEntry **entries = calloc(cap, sizeof(*entries));
@@ -380,19 +412,22 @@ IsdeDesktopEntry **isde_desktop_scan_dir(const char *dirpath, int *count)
     struct dirent *de;
     while ((de = readdir(dir))) {
         size_t nlen = strlen(de->d_name);
-        if (nlen < 9 || strcmp(de->d_name + nlen - 8, ".desktop") != 0)
+        if (nlen < 9 || strcmp(de->d_name + nlen - 8, ".desktop") != 0) {
             continue;
+        }
 
         size_t plen = strlen(dirpath) + 1 + nlen + 1;
         char *path = malloc(plen);
-        if (!path)
+        if (!path) {
             continue;
+        }
         snprintf(path, plen, "%s/%s", dirpath, de->d_name);
 
         IsdeDesktopEntry *e = isde_desktop_load(path);
         free(path);
-        if (!e)
+        if (!e) {
             continue;
+        }
 
         if (*count >= cap) {
             cap *= 2;

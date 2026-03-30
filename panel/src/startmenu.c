@@ -31,7 +31,9 @@ static Pixel start_color_pixel(Panel *p, unsigned int rgb)
                         ((rgb >> 8)  & 0xFF) * 257,
                         ( rgb        & 0xFF) * 257),
         NULL);
-    if (!reply) return screen->white_pixel;
+    if (!reply) {
+        return screen->white_pixel;
+    }
     Pixel px = reply->pixel;
     free(reply);
     return px;
@@ -41,7 +43,9 @@ static Pixel start_color_pixel(Panel *p, unsigned int rgb)
 static void set_start_btn_active(Panel *p, int active)
 {
     const IsdeColorScheme *s = isde_theme_current();
-    if (!s) return;
+    if (!s) {
+        return;
+    }
     Arg args[2];
     if (active) {
         XtSetArg(args[0], XtNforeground,
@@ -80,7 +84,9 @@ static const struct { const char *key; const char *label; } CAT_MAP[] = {
 
 static const char *map_category(const char *categories)
 {
-    if (!categories) return "Other";
+    if (!categories) {
+        return "Other";
+    }
     for (int i = 0; i < (int)NUM_CAT_MAP; i++) {
         const char *cat = CAT_MAP[i].key;
         size_t clen = strlen(cat);
@@ -88,8 +94,9 @@ static const char *map_category(const char *categories)
         while (*p) {
             const char *semi = strchr(p, ';');
             size_t elen = semi ? (size_t)(semi - p) : strlen(p);
-            if (elen == clen && strncmp(p, cat, clen) == 0)
+            if (elen == clen && strncmp(p, cat, clen) == 0) {
                 return CAT_MAP[i].label;
+            }
             p = semi ? semi + 1 : p + elen;
         }
     }
@@ -100,9 +107,11 @@ static const char *map_category(const char *categories)
 
 static StartMenuCategory *find_or_add_cat(Panel *p, const char *label)
 {
-    for (int i = 0; i < p->ncategories; i++)
-        if (strcmp(p->categories[i].label, label) == 0)
+    for (int i = 0; i < p->ncategories; i++) {
+        if (strcmp(p->categories[i].label, label) == 0) {
             return &p->categories[i];
+        }
+    }
 
     p->categories = realloc(p->categories,
                             (p->ncategories + 1) * sizeof(StartMenuCategory));
@@ -131,11 +140,17 @@ static void build_categories(Panel *p)
 {
     for (int i = 0; i < p->ndesktop; i++) {
         IsdeDesktopEntry *de = p->desktop_entries[i];
-        if (!isde_desktop_should_show(de, "ISDE")) continue;
-        if (isde_desktop_no_display(de) || isde_desktop_hidden(de)) continue;
+        if (!isde_desktop_should_show(de, "ISDE")) {
+            continue;
+        }
+        if (isde_desktop_no_display(de) || isde_desktop_hidden(de)) {
+            continue;
+        }
         const char *exec = isde_desktop_exec(de);
         const char *name = isde_desktop_name(de);
-        if (!exec || !name) continue;
+        if (!exec || !name) {
+            continue;
+        }
 
         const char *label = map_category(isde_desktop_categories(de));
         StartMenuCategory *c = find_or_add_cat(p, label);
@@ -147,15 +162,18 @@ static void build_categories(Panel *p)
 
 static void show_category(Panel *p, int index)
 {
-    if (index < 0 || index >= p->ncategories) return;
+    if (index < 0 || index >= p->ncategories) {
+        return;
+    }
     p->active_cat = index;
 
     StartMenuCategory *c = &p->categories[index];
 
     /* Build string list for the app List widget */
     String *names = malloc((c->napps + 1) * sizeof(String));
-    for (int i = 0; i < c->napps; i++)
+    for (int i = 0; i < c->napps; i++) {
         names[i] = (String)c->apps[i].name;
+    }
     names[c->napps] = NULL;
 
     IswListChange(p->app_box, names, c->napps, 0, True);
@@ -167,9 +185,13 @@ static void show_category(Panel *p, int index)
 
 static void launch_app(Panel *p, int index)
 {
-    if (p->active_cat < 0 || p->active_cat >= p->ncategories) return;
+    if (p->active_cat < 0 || p->active_cat >= p->ncategories) {
+        return;
+    }
     StartMenuCategory *c = &p->categories[p->active_cat];
-    if (index < 0 || index >= c->napps) return;
+    if (index < 0 || index >= c->napps) {
+        return;
+    }
 
     const char *exec = c->apps[index].exec;
     panel_dismiss_popup(p);
@@ -189,7 +211,9 @@ static void category_selected(Widget w, XtPointer client_data,
     (void)w;
     Panel *p = (Panel *)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
-    if (ret->list_index == XAW_LIST_NONE) return;
+    if (ret->list_index == XAW_LIST_NONE) {
+        return;
+    }
     show_category(p, ret->list_index);
 }
 
@@ -199,7 +223,9 @@ static void app_selected(Widget w, XtPointer client_data,
     (void)w;
     Panel *p = (Panel *)client_data;
     IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
-    if (ret->list_index == XAW_LIST_NONE) return;
+    if (ret->list_index == XAW_LIST_NONE) {
+        return;
+    }
     launch_app(p, ret->list_index);
 }
 
@@ -212,12 +238,15 @@ static void menu_key_handler(Widget w, XtPointer client_data,
 {
     (void)w; (void)cont;
     Panel *p = (Panel *)client_data;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) return;
+    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+        return;
+    }
 
     xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
 
-    if (!key_syms)
+    if (!key_syms) {
         key_syms = xcb_key_symbols_alloc(p->conn);
+    }
 
     xcb_keysym_t sym = xcb_key_symbols_get_keysym(key_syms,
                                                    kev->detail, 0);
@@ -226,17 +255,23 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     case XK_Down:
         if (p->menu_focus == 0) {
             int next = p->cat_highlight + 1;
-            if (next >= p->ncategories) next = p->ncategories - 1;
+            if (next >= p->ncategories) {
+                next = p->ncategories - 1;
+            }
             p->cat_highlight = next;
             IswListHighlight(p->cat_box, next);
             show_category(p, next);
             p->app_highlight = -1;
             IswListUnhighlight(p->app_box);
         } else {
-            if (p->active_cat < 0) break;
+            if (p->active_cat < 0) {
+                break;
+            }
             StartMenuCategory *c = &p->categories[p->active_cat];
             int next = p->app_highlight + 1;
-            if (next >= c->napps) next = c->napps - 1;
+            if (next >= c->napps) {
+                next = c->napps - 1;
+            }
             p->app_highlight = next;
             IswListHighlight(p->app_box, next);
         }
@@ -245,7 +280,9 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     case XK_Up:
         if (p->menu_focus == 0) {
             int next = p->cat_highlight - 1;
-            if (next < 0) next = 0;
+            if (next < 0) {
+                next = 0;
+            }
             p->cat_highlight = next;
             IswListHighlight(p->cat_box, next);
             show_category(p, next);
@@ -253,21 +290,27 @@ static void menu_key_handler(Widget w, XtPointer client_data,
             IswListUnhighlight(p->app_box);
         } else {
             int next = p->app_highlight - 1;
-            if (next < 0) next = 0;
+            if (next < 0) {
+                next = 0;
+            }
             p->app_highlight = next;
             IswListHighlight(p->app_box, next);
         }
         break;
 
     case XK_Right:
-        if (p->menu_focus == 1 || p->active_cat < 0) break;
+        if (p->menu_focus == 1 || p->active_cat < 0) {
+            break;
+        }
         p->menu_focus = 1;
         p->app_highlight = 0;
         IswListHighlight(p->app_box, 0);
         break;
 
     case XK_Left:
-        if (p->menu_focus == 0) break;
+        if (p->menu_focus == 0) {
+            break;
+        }
         p->menu_focus = 0;
         p->app_highlight = -1;
         IswListUnhighlight(p->app_box);
@@ -276,7 +319,9 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     case XK_Return:
     case XK_KP_Enter:
         if (p->menu_focus == 0) {
-            if (p->active_cat < 0) break;
+            if (p->active_cat < 0) {
+                break;
+            }
             p->menu_focus = 1;
             p->app_highlight = 0;
             IswListHighlight(p->app_box, 0);
@@ -310,8 +355,9 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     int panel_y = p->mon_y + p->mon_h - PANEL_HEIGHT;
     int menu_y = panel_y - MENU_HEIGHT;
 
-    if (!XtIsRealized(p->start_shell))
+    if (!XtIsRealized(p->start_shell)) {
         XtRealizeWidget(p->start_shell);
+    }
     XtConfigureWidget(p->start_shell, p->mon_x, menu_y,
                       MENU_WIDTH, MENU_HEIGHT, 1);
     XtPopup(p->start_shell, XtGrabNone);
@@ -349,14 +395,16 @@ void startmenu_init(Panel *p)
         "start-here", "view-app-grid", "open-menu",
         "application-menu", "view-grid", NULL
     };
-    for (int i = 0; !start_icon_path && menu_icon_names[i]; i++)
+    for (int i = 0; !start_icon_path && menu_icon_names[i]; i++) {
         start_icon_path = isde_icon_find("actions", menu_icon_names[i]);
+    }
 
     /* Start button — child of form, pinned left */
     Arg args[20];
     Cardinal n = 0;
-    if (start_icon_path)
-        { XtSetArg(args[n], XtNsvgFile, start_icon_path); n++; }
+    if (start_icon_path) {
+        XtSetArg(args[n], XtNsvgFile, start_icon_path); n++;
+    }
     XtSetArg(args[n], XtNlabel, "");                 n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
@@ -400,8 +448,9 @@ void startmenu_init(Panel *p)
 
     /* Category list (left pane) — darker tone */
     String *cat_names = malloc((p->ncategories + 1) * sizeof(String));
-    for (int i = 0; i < p->ncategories; i++)
+    for (int i = 0; i < p->ncategories; i++) {
         cat_names[i] = (String)p->categories[i].label;
+    }
     cat_names[p->ncategories] = NULL;
 
     n = 0;
@@ -480,8 +529,9 @@ void startmenu_init(Panel *p)
 
 void startmenu_cleanup(Panel *p)
 {
-    for (int i = 0; i < p->ncategories; i++)
+    for (int i = 0; i < p->ncategories; i++) {
         free(p->categories[i].apps);
+    }
     free(p->categories);
     p->categories = NULL;
     p->ncategories = 0;

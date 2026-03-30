@@ -35,32 +35,36 @@ static void add_entry(Session *s, const char *cmd, int respawn)
 int autostart_load(Session *s, const char *path)
 {
     FILE *fp = fopen(path, "r");
-    if (!fp)
+    if (!fp) {
         return -1;
+    }
 
     char line[1024];
     while (fgets(line, sizeof(line), fp)) {
         /* Strip trailing newline/whitespace */
         char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1]))
+        while (end > line && isspace((unsigned char)end[-1])) {
             *--end = '\0';
+        }
 
         /* Skip empty lines and comments */
         char *p = line;
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (!*p || *p == '#')
+        while (*p && isspace((unsigned char)*p)) { p++; }
+        if (!*p || *p == '#') {
             continue;
+        }
 
         /* Check for @ prefix (respawn) */
         int respawn = 0;
         if (*p == '@') {
             respawn = 1;
             p++;
-            while (*p && isspace((unsigned char)*p)) p++;
+            while (*p && isspace((unsigned char)*p)) { p++; }
         }
 
-        if (*p)
+        if (*p) {
             add_entry(s, p, respawn);
+        }
     }
 
     fclose(fp);
@@ -81,8 +85,9 @@ void autostart_load_xdg(Session *s)
         for (int i = 0; i < count; i++) {
             if (isde_desktop_should_show(entries[i], "ISDE")) {
                 const char *exec = isde_desktop_exec(entries[i]);
-                if (exec)
+                if (exec) {
                     add_entry(s, exec, 0);
+                }
             }
             isde_desktop_free(entries[i]);
         }
@@ -103,8 +108,9 @@ void autostart_load_xdg(Session *s)
                 for (int i = 0; i < count; i++) {
                     if (isde_desktop_should_show(entries[i], "ISDE")) {
                         const char *exec = isde_desktop_exec(entries[i]);
-                        if (exec)
+                        if (exec) {
                             add_entry(s, exec, 0);
+                        }
                     }
                     isde_desktop_free(entries[i]);
                 }
@@ -117,8 +123,9 @@ void autostart_load_xdg(Session *s)
 
 void autostart_free(Session *s)
 {
-    for (int i = 0; i < s->autostart_count; i++)
+    for (int i = 0; i < s->autostart_count; i++) {
         free(s->autostart_cmds[i]);
+    }
     free(s->autostart_cmds);
     free(s->autostart_respawn);
     s->autostart_cmds = NULL;
