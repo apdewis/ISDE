@@ -30,6 +30,7 @@ struct IsdeDesktopEntry {
     char *type;
     char *categories;
     char *mime_types;
+    char *startup_wm_class;
     char *only_show_in;
     char *not_show_in;
     char *actions_str;   /* raw "Actions=" value (semicolon-separated IDs) */
@@ -78,6 +79,8 @@ static void set_field(IsdeDesktopEntry *e, const char *key, const char *val)
         e->no_display = (strcmp(val, "true") == 0);
     else if (strcmp(key, "Hidden") == 0)
         e->hidden = (strcmp(val, "true") == 0);
+    else if (strcmp(key, "StartupWMClass") == 0)
+        e->startup_wm_class = strdup(val);
     else if (strcmp(key, "Actions") == 0)
         e->actions_str = strdup(val);
 }
@@ -219,6 +222,7 @@ void isde_desktop_free(IsdeDesktopEntry *e)
     free(e->type);
     free(e->categories);
     free(e->mime_types);
+    free(e->startup_wm_class);
     free(e->only_show_in);
     free(e->not_show_in);
     free(e->actions_str);
@@ -256,6 +260,7 @@ const char *isde_desktop_icon(const IsdeDesktopEntry *e)         { return e->ico
 const char *isde_desktop_type(const IsdeDesktopEntry *e)         { return e->type; }
 const char *isde_desktop_categories(const IsdeDesktopEntry *e)   { return e->categories; }
 const char *isde_desktop_mime_types(const IsdeDesktopEntry *e)   { return e->mime_types; }
+const char *isde_desktop_startup_wm_class(const IsdeDesktopEntry *e) { return e->startup_wm_class; }
 int         isde_desktop_terminal(const IsdeDesktopEntry *e)     { return e->terminal; }
 int         isde_desktop_no_display(const IsdeDesktopEntry *e)   { return e->no_display; }
 int         isde_desktop_hidden(const IsdeDesktopEntry *e)       { return e->hidden; }

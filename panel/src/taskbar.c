@@ -18,14 +18,27 @@
 
 /* ---------- helpers ---------- */
 
+static char *get_window_title(Panel *p, xcb_window_t win);
+
 static char *get_wm_class(Panel *p, xcb_window_t win)
 {
     char *instance = NULL, *class = NULL;
     if (isde_ewmh_get_wm_class(p->ewmh, win, &instance, &class)) {
+        if (class && *class) {
+            free(instance);
+            return class;
+        }
+        /* Class empty but instance available */
+        free(class);
+        if (instance && *instance) {
+            return instance;
+        }
         free(instance);
-        return class;
     }
-    return strdup("unknown");
+
+    /* Last resort: use the window title */
+    char *title = get_window_title(p, win);
+    return title;
 }
 
 static char *get_window_title(Panel *p, xcb_window_t win)
@@ -411,7 +424,9 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     g->cap_windows = 4;
     g->windows = calloc(g->cap_windows, sizeof(xcb_window_t));
 
-    /* Try to find a matching .desktop entry */
+    /* Try to find a matching .desktop entry.
+     * First pass: match by StartupWMClass (the standard mechanism).
+     * Second pass: fall back to matching Exec basename. */
     char cls_lower[128];
     int j;
     for (j = 0; wm_class[j] && j < 126; j++)
@@ -419,7 +434,26 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
                      ? wm_class[j] + 32 : wm_class[j];
     cls_lower[j] = '\0';
 
-    for (int i = 0; i < p->ndesktop; i++) {
+    int match = -1;
+
+    /* Pass 1: StartupWMClass */
+    for (int i = 0; i < p->ndesktop && match < 0; i++) {
+        const char *swc = isde_desktop_startup_wm_class(p->desktop_entries[i]);
+        if (!swc) continue;
+
+        char swc_lower[128];
+        for (j = 0; swc[j] && j < 126; j++)
+            swc_lower[j] = (swc[j] >= 'A' && swc[j] <= 'Z')
+                          ? swc[j] + 32 : swc[j];
+        swc_lower[j] = '\0';
+
+        if (strcmp(cls_lower, swc_lower) == 0) {
+            match = i;
+        }
+    }
+
+    /* Pass 2: Exec basename */
+    for (int i = 0; i < p->ndesktop && match < 0; i++) {
         const char *exec = isde_desktop_exec(p->desktop_entries[i]);
         if (!exec) continue;
         const char *base = strrchr(exec, '/');
@@ -432,17 +466,21 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
         exec_lower[j] = '\0';
 
         if (strcmp(cls_lower, exec_lower) == 0) {
-            const char *name = isde_desktop_name(p->desktop_entries[i]);
-            if (name) {
-                free(g->display_name);
-                g->display_name = strdup(name);
-            }
-            const char *icon = isde_desktop_icon(p->desktop_entries[i]);
-            if (icon) g->desktop_icon = strdup(icon);
-            g->desktop_exec = strdup(exec);
-            g->desktop_index = i;
-            break;
+            match = i;
         }
+    }
+
+    if (match >= 0) {
+        const char *name = isde_desktop_name(p->desktop_entries[match]);
+        if (name) {
+            free(g->display_name);
+            g->display_name = strdup(name);
+        }
+        const char *icon = isde_desktop_icon(p->desktop_entries[match]);
+        if (icon) g->desktop_icon = strdup(icon);
+        const char *exec = isde_desktop_exec(p->desktop_entries[match]);
+        if (exec) g->desktop_exec = strdup(exec);
+        g->desktop_index = match;
     }
 
     /* Create button widget */

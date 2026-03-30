@@ -33,6 +33,7 @@ const char *isde_desktop_icon(const IsdeDesktopEntry *e);
 const char *isde_desktop_type(const IsdeDesktopEntry *e);
 const char *isde_desktop_categories(const IsdeDesktopEntry *e);
 const char *isde_desktop_mime_types(const IsdeDesktopEntry *e);
+const char *isde_desktop_startup_wm_class(const IsdeDesktopEntry *e);
 int         isde_desktop_handles_mime(const IsdeDesktopEntry *e,
                                       const char *mime);
 int         isde_desktop_terminal(const IsdeDesktopEntry *e);
