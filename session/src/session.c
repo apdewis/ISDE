@@ -94,6 +94,9 @@ static void apply_input_settings(void)
         /* Initialize XKB extension */
         xcb_xkb_use_extension(conn, 1, 0);
 
+        uint8_t per_key_repeat[32];
+        memset(per_key_repeat, 0xFF, sizeof(per_key_repeat));
+
         xcb_xkb_set_controls(conn,
             XCB_XKB_ID_USE_CORE_KBD,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -102,7 +105,7 @@ static void apply_input_settings(void)
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             XCB_XKB_BOOL_CTRL_REPEAT_KEYS,
             0,
-            NULL);
+            per_key_repeat);
         fprintf(stderr, "isde-session: keyboard repeat delay=%d interval=%d\n",
                 rep_delay, rep_int);
     }
