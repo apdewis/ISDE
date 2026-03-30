@@ -131,6 +131,19 @@ static void wl_select_callback(Widget w, XtPointer client_data,
     panel_dismiss_popup(wl_panel);
 }
 
+static void wl_motion_handler(Widget w, XtPointer client_data,
+                              xcb_generic_event_t *event, Boolean *cont)
+{
+    (void)client_data;
+    (void)cont;
+    xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t *)event;
+    /* Use the List's Set action to highlight the item under the pointer.
+     * Set() reads event_x/event_y which are at the same struct offset
+     * for both button_press and motion_notify events. */
+    XtCallActionProc(w, "Set", event, NULL, 0);
+    (void)ev;
+}
+
 static void show_window_menu(Panel *p, TaskGroup *g)
 {
     /* Destroy previous popup if any */
@@ -151,15 +164,9 @@ static void show_window_menu(Panel *p, TaskGroup *g)
         wl_titles[i] = get_window_title(p, g->windows[i]);
     wl_titles[g->nwindows] = NULL;
 
-    /* Estimate menu height */
-    int menu_h = g->nwindows * 20 + 8;
-    if (menu_h > 300) menu_h = 300;
-
     /* Create popup shell */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, 200);              n++;
-    XtSetArg(args[n], XtNheight, menu_h);           n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);   n++;
     XtSetArg(args[n], XtNborderWidth, 1);           n++;
     wl_shell = XtCreatePopupShell("winListMenu", overrideShellWidgetClass,
@@ -178,24 +185,47 @@ static void show_window_menu(Panel *p, TaskGroup *g)
                                     wl_shell, args, n);
     XtAddCallback(wl_list, XtNcallback, wl_select_callback, NULL);
 
-    /* Hover-to-highlight translations */
+    /* Hover-to-highlight + click-to-select translations */
     static char wlTranslations[] =
         "<EnterWindow>: Set()\n"
         "<LeaveWindow>: Unset()\n"
-        "<Motion>:      Set()\n"
+        "<Btn1Motion>:  Set()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
     XtOverrideTranslations(wl_list,
                            XtParseTranslationTable(wlTranslations));
 
-    /* Position above the button */
+    /* Motion handler for hover highlight (translations may not get
+     * PointerMotionMask added when set via XtOverrideTranslations) */
+    XtAddEventHandler(wl_list, PointerMotionMask, False,
+                      wl_motion_handler, NULL);
+
+    /* Realize to get actual size, then position bottom-flush with panel */
+    if (!XtIsRealized(wl_shell)) {
+        XtRealizeWidget(wl_shell);
+    }
+
+    /* Query the list's actual size and resize the shell to fit */
+    Dimension list_w, list_h;
+    n = 0;
+    XtSetArg(args[n], XtNwidth, &list_w);   n++;
+    XtSetArg(args[n], XtNheight, &list_h);  n++;
+    XtGetValues(wl_list, args, n);
+
+    Dimension bw;
+    n = 0;
+    XtSetArg(args[n], XtNborderWidth, &bw); n++;
+    XtGetValues(wl_shell, args, n);
+
+    XtConfigureWidget(wl_shell, 0, 0, list_w, list_h, bw);
+
     Position bx, by;
     XtTranslateCoords(g->button, 0, 0, &bx, &by);
 
-    Arg pargs[2];
-    XtSetArg(pargs[0], XtNx, bx);
-    XtSetArg(pargs[1], XtNy, by - menu_h);
-    XtSetValues(wl_shell, pargs, 2);
+    n = 0;
+    XtSetArg(args[n], XtNx, bx);                                          n++;
+    XtSetArg(args[n], XtNy, by - (Position)list_h - (Position)(2 * bw));  n++;
+    XtSetValues(wl_shell, args, n);
 
     XtPopup(wl_shell, XtGrabNone);
     panel_show_popup(p, wl_shell);
@@ -332,6 +362,7 @@ static void context_menu_handler(Widget w, XtPointer client_data,
 
     Widget ctx = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                     w, NULL, 0);
+
     Arg args[20];
 
     /* Desktop actions (e.g. "New Window", "New Private Window") */
@@ -384,21 +415,24 @@ static void context_menu_handler(Widget w, XtPointer client_data,
                                               ctx, args, 1);
     XtAddCallback(pin_entry, XtNcallback, pin_callback, client_data);
 
-    /* Position above button */
+    /* Position above button, bottom flush with panel top */
     Position bx, by;
     XtTranslateCoords(w, 0, 0, &bx, &by);
 
-    if (!XtIsRealized(ctx))
+    if (!XtIsRealized(ctx)) {
         XtRealizeWidget(ctx);
+    }
 
-    Dimension mh;
-    Arg qargs[1];
-    XtSetArg(qargs[0], XtNheight, &mh);
-    XtGetValues(ctx, qargs, 1);
+    Dimension mh, bw;
+    Arg qargs[20];
+    Cardinal qn = 0;
+    XtSetArg(qargs[qn], XtNheight, &mh); qn++;
+    XtSetArg(qargs[qn], XtNborderWidth, &bw); qn++;
+    XtGetValues(ctx, qargs, qn);
 
     Arg margs[2];
     XtSetArg(margs[0], XtNx, bx);
-    XtSetArg(margs[1], XtNy, by - mh);
+    XtSetArg(margs[1], XtNy, by - (Position)mh - (Position)(2 * bw));
     XtSetValues(ctx, margs, 2);
 
     XtPopup(ctx, XtGrabNone);
