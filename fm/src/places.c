@@ -8,7 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef __FreeBSD__
+#include <sys/param.h>
+#include <sys/mount.h>
+#else
 #include <mntent.h>
+#endif
 
 /* ---------- Place entry ---------- */
 
@@ -119,10 +124,26 @@ static void build_places_list(FmPlacesData *pd)
     places_add(pd, "File System", "/", "drive-harddisk", 0);
 
     /* Scan mounts for removable/user media */
-    FILE *fp = setmntent("/proc/mounts", "r");
-    if (fp) {
+#ifdef __FreeBSD__
+    {
+        struct statfs *mounts;
+        int n = getmntinfo(&mounts, MNT_NOWAIT);
+        for (int i = 0; i < n; i++) {
+            const char *dir = mounts[i].f_mntonname;
+            if (strncmp(dir, "/media/", 7) == 0 ||
+                (strncmp(dir, "/mnt/", 5) == 0 &&
+                 strlen(dir) > 5)) {
+                const char *name = strrchr(dir, '/');
+                name = name ? name + 1 : dir;
+                places_add(pd, name, dir, "drive-removable-media", 0);
+            }
+        }
+    }
+#else
+    FILE *fp_mnt = setmntent("/proc/mounts", "r");
+    if (fp_mnt) {
         struct mntent *me;
-        while ((me = getmntent(fp))) {
+        while ((me = getmntent(fp_mnt))) {
             /* Show /media and /mnt mounts, skip virtual filesystems */
             if (strncmp(me->mnt_dir, "/media/", 7) == 0 ||
                 (strncmp(me->mnt_dir, "/mnt/", 5) == 0 &&
@@ -133,10 +154,12 @@ static void build_places_list(FmPlacesData *pd)
                 places_add(pd, name, me->mnt_dir, "drive-removable-media", 0);
             }
         }
-        endmntent(fp);
+        endmntent(fp_mnt);
     }
+#endif
 
     /* --- Bookmarks section --- */
+    FILE *fp;
     char bm_path[512];
     snprintf(bm_path, sizeof(bm_path), "%s/isde/bookmarks",
              isde_xdg_config_home());
