@@ -171,6 +171,8 @@ int session_init(Session *s)
     /* Defaults if not configured */
     if (!s->wm_command)
         s->wm_command = strdup("isde-wm");
+    if (!s->panel_command)
+        s->panel_command = strdup("isde-panel");
 
     /* Load autostart file */
     char *autostart_path = isde_xdg_find_config("autostart");

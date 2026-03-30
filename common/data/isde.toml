@@ -2,8 +2,8 @@
 
 [session]
 window_manager = "isde-wm"
-# panel = "isde-panel"
-# file_manager = "isde-fm"
+panel = "isde-panel"
+file_manager = "isde-fm"
 
 [input]
 double_click_ms = 400
