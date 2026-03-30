@@ -20,33 +20,39 @@ static const char *get_home(void)
 const char *isde_xdg_config_home(void)
 {
     const char *v = getenv("XDG_CONFIG_HOME");
-    if (v && v[0])
+    if (v && v[0]) {
         return v;
+    }
     static char buf[512];
-    if (!buf[0])
+    if (!buf[0]) {
         snprintf(buf, sizeof(buf), "%s/.config", get_home());
+    }
     return buf;
 }
 
 const char *isde_xdg_data_home(void)
 {
     const char *v = getenv("XDG_DATA_HOME");
-    if (v && v[0])
+    if (v && v[0]) {
         return v;
+    }
     static char buf[512];
-    if (!buf[0])
+    if (!buf[0]) {
         snprintf(buf, sizeof(buf), "%s/.local/share", get_home());
+    }
     return buf;
 }
 
 const char *isde_xdg_cache_home(void)
 {
     const char *v = getenv("XDG_CACHE_HOME");
-    if (v && v[0])
+    if (v && v[0]) {
         return v;
+    }
     static char buf[512];
-    if (!buf[0])
+    if (!buf[0]) {
         snprintf(buf, sizeof(buf), "%s/.cache", get_home());
+    }
     return buf;
 }
 
@@ -67,8 +73,9 @@ char *isde_xdg_config_path(const char *suffix)
     const char *base = isde_xdg_config_home();
     size_t len = strlen(base) + strlen("/isde/") + strlen(suffix) + 1;
     char *path = malloc(len);
-    if (path)
+    if (path) {
         snprintf(path, len, "%s/isde/%s", base, suffix);
+    }
     return path;
 }
 
@@ -77,8 +84,9 @@ char *isde_xdg_data_path(const char *suffix)
     const char *base = isde_xdg_data_home();
     size_t len = strlen(base) + strlen("/isde/") + strlen(suffix) + 1;
     char *path = malloc(len);
-    if (path)
+    if (path) {
         snprintf(path, len, "%s/isde/%s", base, suffix);
+    }
     return path;
 }
 
@@ -88,11 +96,13 @@ static char *find_in_dirs(const char *home, const char *dirs, const char *name)
     /* Check home first */
     size_t hlen = strlen(home) + strlen("/isde/") + strlen(name) + 1;
     char *path = malloc(hlen);
-    if (!path)
+    if (!path) {
         return NULL;
+    }
     snprintf(path, hlen, "%s/isde/%s", home, name);
-    if (access(path, R_OK) == 0)
+    if (access(path, R_OK) == 0) {
         return path;
+    }
     free(path);
 
     /* Walk colon-separated dirs */
@@ -103,11 +113,13 @@ static char *find_in_dirs(const char *home, const char *dirs, const char *name)
         if (dlen > 0) {
             size_t total = dlen + strlen("/isde/") + strlen(name) + 1;
             path = malloc(total);
-            if (!path)
+            if (!path) {
                 return NULL;
+            }
             snprintf(path, total, "%.*s/isde/%s", (int)dlen, p, name);
-            if (access(path, R_OK) == 0)
+            if (access(path, R_OK) == 0) {
                 return path;
+            }
             free(path);
         }
         p = colon ? colon + 1 : NULL;
@@ -163,7 +175,7 @@ char *isde_icon_find(const char *category, const char *name)
         if (len > 0) {
             exe_dir[len] = '\0';
             char *slash = strrchr(exe_dir, '/');
-            if (slash) *slash = '\0';
+            if (slash) { *slash = '\0'; }
         }
     }
     if (exe_dir[0]) {
@@ -172,8 +184,9 @@ char *isde_icon_find(const char *category, const char *name)
         path = malloc(total);
         if (path) {
             snprintf(path, total, "%s/../../common/data/%s", exe_dir, rel);
-            if (access(path, R_OK) == 0)
+            if (access(path, R_OK) == 0) {
                 return path;
+            }
             free(path);
         }
     }
@@ -188,8 +201,9 @@ char *isde_xdg_user_dir(const char *name)
     snprintf(path, sizeof(path), "%s/user-dirs.dirs", isde_xdg_config_home());
 
     FILE *fp = fopen(path, "r");
-    if (!fp)
+    if (!fp) {
         return NULL;
+    }
 
     /* Build the key we're looking for: XDG_xxx_DIR */
     char key[64];
@@ -205,34 +219,39 @@ char *isde_xdg_user_dir(const char *name)
         /* Skip comments and blank lines */
         char *p = line;
         while (*p == ' ' || *p == '\t') p++;
-        if (*p == '#' || *p == '\n' || *p == '\0')
+        if (*p == '#' || *p == '\n' || *p == '\0') {
             continue;
+        }
 
         /* Match key= */
-        if (strncmp(p, key, klen) != 0 || p[klen] != '=')
+        if (strncmp(p, key, klen) != 0 || p[klen] != '=') {
             continue;
+        }
 
         p += klen + 1;
         /* Skip whitespace after = */
         while (*p == ' ' || *p == '\t') p++;
 
         /* Value is quoted: "..." */
-        if (*p != '"')
+        if (*p != '"') {
             continue;
+        }
         p++;
 
         /* Find closing quote */
         char *end = strchr(p, '"');
-        if (!end)
+        if (!end) {
             continue;
+        }
         *end = '\0';
 
         /* Expand $HOME */
         if (strncmp(p, "$HOME/", 6) == 0) {
             size_t total = strlen(home) + strlen(p + 5) + 1;
             result = malloc(total);
-            if (result)
+            if (result) {
                 snprintf(result, total, "%s%s", home, p + 5);
+            }
         } else if (strcmp(p, "$HOME") == 0) {
             /* Set to $HOME means "not configured" per spec */
             result = NULL;
