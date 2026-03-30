@@ -717,10 +717,21 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     case XCB_BUTTON_PRESS: {
         xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
         int edge;
-        if (find_grip_client(wm, bp->event, &edge))
+        if (find_grip_client(wm, bp->event, &edge)) {
             on_grip_press(wm, bp);
-        else
-            XtDispatchEvent(ev, wm->conn);
+        } else {
+            /* Click-to-focus: if the click is on a client window,
+             * focus+raise it and replay the event to the client */
+            WmClient *c = wm_find_client_by_window(wm, bp->event);
+            if (c) {
+                wm_focus_client(wm, c);
+                xcb_allow_events(wm->conn, XCB_ALLOW_REPLAY_POINTER,
+                                 bp->time);
+                xcb_flush(wm->conn);
+            } else {
+                XtDispatchEvent(ev, wm->conn);
+            }
+        }
         break;
     }
     case XCB_PROPERTY_NOTIFY:

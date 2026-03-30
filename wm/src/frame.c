@@ -335,6 +335,13 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     xcb_change_window_attributes(wm->conn, client,
                                  XCB_CW_EVENT_MASK, &client_mask);
 
+    /* Passive grab for click-to-focus on the client window */
+    xcb_grab_button(wm->conn, 0, client,
+                    XCB_EVENT_MASK_BUTTON_PRESS,
+                    XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
+                    XCB_NONE, XCB_NONE,
+                    XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
+
     /* Link into list */
     c->next = wm->clients;
     wm->clients = c;
