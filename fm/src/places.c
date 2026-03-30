@@ -1,4 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
+#ifdef __FreeBSD__
+#define __BSD_VISIBLE 1
+#endif
 /*
  * places.c — sidebar with XDG user dirs, filesystem locations, bookmarks
  */
@@ -9,6 +12,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #ifdef __FreeBSD__
+#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/mount.h>
 #else
