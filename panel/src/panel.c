@@ -240,7 +240,7 @@ int panel_init(Panel *p, int *argc, char **argv)
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNhSpace, 0);                        n++;
+    XtSetArg(args[n], XtNhSpace, 2);                        n++;
     XtSetArg(args[n], XtNvSpace, 0);                        n++;
     XtSetArg(args[n], XtNfromHoriz, p->start_btn);          n++;
     XtSetArg(args[n], XtNtop, XtChainTop);                  n++;
