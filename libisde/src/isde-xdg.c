@@ -151,9 +151,10 @@ char *isde_icon_find(const char *category, const char *name)
     char rel[256];
     snprintf(rel, sizeof(rel), "icons/%s/%s.svg", category, name);
 
-    char *path = isde_xdg_find_data(rel);
-    if (path)
+    path = isde_xdg_find_data(rel);
+    if (path) {
         return path;
+    }
 
     /* Dev build fallback: check relative to executable */
     static char exe_dir[512] = {0};
