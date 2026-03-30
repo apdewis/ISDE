@@ -403,7 +403,10 @@ void startmenu_init(Panel *p)
     Arg args[20];
     Cardinal n = 0;
     if (start_icon_path) {
-        XtSetArg(args[n], XtNsvgFile, start_icon_path); n++;
+        const char *ext = strrchr(start_icon_path, '.');
+        String res = (ext && strcmp(ext, ".svg") == 0)
+                   ? XtNsvgFile : XtNleftBitmap;
+        XtSetArg(args[n], res, start_icon_path);         n++;
     }
     XtSetArg(args[n], XtNlabel, "");                 n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;

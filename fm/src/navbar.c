@@ -62,7 +62,10 @@ static Widget make_nav_button(Fm *fm, const char *name,
 
     char *icon_path = isde_icon_find("actions", icon_name);
     if (icon_path) {
-        XtSetArg(args[n], XtNsvgFile, icon_path);  n++;
+        const char *ext = strrchr(icon_path, '.');
+        String res = (ext && strcmp(ext, ".svg") == 0)
+                   ? XtNsvgFile : XtNleftBitmap;
+        XtSetArg(args[n], res, icon_path);          n++;
         XtSetArg(args[n], XtNlabel, "");            n++;
     } else {
         XtSetArg(args[n], XtNlabel, fallback_label); n++;
