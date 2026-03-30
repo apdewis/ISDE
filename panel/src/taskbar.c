@@ -483,12 +483,29 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
         g->desktop_index = match;
     }
 
+    /* Resolve icon: .desktop icon name -> theme lookup -> default fallback */
+    if (g->desktop_icon) {
+        g->icon_path = isde_icon_find("apps", g->desktop_icon);
+    }
+    if (!g->icon_path) {
+        g->icon_path = isde_icon_find("apps", "application-default");
+    }
+
     /* Create button widget */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, g->display_name);   n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    if (g->icon_path) {
+        Dimension pad = 2;
+        XtSetArg(args[n], XtNsvgFile, g->icon_path);    n++;
+        XtSetArg(args[n], XtNlabel, "");                 n++;
+        XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
+        XtSetArg(args[n], XtNinternalWidth, pad);        n++;
+        XtSetArg(args[n], XtNinternalHeight, pad);       n++;
+    } else {
+        XtSetArg(args[n], XtNlabel, g->display_name);   n++;
+    }
+    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);        n++;
+    XtSetArg(args[n], XtNborderWidth, 0);              n++;
     g->button = XtCreateManagedWidget("taskBtn", commandWidgetClass,
                                       p->box, args, n);
 
@@ -555,6 +572,7 @@ void taskbar_update(Panel *p)
             free(g->display_name);
             free(g->desktop_exec);
             free(g->desktop_icon);
+            free(g->icon_path);
             free(g->windows);
             free(g);
         } else {
@@ -636,6 +654,7 @@ void taskbar_cleanup(Panel *p)
         free(g->display_name);
         free(g->desktop_exec);
         free(g->desktop_icon);
+        free(g->icon_path);
         free(g->windows);
         free(g);
     }

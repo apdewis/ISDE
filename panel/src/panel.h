@@ -44,7 +44,8 @@ typedef struct TaskGroup {
     char       *wm_class;          /* WM_CLASS class name (grouping key) */
     char       *display_name;      /* Display label */
     char       *desktop_exec;      /* Exec from matching .desktop (for launch) */
-    char       *desktop_icon;      /* Icon from matching .desktop */
+    char       *desktop_icon;      /* Icon name from matching .desktop */
+    char       *icon_path;         /* Resolved SVG path (or NULL) */
     int         desktop_index;     /* Index into Panel.desktop_entries, or -1 */
 
     xcb_window_t *windows;         /* Array of managed windows in this group */
