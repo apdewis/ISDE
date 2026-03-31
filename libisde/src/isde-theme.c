@@ -822,15 +822,15 @@ char **isde_theme_build_resources(void)
     /* WM title bar (unfocused defaults — focused set via XtSetValues) */
     res[i++] = fmt_color("*titleBar.background", s->titlebar.bg);
     res[i++] = fmt_color("*titleBar.foreground", s->titlebar.fg);
-    res[i++] = fmt_color("*minimizeBtn.background", s->titlebar_button.bg);
-    res[i++] = fmt_color("*minimizeBtn.foreground", s->titlebar_button.fg);
-    res[i++] = fmt_color("*minimizeBtn.borderColor", s->titlebar_button.border);
-    res[i++] = fmt_color("*maximizeBtn.background", s->titlebar_button.bg);
-    res[i++] = fmt_color("*maximizeBtn.foreground", s->titlebar_button.fg);
-    res[i++] = fmt_color("*maximizeBtn.borderColor", s->titlebar_button.border);
-    res[i++] = fmt_color("*closeBtn.background", s->close_button.bg);
-    res[i++] = fmt_color("*closeBtn.foreground", s->close_button.fg);
-    res[i++] = fmt_color("*closeBtn.borderColor", s->close_button.border);
+    res[i++] = fmt_color("*frame.minimizeBtn.background", s->titlebar_button.bg);
+    res[i++] = fmt_color("*frame.minimizeBtn.foreground", s->titlebar_button.fg);
+    res[i++] = fmt_color("*frame.minimizeBtn.borderColor", s->titlebar_button.border);
+    res[i++] = fmt_color("*frame.maximizeBtn.background", s->titlebar_button.bg);
+    res[i++] = fmt_color("*frame.maximizeBtn.foreground", s->titlebar_button.fg);
+    res[i++] = fmt_color("*frame.maximizeBtn.borderColor", s->titlebar_button.border);
+    res[i++] = fmt_color("*frame.closeBtn.background", s->close_button.bg);
+    res[i++] = fmt_color("*frame.closeBtn.foreground", s->close_button.fg);
+    res[i++] = fmt_color("*frame.closeBtn.borderColor", s->close_button.border);
 
     /* Frame shell background (visible as border around client) */
     res[i++] = fmt_color("*frame.background", s->titlebar.border);
