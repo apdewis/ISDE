@@ -16,6 +16,27 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+/* Strip desktop field codes (%f, %F, %u, %U, etc.) from an Exec string.
+ * Returns a malloc'd copy with codes removed. */
+static char *strip_field_codes(const char *src)
+{
+    size_t len = strlen(src);
+    char *out = malloc(len + 1);
+    if (!out) return NULL;
+    size_t pos = 0;
+    while (*src) {
+        if (*src == '%' && src[1]) {
+            src += 2; /* skip %x */
+        } else {
+            out[pos++] = *src++;
+        }
+    }
+    /* Trim trailing whitespace left by removed codes */
+    while (pos > 0 && out[pos - 1] == ' ') pos--;
+    out[pos] = '\0';
+    return out;
+}
+
 /* ---------- helpers ---------- */
 
 static char *get_window_title(Panel *p, xcb_window_t win);
@@ -329,7 +350,7 @@ static void pin_callback(Widget w, XtPointer client_data,
 
 typedef struct {
     Panel      *panel;
-    const char *exec;  /* points into IsdeDesktopEntry — valid for panel lifetime */
+    char       *exec;  /* expanded command (owned) */
 } ActionClosure;
 
 static void action_callback(Widget w, XtPointer client_data,
@@ -409,7 +430,7 @@ static void context_menu_handler(Widget w, XtPointer client_data,
                                                   ctx, args, 1);
             ActionClosure *ac = malloc(sizeof(*ac));
             ac->panel = p;
-            ac->exec = a->exec;
+            ac->exec = strip_field_codes(a->exec);
             XtAddCallback(entry, XtNcallback, action_callback, ac);
         }
 
@@ -556,10 +577,8 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
         if (icon) {
             g->desktop_icon = strdup(icon);
         }
-        const char *exec = isde_desktop_exec(p->desktop_entries[match]);
-        if (exec) {
-            g->desktop_exec = strdup(exec);
-        }
+        g->desktop_exec = isde_desktop_build_exec(
+            p->desktop_entries[match], NULL, 0);
         g->desktop_index = match;
     }
 

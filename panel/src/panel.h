@@ -64,8 +64,8 @@ typedef struct TaskGroup {
 /* ---------- Start menu: app entry for a category ---------- */
 typedef struct StartMenuApp {
     const char *name;
-    const char *exec;
     const char *icon;
+    IsdeDesktopEntry *entry;  /* for isde_desktop_build_exec() at launch */
 } StartMenuApp;
 
 typedef struct StartMenuCategory {

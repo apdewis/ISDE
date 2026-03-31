@@ -126,14 +126,14 @@ static StartMenuCategory *find_or_add_cat(Panel *p, const char *label)
 }
 
 static void cat_add_app(StartMenuCategory *c, const char *name,
-                        const char *exec, const char *icon)
+                        IsdeDesktopEntry *entry, const char *icon)
 {
     if (c->napps >= c->cap) {
         c->cap *= 2;
         c->apps = realloc(c->apps, c->cap * sizeof(StartMenuApp));
     }
     c->apps[c->napps].name = name;
-    c->apps[c->napps].exec = exec;
+    c->apps[c->napps].entry = entry;
     c->apps[c->napps].icon = icon;
     c->napps++;
 }
@@ -148,15 +148,14 @@ static void build_categories(Panel *p)
         if (isde_desktop_no_display(de) || isde_desktop_hidden(de)) {
             continue;
         }
-        const char *exec = isde_desktop_exec(de);
         const char *name = isde_desktop_name(de);
-        if (!exec || !name) {
+        if (!isde_desktop_exec(de) || !name) {
             continue;
         }
 
         const char *label = map_category(isde_desktop_categories(de));
         StartMenuCategory *c = find_or_add_cat(p, label);
-        cat_add_app(c, name, exec, isde_desktop_icon(de));
+        cat_add_app(c, name, de, isde_desktop_icon(de));
     }
 }
 
@@ -195,13 +194,17 @@ static void launch_app(Panel *p, int index)
         return;
     }
 
-    const char *exec = c->apps[index].exec;
+    IsdeDesktopEntry *de = c->apps[index].entry;
     panel_dismiss_popup(p);
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl("/bin/sh", "sh", "-c", exec, (char *)NULL);
-        _exit(127);
+    char *cmd = isde_desktop_build_exec(de, NULL, 0);
+    if (cmd) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+            _exit(127);
+        }
+        free(cmd);
     }
 }
 
