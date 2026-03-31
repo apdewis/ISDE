@@ -41,10 +41,10 @@ HoverForeground=#E8E8F0
 
 [CloseButton]
 Background=#EF5350
-Foreground=#1E1E2E
+Foreground=#D8D8E8
 Border=#C62828
 HoverBackground=#FF7043
-HoverForeground=#1E1E2E
+HoverForeground=#D8D8E8
 
 [Menu]
 Background=#2E2E3E
