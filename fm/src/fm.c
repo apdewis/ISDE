@@ -104,8 +104,42 @@ void show_rename_dialog(Fm *fm)
     Widget dialog = XtCreateManagedWidget("renameDialog", dialogWidgetClass,
                                           fm->rename_shell, args, n);
 
-    IswDialogAddButton(dialog, "OK", rename_ok_cb, (XtPointer)dialog);
-    IswDialogAddButton(dialog, "Cancel", rename_cancel_cb, NULL);
+    /* OK / Cancel buttons — HIG: action first, bottom-right */
+    int btn_w = isde_scale(80);
+    int btn_pad = isde_scale(8);
+    Widget value_w = XtNameToWidget(dialog, "value");
+    Widget anchor = value_w ? value_w : XtNameToWidget(dialog, "label");
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "OK");                  n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, anchor);              n++;
+    XtSetArg(args[n], XtNhorizDistance, 300 - btn_w * 2 - btn_pad); n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget ok = XtCreateManagedWidget("ok", commandWidgetClass,
+                                      dialog, args, n);
+    XtAddCallback(ok, XtNcallback, rename_ok_cb, (XtPointer)dialog);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, anchor);              n++;
+    XtSetArg(args[n], XtNfromHoriz, ok);                 n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
+                                          dialog, args, n);
+    XtAddCallback(cancel, XtNcallback, rename_cancel_cb, NULL);
 
     XtPopup(fm->rename_shell, XtGrabNone);
 }
@@ -262,12 +296,42 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
                                            fm->delete_shell, args, n);
 
-    if (permanent) {
-        IswDialogAddButton(dialog, "Delete", delete_do_permanent, NULL);
-    } else {
-        IswDialogAddButton(dialog, "Move", delete_do_trash, NULL);
-    }
-    IswDialogAddButton(dialog, "Cancel", delete_confirm_cancel, NULL);
+    /* Action / Cancel buttons — HIG: action first, bottom-right */
+    int btn_w = isde_scale(80);
+    int btn_pad = isde_scale(8);
+    Widget del_anchor = XtNameToWidget(dialog, "label");
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, permanent ? "Delete" : "Move"); n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, del_anchor);          n++;
+    XtSetArg(args[n], XtNhorizDistance, isde_scale(300) - btn_w * 2 - btn_pad); n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget action = XtCreateManagedWidget("action", commandWidgetClass,
+                                          dialog, args, n);
+    XtAddCallback(action, XtNcallback,
+                  permanent ? delete_do_permanent : delete_do_trash, NULL);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, del_anchor);          n++;
+    XtSetArg(args[n], XtNfromHoriz, action);             n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
+                                          dialog, args, n);
+    XtAddCallback(cancel, XtNcallback, delete_confirm_cancel, NULL);
 
     XtPopup(fm->delete_shell, XtGrabNone);
 }
@@ -341,8 +405,41 @@ static void ctx_empty_trash(Fm *fm)
     Widget dialog = XtCreateManagedWidget("emptyTrashDialog", dialogWidgetClass,
                                            fm->empty_trash_shell, args, n);
 
-    IswDialogAddButton(dialog, "Empty Trash", empty_trash_ok, fm);
-    IswDialogAddButton(dialog, "Cancel", empty_trash_cancel, NULL);
+    /* Action / Cancel buttons — HIG: action first, bottom-right */
+    int btn_w = isde_scale(80);
+    int btn_pad = isde_scale(8);
+    Widget et_anchor = XtNameToWidget(dialog, "label");
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Empty Trash");          n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, et_anchor);           n++;
+    XtSetArg(args[n], XtNhorizDistance, isde_scale(300) - btn_w * 2 - btn_pad); n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget et_action = XtCreateManagedWidget("action", commandWidgetClass,
+                                              dialog, args, n);
+    XtAddCallback(et_action, XtNcallback, empty_trash_ok, fm);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+    XtSetArg(args[n], XtNfromVert, et_anchor);           n++;
+    XtSetArg(args[n], XtNfromHoriz, et_action);          n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
+    Widget et_cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
+                                              dialog, args, n);
+    XtAddCallback(et_cancel, XtNcallback, empty_trash_cancel, NULL);
 
     XtPopup(fm->empty_trash_shell, XtGrabNone);
 }

@@ -173,14 +173,22 @@ static void show_chooser(int slot)
                                             fontChooserWidgetClass,
                                             form, args, n);
 
-    /* OK / Cancel buttons */
+    /* OK / Cancel buttons — bottom-right */
+    int btn_w = isde_scale(80);
+    int btn_pad = isde_scale(8);
+
     n = 0;
     XtSetArg(args[n], XtNlabel, "OK");              n++;
     XtSetArg(args[n], XtNfromVert, chooser_widget);  n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(60));     n++;
+    XtSetArg(args[n], XtNwidth, btn_w);              n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);    n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);   n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);        n++;
+    XtSetArg(args[n], XtNright, XtChainRight);       n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNtop, XtChainBottom);        n++;
+    XtSetArg(args[n], XtNhorizDistance, isde_scale(390) - btn_w * 2 - btn_pad); n++;
     Widget ok = XtCreateManagedWidget("fcOk", commandWidgetClass,
                                       form, args, n);
     XtAddCallback(ok, XtNcallback, chooser_ok_cb, NULL);
@@ -189,8 +197,13 @@ static void show_chooser(int slot)
     XtSetArg(args[n], XtNlabel, "Cancel");           n++;
     XtSetArg(args[n], XtNfromVert, chooser_widget);  n++;
     XtSetArg(args[n], XtNfromHoriz, ok);             n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);    n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(60));     n++;
+    XtSetArg(args[n], XtNwidth, btn_w);              n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);    n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);   n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);        n++;
+    XtSetArg(args[n], XtNright, XtChainRight);       n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNtop, XtChainBottom);        n++;
     Widget cancel = XtCreateManagedWidget("fcCancel", commandWidgetClass,

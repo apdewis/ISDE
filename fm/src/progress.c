@@ -128,9 +128,13 @@ static void create_dialog(FmJob *job)
                                                progressBarWidgetClass,
                                                vbox, args, n);
 
-    /* Cancel button */
+    /* Cancel button — right-aligned */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");  n++;
+    XtSetArg(args[n], XtNlabel, "Cancel");              n++;
+    XtSetArg(args[n], XtNwidth, isde_scale(80));         n++;
+    XtSetArg(args[n], XtNinternalWidth, isde_scale(8));  n++;
+    XtSetArg(args[n], XtNinternalHeight, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNflexAlign, XtflexAlignEnd);     n++;
     Widget cancel = XtCreateManagedWidget("cancelBtn", commandWidgetClass,
                                            vbox, args, n);
     XtAddCallback(cancel, XtNcallback, cancel_cb, job);

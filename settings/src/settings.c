@@ -269,6 +269,8 @@ int settings_init(Settings *s, int *argc, char **argv)
     int right_w = isde_scale(600) - PANEL_LIST_WIDTH - isde_scale(4);
     int right_h = isde_scale(440);
     int btn_h = isde_scale(32);
+    int btn_pad = isde_scale(8);
+    int sb_w = isde_scale(14);  /* scrollbar thickness */
 
     n = 0;
     XtSetArg(args[n], XtNfromHoriz, s->panel_bar);  n++;
@@ -289,7 +291,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNuseRight, True);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNwidth, right_w);            n++;
-    XtSetArg(args[n], XtNheight, right_h - btn_h);  n++;
+    XtSetArg(args[n], XtNheight, right_h - btn_h - btn_pad); n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
@@ -306,16 +308,19 @@ int settings_init(Settings *s, int *argc, char **argv)
     s->content_area = XtCreateManagedWidget("content", formWidgetClass,
                                             s->content_vp, args, n);
 
-    /* Save / Revert buttons — fixed at bottom right.
-     * Position Save at the right edge, Revert to its left. */
-    int btn_w = isde_scale(60);
+    /* Save / Revert buttons — fixed at bottom right. */
+    int btn_w = isde_scale(80);
 
     n = 0;
     XtSetArg(args[n], XtNfromVert, s->content_vp);          n++;
     XtSetArg(args[n], XtNlabel, "Save");                     n++;
     XtSetArg(args[n], XtNborderWidth, 0);                    n++;
     XtSetArg(args[n], XtNwidth, btn_w);                      n++;
-    XtSetArg(args[n], XtNhorizDistance, right_w - btn_w * 2 - isde_scale(4)); n++;
+    XtSetArg(args[n], XtNheight, btn_h - btn_pad);           n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);            n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);           n++;
+    XtSetArg(args[n], XtNvertDistance, btn_pad);             n++;
+    XtSetArg(args[n], XtNhorizDistance, right_w - btn_w * 2 - btn_pad * 2 - sb_w); n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
@@ -327,9 +332,14 @@ int settings_init(Settings *s, int *argc, char **argv)
     n = 0;
     XtSetArg(args[n], XtNfromVert, s->content_vp);          n++;
     XtSetArg(args[n], XtNfromHoriz, s->save_btn);           n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);            n++;
+    XtSetArg(args[n], XtNvertDistance, btn_pad);             n++;
     XtSetArg(args[n], XtNlabel, "Revert");                   n++;
     XtSetArg(args[n], XtNborderWidth, 0);                    n++;
     XtSetArg(args[n], XtNwidth, btn_w);                      n++;
+    XtSetArg(args[n], XtNheight, btn_h - btn_pad);           n++;
+    XtSetArg(args[n], XtNinternalWidth, btn_pad);            n++;
+    XtSetArg(args[n], XtNinternalHeight, btn_pad);           n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
