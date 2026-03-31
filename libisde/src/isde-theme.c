@@ -516,6 +516,7 @@ static char *search_theme_base(const char *base, const char *icon_name)
     char path[512];
 
     for (int ni = 0; ni < 2; ni++) {
+        /* Pass 1: prefer SVG (resolution-independent) */
         char *dp = directories;
         while (dp && *dp) {
             char *comma = strchr(dp, ',');
@@ -527,14 +528,39 @@ static char *search_theme_base(const char *base, const char *icon_name)
                     free(directories);
                     return strdup(path);
                 }
+            }
+            dp = comma ? comma + 1 : NULL;
+        }
+
+        /* Pass 2: pick the largest available raster icon (scaling down
+         * from a larger source looks much better than scaling up) */
+        char best[512] = {0};
+        int best_size = 0;
+        dp = directories;
+        while (dp && *dp) {
+            char *comma = strchr(dp, ',');
+            size_t dlen = comma ? (size_t)(comma - dp) : strlen(dp);
+            if (dlen > 0) {
                 snprintf(path, sizeof(path), "%s/%.*s/%s.png",
                          base, (int)dlen, dp, names[ni]);
                 if (access(path, R_OK) == 0) {
-                    free(directories);
-                    return strdup(path);
+                    /* Parse size from directory name (e.g. "48x48/apps") */
+                    int size = atoi(dp);
+                    if (size > best_size) {
+                        best_size = size;
+                        snprintf(best, sizeof(best), "%s", path);
+                    } else if (best[0] == '\0') {
+                        /* Non-numeric dir name (e.g. "symbolic") — keep as
+                         * fallback only if we have nothing yet */
+                        snprintf(best, sizeof(best), "%s", path);
+                    }
                 }
             }
             dp = comma ? comma + 1 : NULL;
+        }
+        if (best[0]) {
+            free(directories);
+            return strdup(best);
         }
     }
 
