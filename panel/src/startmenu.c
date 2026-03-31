@@ -19,6 +19,7 @@
 #include <X11/keysym.h>
 
 static char *start_icon_path;
+static char *logout_icon_path;
 
 static Pixel start_color_pixel(Panel *p, unsigned int rgb)
 {
@@ -397,7 +398,6 @@ void startmenu_init(Panel *p)
     p->menu_focus = 0;
 
     /* Resolve start menu icon from theme */
-    /* Try common start/menu icon names from the theme */
     free(start_icon_path);
     start_icon_path = NULL;
     static const char *menu_icon_names[] = {
@@ -406,6 +406,15 @@ void startmenu_init(Panel *p)
     };
     for (int i = 0; !start_icon_path && menu_icon_names[i]; i++) {
         start_icon_path = isde_icon_find("actions", menu_icon_names[i]);
+    }
+
+    free(logout_icon_path);
+    logout_icon_path = NULL;
+    static const char *logout_icon_names[] = {
+        "system-log-out", "application-exit", "system-shutdown", NULL
+    };
+    for (int i = 0; !logout_icon_path && logout_icon_names[i]; i++) {
+        logout_icon_path = isde_icon_find("actions", logout_icon_names[i]);
     }
 
     /* Start button — child of form, pinned left */
@@ -535,30 +544,37 @@ void startmenu_init(Panel *p)
     XtAddEventHandler(p->start_shell, KeyPressMask, False,
                       menu_key_handler, p);
 
-    /* Bottom toolbar — right-aligned action buttons */
+    /* Bottom toolbar — right-aligned action buttons.
+     * No defaultDistance override: the Form's default 4px acts as bottom margin,
+     * so the natural height = vertDistance + btn_size + 4 = TOOLBAR_HEIGHT. */
     n = 0;
     XtSetArg(args[n], XtNfromVert, p->cat_box);             n++;
     XtSetArg(args[n], XtNvertDistance, 0);                   n++;
     XtSetArg(args[n], XtNwidth, MENU_WIDTH);                 n++;
     XtSetArg(args[n], XtNheight, TOOLBAR_HEIGHT);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);                    n++;
-    XtSetArg(args[n], XtNdefaultDistance, 0);                n++;
     XtSetArg(args[n], XtNbackground, cat_bg);                n++;
     p->menu_toolbar = XtCreateManagedWidget("menuToolbar", formWidgetClass,
                                             form, args, n);
 
-    int btn_w = isde_scale(80);
-    int btn_h = TOOLBAR_HEIGHT - isde_scale(4);
-    int btn_x = MENU_WIDTH - btn_w - isde_scale(4);
+    /* btn_size = TOOLBAR_HEIGHT - top_margin(4) - bottom_margin(4) */
+    int btn_margin = isde_scale(4);
+    int btn_size   = TOOLBAR_HEIGHT - btn_margin * 2;
+    int btn_x      = MENU_WIDTH - btn_size - btn_margin;
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Log Out");                  n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                      n++;
-    XtSetArg(args[n], XtNheight, btn_h);                     n++;
+    XtSetArg(args[n], XtNlabel, "");                         n++;
+    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
+    XtSetArg(args[n], XtNheight, btn_size);                  n++;
     XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
-    XtSetArg(args[n], XtNvertDistance, isde_scale(2));       n++;
+    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
     XtSetArg(args[n], XtNborderWidth, 1);                    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    if (logout_icon_path) {
+        XtSetArg(args[n], XtNsvgFile, logout_icon_path);     n++;
+    }
     p->logout_btn = XtCreateManagedWidget("logoutBtn", commandWidgetClass,
                                           p->menu_toolbar, args, n);
     XtAddCallback(p->logout_btn, XtNcallback, logout_cb, p);
@@ -575,6 +591,9 @@ void startmenu_cleanup(Panel *p)
     free(p->categories);
     p->categories = NULL;
     p->ncategories = 0;
+
+    free(logout_icon_path);
+    logout_icon_path = NULL;
 
     if (key_syms) {
         xcb_key_symbols_free(key_syms);
