@@ -441,6 +441,7 @@ void wm_minimize_client(Wm *wm, WmClient *c)
 {
     /* Placeholder: unmap the frame. A proper implementation would
      * add the window to a taskbar/dock list for restoring later. */
+    c->minimized = 1;
     if (c->shell) {
         XtPopdown(c->shell);
     }

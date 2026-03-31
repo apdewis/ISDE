@@ -324,6 +324,11 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     frame_configure(wm, c);
     frame_apply_theme(wm, c);
 
+    /* Add client to the save-set before reparenting.
+     * If the WM connection closes for any reason (crash, SIGKILL),
+     * X automatically reparents and maps save-set windows to root. */
+    xcb_change_save_set(wm->conn, XCB_SET_MODE_INSERT, client);
+
     /* Reparent the client window into the frame, below the title bar.
      * Client keeps its full requested size; border is extra space around it. */
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
@@ -364,8 +369,14 @@ void frame_destroy(Wm *wm, WmClient *c)
 {
     frame_destroy_grips(wm, c);
 
-    /* Reparent client back to root */
+    /* Remove from save-set, reparent back to root, and re-map.
+     * X auto-unmaps a mapped window during reparent, so we re-map it
+     * unless it was intentionally minimized. */
+    xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);
     xcb_reparent_window(wm->conn, c->client, wm->root, c->x, c->y);
+    if (!c->minimized) {
+        xcb_map_window(wm->conn, c->client);
+    }
     xcb_flush(wm->conn);
 
     if (c->shell) {

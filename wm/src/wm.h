@@ -42,6 +42,7 @@ typedef struct WmClient {
     uint16_t     width, height;/* Client area size (excludes frame) */
     int          focused;
     int          maximized;
+    int          minimized;
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
     xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */
     /* Saved geometry for restore from maximize */
