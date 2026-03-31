@@ -3,6 +3,8 @@ install(FILES data/isde.toml data/autostart data/fm.toml
     DESTINATION "${CMAKE_INSTALL_FULL_SYSCONFDIR}/xdg/isde")
 install(FILES data/isde.desktop
     DESTINATION "${CMAKE_INSTALL_DATADIR}/xsessions")
+install(FILES data/isde-fm.desktop data/isde-settings.desktop
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 
 # Install icon theme and colour schemes
 install(DIRECTORY data/icons/isde-standard

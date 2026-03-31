@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ISDE File Manager
+GenericName=File Manager
+Comment=Browse and manage files
+Exec=isde-fm %U
+Icon=isde-fm
+Terminal=false
+Categories=System;FileManager;
+MimeType=inode/directory;

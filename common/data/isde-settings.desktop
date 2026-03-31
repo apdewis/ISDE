@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ISDE Settings
+GenericName=Settings
+Comment=Configure desktop appearance, display, and input
+Exec=isde-settings
+Icon=isde-settings
+Terminal=false
+Categories=Settings;DesktopSettings;System;
