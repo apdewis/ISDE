@@ -164,15 +164,6 @@ static int load_scale_from_config(void)
     return val;
 }
 
-static void update_scale_label(int percent)
-{
-    if (!scale_label) { return; }
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Scale: %d%%", percent);
-    Arg a[1];
-    XtSetArg(a[0], XtNlabel, buf);
-    XtSetValues(scale_label, a, 1);
-}
 
 static void update_res_label(void)
 {
@@ -181,7 +172,7 @@ static void update_res_label(void)
     }
     OutputInfo *o = &outputs[selected_output];
     char buf[64];
-    snprintf(buf, sizeof(buf), "Resolution: %ux%u", o->width, o->height);
+    snprintf(buf, sizeof(buf), "%ux%u", o->width, o->height);
     Arg a[1];
     XtSetArg(a[0], XtNlabel, buf);
     XtSetValues(res_label, a, 1);
@@ -204,7 +195,6 @@ static void scale_changed_cb(Widget w, XtPointer cd, XtPointer call)
     (void)w; (void)cd;
     int *val = (int *)call;
     current_scale = *val;
-    update_scale_label(current_scale);
 }
 
 static void display_apply(void)
@@ -227,7 +217,6 @@ static void display_revert(void)
     Arg a[1];
     XtSetArg(a[0], XtNscaleValue, saved_scale);
     XtSetValues(scale_slider, a, 1);
-    update_scale_label(saved_scale);
 }
 
 /* ---------- create ---------- */
@@ -245,7 +234,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtGetValues(parent, qargs, 2);
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
+    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("displayForm", formWidgetClass,
                                  parent, args, n);
@@ -260,13 +249,16 @@ static Widget display_create(Widget parent, XtAppContext app)
 
     Widget prev = NULL;
 
-    /* --- Output list --- */
+    /* --- Output list (label-left) --- */
+    int lbl_w = isde_scale(180);
+
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Outputs:");  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    Widget out_lbl = XtCreateManagedWidget("outLbl", labelWidgetClass,
+    XtSetArg(args[n], XtNlabel, "Outputs:");            n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                n++;
+    XtSetArg(args[n], XtNwidth, lbl_w);                   n++;
+    XtSetArg(args[n], XtNjustify, XtJustifyRight);        n++;
+    Widget out_lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
                                            form, args, n);
-    prev = out_lbl;
 
     int list_height = (ph > 0 ? ph / 3 : 100);
     n = 0;
@@ -277,7 +269,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNverticalList, True);             n++;
     XtSetArg(args[n], XtNheight, list_height);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    XtSetArg(args[n], XtNfromVert, prev);                 n++;
+    XtSetArg(args[n], XtNfromHoriz, out_lbl);             n++;
     output_list = XtCreateManagedWidget("outputList", listWidgetClass,
                                         form, args, n);
     XtAddCallback(output_list, XtNcallback, output_select_cb, NULL);
@@ -290,35 +282,48 @@ static Widget display_create(Widget parent, XtAppContext app)
     IswListHighlight(output_list, selected_output);
     prev = output_list;
 
-    /* --- Resolution label --- */
+    /* --- Resolution (read-only, label-left) --- */
+
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Resolution:");  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
-    XtSetArg(args[n], XtNfromVert, prev);           n++;
-    res_label = XtCreateManagedWidget("resLabel", labelWidgetClass,
+    XtSetArg(args[n], XtNlabel, "Resolution:");    n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNfromVert, prev);             n++;
+    XtSetArg(args[n], XtNwidth, lbl_w);               n++;
+    XtSetArg(args[n], XtNjustify, XtJustifyRight);    n++;
+    Widget res_lbl_static = XtCreateManagedWidget("lbl", labelWidgetClass,
+                                                   form, args, n);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "");                  n++;
+    XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNfromVert, prev);             n++;
+    XtSetArg(args[n], XtNfromHoriz, res_lbl_static);  n++;
+    XtSetArg(args[n], XtNjustify, XtJustifyLeft);     n++;
+    res_label = XtCreateManagedWidget("resValue", labelWidgetClass,
                                       form, args, n);
     update_res_label();
     prev = res_label;
 
-    /* --- HiDPI scale --- */
+    /* --- HiDPI scale (label-left) --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Scale: 100%");  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
-    XtSetArg(args[n], XtNfromVert, prev);           n++;
-    scale_label = XtCreateManagedWidget("scaleLbl", labelWidgetClass,
+    XtSetArg(args[n], XtNlabel, "Scale:");            n++;
+    XtSetArg(args[n], XtNborderWidth, 0);              n++;
+    XtSetArg(args[n], XtNfromVert, prev);               n++;
+    XtSetArg(args[n], XtNwidth, lbl_w);                 n++;
+    XtSetArg(args[n], XtNjustify, XtJustifyRight);      n++;
+    scale_label = XtCreateManagedWidget("lbl", labelWidgetClass,
                                         form, args, n);
-    update_scale_label(current_scale);
-    prev = scale_label;
 
     n = 0;
-    XtSetArg(args[n], XtNminimumValue, 100);       n++;
-    XtSetArg(args[n], XtNmaximumValue, 300);        n++;
-    XtSetArg(args[n], XtNscaleValue, current_scale); n++;
-    XtSetArg(args[n], XtNshowValue, True);           n++;
-    XtSetArg(args[n], XtNtickInterval, 25);          n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNfromVert, prev);              n++;
-    if (pw > 100) { XtSetArg(args[n], XtNwidth, pw - 40); n++; }
+    XtSetArg(args[n], XtNminimumValue, 100);          n++;
+    XtSetArg(args[n], XtNmaximumValue, 300);           n++;
+    XtSetArg(args[n], XtNscaleValue, current_scale);   n++;
+    XtSetArg(args[n], XtNshowValue, True);              n++;
+    XtSetArg(args[n], XtNtickInterval, 25);             n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                n++;
+    XtSetArg(args[n], XtNfromVert, prev);                 n++;
+    XtSetArg(args[n], XtNfromHoriz, scale_label);         n++;
+    if (pw > lbl_w + 100) { XtSetArg(args[n], XtNwidth, pw - lbl_w - 40); n++; }
     scale_slider = XtCreateManagedWidget("scaleSlider", scaleWidgetClass,
                                           form, args, n);
     XtAddCallback(scale_slider, XtNvalueChanged, scale_changed_cb, NULL);

@@ -196,3 +196,48 @@ void isde_ewmh_request_close_window(IsdeEwmh *e, xcb_window_t win)
         XCB_EWMH_CLIENT_SOURCE_TYPE_OTHER);
     xcb_flush(e->conn);
 }
+
+int isde_ewmh_get_workarea(IsdeEwmh *e, int *x, int *y, int *w, int *h)
+{
+    xcb_ewmh_get_workarea_reply_t reply;
+    if (xcb_ewmh_get_workarea_reply(
+            &e->ewmh,
+            xcb_ewmh_get_workarea(&e->ewmh, e->screen_num),
+            &reply, NULL)) {
+        uint32_t desk = 0;
+        xcb_ewmh_get_current_desktop_reply(
+            &e->ewmh,
+            xcb_ewmh_get_current_desktop(&e->ewmh, e->screen_num),
+            &desk, NULL);
+        if (desk < reply.workarea_len) {
+            *x = reply.workarea[desk].x;
+            *y = reply.workarea[desk].y;
+            *w = reply.workarea[desk].width;
+            *h = reply.workarea[desk].height;
+            xcb_ewmh_get_workarea_reply_wipe(&reply);
+            return 1;
+        }
+        xcb_ewmh_get_workarea_reply_wipe(&reply);
+    }
+
+    /* Fallback: use screen geometry */
+    *x = 0;
+    *y = 0;
+    *w = e->screen->width_in_pixels;
+    *h = e->screen->height_in_pixels;
+    return 1;
+}
+
+void isde_clamp_to_workarea(xcb_connection_t *conn, int screen,
+                            int *w, int *h)
+{
+    IsdeEwmh *e = isde_ewmh_init(conn, screen);
+    if (!e) return;
+
+    int wx, wy, ww, wh;
+    if (isde_ewmh_get_workarea(e, &wx, &wy, &ww, &wh)) {
+        if (*w > ww) *w = ww;
+        if (*h > wh) *h = wh;
+    }
+    isde_ewmh_free(e);
+}

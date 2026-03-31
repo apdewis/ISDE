@@ -8,6 +8,7 @@
 #include "settings.h"
 
 #include <stdio.h>
+#include "isde/isde-ewmh.h"
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
@@ -214,10 +215,16 @@ int settings_init(Settings *s, int *argc, char **argv)
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
 
+    int init_w = isde_scale(600);
+    int init_h = isde_scale(450);
+    isde_clamp_to_workarea(XtDisplay(s->toplevel), 0, &init_w, &init_h);
+
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(600));  n++;
-    XtSetArg(args[n], XtNheight, isde_scale(450)); n++;
+    XtSetArg(args[n], XtNwidth, init_w);              n++;
+    XtSetArg(args[n], XtNheight, init_h);             n++;
+    XtSetArg(args[n], XtNminWidth, isde_scale(400));  n++;
+    XtSetArg(args[n], XtNminHeight, isde_scale(300)); n++;
     XtSetValues(s->toplevel, args, n);
 
     XtAddCallback(s->toplevel, XtNdestroyCallback,
@@ -301,7 +308,7 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     /* Panel content container inside viewport */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 4);        n++;
+    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNwidth, right_w - isde_scale(20)); n++;
     XtSetArg(args[n], XtNheight, right_h - btn_h);       n++;

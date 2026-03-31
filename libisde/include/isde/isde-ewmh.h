@@ -54,6 +54,17 @@ xcb_atom_t isde_ewmh_get_window_type(IsdeEwmh *e, xcb_window_t win);
 int isde_ewmh_get_wm_class(IsdeEwmh *e, xcb_window_t win,
                             char **instance_out, char **class_out);
 
+/* Get _NET_WORKAREA for the current desktop.
+ * Returns 1 on success (x/y/w/h filled in), 0 on failure.
+ * Falls back to screen geometry if _NET_WORKAREA is not set. */
+int isde_ewmh_get_workarea(IsdeEwmh *e, int *x, int *y, int *w, int *h);
+
+/* Clamp width/height so the window fits within the working area.
+ * Convenience wrapper: initializes a temporary IsdeEwmh, queries workarea,
+ * clamps *w and *h, and cleans up. Safe to call from any app. */
+void isde_clamp_to_workarea(xcb_connection_t *conn, int screen,
+                            int *w, int *h);
+
 /* Send a _NET_ACTIVE_WINDOW client message to the root. */
 void isde_ewmh_request_active_window(IsdeEwmh *e, xcb_window_t win);
 

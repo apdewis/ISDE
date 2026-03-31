@@ -720,6 +720,13 @@ static char *fmt_font(const char *resource, const char *family, int size)
     return buf;
 }
 
+static char *fmt_font_bold(const char *resource, const char *family, int size)
+{
+    char *buf = malloc(strlen(resource) + strlen(family) + 32);
+    sprintf(buf, "%s: %s-%d:bold", resource, family, size);
+    return buf;
+}
+
 char **isde_theme_build_resources(void)
 {
     const IsdeColorScheme *s = isde_theme_current();
@@ -751,7 +758,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Label.foreground", s->fg);
 
     /* Lists */
-    res[i++] = fmt_color("*List.background", s->bg);
+    res[i++] = fmt_color("*List.background", s->bg_bright);
     res[i++] = fmt_color("*List.foreground", s->fg);
 
     /* Menus */
@@ -873,6 +880,12 @@ char **isde_theme_build_resources(void)
                 fam = isde_config_string(fonts, "general_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "general_size", 10);
                 res[i++] = fmt_font("*font", fam, sz);
+
+                /* Section headings — general +2pt bold */
+                res[i++] = fmt_font_bold("*sectionHd.font", fam, sz + 2);
+
+                /* Section headings — general +2pt bold */
+                res[i++] = fmt_font_bold("*sectionHd.font", fam, sz + 2);
 
                 /* Fixed — Text widget (editors, terminal) */
                 fam = isde_config_string(fonts, "fixed_family", "Monospace");

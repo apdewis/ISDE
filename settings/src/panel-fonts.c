@@ -153,7 +153,7 @@ static void show_chooser(int slot)
 
     /* Form to hold chooser + buttons */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
+    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateManagedWidget("fcForm", formWidgetClass,
                                         chooser_shell, args, n);
@@ -210,7 +210,7 @@ static void show_chooser(int slot)
                                           form, args, n);
     XtAddCallback(cancel, XtNcallback, chooser_cancel_cb, NULL);
 
-    XtPopup(chooser_shell, XtGrabNone);
+    XtPopup(chooser_shell, XtGrabExclusive);
 }
 
 /* ---------- edit button callbacks ---------- */
@@ -238,7 +238,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 4); n++;
+    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("fontsForm", formWidgetClass,
                                  parent, args, n);
