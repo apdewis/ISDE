@@ -36,15 +36,34 @@ static void apply_appearance_settings(void)
         }
     }
 
-    /* Set ISW_SCALE_FACTOR for HiDPI scaling */
+    /* Set scaling environment variables for HiDPI */
     IsdeConfigTable *disp = isde_config_table(root, "display");
     if (disp) {
         int scale = (int)isde_config_int(disp, "scale_percent", 100);
         if (scale > 0) {
-            char buf[16];
+            char buf[32];
+
+            /* ISW (libISW toolkit) */
             snprintf(buf, sizeof(buf), "%.2f", scale / 100.0);
             setenv("ISW_SCALE_FACTOR", buf, 1);
-            fprintf(stderr, "isde-session: ISW_SCALE_FACTOR=%s\n", buf);
+
+            /* GDK (GTK 3/4): integer scale + fractional DPI correction */
+            int gdk_scale = scale / 100;
+            if (gdk_scale < 1) { gdk_scale = 1; }
+            snprintf(buf, sizeof(buf), "%d", gdk_scale);
+            setenv("GDK_SCALE", buf, 1);
+            snprintf(buf, sizeof(buf), "%.4f", scale / (gdk_scale * 100.0));
+            setenv("GDK_DPI_SCALE", buf, 1);
+
+            /* Qt 5/6 */
+            snprintf(buf, sizeof(buf), "%.2f", scale / 100.0);
+            setenv("QT_SCALE_FACTOR", buf, 1);
+
+            fprintf(stderr,
+                    "isde-session: scale=%d%% ISW=%.2f GDK_SCALE=%d "
+                    "GDK_DPI_SCALE=%.4f QT_SCALE_FACTOR=%.2f\n",
+                    scale, scale / 100.0, gdk_scale,
+                    scale / (gdk_scale * 100.0), scale / 100.0);
         }
     }
 
@@ -122,7 +141,9 @@ static void on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Session *s = (Session *)user_data;
-    if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
+    if (strcmp(section, "appearance") == 0 ||
+        strcmp(section, "display") == 0 ||
+        strcmp(section, "*") == 0) {
         s->reload_appearance = 1;
     }
 }
