@@ -43,6 +43,7 @@ typedef struct WmClient {
     int          focused;
     int          maximized;
     int          minimized;
+    int          decorated;     /* 0 = CSD/no frame chrome */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
     xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */
     /* Saved geometry for restore from maximize */
@@ -84,6 +85,8 @@ typedef struct Wm {
     xcb_atom_t             atom_wm_take_focus;
     xcb_atom_t             atom_wm_name;
     xcb_atom_t             atom_net_wm_name;
+    xcb_atom_t             atom_motif_wm_hints;
+    xcb_atom_t             atom_wm_change_state;
 
     /* Client list */
     WmClient              *clients;
@@ -128,6 +131,10 @@ void      wm_minimize_client(Wm *wm, WmClient *c);
 
 /* ---------- wm.c — work area ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
+
+/* ---------- wm.c — decoration checks ---------- */
+int   wm_client_wants_decorations(Wm *wm, xcb_window_t win);
+int   wm_window_type_wants_decorations(Wm *wm, xcb_window_t win);
 
 /* ---------- placement.c — window placement ---------- */
 void  wm_place_client(Wm *wm, WmClient *c);

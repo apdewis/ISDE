@@ -94,6 +94,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_wm_take_focus     = intern(wm->conn, "WM_TAKE_FOCUS");
     wm->atom_wm_name           = intern(wm->conn, "WM_NAME");
     wm->atom_net_wm_name       = intern(wm->conn, "_NET_WM_NAME");
+    wm->atom_motif_wm_hints    = intern(wm->conn, "_MOTIF_WM_HINTS");
+    wm->atom_wm_change_state   = intern(wm->conn, "WM_CHANGE_STATE");
 
     /* Load initial colour scheme */
     isde_theme_current();
@@ -429,11 +431,25 @@ void wm_maximize_client(Wm *wm, WmClient *c)
         wm_get_work_area(wm, &wx, &wy, &ww, &wh);
         c->x = wx;
         c->y = wy;
+        int title = c->decorated ? WM_TITLE_HEIGHT : 0;
         c->width  = ww - 2 * WM_BORDER_WIDTH;
-        c->height = wh - WM_TITLE_HEIGHT - 2 * WM_BORDER_WIDTH;
+        c->height = wh - title - 2 * WM_BORDER_WIDTH;
         c->maximized = 1;
     }
     frame_configure(wm, c);
+
+    /* Update _NET_WM_STATE so the client knows about the change */
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    if (c->maximized) {
+        xcb_atom_t states[] = {
+            ewmh->_NET_WM_STATE_MAXIMIZED_VERT,
+            ewmh->_NET_WM_STATE_MAXIMIZED_HORZ
+        };
+        xcb_ewmh_set_wm_state(ewmh, c->client, 2, states);
+    } else {
+        xcb_ewmh_set_wm_state(ewmh, c->client, 0, NULL);
+    }
+
     xcb_flush(wm->conn);
 }
 
@@ -462,6 +478,52 @@ void wm_minimize_client(Wm *wm, WmClient *c)
 }
 
 /* ---------- WM event handlers (non-widget events) ---------- */
+
+/* Check _MOTIF_WM_HINTS to see if a client requests no decorations.
+ * Returns 1 if the window should be decorated, 0 if not. */
+#define MWM_HINTS_DECORATIONS (1 << 1)
+int wm_client_wants_decorations(Wm *wm, xcb_window_t win)
+{
+    xcb_get_property_reply_t *reply = xcb_get_property_reply(
+        wm->conn,
+        xcb_get_property(wm->conn, 0, win,
+                         wm->atom_motif_wm_hints,
+                         XCB_ATOM_ANY,
+                         0, 5),
+        NULL);
+    if (!reply) {
+        return 1;
+    }
+
+    int dominated = 1;
+    if (xcb_get_property_value_length(reply) >= 3 * (int)sizeof(uint32_t)) {
+        uint32_t *hints = (uint32_t *)xcb_get_property_value(reply);
+        uint32_t flags       = hints[0];
+        uint32_t decorations = hints[2];
+        if ((flags & MWM_HINTS_DECORATIONS) && decorations == 0) {
+            dominated = 0;
+        }
+    }
+    free(reply);
+    return dominated;
+}
+
+/* Check _NET_WM_WINDOW_TYPE for types that should never be decorated */
+int wm_window_type_wants_decorations(Wm *wm, xcb_window_t win)
+{
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    xcb_atom_t type = isde_ewmh_get_window_type(wm->ewmh, win);
+
+    if (type == ewmh->_NET_WM_WINDOW_TYPE_DOCK    ||
+        type == ewmh->_NET_WM_WINDOW_TYPE_DESKTOP  ||
+        type == ewmh->_NET_WM_WINDOW_TYPE_SPLASH   ||
+        type == ewmh->_NET_WM_WINDOW_TYPE_TOOLBAR   ||
+        type == ewmh->_NET_WM_WINDOW_TYPE_MENU      ||
+        type == ewmh->_NET_WM_WINDOW_TYPE_NOTIFICATION) {
+        return 0;
+    }
+    return 1;
+}
 
 static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 {
@@ -683,6 +745,12 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
 
     if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name) {
         frame_update_title(wm, c);
+    } else if (ev->atom == wm->atom_motif_wm_hints) {
+        int dominated = wm_client_wants_decorations(wm, c->client);
+        if (dominated != c->decorated) {
+            c->decorated = dominated;
+            frame_configure(wm, c);
+        }
     }
 }
 
@@ -706,6 +774,88 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (c) {
             wm_close_client(wm, c);
+        }
+        return 1;
+    } else if (ev->type == ewmh->_NET_WM_STATE) {
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (!c) { return 1; }
+
+        uint32_t action = ev->data.data32[0];
+        xcb_atom_t a1 = ev->data.data32[1];
+        xcb_atom_t a2 = ev->data.data32[2];
+
+        /* Check if either atom requests maximize */
+        if (a1 == ewmh->_NET_WM_STATE_MAXIMIZED_VERT ||
+            a1 == ewmh->_NET_WM_STATE_MAXIMIZED_HORZ ||
+            a2 == ewmh->_NET_WM_STATE_MAXIMIZED_VERT ||
+            a2 == ewmh->_NET_WM_STATE_MAXIMIZED_HORZ) {
+            int want = (action == 1) || (action == 2 && !c->maximized);
+            if (want != c->maximized) {
+                wm_maximize_client(wm, c);
+            }
+        }
+        /* Check if either atom requests minimize */
+        if (a1 == ewmh->_NET_WM_STATE_HIDDEN ||
+            a2 == ewmh->_NET_WM_STATE_HIDDEN) {
+            int want = (action == 1) || (action == 2 && !c->minimized);
+            if (want && !c->minimized) {
+                wm_minimize_client(wm, c);
+            }
+        }
+        return 1;
+    } else if (ev->type == ewmh->_NET_WM_MOVERESIZE) {
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (!c) { return 1; }
+
+        int root_x   = ev->data.data32[0];
+        int root_y   = ev->data.data32[1];
+        uint32_t dir = ev->data.data32[2];
+
+        if (dir == XCB_EWMH_WM_MOVERESIZE_CANCEL) {
+            if (wm->drag_mode != DRAG_NONE) {
+                xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
+                wm->drag_mode = DRAG_NONE;
+                wm->drag_client = NULL;
+                xcb_flush(wm->conn);
+            }
+            return 1;
+        }
+
+        wm->drag_client  = c;
+        wm->drag_start_x = root_x;
+        wm->drag_start_y = root_y;
+        wm->drag_orig_x  = c->x;
+        wm->drag_orig_y  = c->y;
+        wm->drag_orig_w  = c->width;
+        wm->drag_orig_h  = c->height;
+
+        if (dir == XCB_EWMH_WM_MOVERESIZE_MOVE ||
+            dir == XCB_EWMH_WM_MOVERESIZE_MOVE_KEYBOARD) {
+            wm->drag_mode = DRAG_MOVE;
+        } else if (dir <= XCB_EWMH_WM_MOVERESIZE_SIZE_LEFT) {
+            /* Resize directions 0-7 map to edges */
+            static const int dir_to_grip[] = {
+                GRIP_TL, GRIP_TOP, GRIP_TR, GRIP_RIGHT,
+                GRIP_BR, GRIP_BOTTOM, GRIP_BL, GRIP_LEFT
+            };
+            wm->drag_mode   = DRAG_RESIZE;
+            wm->resize_edge = dir_to_grip[dir];
+        } else {
+            return 1;
+        }
+
+        xcb_grab_pointer(wm->conn, 1, wm->root,
+                         XCB_EVENT_MASK_BUTTON_RELEASE |
+                         XCB_EVENT_MASK_POINTER_MOTION,
+                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+        xcb_flush(wm->conn);
+        return 1;
+    } else if (ev->type == wm->atom_wm_change_state) {
+        /* ICCCM: WM_CHANGE_STATE with data[0] == IconicState → iconify */
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (c && ev->data.data32[0] == 3) { /* IconicState = 3 */
+            wm_minimize_client(wm, c);
         }
         return 1;
     }

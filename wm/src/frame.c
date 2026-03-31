@@ -40,6 +40,10 @@ static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
  * Everything else comes from Xresources. */
 void frame_apply_theme(Wm *wm, WmClient *c)
 {
+    if (!c->decorated) {
+        return;
+    }
+
     const IsdeColorScheme *s = isde_theme_current();
     if (!s) {
         return;
@@ -230,6 +234,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     c->height = geo->height;
     free(geo);
 
+    c->decorated = wm_client_wants_decorations(wm, client) &&
+                   wm_window_type_wants_decorations(wm, client);
+
     c->title = fetch_title(wm, client);
 
     /* Smart placement: center transients over parent, cascade others */
@@ -256,65 +263,64 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     c->shell = XtCreatePopupShell("frame", overrideShellWidgetClass,
                                   wm->toplevel, args, n);
 
-    /* All title bar widgets are direct children of the shell.
-     * We position them explicitly with XtConfigureWidget — no
-     * container widget (Box/Form) that could fight our layout. */
+    /* Title bar widgets — only for decorated windows */
+    if (c->decorated) {
+        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int title_w = fw - btn_area;
+        if (title_w < 1) { title_w = 1; }
 
-    int btn_area = 3 * WM_TITLE_HEIGHT;
-    int title_w = fw - btn_area;
-    if (title_w < 1) { title_w = 1; }
+        /* Title bar label */
+        n = 0;
+        XtSetArg(args[n], XtNlabel, c->title ? c->title : "(untitled)"); n++;
+        XtSetArg(args[n], XtNwidth, title_w);              n++;
+        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+        XtSetArg(args[n], XtNborderWidth, 0);              n++;
+        c->title_label = XtCreateManagedWidget("titleBar", labelWidgetClass,
+                                               c->shell, args, n);
 
-    /* Title bar label */
-    n = 0;
-    XtSetArg(args[n], XtNlabel, c->title ? c->title : "(untitled)"); n++;
-    XtSetArg(args[n], XtNwidth, title_w);              n++;
-    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);              n++;
-    c->title_label = XtCreateManagedWidget("titleBar", labelWidgetClass,
-                                           c->shell, args, n);
+        XtAddEventHandler(c->title_label,
+                          ButtonPressMask,
+                          False, title_button_handler, closure);
 
-    XtAddEventHandler(c->title_label,
-                      ButtonPressMask,
-                      False, title_button_handler, closure);
+        /* Minimize button */
+        n = 0;
+        if (icon_minimize) {
+            XtSetArg(args[n], XtNimage, icon_minimize); n++;
+        }
+        XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
+        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+        XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+        XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        c->minimize_btn = XtCreateManagedWidget("minimizeBtn", commandWidgetClass,
+                                                c->shell, args, n);
+        XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
 
-    /* Minimize button */
-    n = 0;
-    if (icon_minimize) {
-        XtSetArg(args[n], XtNimage, icon_minimize); n++;
+        /* Maximize / restore button */
+        n = 0;
+        if (icon_maximize) {
+            XtSetArg(args[n], XtNimage, icon_maximize); n++;
+        }
+        XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
+        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+        XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+        XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        c->maximize_btn = XtCreateManagedWidget("maximizeBtn", commandWidgetClass,
+                                                c->shell, args, n);
+        XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
+
+        /* Close button */
+        n = 0;
+        if (icon_close) {
+            XtSetArg(args[n], XtNimage, icon_close); n++;
+        }
+        XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
+        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
+        XtSetArg(args[n], XtNinternalWidth, 0);            n++;
+        XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        c->close_btn = XtCreateManagedWidget("closeBtn", commandWidgetClass,
+                                             c->shell, args, n);
+        XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
     }
-    XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
-    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-    c->minimize_btn = XtCreateManagedWidget("minimizeBtn", commandWidgetClass,
-                                            c->shell, args, n);
-    XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
-
-    /* Maximize / restore button */
-    n = 0;
-    if (icon_maximize) {
-        XtSetArg(args[n], XtNimage, icon_maximize); n++;
-    }
-    XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
-    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-    c->maximize_btn = XtCreateManagedWidget("maximizeBtn", commandWidgetClass,
-                                            c->shell, args, n);
-    XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
-
-    /* Close button */
-    n = 0;
-    if (icon_close) {
-        XtSetArg(args[n], XtNimage, icon_close); n++;
-    }
-    XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
-    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);            n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-    c->close_btn = XtCreateManagedWidget("closeBtn", commandWidgetClass,
-                                         c->shell, args, n);
-    XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
 
     /* Realize the shell so we get a window ID */
     frame_init_cursors(wm);
@@ -331,12 +337,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Reparent the client window into the frame, below the title bar.
      * Client keeps its full requested size; border is extra space around it. */
+    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
                         WM_BORDER_WIDTH,
-                        WM_BORDER_WIDTH + WM_TITLE_HEIGHT);
+                        WM_BORDER_WIDTH + title);
 
-    /* Create invisible resize grips — after reparent so they stack on top */
-    frame_create_grips(wm, c);
+    /* Create invisible resize grips — after reparent so they stack on top.
+     * Undecorated windows handle their own resize. */
+    if (c->decorated) {
+        frame_create_grips(wm, c);
+    }
 
     /* Remove client border */
     uint32_t bw = 0;
@@ -349,12 +359,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     xcb_change_window_attributes(wm->conn, client,
                                  XCB_CW_EVENT_MASK, &client_mask);
 
-    /* Passive grab for click-to-focus on the client window */
-    xcb_grab_button(wm->conn, 0, client,
-                    XCB_EVENT_MASK_BUTTON_PRESS,
-                    XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
-                    XCB_NONE, XCB_NONE,
-                    XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
+    /* Passive grab for click-to-focus on the client window.
+     * Skip for undecorated (CSD) windows — they handle their own
+     * input and the sync grab would eat button presses. */
+    if (c->decorated) {
+        xcb_grab_button(wm->conn, 0, client,
+                        XCB_EVENT_MASK_BUTTON_PRESS,
+                        XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
+                        XCB_NONE, XCB_NONE,
+                        XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
+    }
 
     /* Link into list */
     c->next = wm->clients;
@@ -396,7 +410,8 @@ int frame_total_width(WmClient *c)
 
 int frame_total_height(WmClient *c)
 {
-    return c->height + WM_TITLE_HEIGHT + 2 * WM_BORDER_WIDTH;
+    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
+    return c->height + title + 2 * WM_BORDER_WIDTH;
 }
 
 /* ---------- reconfigure frame + client ---------- */
@@ -405,26 +420,34 @@ void frame_configure(Wm *wm, WmClient *c)
 {
     int fw = frame_total_width(c);
     int fh = frame_total_height(c);
-    int btn_area = 3 * WM_TITLE_HEIGHT;
+    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
 
     /* Use XtConfigureWidget to update both Xt internal state and
      * the X window atomically — avoids Xt and XCB disagreeing */
     XtConfigureWidget(c->shell, c->x, c->y, fw, fh, 0);
 
-    /* Title bar inset by border width; spans inner width */
-    int inner_w = c->width;
-    int title_w = inner_w - btn_area;
-    if (title_w < 1) { title_w = 1; }
-    int bx = WM_BORDER_WIDTH;
-    int by = WM_BORDER_WIDTH;
-    XtConfigureWidget(c->title_label, bx, by,
-                      title_w, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->minimize_btn, bx + title_w, by,
-                      WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->maximize_btn, bx + title_w + WM_TITLE_HEIGHT, by,
-                      WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-    XtConfigureWidget(c->close_btn, bx + title_w + 2 * WM_TITLE_HEIGHT, by,
-                      WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
+    if (c->decorated) {
+        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int inner_w = c->width;
+        int title_w = inner_w - btn_area;
+        if (title_w < 1) { title_w = 1; }
+        int bx = WM_BORDER_WIDTH;
+        int by = WM_BORDER_WIDTH;
+        XtConfigureWidget(c->title_label, bx, by,
+                          title_w, WM_TITLE_HEIGHT, 0);
+        XtConfigureWidget(c->minimize_btn, bx + title_w, by,
+                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
+        XtConfigureWidget(c->maximize_btn, bx + title_w + WM_TITLE_HEIGHT, by,
+                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
+        XtConfigureWidget(c->close_btn, bx + title_w + 2 * WM_TITLE_HEIGHT, by,
+                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
+    }
+
+    /* Reposition client window within the frame */
+    uint32_t cpos[] = { WM_BORDER_WIDTH, WM_BORDER_WIDTH + title };
+    xcb_configure_window(wm->conn, c->client,
+                         XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
+                         cpos);
 
     /* Resize client window */
     uint32_t cvals[] = { c->width, c->height };
@@ -444,13 +467,14 @@ void frame_configure(Wm *wm, WmClient *c)
 
 void frame_update_title(Wm *wm, WmClient *c)
 {
-    (void)wm;
     free(c->title);
     c->title = fetch_title(wm, c->client);
 
-    Arg args[20];
-    XtSetArg(args[0], XtNlabel, c->title ? c->title : "(untitled)");
-    XtSetValues(c->title_label, args, 1);
+    if (c->title_label) {
+        Arg args[20];
+        XtSetArg(args[0], XtNlabel, c->title ? c->title : "(untitled)");
+        XtSetValues(c->title_label, args, 1);
+    }
 }
 
 /* ---------- resize cursors ---------- */
