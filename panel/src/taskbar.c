@@ -576,10 +576,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     Cardinal n = 0;
     if (g->icon_path) {
         Dimension pad = 2;
-        const char *ext = strrchr(g->icon_path, '.');
-        String res = (ext && strcmp(ext, ".svg") == 0)
-                   ? XtNsvgFile : XtNleftBitmap;
-        XtSetArg(args[n], res, g->icon_path);               n++;
+        XtSetArg(args[n], XtNimage, g->icon_path);            n++;
         XtSetArg(args[n], XtNlabel, "");                 n++;
         XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
         XtSetArg(args[n], XtNinternalWidth, pad);        n++;

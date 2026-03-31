@@ -408,10 +408,7 @@ void startmenu_init(Panel *p)
     Arg args[20];
     Cardinal n = 0;
     if (start_icon_path) {
-        const char *ext = strrchr(start_icon_path, '.');
-        String res = (ext && strcmp(ext, ".svg") == 0)
-                   ? XtNsvgFile : XtNleftBitmap;
-        XtSetArg(args[n], res, start_icon_path);         n++;
+        XtSetArg(args[n], XtNimage, start_icon_path);       n++;
     }
     XtSetArg(args[n], XtNlabel, "");                 n++;
     XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
@@ -560,7 +557,7 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
     if (logout_icon_path) {
-        XtSetArg(args[n], XtNsvgFile, logout_icon_path);     n++;
+        XtSetArg(args[n], XtNimage, logout_icon_path);       n++;
     }
     p->logout_btn = XtCreateManagedWidget("logoutBtn", commandWidgetClass,
                                           p->menu_toolbar, args, n);

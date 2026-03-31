@@ -144,7 +144,7 @@ static void maximize_callback(Widget w, XtPointer client_data,
                     fread(data, 1, len, fp);
                     data[len] = '\0';
                     Arg a[1];
-                    XtSetArg(a[0], XtNsvgData, data);
+                    XtSetArg(a[0], XtNimage, data);
                     XtSetValues(c->maximize_btn, a, 1);
                     free(data);
                 }
@@ -280,7 +280,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     /* Minimize button */
     n = 0;
     if (icon_minimize) {
-        XtSetArg(args[n], XtNsvgFile, icon_minimize); n++;
+        XtSetArg(args[n], XtNimage, icon_minimize); n++;
     }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
@@ -293,7 +293,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     /* Maximize / restore button */
     n = 0;
     if (icon_maximize) {
-        XtSetArg(args[n], XtNsvgFile, icon_maximize); n++;
+        XtSetArg(args[n], XtNimage, icon_maximize); n++;
     }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
@@ -306,7 +306,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     /* Close button */
     n = 0;
     if (icon_close) {
-        XtSetArg(args[n], XtNsvgFile, icon_close); n++;
+        XtSetArg(args[n], XtNimage, icon_close); n++;
     }
     XtSetArg(args[n], XtNwidth, WM_TITLE_HEIGHT);     n++;
     XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;

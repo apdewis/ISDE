@@ -139,6 +139,14 @@ char *isde_xdg_find_data(const char *name)
 
 char *isde_icon_find(const char *category, const char *name)
 {
+    /* Absolute path (e.g. Icon=/usr/share/pixmaps/foo.png): use directly */
+    if (name[0] == '/') {
+        if (access(name, R_OK) == 0) {
+            return strdup(name);
+        }
+        return NULL;
+    }
+
     /* Read configured icon theme (default: isde-standard) */
     char theme_buf[128] = "isde-standard";
     char errbuf[256];
