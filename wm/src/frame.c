@@ -360,15 +360,13 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
                                  XCB_CW_EVENT_MASK, &client_mask);
 
     /* Passive grab for click-to-focus on the client window.
-     * Skip for undecorated (CSD) windows — they handle their own
-     * input and the sync grab would eat button presses. */
-    if (c->decorated) {
-        xcb_grab_button(wm->conn, 0, client,
-                        XCB_EVENT_MASK_BUTTON_PRESS,
-                        XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
-                        XCB_NONE, XCB_NONE,
-                        XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
-    }
+     * SYNC grab freezes the pointer until we replay the event,
+     * ensuring the WM can focus+raise before the client sees it. */
+    xcb_grab_button(wm->conn, 0, client,
+                    XCB_EVENT_MASK_BUTTON_PRESS,
+                    XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
+                    XCB_NONE, XCB_NONE,
+                    XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
 
     /* Link into list */
     c->next = wm->clients;
