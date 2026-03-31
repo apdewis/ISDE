@@ -89,6 +89,8 @@ typedef struct Panel {
     Widget             cat_box;     /* Left pane: category buttons */
     Widget             app_viewport;/* Right pane: scrollable viewport */
     Widget             app_box;     /* Right pane: app entries for selected category */
+    Widget             menu_toolbar;/* Bottom toolbar strip */
+    Widget             logout_btn;  /* Logout button in toolbar */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */
     char              *clock_time_fmt; /* strftime format for time */

@@ -227,6 +227,25 @@ int session_init(Session *s)
         isde_dbus_settings_subscribe(s->dbus, on_settings_changed, s);
     }
 
+    /* XCB connection for IPC (ISDE_CMD_LOGOUT etc.) */
+    int screen_num;
+    s->conn = xcb_connect(getenv("DISPLAY"), &screen_num);
+    if (!xcb_connection_has_error(s->conn)) {
+        s->ipc = isde_ipc_init(s->conn, screen_num);
+
+        /* Select StructureNotify on root so IPC ClientMessages are delivered */
+        xcb_screen_iterator_t it =
+            xcb_setup_roots_iterator(xcb_get_setup(s->conn));
+        for (int i = 0; i < screen_num; i++) { xcb_screen_next(&it); }
+        uint32_t ev_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+        xcb_change_window_attributes(s->conn, it.data->root,
+                                     XCB_CW_EVENT_MASK, &ev_mask);
+        xcb_flush(s->conn);
+    } else {
+        xcb_disconnect(s->conn);
+        s->conn = NULL;
+    }
+
     s->running = 1;
     return 0;
 }
@@ -265,8 +284,9 @@ void session_run(Session *s)
         child_spawn(s, s->autostart_cmds[i], s->autostart_respawn[i], 0);
     }
 
-    /* Main loop — poll D-Bus fd and handle signals */
+    /* Main loop — poll D-Bus and XCB fds, handle signals */
     int dbus_fd = s->dbus ? isde_dbus_get_fd(s->dbus) : -1;
+    int xcb_fd  = s->conn ? xcb_get_file_descriptor(s->conn) : -1;
 
     while (s->running) {
         if (got_sigchld) {
@@ -292,12 +312,30 @@ void session_run(Session *s)
             break;
         }
 
-        /* Poll D-Bus fd (or just sleep if no D-Bus) */
-        if (dbus_fd >= 0) {
-            struct pollfd pfd = { .fd = dbus_fd, .events = POLLIN };
-            poll(&pfd, 1, 100);
-            if (pfd.revents & POLLIN) {
+        /* Poll D-Bus and XCB fds */
+        struct pollfd pfds[2];
+        int nfds = 0;
+        int dbus_idx = -1, xcb_idx = -1;
+        if (dbus_fd >= 0) { pfds[nfds].fd = dbus_fd; pfds[nfds].events = POLLIN; dbus_idx = nfds++; }
+        if (xcb_fd  >= 0) { pfds[nfds].fd = xcb_fd;  pfds[nfds].events = POLLIN; xcb_idx  = nfds++; }
+
+        if (nfds > 0) {
+            poll(pfds, nfds, 100);
+            if (dbus_idx >= 0 && (pfds[dbus_idx].revents & POLLIN)) {
                 isde_dbus_dispatch(s->dbus);
+            }
+            if (xcb_idx >= 0 && (pfds[xcb_idx].revents & POLLIN)) {
+                xcb_generic_event_t *ev;
+                while ((ev = xcb_poll_for_event(s->conn)) != NULL) {
+                    uint32_t cmd, d0, d1, d2, d3;
+                    if (isde_ipc_decode(s->ipc, ev, &cmd, &d0, &d1, &d2, &d3)) {
+                        if (cmd == ISDE_CMD_LOGOUT) {
+                            fprintf(stderr, "isde-session: logout requested\n");
+                            s->running = 0;
+                        }
+                    }
+                    free(ev);
+                }
             }
         } else {
             pause();
@@ -316,6 +354,8 @@ void session_cleanup(Session *s)
     child_kill_all(s);
     autostart_free(s);
     isde_dbus_free(s->dbus);
+    isde_ipc_free(s->ipc);
+    if (s->conn) { xcb_disconnect(s->conn); }
     free(s->wm_command);
     free(s->panel_command);
     free(s->fm_command);

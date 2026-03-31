@@ -64,6 +64,7 @@ static void set_start_btn_active(Panel *p, int active)
 #define MENU_WIDTH       isde_scale(400)
 #define MENU_HEIGHT      isde_scale(350)
 #define CAT_PANE_WIDTH   isde_scale(150)
+#define TOOLBAR_HEIGHT   isde_scale(28)
 
 /* Standard freedesktop.org category mapping */
 static const struct { const char *key; const char *label; } CAT_MAP[] = {
@@ -336,6 +337,14 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     }
 }
 
+static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    (void)w; (void)call_data;
+    Panel *p = (Panel *)client_data;
+    panel_dismiss_popup(p);
+    isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
+}
+
 /* ---------- toggle ---------- */
 
 static void toggle_start_menu(Widget w, XtPointer client_data,
@@ -464,7 +473,7 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNverticalList, True);                 n++;
     XtSetArg(args[n], XtNborderWidth, 0);                     n++;
     XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT);                n++;
+    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
     XtSetArg(args[n], XtNcursor, None);                       n++;
     XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
     p->cat_box = XtCreateManagedWidget("catList", listWidgetClass,
@@ -476,7 +485,7 @@ void startmenu_init(Panel *p)
     n = 0;
     XtSetArg(args[n], XtNfromHoriz, p->cat_box);                  n++;
     XtSetArg(args[n], XtNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT);                    n++;
+    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
     XtSetArg(args[n], XtNborderWidth, 0);                         n++;
     XtSetArg(args[n], XtNallowVert, True);                        n++;
     XtSetArg(args[n], XtNallowHoriz, False);                      n++;
@@ -525,6 +534,34 @@ void startmenu_init(Panel *p)
     /* Keyboard navigation via event handler on the shell */
     XtAddEventHandler(p->start_shell, KeyPressMask, False,
                       menu_key_handler, p);
+
+    /* Bottom toolbar — right-aligned action buttons */
+    n = 0;
+    XtSetArg(args[n], XtNfromVert, p->cat_box);             n++;
+    XtSetArg(args[n], XtNvertDistance, 0);                   n++;
+    XtSetArg(args[n], XtNwidth, MENU_WIDTH);                 n++;
+    XtSetArg(args[n], XtNheight, TOOLBAR_HEIGHT);            n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
+    XtSetArg(args[n], XtNdefaultDistance, 0);                n++;
+    XtSetArg(args[n], XtNbackground, cat_bg);                n++;
+    p->menu_toolbar = XtCreateManagedWidget("menuToolbar", formWidgetClass,
+                                            form, args, n);
+
+    int btn_w = isde_scale(80);
+    int btn_h = TOOLBAR_HEIGHT - isde_scale(4);
+    int btn_x = MENU_WIDTH - btn_w - isde_scale(4);
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Log Out");                  n++;
+    XtSetArg(args[n], XtNwidth, btn_w);                      n++;
+    XtSetArg(args[n], XtNheight, btn_h);                     n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
+    XtSetArg(args[n], XtNvertDistance, isde_scale(2));       n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    p->logout_btn = XtCreateManagedWidget("logoutBtn", commandWidgetClass,
+                                          p->menu_toolbar, args, n);
+    XtAddCallback(p->logout_btn, XtNcallback, logout_cb, p);
 
     /* Hide app list until a category is hovered */
     XtUnmapWidget(p->app_viewport);

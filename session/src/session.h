@@ -6,10 +6,12 @@
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
+#include "isde/isde-ipc.h"
 #include "isde/isde-xdg.h"
 
 #include <signal.h>
 #include <sys/types.h>
+#include <xcb/xcb.h>
 
 /* ---------- Child process ---------- */
 typedef struct Child {
@@ -35,6 +37,10 @@ typedef struct Session {
     char      **autostart_cmds;
     int        *autostart_respawn;
     int         autostart_count;
+
+    /* XCB / IPC */
+    xcb_connection_t *conn;
+    IsdeIpc          *ipc;
 
     /* D-Bus */
     IsdeDBus   *dbus;
