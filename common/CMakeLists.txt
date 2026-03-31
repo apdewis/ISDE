@@ -5,7 +5,7 @@ install(FILES data/isde.desktop
     DESTINATION "${CMAKE_INSTALL_DATADIR}/xsessions")
 
 # Install icon theme and colour schemes
-install(DIRECTORY data/icons/
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/isde/icons")
+install(DIRECTORY data/icons/isde-standard
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons")
 install(DIRECTORY data/themes/
     DESTINATION "${CMAKE_INSTALL_DATADIR}/isde/themes")

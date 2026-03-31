@@ -1,0 +1,41 @@
+[Icon Theme]
+Name=ISDE Standard
+Comment=ISDE built-in icon theme; inherits hicolor for system icons
+Inherits=hicolor
+Directories=actions,apps,devices,mimetypes,places,ui
+
+[actions]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512
+
+[apps]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512
+
+[devices]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512
+
+[mimetypes]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512
+
+[places]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512
+
+[ui]
+Size=16
+Type=Scalable
+MinSize=1
+MaxSize=512

@@ -139,8 +139,8 @@ char *isde_xdg_find_data(const char *name)
 
 char *isde_icon_find(const char *category, const char *name)
 {
-    /* Try configured icon theme, falling back to hicolor */
-    char theme_buf[128] = "hicolor";
+    /* Read configured icon theme (default: isde-standard) */
+    char theme_buf[128] = "isde-standard";
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -154,21 +154,22 @@ char *isde_icon_find(const char *category, const char *name)
         }
         isde_config_free(cfg);
     }
+
     char *path = isde_icon_theme_lookup(theme_buf, category, name);
     if (path) {
         return path;
     }
 
-    /* Fallback: ISDE bundled icons in isde/icons/<category>/<name>.svg */
-    char rel[256];
-    snprintf(rel, sizeof(rel), "icons/%s/%s.svg", category, name);
-
-    path = isde_xdg_find_data(rel);
-    if (path) {
-        return path;
+    /* If a non-default theme was active, fall back to isde-standard so ISDE's
+     * own UI icons are always available regardless of the user's theme choice. */
+    if (strcmp(theme_buf, "isde-standard") != 0) {
+        path = isde_icon_theme_lookup("isde-standard", category, name);
+        if (path) {
+            return path;
+        }
     }
 
-    /* Dev build fallback: check relative to executable */
+    /* Dev build fallback: isde-standard not yet installed; check source tree. */
     static char exe_dir[512] = {0};
     if (!exe_dir[0]) {
         ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);
@@ -179,15 +180,12 @@ char *isde_icon_find(const char *category, const char *name)
         }
     }
     if (exe_dir[0]) {
-        size_t total = strlen(exe_dir) + strlen("/../../common/data/") +
-                       strlen(rel) + 1;
-        path = malloc(total);
-        if (path) {
-            snprintf(path, total, "%s/../../common/data/%s", exe_dir, rel);
-            if (access(path, R_OK) == 0) {
-                return path;
-            }
-            free(path);
+        char dev_path[512];
+        snprintf(dev_path, sizeof(dev_path),
+                 "%s/../../common/data/icons/isde-standard/%s/%s.svg",
+                 exe_dir, category, name);
+        if (access(dev_path, R_OK) == 0) {
+            return strdup(dev_path);
         }
     }
 

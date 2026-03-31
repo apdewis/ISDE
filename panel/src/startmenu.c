@@ -397,25 +397,12 @@ void startmenu_init(Panel *p)
     p->app_highlight = -1;
     p->menu_focus = 0;
 
-    /* Resolve start menu icon from theme */
+    /* Resolve start menu and logout icons from theme */
     free(start_icon_path);
-    start_icon_path = NULL;
-    static const char *menu_icon_names[] = {
-        "start-here", "view-app-grid", "open-menu",
-        "application-menu", "view-grid", NULL
-    };
-    for (int i = 0; !start_icon_path && menu_icon_names[i]; i++) {
-        start_icon_path = isde_icon_find("actions", menu_icon_names[i]);
-    }
+    start_icon_path = isde_icon_find("actions", "application-menu");
 
     free(logout_icon_path);
-    logout_icon_path = NULL;
-    static const char *logout_icon_names[] = {
-        "system-log-out", "application-exit", "system-shutdown", NULL
-    };
-    for (int i = 0; !logout_icon_path && logout_icon_names[i]; i++) {
-        logout_icon_path = isde_icon_find("actions", logout_icon_names[i]);
-    }
+    logout_icon_path = isde_icon_find("actions", "system-log-out");
 
     /* Start button — child of form, pinned left */
     Arg args[20];

@@ -44,10 +44,11 @@ char *isde_xdg_find_config(const char *name);
 /* Search for a file in XDG data directories (same logic as above). */
 char *isde_xdg_find_data(const char *name);
 
-/* Find an ISDE icon by category and name.
- * Searches: $XDG_DATA_HOME/isde/icons/<category>/<name>.svg
- *           $XDG_DATA_DIRS/isde/icons/<category>/<name>.svg
- *           <source_tree>/common/data/icons/<category>/<name>.svg
+/* Find an icon by category and name.
+ * Searches the configured icon theme (default: isde-standard) via the
+ * freedesktop theme lookup chain (theme -> Inherits -> hicolor).  If the
+ * configured theme is not isde-standard, isde-standard is tried as a final
+ * fallback so ISDE's own UI icons are always resolvable.
  * Returns the first path that exists (caller must free), or NULL. */
 char *isde_icon_find(const char *category, const char *name);
 
