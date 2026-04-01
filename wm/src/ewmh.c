@@ -47,7 +47,8 @@ void wm_ewmh_update_client_list(Wm *wm)
 {
     int count = 0;
     for (WmClient *c = wm->clients; c; c = c->next) {
-        count++;
+        if (!c->transient_for)
+            count++;
     }
 
     xcb_window_t *wins = NULL;
@@ -58,7 +59,8 @@ void wm_ewmh_update_client_list(Wm *wm)
         }
         int i = 0;
         for (WmClient *c = wm->clients; c; c = c->next) {
-            wins[i++] = c->client;
+            if (!c->transient_for)
+                wins[i++] = c->client;
         }
     }
 
