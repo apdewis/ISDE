@@ -91,11 +91,8 @@ typedef struct FmJob {
     int             error;         /* errno of first failure */
     struct Fm      *origin_win;    /* window that started this op */
     /* Progress UI (managed by progress.c, main thread only) */
-    Widget          progress_shell;
-    Widget          progress_bar;
-    Widget          progress_label;
+    struct IsdeProgress *progress;
     XtIntervalId    progress_timer;    /* polls atomic counters */
-    XtIntervalId    show_delay_timer;  /* 500ms before showing dialog */
     struct FmJob   *next;
 } FmJob;
 

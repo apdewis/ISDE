@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include "isde/isde-ewmh.h"
+#include "isde/isde-dialog.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -27,154 +28,52 @@ static void ctx_free_dynamic(Fm *fm);
 
 /* ---------- rename dialog ---------- */
 
-static void rename_ok_cb(Widget w, XtPointer cd, XtPointer call)
+static void rename_result_cb(IsdeDialogResult result,
+                             const char *text, void *data)
 {
-    (void)w; (void)call;
-    Widget dialog = (Widget)cd;
-    Fm *fm = fm_from_widget(dialog);
-    if (!fm) {
+    Fm *fm = (Fm *)data;
+    fm->rename_shell = NULL;
+    if (result != ISDE_DIALOG_OK || !text || !text[0])
         return;
-    }
-    char *newname = IswDialogGetValueString(dialog);
-    if (newname && newname[0] && fm->rename_index >= 0 &&
-        fm->rename_index < fm->nentries) {
-        fileops_rename(fm, fm->entries[fm->rename_index].full_path,
-                       newname);
+    if (fm->rename_index >= 0 && fm->rename_index < fm->nentries) {
+        fileops_rename(fm, fm->entries[fm->rename_index].full_path, text);
         fm_refresh(fm);
-    }
-    if (fm->rename_shell) {
-        XtPopdown(fm->rename_shell);
-        XtDestroyWidget(fm->rename_shell);
-        fm->rename_shell = NULL;
-    }
-}
-
-static void rename_cancel_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)cd; (void)call;
-    Fm *fm = fm_from_widget(w);
-    if (fm && fm->rename_shell) {
-        XtPopdown(fm->rename_shell);
-        XtDestroyWidget(fm->rename_shell);
-        fm->rename_shell = NULL;
-    }
-}
-
-static void act_dismiss_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
-{
-    (void)ev; (void)p; (void)n;
-    Fm *fm = fm_from_widget(w);
-    if (fm && fm->rename_shell) {
-        XtPopdown(fm->rename_shell);
-        XtDestroyWidget(fm->rename_shell);
-        fm->rename_shell = NULL;
     }
 }
 
 void show_rename_dialog(Fm *fm)
 {
     int sel = -1;
-    if (fm->iconview) {
+    if (fm->iconview)
         sel = IswIconViewGetSelected(fm->iconview);
-    }
-    if (sel < 0 || sel >= fm->nentries) {
+    if (sel < 0 || sel >= fm->nentries)
         return;
-    }
 
     fm->rename_index = sel;
-
-    if (fm->rename_shell) {
-        XtDestroyWidget(fm->rename_shell);
-        fm->rename_shell = NULL;
-    }
-
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(300));   n++;
-    XtSetArg(args[n], XtNheight, isde_scale(120)); n++;
-    XtSetArg(args[n], XtNborderWidth, 1);          n++;
-    fm->rename_shell = XtCreatePopupShell("renameShell",
-                                      transientShellWidgetClass,
-                                      fm->toplevel, args, n);
-    XtOverrideTranslations(fm->rename_shell, XtParseTranslationTable(
-        "<Message>WM_PROTOCOLS: fm-dismiss-rename()\n"));
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Rename:");         n++;
-    XtSetArg(args[n], XtNvalue, fm->entries[sel].name); n++;
-    Widget dialog = XtCreateManagedWidget("renameDialog", dialogWidgetClass,
-                                          fm->rename_shell, args, n);
-
-    /* OK / Cancel buttons — HIG: action first, bottom-right */
-    int btn_w = isde_scale(80);
-    int btn_pad = isde_scale(8);
-    Widget value_w = XtNameToWidget(dialog, "value");
-    Widget anchor = value_w ? value_w : XtNameToWidget(dialog, "label");
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "OK");                  n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, anchor);              n++;
-    XtSetArg(args[n], XtNhorizDistance, 300 - btn_w * 2 - btn_pad); n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget ok = XtCreateManagedWidget("ok", commandWidgetClass,
-                                      dialog, args, n);
-    XtAddCallback(ok, XtNcallback, rename_ok_cb, (XtPointer)dialog);
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, anchor);              n++;
-    XtSetArg(args[n], XtNfromHoriz, ok);                 n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
-                                          dialog, args, n);
-    XtAddCallback(cancel, XtNcallback, rename_cancel_cb, NULL);
-
-    XtPopup(fm->rename_shell, XtGrabExclusive);
+    isde_dialog_dismiss(fm->rename_shell);
+    fm->rename_shell = isde_dialog_input(fm->toplevel, "Rename",
+                                         "Rename:",
+                                         fm->entries[sel].name,
+                                         rename_result_cb, fm);
 }
 
 /* ---------- delete with confirmation ---------- */
 
-static void dismiss_delete_dialog(Fm *fm)
-{
-    if (fm->delete_shell) {
-        XtPopdown(fm->delete_shell);
-        XtDestroyWidget(fm->delete_shell);
-        fm->delete_shell = NULL;
-    }
-}
+typedef struct {
+    Fm  *fm;
+    int  permanent;
+} FmDeleteCtx;
 
-static void act_dismiss_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void delete_result_cb(IsdeDialogResult result, void *data)
 {
-    (void)ev; (void)p; (void)n;
-    Fm *fm = fm_from_widget(w);
-    if (fm) {
-        dismiss_delete_dialog(fm);
-    }
-}
+    FmDeleteCtx *dctx = (FmDeleteCtx *)data;
+    Fm *fm = dctx->fm;
+    int permanent = dctx->permanent;
+    free(dctx);
+    fm->delete_shell = NULL;
 
-static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)cd; (void)call;
-    Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) {
-        if (fm) {
-            dismiss_delete_dialog(fm);
-        }
+    if (result != ISDE_DIALOG_OK || !fm->iconview)
         return;
-    }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -183,64 +82,24 @@ static void delete_do_trash(Widget w, XtPointer cd, XtPointer call)
         int npaths = 0;
         for (int i = 0; i < nsel; i++) {
             int idx = indices[i];
-            if (idx >= 0 && idx < fm->nentries) {
+            if (idx >= 0 && idx < fm->nentries)
                 paths[npaths++] = fm->entries[idx].full_path;
-            }
         }
         if (npaths > 0) {
-            jobqueue_submit_trash(fm->app_state, fm, paths, npaths);
+            if (permanent)
+                jobqueue_submit_delete(fm->app_state, fm, paths, npaths);
+            else
+                jobqueue_submit_trash(fm->app_state, fm, paths, npaths);
         }
         free(paths);
     }
     free(indices);
-    dismiss_delete_dialog(fm);
-}
-
-static void delete_do_permanent(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)cd; (void)call;
-    Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) {
-        if (fm) {
-            dismiss_delete_dialog(fm);
-        }
-        return;
-    }
-
-    int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
-    if (nsel > 0) {
-        char **paths = malloc(nsel * sizeof(char *));
-        int npaths = 0;
-        for (int i = 0; i < nsel; i++) {
-            int idx = indices[i];
-            if (idx >= 0 && idx < fm->nentries) {
-                paths[npaths++] = fm->entries[idx].full_path;
-            }
-        }
-        if (npaths > 0) {
-            jobqueue_submit_delete(fm->app_state, fm, paths, npaths);
-        }
-        free(paths);
-    }
-    free(indices);
-    dismiss_delete_dialog(fm);
-}
-
-static void delete_confirm_cancel(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)cd; (void)call;
-    Fm *fm = fm_from_widget(w);
-    if (fm) {
-        dismiss_delete_dialog(fm);
-    }
 }
 
 static void fm_delete_confirm(Fm *fm, int permanent)
 {
-    if (!fm->iconview) {
+    if (!fm->iconview)
         return;
-    }
 
     int *indices = NULL;
     int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
@@ -253,88 +112,36 @@ static void fm_delete_confirm(Fm *fm, int permanent)
     int in_trash = (strncmp(fm->cwd, trash_path, strlen(trash_path)) == 0);
     free(trash_path);
 
-    if (in_trash) {
+    if (in_trash)
         permanent = 1;
-    }
 
     char msg[256];
     if (nsel == 1) {
         int idx = indices[0];
         const char *name = (idx >= 0 && idx < fm->nentries)
                            ? fm->entries[idx].name : "selected item";
-        if (permanent) {
+        if (permanent)
             snprintf(msg, sizeof(msg), "Permanently delete \"%s\"?", name);
-        } else {
+        else
             snprintf(msg, sizeof(msg), "Move \"%s\" to Trash?", name);
-        }
     } else {
-        if (permanent) {
+        if (permanent)
             snprintf(msg, sizeof(msg), "Permanently delete %d items?", nsel);
-        } else {
+        else
             snprintf(msg, sizeof(msg), "Move %d items to Trash?", nsel);
-        }
     }
     free(indices);
 
-    if (fm->delete_shell) {
-        XtDestroyWidget(fm->delete_shell);
-        fm->delete_shell = NULL;
-    }
+    isde_dialog_dismiss(fm->delete_shell);
 
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(300));   n++;
-    XtSetArg(args[n], XtNheight, isde_scale(120));  n++;
-    XtSetArg(args[n], XtNborderWidth, 1);           n++;
-    fm->delete_shell = XtCreatePopupShell("deleteShell",
-                                       transientShellWidgetClass,
-                                       fm->toplevel, args, n);
-    XtOverrideTranslations(fm->delete_shell, XtParseTranslationTable(
-        "<Message>WM_PROTOCOLS: fm-dismiss-delete()\n"));
+    FmDeleteCtx *dctx = malloc(sizeof(*dctx));
+    dctx->fm = fm;
+    dctx->permanent = permanent;
 
-    n = 0;
-    XtSetArg(args[n], XtNlabel, msg); n++;
-    Widget dialog = XtCreateManagedWidget("deleteDialog", dialogWidgetClass,
-                                           fm->delete_shell, args, n);
-
-    /* Action / Cancel buttons — HIG: action first, bottom-right */
-    int btn_w = isde_scale(80);
-    int btn_pad = isde_scale(8);
-    Widget del_anchor = XtNameToWidget(dialog, "label");
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, permanent ? "Delete" : "Move"); n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, del_anchor);          n++;
-    XtSetArg(args[n], XtNhorizDistance, isde_scale(300) - btn_w * 2 - btn_pad); n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget action = XtCreateManagedWidget("action", commandWidgetClass,
-                                          dialog, args, n);
-    XtAddCallback(action, XtNcallback,
-                  permanent ? delete_do_permanent : delete_do_trash, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, del_anchor);          n++;
-    XtSetArg(args[n], XtNfromHoriz, action);             n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
-                                          dialog, args, n);
-    XtAddCallback(cancel, XtNcallback, delete_confirm_cancel, NULL);
-
-    XtPopup(fm->delete_shell, XtGrabExclusive);
+    fm->delete_shell = isde_dialog_confirm(fm->toplevel, "Confirm",
+                                           msg,
+                                           permanent ? "Delete" : "Move",
+                                           delete_result_cb, dctx);
 }
 
 static void fm_delete_selected(Fm *fm)
@@ -349,100 +156,21 @@ static void fm_delete_selected_permanent(Fm *fm)
 
 /* ---------- empty trash ---------- */
 
-static void empty_trash_ok(Widget w, XtPointer cd, XtPointer call)
+static void empty_trash_result_cb(IsdeDialogResult result, void *data)
 {
-    (void)w; (void)call;
-    Fm *fm = (Fm *)cd;
-    jobqueue_submit_empty_trash(fm->app_state, fm);
-    if (fm->empty_trash_shell) {
-        XtPopdown(fm->empty_trash_shell);
-        XtDestroyWidget(fm->empty_trash_shell);
-        fm->empty_trash_shell = NULL;
-    }
-}
-
-static void empty_trash_cancel(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)cd; (void)call;
-    Fm *fm = fm_from_widget(w);
-    if (fm && fm->empty_trash_shell) {
-        XtPopdown(fm->empty_trash_shell);
-        XtDestroyWidget(fm->empty_trash_shell);
-        fm->empty_trash_shell = NULL;
-    }
-}
-
-static void act_dismiss_empty_trash(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
-{
-    (void)ev; (void)p; (void)n;
-    Fm *fm = fm_from_widget(w);
-    if (fm && fm->empty_trash_shell) {
-        XtPopdown(fm->empty_trash_shell);
-        XtDestroyWidget(fm->empty_trash_shell);
-        fm->empty_trash_shell = NULL;
-    }
+    Fm *fm = (Fm *)data;
+    fm->empty_trash_shell = NULL;
+    if (result == ISDE_DIALOG_OK)
+        jobqueue_submit_empty_trash(fm->app_state, fm);
 }
 
 static void ctx_empty_trash(Fm *fm)
 {
-    if (fm->empty_trash_shell) {
-        XtDestroyWidget(fm->empty_trash_shell);
-        fm->empty_trash_shell = NULL;
-    }
-
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(300));   n++;
-    XtSetArg(args[n], XtNheight, isde_scale(120));  n++;
-    XtSetArg(args[n], XtNborderWidth, 1);           n++;
-    fm->empty_trash_shell = XtCreatePopupShell("emptyTrashShell",
-                                            transientShellWidgetClass,
-                                            fm->toplevel, args, n);
-    XtOverrideTranslations(fm->empty_trash_shell, XtParseTranslationTable(
-        "<Message>WM_PROTOCOLS: fm-dismiss-empty-trash()\n"));
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Permanently delete all items in Trash?"); n++;
-    Widget dialog = XtCreateManagedWidget("emptyTrashDialog", dialogWidgetClass,
-                                           fm->empty_trash_shell, args, n);
-
-    /* Action / Cancel buttons — HIG: action first, bottom-right */
-    int btn_w = isde_scale(80);
-    int btn_pad = isde_scale(8);
-    Widget et_anchor = XtNameToWidget(dialog, "label");
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Empty Trash");          n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, et_anchor);           n++;
-    XtSetArg(args[n], XtNhorizDistance, isde_scale(300) - btn_w * 2 - btn_pad); n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget et_action = XtCreateManagedWidget("action", commandWidgetClass,
-                                              dialog, args, n);
-    XtAddCallback(et_action, XtNcallback, empty_trash_ok, fm);
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");               n++;
-    XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
-    XtSetArg(args[n], XtNfromVert, et_anchor);           n++;
-    XtSetArg(args[n], XtNfromHoriz, et_action);          n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_pad);        n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-    Widget et_cancel = XtCreateManagedWidget("cancel", commandWidgetClass,
-                                              dialog, args, n);
-    XtAddCallback(et_cancel, XtNcallback, empty_trash_cancel, NULL);
-
-    XtPopup(fm->empty_trash_shell, XtGrabExclusive);
+    isde_dialog_dismiss(fm->empty_trash_shell);
+    fm->empty_trash_shell = isde_dialog_confirm(
+        fm->toplevel, "Empty Trash",
+        "Permanently delete all items in Trash?",
+        "Empty Trash", empty_trash_result_cb, fm);
 }
 
 static void ctx_open_terminal(Fm *fm)
@@ -945,9 +673,6 @@ static XtActionsRec fm_actions[] = {
     {"fm-refresh",       act_refresh},
     {"fm-open",          act_open},
     {"fm-toggle-hidden", act_toggle_hidden},
-    {"fm-dismiss-rename", act_dismiss_rename},
-    {"fm-dismiss-delete", act_dismiss_delete},
-    {"fm-dismiss-empty-trash", act_dismiss_empty_trash},
     {"fm-new-window", act_new_window},
     {"fm-close-window", act_close_window},
 };

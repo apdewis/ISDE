@@ -27,6 +27,7 @@ UI and interaction conventions for all ISDE components. Follow these rules when 
 - **Initial size**: Set a sensible default via `XtNwidth` / `XtNheight` on the shell. All sizes must use `isde_scale()`.
 - **Minimum size**: Set `XtNminWidth` / `XtNminHeight` WM hints on all resizable top-level windows. The minimum must be large enough to keep the UI usable (no clipped controls or overlapping buttons).
 - **Working area limit**: Never set an initial window size that exceeds the available working area. Query the screen geometry and `_NET_WORKAREA` and clamp if needed.
+- **Window borders**: All non-maximized windows, including dialogs, must have a 1px border in `scheme->fg`. Maximized windows have no border (borderWidth 0).
 - **Dialogs**: Confirmation and action dialogs (delete, rename, empty trash, font chooser, etc.) must be modal — use `XtGrabExclusive`. Only informational or progress windows use `XtGrabNone`.
 - **Dialog sizing**: Dialogs should be just large enough for their content. Do not set dialogs resizable unless they contain a scrollable or variable-size area.
 

@@ -8,6 +8,8 @@ add_library(isde SHARED
     src/isde-dbus.c
     src/isde-mime.c
     src/isde-theme.c
+    src/isde-dialog.c
+    src/isde-filechooser.c
     vendor/tomlc99/toml.c
 )
 
@@ -27,6 +29,7 @@ target_link_libraries(isde
         PkgConfig::XCB_EWMH
         PkgConfig::XCB_ICCCM
         PkgConfig::XCB_UTIL
+        PkgConfig::ISW
     PRIVATE
         PkgConfig::DBUS
 )

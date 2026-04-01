@@ -259,7 +259,13 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     XtSetArg(args[n], XtNwidth, fw);              n++;
     XtSetArg(args[n], XtNheight, fh);             n++;
     XtSetArg(args[n], XtNoverrideRedirect, True); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
+    XtSetArg(args[n], XtNborderWidth, 1);         n++;
+    {
+        const IsdeColorScheme *s = isde_theme_current();
+        if (s) {
+            XtSetArg(args[n], XtNborderColor, color_to_pixel(wm, s->fg)); n++;
+        }
+    }
     c->shell = XtCreatePopupShell("frame", overrideShellWidgetClass,
                                   wm->toplevel, args, n);
 
@@ -421,8 +427,16 @@ void frame_configure(Wm *wm, WmClient *c)
     int title = c->decorated ? WM_TITLE_HEIGHT : 0;
 
     /* Use XtConfigureWidget to update both Xt internal state and
-     * the X window atomically — avoids Xt and XCB disagreeing */
-    XtConfigureWidget(c->shell, c->x, c->y, fw, fh, 0);
+     * the X window atomically — avoids Xt and XCB disagreeing.
+     * Non-maximized windows get a 1px border; maximized get none. */
+    int bw = c->maximized ? 0 : 1;
+    XtConfigureWidget(c->shell, c->x, c->y, fw, fh, bw);
+
+    /* XtConfigureWidget may skip the border_width change if Xt thinks
+     * it hasn't changed, so force it via XCB as well. */
+    uint32_t bw32 = bw;
+    xcb_configure_window(wm->conn, XtWindow(c->shell),
+                         XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw32);
 
     if (c->decorated) {
         int btn_area = 3 * WM_TITLE_HEIGHT;

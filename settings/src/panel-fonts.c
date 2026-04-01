@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include <ISW/FontChooser.h>
+#include "isde/isde-dialog.h"
 
 /* ---------- font slot definitions ---------- */
 
@@ -96,26 +97,15 @@ static void update_desc_label(int idx)
 /* ---------- font chooser dialog ---------- */
 
 static Widget chooser_shell;
-static Widget chooser_widget;
 static int    chooser_slot;  /* which font slot is being edited */
 
-static void dismiss_chooser(void)
+static void chooser_result_cb(IsdeDialogResult result,
+                              const char *family, int size, void *data)
 {
-    if (chooser_shell) {
-        XtPopdown(chooser_shell);
-        XtDestroyWidget(chooser_shell);
-        chooser_shell = NULL;
-        chooser_widget = NULL;
-    }
-}
-
-static void chooser_ok_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)cd; (void)call;
-    if (!chooser_widget) { return; }
-
-    String family = IswFontChooserGetFamily(chooser_widget);
-    int size = IswFontChooserGetSize(chooser_widget);
+    (void)data;
+    chooser_shell = NULL;
+    if (result != ISDE_DIALOG_OK)
+        return;
 
     if (family && family[0]) {
         snprintf(current[chooser_slot].family,
@@ -124,93 +114,17 @@ static void chooser_ok_cb(Widget w, XtPointer cd, XtPointer call)
     if (size > 0) {
         current[chooser_slot].size = size;
     }
-
     update_desc_label(chooser_slot);
-    dismiss_chooser();
-}
-
-static void chooser_cancel_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)cd; (void)call;
-    dismiss_chooser();
 }
 
 static void show_chooser(int slot)
 {
-    dismiss_chooser();
-
+    isde_dialog_dismiss(chooser_shell);
     chooser_slot = slot;
-
-    Arg args[20];
-    Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(400));  n++;
-    XtSetArg(args[n], XtNheight, isde_scale(350)); n++;
-    XtSetArg(args[n], XtNborderWidth, 1);          n++;
-    XtSetArg(args[n], XtNtitle, font_labels[slot]); n++;
-    chooser_shell = XtCreatePopupShell("fontChooserShell",
-                                        transientShellWidgetClass,
-                                        toplevel_cache, args, n);
-
-    /* Form to hold chooser + buttons */
-    n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateManagedWidget("fcForm", formWidgetClass,
-                                        chooser_shell, args, n);
-
-    /* FontChooser widget */
-    n = 0;
-    XtSetArg(args[n], XtNfontFamily, current[slot].family); n++;
-    XtSetArg(args[n], XtNfontSize, current[slot].size);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                   n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
-    XtSetArg(args[n], XtNright, XtChainRight);               n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(390));            n++;
-    XtSetArg(args[n], XtNheight, isde_scale(290));           n++;
-    chooser_widget = XtCreateManagedWidget("fontChooser",
-                                            fontChooserWidgetClass,
-                                            form, args, n);
-
-    /* OK / Cancel buttons — bottom-right */
-    int btn_w = isde_scale(80);
-    int btn_pad = isde_scale(8);
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "OK");              n++;
-    XtSetArg(args[n], XtNfromVert, chooser_widget);  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, btn_w);              n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);    n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);   n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);        n++;
-    XtSetArg(args[n], XtNright, XtChainRight);       n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);        n++;
-    XtSetArg(args[n], XtNhorizDistance, isde_scale(390) - btn_w * 2 - btn_pad); n++;
-    Widget ok = XtCreateManagedWidget("fcOk", commandWidgetClass,
-                                      form, args, n);
-    XtAddCallback(ok, XtNcallback, chooser_ok_cb, NULL);
-
-    n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");           n++;
-    XtSetArg(args[n], XtNfromVert, chooser_widget);  n++;
-    XtSetArg(args[n], XtNfromHoriz, ok);             n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_pad);    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, btn_w);              n++;
-    XtSetArg(args[n], XtNinternalWidth, btn_pad);    n++;
-    XtSetArg(args[n], XtNinternalHeight, btn_pad);   n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);        n++;
-    XtSetArg(args[n], XtNright, XtChainRight);       n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);        n++;
-    Widget cancel = XtCreateManagedWidget("fcCancel", commandWidgetClass,
-                                          form, args, n);
-    XtAddCallback(cancel, XtNcallback, chooser_cancel_cb, NULL);
-
-    XtPopup(chooser_shell, XtGrabExclusive);
+    chooser_shell = isde_dialog_font(toplevel_cache, font_labels[slot],
+                                     current[slot].family,
+                                     current[slot].size,
+                                     chooser_result_cb, NULL);
 }
 
 /* ---------- edit button callbacks ---------- */
@@ -354,7 +268,8 @@ static int fonts_has_changes(void)
 
 static void fonts_destroy(void)
 {
-    dismiss_chooser();
+    isde_dialog_dismiss(chooser_shell);
+    chooser_shell = NULL;
     for (int i = 0; i < NUM_FONTS; i++) {
         desc_labels[i] = NULL;
     }

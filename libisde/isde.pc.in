@@ -6,6 +6,6 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: ISDE
 Description: Infi Systems Desktop Environment - shared utility library
 Version: @PROJECT_VERSION@
-Requires: xcb xcb-ewmh xcb-icccm
+Requires: xcb xcb-ewmh xcb-icccm isw
 Cflags: -I${includedir}
 Libs: -L${libdir} -lisde
