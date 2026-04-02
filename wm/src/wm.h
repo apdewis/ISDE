@@ -50,6 +50,7 @@ typedef struct WmClient {
     int16_t      save_x, save_y;
     uint16_t     save_w, save_h;
     char        *title;
+    unsigned long focus_seq;       /* focus sequence number for MRU fallback */
 
     /* Resize grips — input-only windows on frame edges */
     xcb_window_t  grip[8];  /* top, bottom, left, right, tl, tr, bl, br */
@@ -91,6 +92,7 @@ typedef struct Wm {
     /* Client list */
     WmClient              *clients;
     WmClient              *focused;
+    unsigned long          focus_seq;  /* monotonic counter for MRU tracking */
 
     /* Virtual desktops */
     int                    desk_rows;

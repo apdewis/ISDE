@@ -374,9 +374,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
                     XCB_NONE, XCB_NONE,
                     XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
 
-    /* Link into list */
-    c->next = wm->clients;
-    wm->clients = c;
+    /* Append to list tail — _NET_CLIENT_LIST must be in initial mapping order */
+    c->next = NULL;
+    if (!wm->clients) {
+        wm->clients = c;
+    } else {
+        WmClient *tail = wm->clients;
+        while (tail->next)
+            tail = tail->next;
+        tail->next = c;
+    }
 
     return c;
 }

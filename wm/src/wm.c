@@ -201,6 +201,7 @@ void wm_focus_client(Wm *wm, WmClient *c)
 
     if (c) {
         c->focused = 1;
+        c->focus_seq = ++wm->focus_seq;
         xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
                             c->client, XCB_CURRENT_TIME);
         /* Raise frame */
@@ -239,7 +240,13 @@ void wm_remove_client(Wm *wm, WmClient *c)
     wm_ewmh_update_active(wm);
 
     if (!wm->focused && wm->clients) {
-        wm_focus_client(wm, wm->clients);
+        /* Focus the most recently focused remaining client (MRU) */
+        WmClient *mru = NULL;
+        for (WmClient *p = wm->clients; p; p = p->next) {
+            if (!mru || p->focus_seq > mru->focus_seq)
+                mru = p;
+        }
+        wm_focus_client(wm, mru);
     }
 }
 
