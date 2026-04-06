@@ -110,6 +110,10 @@ typedef struct Wm {
     int16_t                drag_orig_x, drag_orig_y;
     uint16_t               drag_orig_w, drag_orig_h;
 
+    /* Snap preview */
+    xcb_window_t           snap_preview;   /* overlay window (0 = none) */
+    int                    snap_pending;   /* pending snap zone */
+
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
 

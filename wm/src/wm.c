@@ -240,6 +240,8 @@ void wm_focus_client(Wm *wm, WmClient *c)
 
 /* ---------- remove client ---------- */
 
+static void snap_preview_hide(Wm *wm);
+
 void wm_remove_client(Wm *wm, WmClient *c)
 {
     WmClient **pp = &wm->clients;
@@ -254,6 +256,7 @@ void wm_remove_client(Wm *wm, WmClient *c)
         wm->focused = NULL;
     }
     if (wm->drag_client == c) {
+        snap_preview_hide(wm);
         wm->drag_client = NULL;
         wm->drag_mode = DRAG_NONE;
     }
@@ -360,7 +363,7 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 
 enum {
     SNAP_NONE = 0,
-    SNAP_LEFT, SNAP_RIGHT, SNAP_TOP, SNAP_BOTTOM,
+    SNAP_LEFT, SNAP_RIGHT,
     SNAP_TL, SNAP_TR, SNAP_BL, SNAP_BR
 };
 
@@ -383,15 +386,123 @@ static int detect_snap_zone(Wm *wm, int rx, int ry)
     if (at_right && at_bottom) { return SNAP_BR; }
     if (at_left)               { return SNAP_LEFT; }
     if (at_right)              { return SNAP_RIGHT; }
-    if (at_top)                { return SNAP_TOP; }
-    if (at_bottom)             { return SNAP_BOTTOM; }
     return SNAP_NONE;
+}
+
+/* Compute the snap target geometry for a zone (does not modify client) */
+static void snap_geometry(Wm *wm, int zone, int *sx, int *sy, int *sw, int *sh)
+{
+    int wx, wy, ww, wh;
+    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+
+    switch (zone) {
+    case SNAP_LEFT:
+        *sx = wx; *sy = wy;
+        *sw = ww / 2; *sh = wh;
+        break;
+    case SNAP_RIGHT:
+        *sx = wx + ww / 2; *sy = wy;
+        *sw = ww - ww / 2; *sh = wh;
+        break;
+    case SNAP_TL:
+        *sx = wx; *sy = wy;
+        *sw = ww / 2; *sh = wh / 2;
+        break;
+    case SNAP_TR:
+        *sx = wx + ww / 2; *sy = wy;
+        *sw = ww - ww / 2; *sh = wh / 2;
+        break;
+    case SNAP_BL:
+        *sx = wx; *sy = wy + wh / 2;
+        *sw = ww / 2; *sh = wh / 2;
+        break;
+    case SNAP_BR:
+        *sx = wx + ww / 2; *sy = wy + wh / 2;
+        *sw = ww - ww / 2; *sh = wh / 2;
+        break;
+    default:
+        *sx = *sy = *sw = *sh = 0;
+        break;
+    }
+}
+
+/* Show or reposition the snap preview overlay */
+static void snap_preview_show(Wm *wm, int zone)
+{
+    int px, py, pw, ph;
+    snap_geometry(wm, zone, &px, &py, &pw, &ph);
+    if (pw <= 0 || ph <= 0) { return; }
+
+    /* Inset by 2px for a border-like appearance */
+    int inset = isde_scale(2);
+    px += inset; py += inset;
+    pw -= 2 * inset; ph -= 2 * inset;
+    if (pw < 1) { pw = 1; }
+    if (ph < 1) { ph = 1; }
+
+    /* Pick the active/accent colour from the theme */
+    const IsdeColorScheme *s = isde_theme_current();
+    unsigned int color = s ? s->active : 0x4488CC;
+
+    if (!wm->snap_preview) {
+        /* Allocate background pixel */
+        xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
+            wm->conn,
+            xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                            ((color >> 16) & 0xFF) * 257,
+                            ((color >> 8)  & 0xFF) * 257,
+                            ( color        & 0xFF) * 257),
+            NULL);
+        uint32_t bg = cr ? cr->pixel : wm->screen->white_pixel;
+        free(cr);
+
+        wm->snap_preview = xcb_generate_id(wm->conn);
+        uint32_t vals[] = {
+            bg,
+            1,  /* override-redirect */
+            XCB_EVENT_MASK_NO_EVENT
+        };
+        xcb_create_window(wm->conn, XCB_COPY_FROM_PARENT,
+                          wm->snap_preview, wm->root,
+                          px, py, pw, ph, 0,
+                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          wm->screen->root_visual,
+                          XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
+                          XCB_CW_EVENT_MASK,
+                          vals);
+        /* Set 50% opacity via _NET_WM_WINDOW_OPACITY */
+        uint32_t opacity = (uint32_t)(0.5 * 0xFFFFFFFF);
+        xcb_atom_t atom_opacity = intern(wm->conn, "_NET_WM_WINDOW_OPACITY");
+        xcb_change_property(wm->conn, XCB_PROP_MODE_REPLACE,
+                            wm->snap_preview, atom_opacity,
+                            XCB_ATOM_CARDINAL, 32, 1, &opacity);
+
+        xcb_map_window(wm->conn, wm->snap_preview);
+    } else {
+        uint32_t cfg[] = { px, py, pw, ph };
+        xcb_configure_window(wm->conn, wm->snap_preview,
+                             XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+                             XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                             cfg);
+    }
+    xcb_flush(wm->conn);
+}
+
+/* Hide and destroy the snap preview overlay */
+static void snap_preview_hide(Wm *wm)
+{
+    if (wm->snap_preview) {
+        xcb_destroy_window(wm->conn, wm->snap_preview);
+        wm->snap_preview = 0;
+        xcb_flush(wm->conn);
+    }
+    wm->snap_pending = SNAP_NONE;
 }
 
 static void apply_snap(Wm *wm, WmClient *c, int zone)
 {
-    int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+    int sx, sy, sw, sh;
+    snap_geometry(wm, zone, &sx, &sy, &sw, &sh);
 
     int th = WM_TITLE_HEIGHT;
 
@@ -401,41 +512,10 @@ static void apply_snap(Wm *wm, WmClient *c, int zone)
     c->save_w = c->width;
     c->save_h = c->height;
 
-    switch (zone) {
-    case SNAP_LEFT:
-        c->x = wx; c->y = wy;
-        c->width = ww / 2; c->height = wh - th;
-        break;
-    case SNAP_RIGHT:
-        c->x = wx + ww / 2; c->y = wy;
-        c->width = ww - ww / 2; c->height = wh - th;
-        break;
-    case SNAP_TOP:
-        c->x = wx; c->y = wy;
-        c->width = ww; c->height = wh - th;
-        c->maximized = 1;
-        break;
-    case SNAP_BOTTOM:
-        c->x = wx; c->y = wy + wh / 2;
-        c->width = ww; c->height = wh / 2 - th;
-        break;
-    case SNAP_TL:
-        c->x = wx; c->y = wy;
-        c->width = ww / 2; c->height = wh / 2 - th;
-        break;
-    case SNAP_TR:
-        c->x = wx + ww / 2; c->y = wy;
-        c->width = ww - ww / 2; c->height = wh / 2 - th;
-        break;
-    case SNAP_BL:
-        c->x = wx; c->y = wy + wh / 2;
-        c->width = ww / 2; c->height = wh / 2 - th;
-        break;
-    case SNAP_BR:
-        c->x = wx + ww / 2; c->y = wy + wh / 2;
-        c->width = ww - ww / 2; c->height = wh / 2 - th;
-        break;
-    }
+    c->x = sx;
+    c->y = sy;
+    c->width = sw;
+    c->height = sh - th;
 
     frame_configure(wm, c);
     xcb_flush(wm->conn);
@@ -692,14 +772,12 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         XtMoveWidget(c->shell, c->x, c->y);
         int zone = detect_snap_zone(wm, ev->root_x, ev->root_y);
         if (zone != SNAP_NONE) {
-            apply_snap(wm, c, zone);
-            /* Re-apply child positions — shell resize may have reset them */
-            frame_configure(wm, c);
-            xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
-            xcb_flush(wm->conn);
-            wm->drag_mode = DRAG_NONE;
-            wm->drag_client = NULL;
-            return;
+            if (wm->snap_pending != zone) {
+                snap_preview_show(wm, zone);
+                wm->snap_pending = zone;
+            }
+        } else if (wm->snap_pending != SNAP_NONE) {
+            snap_preview_hide(wm);
         }
     } else if (wm->drag_mode == DRAG_RESIZE) {
         int e = wm->resize_edge;
@@ -740,6 +818,11 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
     (void)ev;
     if (wm->drag_mode != DRAG_NONE) {
         WmClient *c = wm->drag_client;
+
+        if (wm->drag_mode == DRAG_MOVE && wm->snap_pending != SNAP_NONE && c) {
+            apply_snap(wm, c, wm->snap_pending);
+        }
+        snap_preview_hide(wm);
 
         xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
         xcb_flush(wm->conn);
@@ -825,6 +908,7 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
 
         if (dir == XCB_EWMH_WM_MOVERESIZE_CANCEL) {
             if (wm->drag_mode != DRAG_NONE) {
+                snap_preview_hide(wm);
                 xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
                 wm->drag_mode = DRAG_NONE;
                 wm->drag_client = NULL;
