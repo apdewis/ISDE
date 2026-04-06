@@ -155,9 +155,12 @@ static void maximize_callback(Widget w, XtPointer client_data,
                 if (data) {
                     fread(data, 1, len, fp);
                     data[len] = '\0';
-                    Arg a[1];
-                    XtSetArg(a[0], XtNimage, data);
-                    XtSetValues(c->maximize_btn, a, 1);
+                    Arg a[20];
+                    Cardinal an = 0;
+                    XtSetArg(a[an], XtNimage, data);          an++;
+                    XtSetArg(a[an], XtNwidth, WM_TITLE_HEIGHT);  an++;
+                    XtSetArg(a[an], XtNheight, WM_TITLE_HEIGHT); an++;
+                    XtSetValues(c->maximize_btn, a, an);
                     free(data);
                 }
                 fclose(fp);
