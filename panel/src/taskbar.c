@@ -273,6 +273,8 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
         launch_app(p, g);
     } else if (g->nwindows == 1) {
         focus_window(p, g->windows[0]);
+    } else if (p->active_popup && wl_shell && wl_group == g) {
+        panel_dismiss_popup(p);
     } else {
         show_window_menu(p, g);
     }
