@@ -246,15 +246,12 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     XtSetArg(args[n], XtNborderWidth, &bw); n++;
     XtGetValues(wl_shell, args, n);
 
-    XtConfigureWidget(wl_shell, 0, 0, list_w, list_h, bw);
-
     Position bx, by;
     XtTranslateCoords(g->button, 0, 0, &bx, &by);
 
-    n = 0;
-    XtSetArg(args[n], XtNx, bx);                                          n++;
-    XtSetArg(args[n], XtNy, by - (Position)list_h - (Position)(2 * bw));  n++;
-    XtSetValues(wl_shell, args, n);
+    XtConfigureWidget(wl_shell, bx,
+                      by - (Position)list_h - (Position)(2 * bw),
+                      list_w, list_h, bw);
 
     XtPopup(wl_shell, XtGrabNone);
     panel_show_popup(p, wl_shell);
