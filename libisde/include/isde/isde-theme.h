@@ -74,6 +74,14 @@ int isde_scheme_list(char ***names);
  * Scans $XDG_DATA_DIRS/icons/{theme}/cursors/ directories. */
 int isde_cursor_theme_list(char ***names);
 
+/* Return the configured cursor theme name from isde.toml [appearance].
+ * Returns NULL if not set. The returned string is static; do not free. */
+const char *isde_cursor_theme_configured(void);
+
+/* Return the configured cursor size as a string from isde.toml [appearance].
+ * Returns NULL if not set. The returned string is static; do not free. */
+const char *isde_cursor_size_configured(void);
+
 /* ---------- Icon themes ---------- */
 
 /* List available icon theme names (from index.theme Name= field).

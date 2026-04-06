@@ -663,6 +663,8 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
 /* ---------- global active theme ---------- */
 
 static IsdeColorScheme *g_scheme = NULL;
+static char *g_cursor_theme = NULL;
+static char *g_cursor_size  = NULL;
 
 const IsdeColorScheme *isde_theme_current(void)
 {
@@ -679,6 +681,12 @@ const IsdeColorScheme *isde_theme_current(void)
         if (name) {
             g_scheme = isde_scheme_load(name);
         }
+        const char *ct = isde_config_string(appear, "cursor_theme", NULL);
+        free(g_cursor_theme);
+        g_cursor_theme = ct ? strdup(ct) : NULL;
+        const char *cs = isde_config_string(appear, "cursor_size", NULL);
+        free(g_cursor_size);
+        g_cursor_size = cs ? strdup(cs) : NULL;
     }
     isde_config_free(cfg);
 
@@ -695,6 +703,18 @@ void isde_theme_reload(void)
     isde_scheme_free(g_scheme);
     g_scheme = NULL;
     isde_theme_current(); /* re-load */
+}
+
+const char *isde_cursor_theme_configured(void)
+{
+    isde_theme_current(); /* ensure config is loaded */
+    return g_cursor_theme;
+}
+
+const char *isde_cursor_size_configured(void)
+{
+    isde_theme_current();
+    return g_cursor_size;
 }
 
 void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b)
