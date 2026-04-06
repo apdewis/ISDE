@@ -52,10 +52,18 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     const IsdeElementColors *tb = c->focused
         ? &s->titlebar_active : &s->titlebar;
 
+    /* Include explicit width/height so XtSetValues doesn't resize the
+     * label to its preferred (text-fitting) geometry. */
+    int btn_area = 3 * WM_TITLE_HEIGHT;
+    int title_w = c->width - btn_area;
+    if (title_w < 1) { title_w = 1; }
+
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNbackground, color_to_pixel(wm, tb->bg)); n++;
     XtSetArg(args[n], XtNforeground, color_to_pixel(wm, tb->fg)); n++;
+    XtSetArg(args[n], XtNwidth, title_w);                          n++;
+    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);                 n++;
     XtSetValues(c->title_label, args, n);
 }
 
@@ -498,9 +506,16 @@ void frame_update_title(Wm *wm, WmClient *c)
     c->title = fetch_title(wm, c->client);
 
     if (c->title_label) {
+        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int title_w = c->width - btn_area;
+        if (title_w < 1) { title_w = 1; }
+
         Arg args[20];
-        XtSetArg(args[0], XtNlabel, c->title ? c->title : "(untitled)");
-        XtSetValues(c->title_label, args, 1);
+        Cardinal n = 0;
+        XtSetArg(args[n], XtNlabel, c->title ? c->title : "(untitled)"); n++;
+        XtSetArg(args[n], XtNwidth, title_w);                             n++;
+        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);                    n++;
+        XtSetValues(c->title_label, args, n);
     }
 }
 
