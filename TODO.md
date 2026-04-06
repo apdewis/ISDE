@@ -1,5 +1,14 @@
 # ISDE — TODO
 
+## Extention architecture.
+
+Extensions should be implemented as subprocesses with secure IPC, for each part of ISDE the required RPC or similar calls should be determined.
+Including:
+ - WM management and compositing hooks. Allow snapping beheviour and similar to be modular
+ - Filemanager: previews, context extensions, etc
+ - Panel: Allow replacement of standard widgets, enhance or replace task bar, start menu etc, calendar app hook for the clock and other modularity
+ - Settings, allow apps and modules to add to the commons settings area
+
 ## HIG (DESIGN.md)
 
 The following areas are not yet covered and should be added as the DE matures:
