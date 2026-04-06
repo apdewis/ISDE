@@ -177,6 +177,19 @@ char *isde_icon_find(const char *category, const char *name)
         }
     }
 
+    /* Freedesktop fallback: /usr/share/pixmaps (unthemed legacy icons) */
+    {
+        const char *exts[] = { ".svg", ".png", ".xpm", NULL };
+        char pix_path[512];
+        for (int i = 0; exts[i]; i++) {
+            snprintf(pix_path, sizeof(pix_path), "/usr/share/pixmaps/%s%s",
+                     name, exts[i]);
+            if (access(pix_path, R_OK) == 0) {
+                return strdup(pix_path);
+            }
+        }
+    }
+
     /* Dev build fallback: isde-standard not yet installed; check source tree. */
     static char exe_dir[512] = {0};
     if (!exe_dir[0]) {

@@ -431,17 +431,23 @@ int isde_icon_theme_list(char ***names)
 }
 
 /* Find the base directory containing a theme (where index.theme lives) */
-static char *find_theme_base(const char *theme)
+/* Collect all base directories for a given icon theme.
+ * The freedesktop spec says a theme can span multiple data directories
+ * (e.g. /var/lib/flatpak/exports/share/icons/hicolor AND
+ * /usr/share/icons/hicolor), and all must be searched for icons. */
+static int find_all_theme_bases(const char *theme, char ***out)
 {
     char path[512];
+    int n = 0, cap = 4;
+    char **bases = malloc(cap * sizeof(char *));
 
     /* User icons */
     snprintf(path, sizeof(path), "%s/icons/%s/index.theme",
              isde_xdg_data_home(), theme);
     if (access(path, R_OK) == 0) {
-        snprintf(path, sizeof(path), "%s/icons/%s",
-                 isde_xdg_data_home(), theme);
-        return strdup(path);
+        if (n >= cap) { cap *= 2; bases = realloc(bases, cap * sizeof(char *)); }
+        snprintf(path, sizeof(path), "%s/icons/%s", isde_xdg_data_home(), theme);
+        bases[n++] = strdup(path);
     }
 
     /* ~/.icons (traditional) */
@@ -449,8 +455,9 @@ static char *find_theme_base(const char *theme)
     if (home) {
         snprintf(path, sizeof(path), "%s/.icons/%s/index.theme", home, theme);
         if (access(path, R_OK) == 0) {
+            if (n >= cap) { cap *= 2; bases = realloc(bases, cap * sizeof(char *)); }
             snprintf(path, sizeof(path), "%s/.icons/%s", home, theme);
-            return strdup(path);
+            bases[n++] = strdup(path);
         }
     }
 
@@ -464,15 +471,17 @@ static char *find_theme_base(const char *theme)
             snprintf(path, sizeof(path), "%.*s/icons/%s/index.theme",
                      (int)dlen, p, theme);
             if (access(path, R_OK) == 0) {
-                snprintf(path, sizeof(path), "%.*s/icons/%s",
-                         (int)dlen, p, theme);
-                return strdup(path);
+                if (n >= cap) { cap *= 2; bases = realloc(bases, cap * sizeof(char *)); }
+                snprintf(path, sizeof(path), "%.*s/icons/%s", (int)dlen, p, theme);
+                bases[n++] = strdup(path);
             }
         }
         p = colon ? colon + 1 : NULL;
     }
 
-    return NULL;
+    if (n == 0) { free(bases); *out = NULL; return 0; }
+    *out = bases;
+    return n;
 }
 
 /* Try to find an icon file in a single base directory, checking
@@ -489,15 +498,27 @@ static char *search_theme_base(const char *base, const char *icon_name)
     char *directories = NULL;
     char line[8192];
     int in_theme = 0;
+    int got_newline;
 
     while (fgets(line, sizeof(line), fp)) {
-        char *end = line + strlen(line);
-        while (end > line && isspace((unsigned char)end[-1])) { *--end = '\0'; }
+        size_t len = strlen(line);
+        got_newline = (len > 0 && line[len - 1] == '\n');
+        while (len > 0 && isspace((unsigned char)line[len - 1])) { line[--len] = '\0'; }
 
         if (strcmp(line, "[Icon Theme]") == 0) { in_theme = 1; continue; }
         if (line[0] == '[') { in_theme = 0; continue; }
         if (in_theme && strncmp(line, "Directories=", 12) == 0) {
             directories = strdup(line + 12);
+            /* The Directories= line can exceed the buffer (e.g. hicolor
+             * has ~11 KB).  Keep reading until we see a newline. */
+            while (!got_newline && fgets(line, sizeof(line), fp)) {
+                len = strlen(line);
+                got_newline = (len > 0 && line[len - 1] == '\n');
+                while (len > 0 && isspace((unsigned char)line[len - 1])) { line[--len] = '\0'; }
+                size_t old_len = strlen(directories);
+                directories = realloc(directories, old_len + len + 1);
+                memcpy(directories + old_len, line, len + 1);
+            }
             break;
         }
 
@@ -605,8 +626,9 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
     static int depth = 0;
     if (depth > 8) { return NULL; }
 
-    char *base = find_theme_base(theme);
-    if (!base) {
+    char **bases;
+    int nbases = find_all_theme_bases(theme, &bases);
+    if (nbases == 0) {
         /* Theme not found — try hicolor as last resort */
         if (strcmp(theme, "hicolor") != 0) {
             depth++;
@@ -617,16 +639,24 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
         return NULL;
     }
 
-    /* Search this theme's directories */
-    char *path = search_theme_base(base, icon_name);
+    /* Search all base directories for this theme */
+    char *path = NULL;
+    for (int i = 0; i < nbases && !path; i++) {
+        path = search_theme_base(bases[i], icon_name);
+    }
     if (path) {
-        free(base);
+        for (int i = 0; i < nbases; i++) free(bases[i]);
+        free(bases);
         return path;
     }
 
-    /* Follow Inherits= chain */
-    char *inherits = read_theme_inherits(base);
-    free(base);
+    /* Follow Inherits= chain (read from the first base that has one) */
+    char *inherits = NULL;
+    for (int i = 0; i < nbases && !inherits; i++) {
+        inherits = read_theme_inherits(bases[i]);
+    }
+    for (int i = 0; i < nbases; i++) free(bases[i]);
+    free(bases);
 
     if (inherits) {
         char *ip = inherits;
