@@ -660,24 +660,6 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         return;
     }
 
-    /* Coalesce: drain any queued motion events and use the latest one */
-    xcb_generic_event_t *next;
-    while ((next = xcb_poll_for_queued_event(wm->conn))) {
-        uint8_t type = next->response_type & ~0x80;
-        if (type == XCB_MOTION_NOTIFY) {
-            ev = (xcb_motion_notify_event_t *)next;
-        } else {
-            if (type == XCB_BUTTON_RELEASE) {
-                on_button_release(wm, (xcb_button_release_event_t *)next);
-                free(next);
-                return;
-            }
-            XtDispatchEvent(next, wm->conn);
-            free(next);
-            break;
-        }
-    }
-
     int dx = ev->root_x - wm->drag_start_x;
     int dy = ev->root_y - wm->drag_start_y;
 
@@ -969,11 +951,28 @@ void wm_run(Wm *wm)
         struct pollfd pfd = { .fd = xcb_fd, .events = POLLIN };
         poll(&pfd, 1, 50);
 
-        /* Drain all XCB events */
+        /* Drain all XCB events, coalescing consecutive motion events
+         * so a drag resize/move only processes the latest position. */
         xcb_generic_event_t *ev;
+        xcb_generic_event_t *held_motion = NULL;
         while ((ev = xcb_poll_for_event(wm->conn))) {
+            uint8_t type = ev->response_type & ~0x80;
+            if (type == XCB_MOTION_NOTIFY && wm->drag_mode != DRAG_NONE) {
+                free(held_motion);
+                held_motion = ev;
+                continue;
+            }
+            if (held_motion) {
+                dispatch_wm_event(wm, held_motion);
+                free(held_motion);
+                held_motion = NULL;
+            }
             dispatch_wm_event(wm, ev);
             free(ev);
+        }
+        if (held_motion) {
+            dispatch_wm_event(wm, held_motion);
+            free(held_motion);
         }
     }
 }

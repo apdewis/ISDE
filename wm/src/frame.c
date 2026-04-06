@@ -281,8 +281,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNwidth, title_w);              n++;
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNborderWidth, 0);              n++;
-        c->title_label = XtCreateManagedWidget("titleBar", labelWidgetClass,
-                                               c->shell, args, n);
+        c->title_label = XtCreateWidget("titleBar", labelWidgetClass,
+                                        c->shell, args, n);
 
         XtAddEventHandler(c->title_label,
                           ButtonPressMask,
@@ -297,8 +297,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-        c->minimize_btn = XtCreateManagedWidget("minimizeBtn", commandWidgetClass,
-                                                c->shell, args, n);
+        c->minimize_btn = XtCreateWidget("minimizeBtn", commandWidgetClass,
+                                         c->shell, args, n);
         XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
 
         /* Maximize / restore button */
@@ -310,8 +310,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-        c->maximize_btn = XtCreateManagedWidget("maximizeBtn", commandWidgetClass,
-                                                c->shell, args, n);
+        c->maximize_btn = XtCreateWidget("maximizeBtn", commandWidgetClass,
+                                         c->shell, args, n);
         XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
 
         /* Close button */
@@ -323,14 +323,22 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
-        c->close_btn = XtCreateManagedWidget("closeBtn", commandWidgetClass,
-                                             c->shell, args, n);
+        c->close_btn = XtCreateWidget("closeBtn", commandWidgetClass,
+                                      c->shell, args, n);
         XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
     }
 
-    /* Realize the shell so we get a window ID */
+    /* Realize the shell so we get a window ID.  Title bar widgets are
+     * created unmanaged so Shell's Resize proc never touches them —
+     * map them explicitly after realization. */
     frame_init_cursors(wm);
     XtRealizeWidget(c->shell);
+    if (c->decorated) {
+        XtMapWidget(c->title_label);
+        XtMapWidget(c->minimize_btn);
+        XtMapWidget(c->maximize_btn);
+        XtMapWidget(c->close_btn);
+    }
 
     /* Set correct initial positions and apply theme colors */
     frame_configure(wm, c);
