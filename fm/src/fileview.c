@@ -63,7 +63,7 @@ void fileview_init(Fm *fm)
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNallowVert, True);          n++;
-    XtSetArg(args[n], XtNallowHoriz, True);         n++;
+    XtSetArg(args[n], XtNallowHoriz, False);        n++;
     XtSetArg(args[n], XtNuseRight, True);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNflexGrow, 1);               n++;
