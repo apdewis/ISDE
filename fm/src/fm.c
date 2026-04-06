@@ -43,9 +43,7 @@ static void rename_result_cb(IsdeDialogResult result,
 
 void show_rename_dialog(Fm *fm)
 {
-    int sel = -1;
-    if (fm->iconview)
-        sel = IswIconViewGetSelected(fm->iconview);
+    int sel = fileview_get_selected(fm);
     if (sel < 0 || sel >= fm->nentries)
         return;
 
@@ -72,11 +70,11 @@ static void delete_result_cb(IsdeDialogResult result, void *data)
     free(dctx);
     fm->delete_shell = NULL;
 
-    if (result != ISDE_DIALOG_OK || !fm->iconview)
+    if (result != ISDE_DIALOG_OK)
         return;
 
     int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    int nsel = fileview_get_selected_items(fm, &indices);
     if (nsel > 0) {
         char **paths = malloc(nsel * sizeof(char *));
         int npaths = 0;
@@ -98,11 +96,8 @@ static void delete_result_cb(IsdeDialogResult result, void *data)
 
 static void fm_delete_confirm(Fm *fm, int permanent)
 {
-    if (!fm->iconview)
-        return;
-
     int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    int nsel = fileview_get_selected_items(fm, &indices);
     if (nsel <= 0) {
         free(indices);
         return;
@@ -199,11 +194,8 @@ static void ctx_new_folder(Fm *fm) {
     fm_refresh(fm);
 }
 static void ctx_restore(Fm *fm) {
-    if (!fm->iconview) {
-        return;
-    }
     int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    int nsel = fileview_get_selected_items(fm, &indices);
     for (int i = 0; i < nsel; i++) {
         int idx = indices[i];
         if (idx >= 0 && idx < fm->nentries) {
@@ -331,10 +323,7 @@ static void ctx_build_open_with(Fm *fm)
     fm->ow_count = 0;
     FmApp *app = fm->app_state;
 
-    if (!fm->iconview) {
-        return;
-    }
-    int sel = IswIconViewGetSelected(fm->iconview);
+    int sel = fileview_get_selected(fm);
     if (sel < 0 || sel >= fm->nentries) {
         return;
     }
@@ -488,9 +477,10 @@ void fm_navigate(Fm *fm, const char *path)
 
     char *new_path = strdup(path);
 
-    if (fm->iconview) {
+    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    }
+    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
+        IswListViewSetData(fm->listview, NULL, 0, 0);
 
     if (browser_read_dir(fm, new_path) != 0) {
         free(new_path);
@@ -517,9 +507,10 @@ void fm_refresh(Fm *fm)
 {
     fm_dismiss_context(fm);
 
-    if (fm->iconview) {
+    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
         IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    }
+    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
+        IswListViewSetData(fm->listview, NULL, 0, 0);
 
     browser_read_dir(fm, fm->cwd);
     fileview_populate(fm);
@@ -640,10 +631,10 @@ static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
-    if (!fm || !fm->iconview) {
+    if (!fm) {
         return;
     }
-    int sel = IswIconViewGetSelected(fm->iconview);
+    int sel = fileview_get_selected(fm);
     if (sel >= 0 && sel < fm->nentries) {
         browser_open_entry(fm, sel);
     }
@@ -660,6 +651,17 @@ static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Card
     fm_refresh(fm);
 }
 
+static void act_toggle_view(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (!fm) {
+        return;
+    }
+    fileview_set_mode(fm, fm->view_mode == FM_VIEW_ICON
+                         ? FM_VIEW_LIST : FM_VIEW_ICON);
+}
+
 static XtActionsRec fm_actions[] = {
     {"fm-copy",          act_copy},
     {"fm-cut",           act_cut},
@@ -673,6 +675,7 @@ static XtActionsRec fm_actions[] = {
     {"fm-refresh",       act_refresh},
     {"fm-open",          act_open},
     {"fm-toggle-hidden", act_toggle_hidden},
+    {"fm-toggle-view", act_toggle_view},
     {"fm-new-window", act_new_window},
     {"fm-close-window", act_close_window},
 };
@@ -691,6 +694,7 @@ static char fm_translations[] =
     "Alt<Key>Right:      fm-go-fwd()\n"
     "<Key>F5:            fm-refresh()\n"
     "Ctrl<Key>h:        fm-toggle-hidden()\n"
+    "Ctrl<Key>l:        fm-toggle-view()\n"
     "Ctrl<Key>n:        fm-new-window()\n";
 
 void fm_install_shortcuts(Widget w)
@@ -1037,8 +1041,11 @@ Fm *fm_window_new(FmApp *app, const char *path)
     /* Store Fm* for fm_from_widget lookups */
     fm_set_context(fm->toplevel, fm);
 
-    /* XDND init must be after realize */
+    /* XDND init must be after realize — re-apply keyboard shortcuts
+     * afterward since DnD translation overrides can clobber them. */
     dnd_init(fm);
+    fm_install_shortcuts(fm->iconview);
+    fm_install_shortcuts(fm->listview);
 
     fileview_populate(fm);
     navbar_update(fm);

@@ -50,10 +50,10 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
     fm->clipboard.paths = malloc(cap * sizeof(char *));
     fm->clipboard.npaths = 0;
 
-    /* Get selected indices from IconView */
-    if (fm->iconview) {
+    /* Get selected indices from active view */
+    {
         int *indices = NULL;
-        int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+        int nsel = fileview_get_selected_items(fm, &indices);
         for (int i = 0; i < nsel; i++) {
             int idx = indices[i];
             if (idx >= 0 && idx < fm->nentries) {

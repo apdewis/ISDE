@@ -17,6 +17,7 @@
 #include <ISW/FlexBox.h>
 #include <ISW/Viewport.h>
 #include <ISW/IconView.h>
+#include <ISW/ListView.h>
 #include <ISW/List.h>
 #include <ISW/StatusBar.h>
 #include <ISW/Dialog.h>
@@ -42,6 +43,19 @@
 #define FM_ICON_SIZE     48
 #define FM_HISTORY_MAX   64
 #define MAX_OPEN_WITH    16
+
+/* ---------- View mode ---------- */
+typedef enum {
+    FM_VIEW_ICON,
+    FM_VIEW_LIST
+} FmViewMode;
+
+/* ---------- Sort column ---------- */
+typedef enum {
+    FM_SORT_NAME,
+    FM_SORT_TYPE,
+    FM_SORT_SIZE
+} FmSortColumn;
 
 /* ---------- File entry ---------- */
 typedef struct {
@@ -171,8 +185,14 @@ typedef struct Fm {
     Widget         hbox;         /* inner FlexBox (horizontal) */
     Widget         viewport;
     Widget         iconview;
+    Widget         listview;
+    FmViewMode     view_mode;
     int            show_hidden;
     int            double_click;  /* 1 = double click to open, 0 = single */
+
+    /* Sort state (applies to both views) */
+    FmSortColumn               sort_col;
+    IswListViewSortDirection   sort_dir;
 
     /* Status bar */
     Widget         status_label;
@@ -219,6 +239,11 @@ typedef struct Fm {
     String        *fv_icons;
     char         **fv_trunc_names;
     int            fv_trunc_count;
+
+    /* ListView backing data (flat row-major: [row * 3 + col]) */
+    String        *lv_data;
+    char         **lv_size_strs;   /* heap-allocated size strings */
+    int            lv_nrows;
 
     /* Double-click tracking (per-window) */
     int            last_click_index;
@@ -282,6 +307,9 @@ void  browser_open_entry(Fm *fm, int index);
 void  fileview_init(Fm *fm);
 void  fileview_populate(Fm *fm);
 void  fileview_cleanup(Fm *fm);
+void  fileview_set_mode(Fm *fm, FmViewMode mode);
+int   fileview_get_selected(Fm *fm);
+int   fileview_get_selected_items(Fm *fm, int **indices_out);
 
 /* ---------- navbar.c ---------- */
 void  navbar_init(Fm *fm);

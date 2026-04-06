@@ -2,13 +2,14 @@
 /*
  * dnd.c — XDND drag-and-drop for the file manager
  *
- * Registers the IconView as both a drag source and drop target.
+ * Registers both IconView and ListView as drag sources; the shell
+ * is the drop target.
  * Drag: selected files can be dragged to other windows/apps.
  * Drop: files from other windows/apps can be dropped into the
  *        current directory.
  *
  * Drag initiation uses Xt translation overrides that chain with the
- * IconView's own SelectItem/BandDrag actions.
+ * view widget's own SelectItem/BandDrag actions.
  *
  * Uses standard XDND v5 move semantics: the drop target always
  * copies; the drag source deletes originals on move completion.
@@ -45,7 +46,8 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
-    xcb_atom_t uri_atom = ISWXdndInternType(fm->iconview, "text/uri-list");
+    Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
+    xcb_atom_t uri_atom = ISWXdndInternType(dnd_w, "text/uri-list");
 
     if (target_type != uri_atom) {
         return False;
@@ -105,7 +107,7 @@ static void start_drag(Fm *fm)
      * By this point SelectItem has already run on the Btn1Down event,
      * so the selection reflects the user's click. */
     int *indices = NULL;
-    int nsel = IswIconViewGetSelectedItems(fm->iconview, &indices);
+    int nsel = fileview_get_selected_items(fm, &indices);
     if (nsel <= 0) {
         free(indices);
         return;
@@ -127,7 +129,8 @@ static void start_drag(Fm *fm)
     }
 
     static xcb_atom_t uri_type;
-    uri_type = ISWXdndInternType(fm->iconview, "text/uri-list");
+    Widget drag_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
+    uri_type = ISWXdndInternType(drag_w, "text/uri-list");
 
     IswDragSourceDesc desc;
     memset(&desc, 0, sizeof(desc));
@@ -138,7 +141,7 @@ static void start_drag(Fm *fm)
     desc.finished    = drag_finished;
     desc.client_data = fm;
 
-    ISWXdndStartDrag(fm->iconview, &fm->dnd_saved_press, &desc);
+    ISWXdndStartDrag(drag_w, &fm->dnd_saved_press, &desc);
 }
 
 /* ---------- Xt action procedures for drag initiation ---------- */
@@ -202,8 +205,14 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
     }
 
     /* Only start drag if something is selected (not rubber band) */
-    int sel = IswIconViewGetSelected(fm->iconview);
+    int sel = fileview_get_selected(fm);
     if (sel < 0) {
+        return;
+    }
+
+    /* If the ListView is mid-band-select, let BandDrag handle it */
+    if (fm->view_mode == FM_VIEW_LIST && fm->listview &&
+        IswListViewBandActive(fm->listview)) {
         return;
     }
 
@@ -294,12 +303,17 @@ void dnd_init(Fm *fm)
     ISWXdndSetAcceptedActions(fm->toplevel,
                               ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 
-    /* Register drag actions and override IconView translations to
-     * chain our press/motion handlers before SelectItem/BandDrag. */
+    /* Register drag actions and override translations on both views
+     * to chain our press/motion handlers before the view's own actions.
+     * IconView uses SelectItem(); ListView uses SelectRow(). */
     XtAppAddActions(fm->app_state->app, dnd_actions, XtNumber(dnd_actions));
     XtOverrideTranslations(fm->iconview, XtParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectItem()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"));
+    XtOverrideTranslations(fm->listview, XtParseTranslationTable(
+        "<Btn1Down>:   fm-dnd-press() SelectRow()\n"
+        "<Btn1Motion>: fm-dnd-check() BandDrag()\n"
+        "<Btn1Up>:     BandFinish()\n"));
 }
 
 void dnd_cleanup(Fm *fm)
