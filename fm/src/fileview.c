@@ -290,6 +290,7 @@ void fileview_init(Fm *fm)
     XtSetArg(args[n], XtNiconSize, 32);        n++;
     XtSetArg(args[n], XtNitemSpacing, 16);     n++;
     XtSetArg(args[n], XtNmultiSelect, True);   n++;
+    XtSetArg(args[n], "labelLines", 3);         n++;
     fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
                                          fm->viewport, args, n);
     XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
@@ -346,33 +347,15 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
 void fileview_populate(Fm *fm)
 {
     if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
-        /* Free previous truncated names */
-        for (int i = 0; i < fm->fv_trunc_count; i++) {
-            free(fm->fv_trunc_names[i]);
-        }
-        free(fm->fv_trunc_names);
         free(fm->fv_labels);
         free(fm->fv_icons);
 
-        #define MAX_LABEL_LEN 12
-
-        fm->fv_labels = malloc((fm->nentries + 1) * sizeof(String));
-        fm->fv_icons  = malloc((fm->nentries + 1) * sizeof(String));
-        fm->fv_trunc_names = malloc(fm->nentries * sizeof(char *));
-        fm->fv_trunc_count = fm->nentries;
+        fm->fv_labels = malloc(fm->nentries * sizeof(String));
+        fm->fv_icons  = malloc(fm->nentries * sizeof(String));
 
         for (int i = 0; i < fm->nentries; i++) {
-            const char *name = fm->entries[i].name;
-            if (strlen(name) > MAX_LABEL_LEN) {
-                fm->fv_trunc_names[i] = malloc(MAX_LABEL_LEN + 4);
-                memcpy(fm->fv_trunc_names[i], name, MAX_LABEL_LEN);
-                strcpy(fm->fv_trunc_names[i] + MAX_LABEL_LEN, "...");
-                fm->fv_labels[i] = fm->fv_trunc_names[i];
-            } else {
-                fm->fv_trunc_names[i] = NULL;
-                fm->fv_labels[i] = (String)name;
-            }
-            fm->fv_icons[i] = (String)fm->entries[i].mime_icon;
+            fm->fv_labels[i] = (String)fm->entries[i].name;
+            fm->fv_icons[i]  = (String)fm->entries[i].mime_icon;
         }
         IswIconViewSetItems(fm->iconview, fm->fv_labels, fm->fv_icons,
                             fm->nentries);
@@ -408,16 +391,10 @@ void fileview_populate(Fm *fm)
 
 void fileview_cleanup(Fm *fm)
 {
-    for (int i = 0; i < fm->fv_trunc_count; i++) {
-        free(fm->fv_trunc_names[i]);
-    }
-    free(fm->fv_trunc_names);
     free(fm->fv_labels);
     free(fm->fv_icons);
-    fm->fv_trunc_names = NULL;
     fm->fv_labels = NULL;
     fm->fv_icons = NULL;
-    fm->fv_trunc_count = 0;
 
     lv_free_data(fm);
 }

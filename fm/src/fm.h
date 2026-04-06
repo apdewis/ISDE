@@ -241,8 +241,6 @@ typedef struct Fm {
     /* Fileview backing arrays (per-window) */
     String        *fv_labels;
     String        *fv_icons;
-    char         **fv_trunc_names;
-    int            fv_trunc_count;
 
     /* ListView backing data (flat row-major: [row * 3 + col]) */
     String        *lv_data;
