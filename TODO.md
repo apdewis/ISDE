@@ -1,5 +1,18 @@
 # ISDE — TODO
 
+## Display manager
+
+This should:
+ - Integrate with seatd for session management
+ - Login screen with clock, username + password boxes plus shutdown, sleep, switch user buttons
+ - Lock screen that is the login screen but with the switch user option present
+ - handle the logout/shutdown/etc confirmation fullscreen panel
+ - have a d-bus interface for triggering lock, the confirmation panel etc
+
+## Keybinding settings
+
+Add keybinding management to isde-settings and ensure apps accept user settings externally.
+
 ## Extention architecture.
 
 Extensions should be implemented as subprocesses with secure IPC, for each part of ISDE the required RPC or similar calls should be determined.
