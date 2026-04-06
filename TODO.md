@@ -8,6 +8,7 @@ This should:
  - Lock screen that is the login screen but with the switch user option present
  - handle the logout/shutdown/etc confirmation fullscreen panel
  - have a d-bus interface for triggering lock, the confirmation panel etc
+ - Load available sessions via the desktop/session format
 
 ## Keybinding settings
 
