@@ -7,6 +7,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ---------- view mode callbacks ---------- */
+
+static void icon_view_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    fileview_set_mode(fm, FM_VIEW_ICON);
+}
+
+static void list_view_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    fileview_set_mode(fm, FM_VIEW_LIST);
+}
+
 /* Navigate to a history entry without pushing new history */
 static void navigate_history(Fm *fm, int pos)
 {
@@ -104,6 +120,12 @@ void navbar_init(Fm *fm)
     XtSetArg(args[n], XtNborderWidth, 0);           n++;
     fm->path_label = XtCreateManagedWidget("pathLabel", labelWidgetClass,
                                            fm->nav_box, args, n);
+
+    /* View mode toggle buttons */
+    fm->icon_view_btn = make_nav_button(fm, "iconViewBtn", "view-grid",
+                                        "Grid", icon_view_cb);
+    fm->list_view_btn = make_nav_button(fm, "listViewBtn", "view-list",
+                                        "List", list_view_cb);
 }
 
 void navbar_update(Fm *fm)

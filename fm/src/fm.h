@@ -175,6 +175,10 @@ typedef struct Fm {
     Widget         up_btn;
     Widget         path_label;
 
+    /* View mode buttons */
+    Widget         icon_view_btn;
+    Widget         list_view_btn;
+
     /* Places sidebar */
     Widget         places_vp;
     Widget         places_box;
