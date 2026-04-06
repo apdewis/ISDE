@@ -289,6 +289,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNwidth, title_w);              n++;
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNborderWidth, 0);              n++;
+        XtSetArg(args[n], XtNresize, False);               n++;
         c->title_label = XtCreateWidget("titleBar", labelWidgetClass,
                                         c->shell, args, n);
 
