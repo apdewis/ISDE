@@ -5,6 +5,7 @@
  * Current bindings:
  *   Alt+F4       — close focused window
  *   Alt+Tab      — cycle focus to next window
+ *   Shift+Alt+Tab — cycle focus to previous window
  */
 #include "wm.h"
 
@@ -52,6 +53,7 @@ void wm_keys_setup(Wm *wm)
 {
     grab_key(wm, XK_F4,  XCB_MOD_MASK_1);  /* Alt+F4 */
     grab_key(wm, XK_Tab, XCB_MOD_MASK_1);  /* Alt+Tab */
+    grab_key(wm, XK_Tab, XCB_MOD_MASK_1 | XCB_MOD_MASK_SHIFT); /* Shift+Alt+Tab */
 
     /* Ctrl+Super+Arrow — desktop navigation */
     uint16_t desk_mod = XCB_MOD_MASK_CONTROL | MOD_SUPER;
@@ -82,6 +84,34 @@ static void cycle_focus(Wm *wm)
     wm_focus_client(wm, next);
 }
 
+static void cycle_focus_reverse(Wm *wm)
+{
+    if (!wm->clients) {
+        return;
+    }
+
+    if (!wm->focused) {
+        wm_focus_client(wm, wm->clients);
+        return;
+    }
+
+    /* Find the previous client in the singly-linked list */
+    WmClient *prev = NULL;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->next == wm->focused) {
+            prev = c;
+            break;
+        }
+    }
+
+    /* If focused is the head, wrap to the tail */
+    if (!prev) {
+        for (prev = wm->clients; prev->next; prev = prev->next)
+            ;
+    }
+    wm_focus_client(wm, prev);
+}
+
 void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
 {
     xcb_keysym_t sym = xcb_key_symbols_get_keysym(wm->keysyms,
@@ -98,7 +128,11 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
     }
 
     if (sym == XK_Tab && (mod & XCB_MOD_MASK_1)) {
-        cycle_focus(wm);
+        if (mod & XCB_MOD_MASK_SHIFT) {
+            cycle_focus_reverse(wm);
+        } else {
+            cycle_focus(wm);
+        }
         return;
     }
 
