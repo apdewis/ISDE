@@ -177,9 +177,10 @@ char *isde_icon_find(const char *category, const char *name)
         }
     }
 
-    /* Freedesktop fallback: /usr/share/pixmaps (unthemed legacy icons) */
+    /* Freedesktop fallback: /usr/share/pixmaps (unthemed legacy icons).
+     * Only check formats ISW can render (SVG and PNG). */
     {
-        const char *exts[] = { ".svg", ".png", ".xpm", NULL };
+        const char *exts[] = { ".svg", ".png", NULL };
         char pix_path[512];
         for (int i = 0; exts[i]; i++) {
             snprintf(pix_path, sizeof(pix_path), "/usr/share/pixmaps/%s%s",
