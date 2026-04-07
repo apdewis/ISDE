@@ -298,7 +298,14 @@ void dm_run(Dm *dm)
         }
 
         /* Handle D-Bus */
-        if (dbus_idx >= 0 && (pfds[dbus_idx].revents & POLLIN)) {
+        if (dbus_idx < 0) {
+            static int dbus_warn_once = 0;
+            if (!dbus_warn_once) {
+                fprintf(stderr, "isde-dm: D-Bus fd not polled (fd=%d)\n",
+                        dbus_fd);
+                dbus_warn_once = 1;
+            }
+        } else if (pfds[dbus_idx].revents & POLLIN) {
             dm_dbus_dispatch(dm);
         }
 
@@ -368,21 +375,21 @@ void dm_lock_session(Dm *dm)
         return;  /* already locked */
     }
     if (dm->session_pid == 0 || !dm->session_user) {
-        return;  /* no session to lock */
+        fprintf(stderr, "isde-dm: lock ignored — no active session "
+                "(pid=%d user=%s)\n",
+                (int)dm->session_pid,
+                dm->session_user ? dm->session_user : "(null)");
+        return;
     }
 
     fprintf(stderr, "isde-dm: locking session for '%s'\n", dm->session_user);
     dm->locked = 1;
 
-    /* Start greeter on the same X server if not already running */
+    /* Start greeter in lock mode — dm_greeter_start checks dm->locked
+     * and passes --lock <username> to the greeter process. */
     if (dm->greeter_pid == 0) {
         dm_greeter_start(dm);
     }
-
-    /* Send MODE_LOCK to greeter */
-    char msg[512];
-    snprintf(msg, sizeof(msg), "MODE_LOCK %s", dm->session_user);
-    dm_ipc_send(dm, msg);
 
     /* Switch VT to greeter */
     if (!dm->dev_mode && dm->seat) {

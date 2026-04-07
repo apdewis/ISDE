@@ -78,6 +78,9 @@ handle_method(DBusConnection *conn, DBusMessage *msg, void *userdata)
 
     DBusMessage *reply = NULL;
 
+    fprintf(stderr, "isde-dm: D-Bus method: %s (iface=%s)\n",
+            method, iface ? iface : "(null)");
+
     if (strcmp(method, "Lock") == 0) {
         dm_lock_session(dm);
         reply = dbus_message_new_method_return(msg);
@@ -163,6 +166,8 @@ void dm_dbus_dispatch(Dm *dm)
     if (!dm->dbus) {
         return;
     }
+    /* Read incoming data from the bus, then dispatch queued messages */
+    dbus_connection_read_write(dm->dbus, 0);
     while (dbus_connection_dispatch(dm->dbus) ==
            DBUS_DISPATCH_DATA_REMAINS) {
         /* drain */

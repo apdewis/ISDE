@@ -92,6 +92,7 @@ void greeter_cleanup(Greeter *g);
 void greeter_set_error(Greeter *g, const char *msg);
 void greeter_clear_error(Greeter *g);
 void greeter_enter_login_mode(Greeter *g);
+void greeter_enter_lock_mode(Greeter *g, const char *username);
 
 /* ---------- clock.c ---------- */
 void greeter_clock_init(Greeter *g);

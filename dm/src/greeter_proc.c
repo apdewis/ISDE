@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <pwd.h>
 #include <time.h>
 
@@ -17,6 +18,12 @@ int dm_greeter_start(Dm *dm)
 {
     if (dm->greeter_pid > 0) {
         return 0;  /* already running */
+    }
+
+    /* Determine if we're launching for lock screen */
+    const char *lock_user = NULL;
+    if (dm->locked && dm->session_user) {
+        lock_user = dm->session_user;
     }
 
     pid_t pid = fork();
@@ -44,14 +51,20 @@ int dm_greeter_start(Dm *dm)
          * and setuid/setgid before exec.
          */
 
-        execlp(dm->greeter_cmd, dm->greeter_cmd, (char *)NULL);
+        if (lock_user) {
+            execlp(dm->greeter_cmd, dm->greeter_cmd,
+                   "--lock", lock_user, (char *)NULL);
+        } else {
+            execlp(dm->greeter_cmd, dm->greeter_cmd, (char *)NULL);
+        }
         fprintf(stderr, "isde-dm: exec greeter '%s' failed: %s\n",
                 dm->greeter_cmd, strerror(errno));
         _exit(1);
     }
 
     dm->greeter_pid = pid;
-    fprintf(stderr, "isde-dm: greeter started (pid %d)\n", pid);
+    fprintf(stderr, "isde-dm: greeter started (pid %d)%s\n", pid,
+            lock_user ? " [lock mode]" : "");
     return 0;
 }
 
@@ -61,15 +74,26 @@ void dm_greeter_stop(Dm *dm)
         return;
     }
 
-    kill(dm->greeter_pid, SIGTERM);
+    pid_t pid = dm->greeter_pid;
+    kill(pid, SIGTERM);
 
     /* Wait briefly for graceful exit */
-    struct timespec ts = { .tv_sec = 0, .tv_nsec = 500000000 };
-    nanosleep(&ts, NULL);
-
-    if (dm->greeter_pid > 0) {
-        kill(dm->greeter_pid, SIGKILL);
+    int exited = 0;
+    for (int i = 0; i < 10; i++) {
+        if (waitpid(pid, NULL, WNOHANG) == pid) {
+            exited = 1;
+            break;
+        }
+        struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 }; /* 50ms */
+        nanosleep(&ts, NULL);
     }
+
+    if (!exited) {
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, 0);
+    }
+
+    dm->greeter_pid = 0;
 
     /* Close IPC client connection if any */
     if (dm->ipc_client_fd >= 0) {

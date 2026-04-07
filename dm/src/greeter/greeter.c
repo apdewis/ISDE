@@ -180,8 +180,6 @@ static void ipc_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     g->ipc_buf_len = remaining;
 }
 
-static void enter_lock_mode(Greeter *g, const char *username);
-
 static void handle_ipc_line(Greeter *g, const char *line)
 {
     if (strcmp(line, "AUTH_OK") == 0) {
@@ -197,7 +195,7 @@ static void handle_ipc_line(Greeter *g, const char *line)
         XtSetArg(args[0], XtNstring, "");
         XtSetValues(g->pass_text, args, 1);
     } else if (strncmp(line, "MODE_LOCK ", 10) == 0) {
-        enter_lock_mode(g, line + 10);
+        greeter_enter_lock_mode(g, line + 10);
     } else if (strcmp(line, "MODE_LOGIN") == 0) {
         /* Switch back to login mode (not typical, but handle it) */
         greeter_enter_login_mode(g);
@@ -596,7 +594,7 @@ void greeter_clear_error(Greeter *g)
 
 /* ---------- Lock mode ---------- */
 
-static void enter_lock_mode(Greeter *g, const char *username)
+void greeter_enter_lock_mode(Greeter *g, const char *username)
 {
     fprintf(stderr, "isde-greeter: entering lock mode for '%s'\n", username);
     g->mode_lock = 1;
