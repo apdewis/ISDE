@@ -38,6 +38,10 @@ int isde_ipc_decode(IsdeIpc *ipc, xcb_generic_event_t *ev,
 #define ISDE_CMD_QUIT       1  /* Request component to exit cleanly */
 #define ISDE_CMD_RELOAD     2  /* Request config reload */
 #define ISDE_CMD_LOGOUT     3  /* Session logout */
+#define ISDE_CMD_LOCK       4  /* Request screen lock */
+#define ISDE_CMD_SHUTDOWN   5  /* Request shutdown (with confirmation) */
+#define ISDE_CMD_REBOOT     6  /* Request reboot (with confirmation) */
+#define ISDE_CMD_SUSPEND    7  /* Request suspend */
 
 #ifdef __cplusplus
 }

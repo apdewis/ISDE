@@ -21,6 +21,7 @@
 #define XK_Right   0xff53
 #define XK_Down    0xff54
 #define XK_Super_L 0xffeb
+#define XK_l       0x006c
 
 /* Mod4 = Super key */
 #define MOD_SUPER  XCB_MOD_MASK_4
@@ -61,6 +62,9 @@ void wm_keys_setup(Wm *wm)
     grab_key(wm, XK_Right, desk_mod);
     grab_key(wm, XK_Up,    desk_mod);
     grab_key(wm, XK_Down,  desk_mod);
+
+    /* Super+L — lock screen */
+    grab_key(wm, XK_l, MOD_SUPER);
 
     xcb_flush(wm->conn);
 }
@@ -133,6 +137,12 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
         } else {
             cycle_focus(wm);
         }
+        return;
+    }
+
+    /* Super+L — lock screen */
+    if (sym == XK_l && (mod & MOD_SUPER)) {
+        isde_ipc_send(wm->ipc, ISDE_CMD_LOCK, 0, 0, 0, 0);
         return;
     }
 

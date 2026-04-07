@@ -78,6 +78,10 @@ typedef struct Greeter {
     int             allow_reboot;
     int             allow_suspend;
 
+    /* Mode: 0 = login, 1 = lock screen */
+    int             mode_lock;
+    char           *lock_user;     /* username for lock mode */
+
     int             running;
 } Greeter;
 
@@ -87,6 +91,7 @@ void greeter_run(Greeter *g);
 void greeter_cleanup(Greeter *g);
 void greeter_set_error(Greeter *g, const char *msg);
 void greeter_clear_error(Greeter *g);
+void greeter_enter_login_mode(Greeter *g);
 
 /* ---------- clock.c ---------- */
 void greeter_clock_init(Greeter *g);

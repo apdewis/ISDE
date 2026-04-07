@@ -171,14 +171,19 @@ static void handle_auth(Dm *dm, const char *args)
         desktop = dm->default_session;
     }
 
-    fprintf(stderr, "isde-dm: auth success for '%s', session '%s'\n",
-            username, desktop);
-
+    fprintf(stderr, "isde-dm: auth success for '%s'\n", username);
     dm_ipc_send(dm, "AUTH_OK");
 
-    /* Stop greeter and start session */
-    dm_greeter_stop(dm);
-    dm_session_start(dm, username, desktop);
+    if (dm->locked) {
+        /* Lock screen: verify the user matches, then unlock */
+        if (dm->session_user && strcmp(username, dm->session_user) == 0) {
+            dm_unlock_session(dm);
+        }
+    } else {
+        /* Normal login: stop greeter and start session */
+        dm_greeter_stop(dm);
+        dm_session_start(dm, username, desktop);
+    }
 }
 
 static void handle_session(Dm *dm, const char *args)
@@ -240,6 +245,8 @@ static void dispatch_message(Dm *dm, const char *line)
         if (dm->allow_suspend) {
             dm_power_suspend(dm);
         }
+    } else if (strcmp(line, "CANCEL_LOCK") == 0) {
+        dm_unlock_session(dm);
     } else {
         fprintf(stderr, "isde-dm: unknown IPC message: %s\n", line);
     }

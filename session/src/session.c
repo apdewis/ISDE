@@ -13,6 +13,35 @@
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
+#include <dbus/dbus.h>
+
+/* ---------- DM D-Bus helper ---------- */
+
+static void dm_dbus_call(const char *method)
+{
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+    if (!conn) {
+        fprintf(stderr, "isde-session: D-Bus: %s\n",
+                err.message ? err.message : "cannot connect");
+        dbus_error_free(&err);
+        return;
+    }
+
+    DBusMessage *msg = dbus_message_new_method_call(
+        "org.isde.DisplayManager",
+        "/org/isde/DisplayManager",
+        "org.isde.DisplayManager",
+        method);
+    if (msg) {
+        dbus_connection_send(conn, msg, NULL);
+        dbus_connection_flush(conn);
+        dbus_message_unref(msg);
+    }
+    dbus_connection_unref(conn);
+    dbus_error_free(&err);
+}
 
 /* ---------- apply input settings from config ---------- */
 
@@ -332,6 +361,18 @@ void session_run(Session *s)
                         if (cmd == ISDE_CMD_LOGOUT) {
                             fprintf(stderr, "isde-session: logout requested\n");
                             s->running = 0;
+                        } else if (cmd == ISDE_CMD_LOCK) {
+                            fprintf(stderr, "isde-session: lock requested\n");
+                            dm_dbus_call("Lock");
+                        } else if (cmd == ISDE_CMD_SHUTDOWN) {
+                            fprintf(stderr, "isde-session: shutdown requested\n");
+                            dm_dbus_call("Shutdown");
+                        } else if (cmd == ISDE_CMD_REBOOT) {
+                            fprintf(stderr, "isde-session: reboot requested\n");
+                            dm_dbus_call("Reboot");
+                        } else if (cmd == ISDE_CMD_SUSPEND) {
+                            fprintf(stderr, "isde-session: suspend requested\n");
+                            dm_dbus_call("Suspend");
                         }
                     }
                     free(ev);

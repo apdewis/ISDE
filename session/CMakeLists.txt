@@ -13,6 +13,7 @@ target_link_libraries(isde-session
     PkgConfig::XCB_XKB
     PkgConfig::SM
     PkgConfig::ICE
+    PkgConfig::DBUS
 )
 
 install(TARGETS isde-session RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

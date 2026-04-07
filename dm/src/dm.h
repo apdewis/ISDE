@@ -63,6 +63,11 @@ struct Dm {
     char       *session_desktop;   /* .desktop file name */
     int         session_vt;        /* VT for user session */
 
+    /* Lock state */
+    int         locked;            /* 1 if session is locked */
+    int         lock_timeout;      /* idle seconds before auto-lock (0=disabled) */
+    time_t      session_active_since; /* monotonic time of last unlock/session start */
+
     /* IPC socket */
     int         ipc_listen_fd;     /* listening socket */
     int         ipc_client_fd;     /* connected greeter fd (-1 if none) */
@@ -128,5 +133,20 @@ int  dm_power_shutdown(Dm *dm);
 int  dm_power_reboot(Dm *dm);
 int  dm_power_suspend(Dm *dm);
 void dm_kill_sessions(Dm *dm);
+
+/* ---------- dbus.c ---------- */
+int  dm_dbus_init(Dm *dm);
+void dm_dbus_cleanup(Dm *dm);
+void dm_dbus_dispatch(Dm *dm);
+int  dm_dbus_get_fd(Dm *dm);
+void dm_dbus_emit_session_started(Dm *dm, const char *username,
+                                  const char *session);
+void dm_dbus_emit_session_ended(Dm *dm, const char *username);
+void dm_dbus_emit_locked(Dm *dm);
+void dm_dbus_emit_unlocked(Dm *dm);
+
+/* ---------- lock ---------- */
+void dm_lock_session(Dm *dm);
+void dm_unlock_session(Dm *dm);
 
 #endif /* ISDE_DM_H */

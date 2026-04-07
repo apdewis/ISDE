@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 
 /* ---------- signal self-pipe ---------- */
 
@@ -83,6 +84,7 @@ static void load_config(Dm *dm)
     }
 
     dm->dev_mode = isde_config_bool(root, "dev_mode", 0);
+    dm->lock_timeout = isde_config_int(root, "lock_timeout", 0);
 
     /* In dev mode, default to Xephyr if xserver wasn't explicitly set */
     if (dm->dev_mode && !xsrv) {
@@ -194,6 +196,12 @@ int dm_init(Dm *dm)
         return -1;
     }
 
+    /* D-Bus system bus — non-fatal if unavailable */
+    if (dm_dbus_init(dm) != 0) {
+        fprintf(stderr, "isde-dm: D-Bus unavailable, "
+                "Lock/Shutdown via D-Bus disabled\n");
+    }
+
     /* Start X server on greeter VT (no VT arg in dev mode) */
     dm->greeter_vt = dm->dev_mode ? 0 : 7;
     if (dm_xserver_start(dm, dm->greeter_vt) != 0) {
@@ -220,7 +228,7 @@ int dm_init(Dm *dm)
 void dm_run(Dm *dm)
 {
     while (dm->running) {
-        struct pollfd pfds[4];
+        struct pollfd pfds[5];
         int nfds = 0;
 
         /* Signal self-pipe */
@@ -252,6 +260,16 @@ void dm_run(Dm *dm)
             nfds++;
         }
 
+        /* D-Bus system bus fd */
+        int dbus_idx = -1;
+        int dbus_fd = dm_dbus_get_fd(dm);
+        if (dbus_fd >= 0) {
+            dbus_idx = nfds;
+            pfds[nfds].fd = dbus_fd;
+            pfds[nfds].events = POLLIN;
+            nfds++;
+        }
+
         int ret = poll(pfds, nfds, 1000);
         if (ret < 0) {
             if (errno == EINTR) {
@@ -279,6 +297,20 @@ void dm_run(Dm *dm)
             }
         }
 
+        /* Handle D-Bus */
+        if (dbus_idx >= 0 && (pfds[dbus_idx].revents & POLLIN)) {
+            dm_dbus_dispatch(dm);
+        }
+
+        /* Idle timeout lock check */
+        if (dm->lock_timeout > 0 && dm->session_pid > 0 &&
+            !dm->locked && dm->session_active_since > 0) {
+            time_t now = time(NULL);
+            if (now - dm->session_active_since >= dm->lock_timeout) {
+                dm_lock_session(dm);
+            }
+        }
+
         /* If the greeter died and no session is running, restart it */
         if (dm->greeter_pid == 0 && dm->session_pid == 0 &&
             dm->xserver_pid != 0) {
@@ -303,6 +335,7 @@ void dm_cleanup(Dm *dm)
     dm_greeter_stop(dm);
     dm_xserver_stop(dm);
     dm_ipc_cleanup(dm);
+    dm_dbus_cleanup(dm);
     dm_seat_cleanup(dm);
 
     if (dm->sig_pipe[0] >= 0) { close(dm->sig_pipe[0]); }
@@ -325,4 +358,56 @@ void dm_cleanup(Dm *dm)
     unlink(path);
     snprintf(path, sizeof(path), "%s/Xauthority", dm->plat->rundir);
     unlink(path);
+}
+
+/* ---------- lock / unlock ---------- */
+
+void dm_lock_session(Dm *dm)
+{
+    if (dm->locked) {
+        return;  /* already locked */
+    }
+    if (dm->session_pid == 0 || !dm->session_user) {
+        return;  /* no session to lock */
+    }
+
+    fprintf(stderr, "isde-dm: locking session for '%s'\n", dm->session_user);
+    dm->locked = 1;
+
+    /* Start greeter on the same X server if not already running */
+    if (dm->greeter_pid == 0) {
+        dm_greeter_start(dm);
+    }
+
+    /* Send MODE_LOCK to greeter */
+    char msg[512];
+    snprintf(msg, sizeof(msg), "MODE_LOCK %s", dm->session_user);
+    dm_ipc_send(dm, msg);
+
+    /* Switch VT to greeter */
+    if (!dm->dev_mode && dm->seat) {
+        libseat_switch_session(dm->seat, dm->greeter_vt);
+    }
+
+    dm_dbus_emit_locked(dm);
+}
+
+void dm_unlock_session(Dm *dm)
+{
+    if (!dm->locked) {
+        return;
+    }
+
+    fprintf(stderr, "isde-dm: unlocking session\n");
+    dm->locked = 0;
+    dm->session_active_since = time(NULL);  /* reset idle timer */
+
+    /* Stop greeter and switch back to session VT */
+    dm_greeter_stop(dm);
+
+    if (!dm->dev_mode && dm->seat && dm->session_vt > 0) {
+        libseat_switch_session(dm->seat, dm->session_vt);
+    }
+
+    dm_dbus_emit_unlocked(dm);
 }

@@ -9,6 +9,7 @@ add_executable(isde-dm
     src/session.c
     src/greeter_proc.c
     src/power.c
+    src/dbus.c
 )
 
 target_compile_definitions(isde-dm PRIVATE
@@ -40,7 +41,9 @@ install(TARGETS isde-dm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES data/isde-dm.pam DESTINATION "${DM_PAM_DIR}" RENAME isde-dm)
 install(FILES data/org.isde.DisplayManager.conf
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dbus-1/system.d")
-install(FILES data/isde-dm.toml DESTINATION "${CMAKE_INSTALL_FULL_SYSCONFDIR}/isde")
+install(FILES data/isde-dm.toml
+        DESTINATION "${CMAKE_INSTALL_FULL_SYSCONFDIR}/isde"
+        RENAME isde-dm.toml.example)
 
 # --- isde-greeter (unprivileged UI) ---
 

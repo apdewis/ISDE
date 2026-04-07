@@ -321,19 +321,27 @@ int dm_session_start(Dm *dm, const char *username,
 
     free(exec_cmd);
 
+    dm->session_active_since = time(NULL);
+
     fprintf(stderr, "isde-dm: session started for '%s' (pid %d)\n",
             username, pid);
+
+    dm_dbus_emit_session_started(dm, username, desktop_file);
     return 0;
 }
 
 void dm_session_cleanup(Dm *dm)
 {
+    const char *user = dm->session_user ? dm->session_user : "";
+    dm_dbus_emit_session_ended(dm, user);
+
     dm->session_pid = 0;
+    dm->locked = 0;
     free(dm->session_user);
     dm->session_user = NULL;
 
     fprintf(stderr, "isde-dm: session ended, restarting greeter\n");
 
-    /* Restart greeter */
+    /* Restart greeter in login mode */
     dm_greeter_start(dm);
 }

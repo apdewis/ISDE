@@ -180,17 +180,27 @@ static void ipc_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     g->ipc_buf_len = remaining;
 }
 
+static void enter_lock_mode(Greeter *g, const char *username);
+
 static void handle_ipc_line(Greeter *g, const char *line)
 {
     if (strcmp(line, "AUTH_OK") == 0) {
         fprintf(stderr, "isde-greeter: auth success\n");
-        g->running = 0;  /* Daemon will kill us and start the session */
+        if (g->mode_lock) {
+            /* Daemon handles unlock; we just exit */
+        }
+        g->running = 0;
     } else if (strncmp(line, "AUTH_FAIL ", 10) == 0) {
         greeter_set_error(g, line + 10);
         /* Clear password field */
         Arg args[20];
         XtSetArg(args[0], XtNstring, "");
         XtSetValues(g->pass_text, args, 1);
+    } else if (strncmp(line, "MODE_LOCK ", 10) == 0) {
+        enter_lock_mode(g, line + 10);
+    } else if (strcmp(line, "MODE_LOGIN") == 0) {
+        /* Switch back to login mode (not typical, but handle it) */
+        greeter_enter_login_mode(g);
     } else {
         fprintf(stderr, "isde-greeter: unknown IPC: %s\n", line);
     }
@@ -563,6 +573,7 @@ void greeter_cleanup(Greeter *g)
 
     free(g->clock_time_fmt);
     free(g->clock_date_fmt);
+    free(g->lock_user);
 
     if (g->toplevel) {
         XtDestroyWidget(g->toplevel);
@@ -581,4 +592,85 @@ void greeter_clear_error(Greeter *g)
     Arg args[20];
     XtSetArg(args[0], XtNlabel, " ");
     XtSetValues(g->error_label, args, 1);
+}
+
+/* ---------- Lock mode ---------- */
+
+static void enter_lock_mode(Greeter *g, const char *username)
+{
+    fprintf(stderr, "isde-greeter: entering lock mode for '%s'\n", username);
+    g->mode_lock = 1;
+    free(g->lock_user);
+    g->lock_user = strdup(username);
+
+    Arg args[20];
+
+    /* Pre-fill username and make it read-only */
+    XtSetArg(args[0], XtNstring, username);
+    XtSetValues(g->user_text, args, 1);
+    XtSetSensitive(g->user_text, False);
+
+    /* Clear password and focus it */
+    XtSetArg(args[0], XtNstring, "");
+    XtSetValues(g->pass_text, args, 1);
+
+    /* Hide session selector in lock mode */
+    XtUnmanageChild(g->session_label);
+    XtUnmanageChild(g->session_btn);
+
+    /* Hide power buttons in lock mode */
+    if (g->shutdown_btn) { XtUnmanageChild(g->shutdown_btn); }
+    if (g->reboot_btn)   { XtUnmanageChild(g->reboot_btn); }
+    if (g->suspend_btn)  { XtUnmanageChild(g->suspend_btn); }
+
+    greeter_clear_error(g);
+
+    /* Grab keyboard and pointer for lock screen security */
+    xcb_connection_t *conn = XtDisplay(g->toplevel);
+    xcb_window_t win = XtWindow(g->shell);
+
+    xcb_grab_keyboard(conn, 1, win, XCB_CURRENT_TIME,
+                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    xcb_grab_pointer(conn, 1, win,
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE |
+                     XCB_EVENT_MASK_POINTER_MOTION,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     win, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
+}
+
+void greeter_enter_login_mode(Greeter *g)
+{
+    g->mode_lock = 0;
+    free(g->lock_user);
+    g->lock_user = NULL;
+
+    Arg args[20];
+
+    /* Clear and re-enable username field */
+    XtSetArg(args[0], XtNstring, "");
+    XtSetValues(g->user_text, args, 1);
+    XtSetSensitive(g->user_text, True);
+
+    /* Clear password */
+    XtSetArg(args[0], XtNstring, "");
+    XtSetValues(g->pass_text, args, 1);
+
+    /* Show session selector */
+    XtManageChild(g->session_label);
+    XtManageChild(g->session_btn);
+
+    /* Show power buttons */
+    if (g->shutdown_btn) { XtManageChild(g->shutdown_btn); }
+    if (g->reboot_btn)   { XtManageChild(g->reboot_btn); }
+    if (g->suspend_btn)  { XtManageChild(g->suspend_btn); }
+
+    greeter_clear_error(g);
+
+    /* Release grabs */
+    xcb_connection_t *conn = XtDisplay(g->toplevel);
+    xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
+    xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
+    xcb_flush(conn);
 }
