@@ -611,6 +611,7 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
     /* Clear password and focus it */
     XtSetArg(args[0], XtNstring, "");
     XtSetValues(g->pass_text, args, 1);
+    XtSetKeyboardFocus(g->form, g->pass_text);
 
     /* Hide session selector in lock mode */
     XtUnmanageChild(g->session_label);
@@ -623,11 +624,15 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
 
     greeter_clear_error(g);
 
-    /* Grab keyboard and pointer for lock screen security */
+    /* Grab keyboard and pointer for lock screen security.
+     * Grab keyboard on the password field so key events are delivered
+     * directly to it — grabbing on the shell would intercept events
+     * before Xt can dispatch them to the text widget. */
     xcb_connection_t *conn = XtDisplay(g->toplevel);
     xcb_window_t win = XtWindow(g->shell);
+    xcb_window_t pass_win = XtWindow(g->pass_text);
 
-    xcb_grab_keyboard(conn, 1, win, XCB_CURRENT_TIME,
+    xcb_grab_keyboard(conn, 1, pass_win, XCB_CURRENT_TIME,
                       XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
     xcb_grab_pointer(conn, 1, win,
                      XCB_EVENT_MASK_BUTTON_PRESS |
