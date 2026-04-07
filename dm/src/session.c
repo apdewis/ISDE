@@ -265,7 +265,28 @@ int dm_session_start(Dm *dm, const char *username,
         clearenv();
         setenv("DISPLAY", dm->display, 1);
         if (!dm->dev_mode) {
-            setenv("XAUTHORITY", dm->xauth_path, 1);
+            /* Copy the DM's Xauthority to user-accessible location.
+             * The DM's copy is root-owned 0600, unreadable after
+             * we drop privileges. */
+            char user_xauth[512];
+            snprintf(user_xauth, sizeof(user_xauth),
+                     "%s/.Xauthority", pw->pw_dir);
+            int src = open(dm->xauth_path, O_RDONLY);
+            if (src >= 0) {
+                int dst = open(user_xauth,
+                               O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                if (dst >= 0) {
+                    unsigned char abuf[512];
+                    ssize_t nr;
+                    while ((nr = read(src, abuf, sizeof(abuf))) > 0) {
+                        write(dst, abuf, nr);
+                    }
+                    fchown(dst, pw->pw_uid, pw->pw_gid);
+                    close(dst);
+                }
+                close(src);
+            }
+            setenv("XAUTHORITY", user_xauth, 1);
         }
         setenv("HOME", pw->pw_dir, 1);
         setenv("USER", pw->pw_name, 1);
