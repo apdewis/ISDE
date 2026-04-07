@@ -242,9 +242,6 @@ allow_suspend = true
 # Dev mode: Xephyr, no seat, no root required
 dev_mode = false
 
-# Phase 2+
-# autologin_user = ""
-# autologin_session = "isde.desktop"
 # lock_timeout = 300
 
 [clock]
@@ -314,17 +311,16 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 - Idle timeout lock
 - isde-wm lock keybinding integration
 
-**Phase 3 — Multi-user + switch user:**
+**Phase 3 — Confirmation panel + polish:**
+- Session-side confirmation panel (fullscreen override-redirect)
+- `ShowConfirmation` D-Bus method
+- Greeter appearance customization, background image
+- `[dm.clock]` format configuration
+
+**Optional — Multi-user + switch user:**
 - Multiple simultaneous sessions on different VTs
 - Switch User button (new greeter on new VT)
 - VT-to-session mapping in daemon
-
-**Phase 4 — Confirmation panel + polish:**
-- Session-side confirmation panel (fullscreen override-redirect)
-- `ShowConfirmation` D-Bus method
-- Autologin support
-- Greeter appearance customization, background image
-- `[dm.clock]` format configuration
 
 ### Relationship to Existing Components
 
