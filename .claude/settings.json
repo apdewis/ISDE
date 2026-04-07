@@ -41,7 +41,8 @@
       "Bash(find /usr/share/icons/Adwaita -name open-menu* -o -name view-app-grid* -o -name view-grid* -o -name application-menu*)",
       "Bash(ls /home/adam/libISW/build*)",
       "Bash(ls -d /home/adam/ISDE/*/)",
-      "Bash(grep -n \"isde_config_write\\\\|isde_config_string\" /home/adam/ISDE/settings/src/*.c)"
+      "Bash(grep -n \"isde_config_write\\\\|isde_config_string\" /home/adam/ISDE/settings/src/*.c)",
+      "Bash(make -nd -C /home/adam/ISDE/build -f panel/CMakeFiles/isde-panel.dir/build.make panel/CMakeFiles/isde-panel.dir/src/startmenu.c.o)"
     ],
     "additionalDirectories": [
       "/tmp",

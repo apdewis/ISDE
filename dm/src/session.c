@@ -312,21 +312,25 @@ int dm_session_start(Dm *dm, const char *username,
         _exit(1);
     }
 
-    /* Parent */
+    /* Parent — note: desktop_file may alias dm->session_desktop,
+     * so we must strdup before freeing. */
     dm->session_pid = pid;
     free(dm->session_user);
     dm->session_user = strdup(username);
+
+    char *saved_desktop = desktop_file ? strdup(desktop_file) : NULL;
     free(dm->session_desktop);
-    dm->session_desktop = strdup(desktop_file);
+    dm->session_desktop = saved_desktop;
 
     free(exec_cmd);
 
     dm->session_active_since = time(NULL);
 
+    const char *session_name = saved_desktop ? saved_desktop : "";
     fprintf(stderr, "isde-dm: session started for '%s' (pid %d)\n",
             username, pid);
 
-    dm_dbus_emit_session_started(dm, username, desktop_file);
+    dm_dbus_emit_session_started(dm, username, session_name);
     return 0;
 }
 

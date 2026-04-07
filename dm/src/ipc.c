@@ -179,6 +179,9 @@ static void handle_auth(Dm *dm, const char *args)
         if (dm->session_user && strcmp(username, dm->session_user) == 0) {
             dm_unlock_session(dm);
         }
+    } else if (!desktop) {
+        fprintf(stderr, "isde-dm: no session configured\n");
+        dm_ipc_send(dm, "AUTH_FAIL no session configured");
     } else {
         /* Normal login: stop greeter and start session */
         dm_greeter_stop(dm);
