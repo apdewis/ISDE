@@ -297,7 +297,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
                                         c->shell, args, n);
 
         XtAddEventHandler(c->title_label,
-                          ButtonPressMask,
+                          XCB_EVENT_MASK_BUTTON_PRESS,
                           False, title_button_handler, closure);
 
         /* Minimize button */

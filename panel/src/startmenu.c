@@ -538,7 +538,7 @@ void startmenu_init(Panel *p)
                            XtParseTranslationTable(appTranslations));
 
     /* Keyboard navigation via event handler on the shell */
-    XtAddEventHandler(p->start_shell, KeyPressMask, False,
+    XtAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       menu_key_handler, p);
 
     /* Bottom toolbar — right-aligned action buttons.

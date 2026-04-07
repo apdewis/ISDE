@@ -225,8 +225,8 @@ static void show_window_menu(Panel *p, TaskGroup *g)
                            XtParseTranslationTable(wlTranslations));
 
     /* Motion handler for hover highlight (translations may not get
-     * PointerMotionMask added when set via XtOverrideTranslations) */
-    XtAddEventHandler(wl_list, PointerMotionMask, False,
+     * XCB_EVENT_MASK_POINTER_MOTION added when set via XtOverrideTranslations) */
+    XtAddEventHandler(wl_list, XCB_EVENT_MASK_POINTER_MOTION, False,
                       wl_motion_handler, NULL);
 
     /* Realize to get actual size, then position bottom-flush with panel */
@@ -613,7 +613,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     XtAddCallback(g->button, XtNcallback, taskbar_button_callback, tc);
 
     /* Right-click handler for pin/unpin */
-    XtAddEventHandler(g->button, ButtonPressMask, False,
+    XtAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
                       context_menu_handler, tc);
 
     /* Link into list */

@@ -466,7 +466,7 @@ static void ctx_handler(Widget w, XtPointer client_data,
 
 void fm_register_context_menu(Fm *fm, Widget w)
 {
-    XtAddEventHandler(w, ButtonPressMask, False, ctx_handler, fm);
+    XtAddEventHandler(w, XCB_EVENT_MASK_BUTTON_PRESS, False, ctx_handler, fm);
 }
 
 /* ---------- navigation ---------- */
