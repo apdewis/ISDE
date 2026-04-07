@@ -179,6 +179,9 @@ int dm_xserver_ready(Dm *dm)
     char lockfile[64];
     snprintf(lockfile, sizeof(lockfile), "/tmp/.X%d-lock", dm->display_num);
 
+    /* Set XAUTHORITY so xcb_connect() can authenticate */
+    setenv("XAUTHORITY", dm->xauth_path, 1);
+
     for (int i = 0; i < 50; i++) {  /* up to 5 seconds */
         if (access(lockfile, F_OK) == 0) {
             /* Also try connecting to verify it's ready */
