@@ -43,6 +43,15 @@ pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
 pkg_check_modules(XCB_XKB REQUIRED IMPORTED_TARGET xcb-xkb)
 pkg_check_modules(XCB_RANDR REQUIRED IMPORTED_TARGET xcb-randr)
 pkg_check_modules(XCB_CURSOR REQUIRED IMPORTED_TARGET xcb-cursor)
+pkg_check_modules(LIBSEAT REQUIRED IMPORTED_TARGET libseat)
+
+# PAM has no pkg-config file on most distros — find it manually
+find_library(PAM_LIBRARY pam REQUIRED)
+find_path(PAM_INCLUDE_DIR security/pam_appl.h REQUIRED)
+add_library(pam_imported INTERFACE IMPORTED)
+set_target_properties(pam_imported PROPERTIES
+    INTERFACE_LINK_LIBRARIES "${PAM_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PAM_INCLUDE_DIR}")
 
 # --- Subdirectories ---
 add_subdirectory(libisde)
@@ -51,4 +60,5 @@ add_subdirectory(session)
 add_subdirectory(panel)
 add_subdirectory(fm)
 add_subdirectory(settings)
+add_subdirectory(dm)
 add_subdirectory(common)

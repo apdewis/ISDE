@@ -1,0 +1,24 @@
+# isde-dm configuration
+# System-wide config: /etc/isde/isde-dm.toml
+
+# Greeter binary
+greeter = "isde-greeter"
+
+# X server binary (use "Xephyr" for development)
+xserver = "/usr/bin/Xorg"
+
+# Default session .desktop file (from /usr/share/xsessions/)
+default_session = "isde.desktop"
+
+# Power buttons on greeter
+allow_shutdown = true
+allow_reboot = true
+allow_suspend = true
+
+# Dev mode: run with Xephyr, no seat management, no root required.
+# Set xserver = "Xephyr" when using this.
+dev_mode = false
+
+[clock]
+time_format = "%H:%M"
+date_format = "%Y-%m-%d"

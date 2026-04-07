@@ -225,29 +225,37 @@ Update `common/data/isde.desktop`: change `Type=Application` to `Type=XSession`.
 
 Session components send these via X ClientMessage. isde-session forwards to the DM daemon via D-Bus.
 
-### Configuration (`isde.toml`)
+### Configuration (`/etc/isde/isde-dm.toml`)
+
+The DM has its own system-wide config file, separate from the per-user `isde.toml`. The DM runs as root before any user session exists, so XDG user directories are not applicable.
 
 ```toml
-[dm]
+# /etc/isde/isde-dm.toml
+
 greeter = "isde-greeter"
-autologin_user = ""
-autologin_session = "isde.desktop"
+xserver = "/usr/bin/Xorg"
 default_session = "isde.desktop"
-lock_timeout = 300
 allow_shutdown = true
 allow_reboot = true
 allow_suspend = true
 
-[dm.clock]
+# Dev mode: Xephyr, no seat, no root required
+dev_mode = false
+
+# Phase 2+
+# autologin_user = ""
+# autologin_session = "isde.desktop"
+# lock_timeout = 300
+
+[clock]
 time_format = "%H:%M"
 date_format = "%Y-%m-%d"
 
-[dm.appearance]
+# Phase 4
+# [appearance]
 # color_scheme = "default-dark"
 # background = ""
 ```
-
-Read from system-wide config (`/etc/xdg/isde/isde.toml`).
 
 ### Build Integration
 
