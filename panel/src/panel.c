@@ -490,7 +490,7 @@ void panel_run(Panel *p)
     /* Start periodic client list poll */
     XtAppAddTimeOut(p->app, 50, poll_clients, p);
 
-    while (p->running) {
+    while (p->running && !XtAppGetExitFlag(p->app)) {
         XtAppProcessEvent(p->app, XtIMAll);
     }
 }

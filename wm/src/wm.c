@@ -1042,7 +1042,7 @@ void wm_run(Wm *wm)
 {
     int xcb_fd = xcb_get_file_descriptor(wm->conn);
 
-    while (wm->running) {
+    while (wm->running && !XtAppGetExitFlag(wm->app)) {
         /* Process any pending Xt work (widget events, timers) */
         while (XtAppPending(wm->app)) {
             XtAppProcessEvent(wm->app, XtIMAll);
