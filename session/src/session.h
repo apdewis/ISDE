@@ -12,6 +12,8 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <xcb/xcb.h>
+#include <X11/Intrinsic.h>
+#include <dbus/dbus.h>
 
 /* ---------- Child process ---------- */
 typedef struct Child {
@@ -42,11 +44,22 @@ typedef struct Session {
     xcb_connection_t *conn;
     IsdeIpc          *ipc;
 
+    /* Xt (for confirmation dialogs) */
+    XtAppContext      app;
+    Widget            toplevel;
+    Widget            confirm_shell;  /* active confirmation dialog, or NULL */
+    XtSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
+    XtIntervalId      check_timer;    /* periodic WM-alive / appearance check */
+
     /* D-Bus */
-    IsdeDBus   *dbus;
+    IsdeDBus         *dbus;
+    DBusConnection   *system_bus;     /* system bus for DM signals */
 
     /* Flags set from D-Bus callbacks */
     volatile sig_atomic_t reload_appearance;
+
+    /* Pending confirmation action from ConfirmationRequested signal */
+    char              confirm_action[16];
 
     int         running;
 } Session;

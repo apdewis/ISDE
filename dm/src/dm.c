@@ -93,7 +93,12 @@ static void load_config(Dm *dm)
     }
 
     IsdeConfigTable *clock = isde_config_table(root, "clock");
-    (void)clock; /* greeter reads clock config itself */
+    if (clock) {
+        const char *tf = isde_config_string(clock, "time_format", NULL);
+        if (tf) { free(dm->clock_time_fmt); dm->clock_time_fmt = strdup(tf); }
+        const char *df = isde_config_string(clock, "date_format", NULL);
+        if (df) { free(dm->clock_date_fmt); dm->clock_date_fmt = strdup(df); }
+    }
 
     isde_config_free(cfg);
 }
@@ -158,6 +163,8 @@ int dm_init(Dm *dm)
     dm->allow_shutdown = 1;
     dm->allow_reboot   = 1;
     dm->allow_suspend  = 1;
+    dm->clock_time_fmt = strdup("%H:%M");
+    dm->clock_date_fmt = strdup("%Y-%m-%d");
 
     load_config(dm);
 
@@ -358,6 +365,8 @@ void dm_cleanup(Dm *dm)
     free(dm->xserver_args);
     free(dm->session_user);
     free(dm->session_desktop);
+    free(dm->clock_time_fmt);
+    free(dm->clock_date_fmt);
 
     /* Remove runtime directory contents */
     char path[512];

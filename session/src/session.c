@@ -9,11 +9,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
-#include <poll.h>
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <dbus/dbus.h>
+
+#include "isde/isde-dialog.h"
+#include "isde/isde-theme.h"
 
 /* ---------- DM D-Bus helper ---------- */
 
@@ -187,14 +189,210 @@ static void restart_ui_children(Session *s)
     }
 }
 
-/* SIGCHLD handler — just sets a flag so the main loop can reap */
-static volatile sig_atomic_t got_sigchld = 0;
+/* ---------- SIGCHLD ---------- */
+
+static XtAppContext sigchld_app;
+static XtSignalId   sigchld_xt_id;
 
 static void sigchld_handler(int sig)
 {
     (void)sig;
-    got_sigchld = 1;
+    if (sigchld_app) {
+        XtNoticeSignal(sigchld_xt_id);
+    }
 }
+
+static void sigchld_xt_cb(XtPointer client_data, XtSignalId *id)
+{
+    (void)id;
+    Session *s = (Session *)client_data;
+    child_reap(s);
+}
+
+/* ---------- Confirmation dialog ---------- */
+
+static void confirm_result_cb(IsdeDialogResult result, void *data)
+{
+    Session *s = (Session *)data;
+    s->confirm_shell = NULL;
+
+    if (result == ISDE_DIALOG_OK) {
+        if (strcmp(s->confirm_action, "shutdown") == 0) {
+            dm_dbus_call("Shutdown");
+        } else if (strcmp(s->confirm_action, "reboot") == 0) {
+            dm_dbus_call("Reboot");
+        } else if (strcmp(s->confirm_action, "suspend") == 0) {
+            dm_dbus_call("Suspend");
+        }
+    }
+    s->confirm_action[0] = '\0';
+}
+
+static void show_confirmation(Session *s, const char *action)
+{
+    /* Don't stack confirmations */
+    if (s->confirm_shell) {
+        return;
+    }
+
+    const char *message;
+    const char *button_label;
+
+    if (strcmp(action, "shutdown") == 0) {
+        message = "Are you sure you want to shut down?";
+        button_label = "Shut Down";
+    } else if (strcmp(action, "reboot") == 0) {
+        message = "Are you sure you want to reboot?";
+        button_label = "Reboot";
+    } else if (strcmp(action, "suspend") == 0) {
+        message = "Are you sure you want to suspend?";
+        button_label = "Suspend";
+    } else {
+        return;
+    }
+
+    snprintf(s->confirm_action, sizeof(s->confirm_action), "%s", action);
+    s->confirm_shell = isde_dialog_confirm(s->toplevel, "Confirm",
+                                           message, button_label,
+                                           confirm_result_cb, s);
+}
+
+/* ---------- System bus: ConfirmationRequested signal ---------- */
+
+static DBusHandlerResult
+system_bus_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
+{
+    (void)conn;
+    Session *s = (Session *)user_data;
+
+    if (dbus_message_is_signal(msg, "org.isde.DisplayManager",
+                               "ConfirmationRequested")) {
+        const char *action = NULL;
+        if (dbus_message_get_args(msg, NULL,
+                                  DBUS_TYPE_STRING, &action,
+                                  DBUS_TYPE_INVALID) && action) {
+            show_confirmation(s, action);
+        }
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+static void init_system_bus(Session *s)
+{
+    DBusError err;
+    dbus_error_init(&err);
+    s->system_bus = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+    if (!s->system_bus) {
+        fprintf(stderr, "isde-session: system bus: %s\n",
+                err.message ? err.message : "cannot connect");
+        dbus_error_free(&err);
+        return;
+    }
+
+    dbus_connection_set_exit_on_disconnect(s->system_bus, FALSE);
+
+    /* Subscribe to ConfirmationRequested signals from the DM */
+    dbus_bus_add_match(s->system_bus,
+        "type='signal',"
+        "interface='org.isde.DisplayManager',"
+        "member='ConfirmationRequested'",
+        &err);
+    if (dbus_error_is_set(&err)) {
+        fprintf(stderr, "isde-session: D-Bus match: %s\n", err.message);
+        dbus_error_free(&err);
+    }
+
+    dbus_connection_add_filter(s->system_bus, system_bus_filter, s, NULL);
+    dbus_error_free(&err);
+}
+
+/* ---------- Xt input callbacks ---------- */
+
+static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+{
+    (void)fd; (void)id;
+    Session *s = (Session *)client_data;
+    if (s->dbus) {
+        isde_dbus_dispatch(s->dbus);
+    }
+}
+
+static void system_bus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+{
+    (void)fd; (void)id;
+    Session *s = (Session *)client_data;
+    if (s->system_bus) {
+        dbus_connection_read_write(s->system_bus, 0);
+        while (dbus_connection_dispatch(s->system_bus) ==
+               DBUS_DISPATCH_DATA_REMAINS) {
+            /* drain */
+        }
+    }
+}
+
+static void xcb_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+{
+    (void)fd; (void)id;
+    Session *s = (Session *)client_data;
+
+    xcb_generic_event_t *ev;
+    while ((ev = xcb_poll_for_event(s->conn)) != NULL) {
+        uint32_t cmd, d0, d1, d2, d3;
+        if (isde_ipc_decode(s->ipc, ev, &cmd, &d0, &d1, &d2, &d3)) {
+            if (cmd == ISDE_CMD_LOGOUT) {
+                fprintf(stderr, "isde-session: logout requested\n");
+                s->running = 0;
+            } else if (cmd == ISDE_CMD_LOCK) {
+                fprintf(stderr, "isde-session: lock requested\n");
+                dm_dbus_call("Lock");
+            } else if (cmd == ISDE_CMD_SHUTDOWN) {
+                fprintf(stderr, "isde-session: shutdown requested\n");
+                dm_dbus_call("Shutdown");
+            } else if (cmd == ISDE_CMD_REBOOT) {
+                fprintf(stderr, "isde-session: reboot requested\n");
+                dm_dbus_call("Reboot");
+            } else if (cmd == ISDE_CMD_SUSPEND) {
+                fprintf(stderr, "isde-session: suspend requested\n");
+                dm_dbus_call("Suspend");
+            }
+        }
+        free(ev);
+    }
+}
+
+/* ---------- Periodic check timer ---------- */
+
+static void check_timer_cb(XtPointer client_data, XtIntervalId *id)
+{
+    (void)id;
+    Session *s = (Session *)client_data;
+
+    if (s->reload_appearance) {
+        s->reload_appearance = 0;
+        fprintf(stderr, "isde-session: appearance changed, "
+                "restarting WM and panel\n");
+        restart_ui_children(s);
+    }
+
+    /* If the WM died and wasn't respawned, shut down the session */
+    int wm_alive = 0;
+    for (Child *c = s->children; c; c = c->next) {
+        if (c->is_wm) { wm_alive = 1; break; }
+    }
+    if (!wm_alive) {
+        fprintf(stderr, "isde-session: WM exited, ending session\n");
+        s->running = 0;
+    }
+
+    /* Re-arm the timer if still running */
+    if (s->running) {
+        s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
+    }
+}
+
+/* ---------- public API ---------- */
 
 int session_init(Session *s)
 {
@@ -239,22 +437,36 @@ int session_init(Session *s)
     /* Also load XDG autostart .desktop files */
     autostart_load_xdg(s);
 
-    /* Install SIGCHLD handler */
+    /* Apply settings from config before starting components */
+    apply_appearance_settings();
+    apply_input_settings();
+
+    /* Initialize Xt for confirmation dialogs */
+    char **fallbacks = isde_theme_build_resources();
+    int argc = 0;
+    s->toplevel = XtAppInitialize(&s->app, "ISDE-Session",
+                                  NULL, 0, &argc, NULL,
+                                  fallbacks, NULL, 0);
+
+    /* Install SIGCHLD handler via Xt signal mechanism */
+    sigchld_app = s->app;
+    sigchld_xt_id = XtAppAddSignal(s->app, sigchld_xt_cb, s);
+    s->sigchld_id = sigchld_xt_id;
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = sigchld_handler;
     sa.sa_flags = SA_NOCLDSTOP;
     sigaction(SIGCHLD, &sa, NULL);
 
-    /* Apply settings from config before starting components */
-    apply_appearance_settings();
-    apply_input_settings();
-
-    /* D-Bus for settings change notifications */
+    /* D-Bus session bus for settings change notifications */
     s->dbus = isde_dbus_init();
     if (s->dbus) {
         isde_dbus_settings_subscribe(s->dbus, on_settings_changed, s);
     }
+
+    /* D-Bus system bus for DM ConfirmationRequested signal */
+    init_system_bus(s);
 
     /* XCB connection for IPC (ISDE_CMD_LOGOUT etc.) */
     int screen_num;
@@ -313,73 +525,38 @@ void session_run(Session *s)
         child_spawn(s, s->autostart_cmds[i], s->autostart_respawn[i], 0);
     }
 
-    /* Main loop — poll D-Bus and XCB fds, handle signals */
+    /* Register fd-based input sources with Xt */
     int dbus_fd = s->dbus ? isde_dbus_get_fd(s->dbus) : -1;
     int xcb_fd  = s->conn ? xcb_get_file_descriptor(s->conn) : -1;
 
+    if (dbus_fd >= 0) {
+        XtAppAddInput(s->app, dbus_fd, (XtPointer)XtInputReadMask,
+                      dbus_input_cb, s);
+    }
+
+    int sys_fd = -1;
+    if (s->system_bus) {
+        dbus_connection_get_unix_fd(s->system_bus, &sys_fd);
+        if (sys_fd >= 0) {
+            XtAppAddInput(s->app, sys_fd, (XtPointer)XtInputReadMask,
+                          system_bus_input_cb, s);
+        }
+    }
+
+    if (xcb_fd >= 0) {
+        XtAppAddInput(s->app, xcb_fd, (XtPointer)XtInputReadMask,
+                      xcb_input_cb, s);
+    }
+
+    /* Periodic timer for WM-alive check and appearance reload */
+    s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
+
+    /* Xt event loop */
     while (s->running) {
-        if (got_sigchld) {
-            got_sigchld = 0;
-            child_reap(s);
-        }
+        XtAppProcessEvent(s->app, XtIMAll);
 
-        if (s->reload_appearance) {
-            s->reload_appearance = 0;
-            fprintf(stderr, "isde-session: appearance changed, "
-                    "restarting WM and panel\n");
-            restart_ui_children(s);
-        }
-
-        /* If the WM died and wasn't respawned, shut down the session */
-        int wm_alive = 0;
-        for (Child *c = s->children; c; c = c->next) {
-            if (c->is_wm) { wm_alive = 1; break; }
-        }
-        if (!wm_alive) {
-            fprintf(stderr, "isde-session: WM exited, ending session\n");
-            s->running = 0;
+        if (XtAppGetExitFlag(s->app)) {
             break;
-        }
-
-        /* Poll D-Bus and XCB fds */
-        struct pollfd pfds[2];
-        int nfds = 0;
-        int dbus_idx = -1, xcb_idx = -1;
-        if (dbus_fd >= 0) { pfds[nfds].fd = dbus_fd; pfds[nfds].events = POLLIN; dbus_idx = nfds++; }
-        if (xcb_fd  >= 0) { pfds[nfds].fd = xcb_fd;  pfds[nfds].events = POLLIN; xcb_idx  = nfds++; }
-
-        if (nfds > 0) {
-            poll(pfds, nfds, 100);
-            if (dbus_idx >= 0 && (pfds[dbus_idx].revents & POLLIN)) {
-                isde_dbus_dispatch(s->dbus);
-            }
-            if (xcb_idx >= 0 && (pfds[xcb_idx].revents & POLLIN)) {
-                xcb_generic_event_t *ev;
-                while ((ev = xcb_poll_for_event(s->conn)) != NULL) {
-                    uint32_t cmd, d0, d1, d2, d3;
-                    if (isde_ipc_decode(s->ipc, ev, &cmd, &d0, &d1, &d2, &d3)) {
-                        if (cmd == ISDE_CMD_LOGOUT) {
-                            fprintf(stderr, "isde-session: logout requested\n");
-                            s->running = 0;
-                        } else if (cmd == ISDE_CMD_LOCK) {
-                            fprintf(stderr, "isde-session: lock requested\n");
-                            dm_dbus_call("Lock");
-                        } else if (cmd == ISDE_CMD_SHUTDOWN) {
-                            fprintf(stderr, "isde-session: shutdown requested\n");
-                            dm_dbus_call("Shutdown");
-                        } else if (cmd == ISDE_CMD_REBOOT) {
-                            fprintf(stderr, "isde-session: reboot requested\n");
-                            dm_dbus_call("Reboot");
-                        } else if (cmd == ISDE_CMD_SUSPEND) {
-                            fprintf(stderr, "isde-session: suspend requested\n");
-                            dm_dbus_call("Suspend");
-                        }
-                    }
-                    free(ev);
-                }
-            }
-        } else {
-            pause();
         }
     }
 }
@@ -397,6 +574,13 @@ void session_cleanup(Session *s)
     isde_dbus_free(s->dbus);
     isde_ipc_free(s->ipc);
     if (s->conn) { xcb_disconnect(s->conn); }
+    if (s->system_bus) {
+        dbus_connection_remove_filter(s->system_bus, system_bus_filter, s);
+        dbus_connection_unref(s->system_bus);
+    }
+    if (s->toplevel) {
+        XtDestroyWidget(s->toplevel);
+    }
     free(s->wm_command);
     free(s->panel_command);
     free(s->fm_command);

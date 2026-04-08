@@ -90,6 +90,8 @@ typedef struct Panel {
     Widget             app_viewport;/* Right pane: scrollable viewport */
     Widget             app_box;     /* Right pane: app entries for selected category */
     Widget             menu_toolbar;/* Bottom toolbar strip */
+    Widget             shutdown_btn;/* Shut Down button in toolbar */
+    Widget             reboot_btn;  /* Reboot button in toolbar */
     Widget             logout_btn;  /* Logout button in toolbar */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */

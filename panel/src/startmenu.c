@@ -20,6 +20,8 @@
 #include <X11/keysym.h>
 
 static char *start_icon_path;
+static char *shutdown_icon_path;
+static char *reboot_icon_path;
 static char *logout_icon_path;
 
 static Pixel start_color_pixel(Panel *p, unsigned int rgb)
@@ -342,11 +344,48 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     }
 }
 
+static void shutdown_confirm_cb(IsdeDialogResult result, void *data)
+{
+    Panel *p = (Panel *)data;
+    if (result == ISDE_DIALOG_OK) {
+        isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
+    }
+}
+
+static void shutdown_cb(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    (void)w; (void)call_data;
+    Panel *p = (Panel *)client_data;
+    panel_dismiss_popup(p);
+    isde_dialog_confirm(p->toplevel, "Shut Down",
+                        "Are you sure you want to shut down?",
+                        "Shut Down", shutdown_confirm_cb, p);
+}
+
+static void reboot_confirm_cb(IsdeDialogResult result, void *data)
+{
+    Panel *p = (Panel *)data;
+    if (result == ISDE_DIALOG_OK) {
+        isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
+    }
+}
+
+static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    (void)w; (void)call_data;
+    Panel *p = (Panel *)client_data;
+    panel_dismiss_popup(p);
+    isde_dialog_confirm(p->toplevel, "Reboot",
+                        "Are you sure you want to reboot?",
+                        "Reboot", reboot_confirm_cb, p);
+}
+
 static void logout_confirm_cb(IsdeDialogResult result, void *data)
 {
     Panel *p = (Panel *)data;
-    if (result == ISDE_DIALOG_OK)
+    if (result == ISDE_DIALOG_OK) {
         isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
+    }
 }
 
 static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
@@ -413,6 +452,12 @@ void startmenu_init(Panel *p)
     /* Resolve start menu and logout icons from theme */
     free(start_icon_path);
     start_icon_path = isde_icon_find("actions", "application-menu");
+
+    free(shutdown_icon_path);
+    shutdown_icon_path = isde_icon_find("actions", "system-shutdown");
+
+    free(reboot_icon_path);
+    reboot_icon_path = isde_icon_find("actions", "system-reboot");
 
     free(logout_icon_path);
     logout_icon_path = isde_icon_find("actions", "system-log-out");
@@ -558,6 +603,8 @@ void startmenu_init(Panel *p)
     int btn_margin = isde_scale(4);
     int btn_size   = TOOLBAR_HEIGHT - btn_margin * 2;
     int btn_x      = MENU_WIDTH - btn_size - btn_margin;
+
+    /* Logout button (rightmost) */
     n = 0;
     XtSetArg(args[n], XtNlabel, "");                         n++;
     XtSetArg(args[n], XtNwidth, btn_size);                   n++;
@@ -576,6 +623,46 @@ void startmenu_init(Panel *p)
                                           p->menu_toolbar, args, n);
     XtAddCallback(p->logout_btn, XtNcallback, logout_cb, p);
 
+    /* Reboot button (left of logout) */
+    btn_x -= btn_size + btn_margin;
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "");                         n++;
+    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
+    XtSetArg(args[n], XtNheight, btn_size);                  n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
+    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    if (reboot_icon_path) {
+        XtSetArg(args[n], XtNimage, reboot_icon_path);       n++;
+    }
+    p->reboot_btn = XtCreateManagedWidget("rebootBtn", commandWidgetClass,
+                                          p->menu_toolbar, args, n);
+    XtAddCallback(p->reboot_btn, XtNcallback, reboot_cb, p);
+
+    /* Shut Down button (left of reboot) */
+    btn_x -= btn_size + btn_margin;
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "");                         n++;
+    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
+    XtSetArg(args[n], XtNheight, btn_size);                  n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
+    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
+    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    if (shutdown_icon_path) {
+        XtSetArg(args[n], XtNimage, shutdown_icon_path);     n++;
+    }
+    p->shutdown_btn = XtCreateManagedWidget("shutdownBtn", commandWidgetClass,
+                                            p->menu_toolbar, args, n);
+    XtAddCallback(p->shutdown_btn, XtNcallback, shutdown_cb, p);
+
     /* Hide app list until a category is hovered */
     XtUnmapWidget(p->app_viewport);
 }
@@ -589,6 +676,10 @@ void startmenu_cleanup(Panel *p)
     p->categories = NULL;
     p->ncategories = 0;
 
+    free(shutdown_icon_path);
+    shutdown_icon_path = NULL;
+    free(reboot_icon_path);
+    reboot_icon_path = NULL;
     free(logout_icon_path);
     logout_icon_path = NULL;
 

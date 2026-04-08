@@ -244,6 +244,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     register_panel(s, &panel_fonts, NULL);
     register_panel(s, &panel_display, NULL);
     register_panel(s, &panel_desktops, NULL);
+    register_panel(s, &panel_dm, NULL);
     load_plugins(s);
 
     /* Left pane: panel name list */

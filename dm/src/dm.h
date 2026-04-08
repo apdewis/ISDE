@@ -41,6 +41,10 @@ struct Dm {
     int         allow_suspend;
     int         dev_mode;          /* 1 = Xephyr mode (no VT, no seat, no root) */
 
+    /* Greeter appearance (exposed via D-Bus for settings panel) */
+    char       *clock_time_fmt;    /* strftime format for clock time */
+    char       *clock_date_fmt;    /* strftime format for clock date */
+
     /* Seat management */
     struct libseat *seat;
     int         seat_fd;           /* pollable fd from libseat */

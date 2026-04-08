@@ -68,6 +68,7 @@ extern const IsdeSettingsPanel panel_appearance;
 extern const IsdeSettingsPanel panel_display;
 extern const IsdeSettingsPanel panel_desktops;
 extern const IsdeSettingsPanel panel_fonts;
+extern const IsdeSettingsPanel panel_dm;
 
 void panel_appearance_set_dbus(IsdeDBus *bus);
 void panel_display_set_dbus(IsdeDBus *bus);

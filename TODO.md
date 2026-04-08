@@ -311,11 +311,12 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 - Idle timeout lock
 - isde-wm lock keybinding integration
 
-**Phase 3 — Confirmation panel + polish:**
-- Session-side confirmation panel (fullscreen override-redirect)
-- `ShowConfirmation` D-Bus method
-- Greeter appearance customization, background image
-- `[dm.clock]` format configuration
+**Phase 3 — Confirmation panel + polish:** *(done)*
+- Session-side confirmation dialog (isde-session, Xt-based)
+- `ShowConfirmation` D-Bus method + `ConfirmationRequested` signal
+- Shutdown/Reboot buttons in panel start menu with confirmation dialogs
+- `GetGreeterConfig`/`SetGreeterConfig` D-Bus methods for greeter appearance
+- `[dm.clock]` format configuration via isde-settings DM panel
 
 **Optional — Multi-user + switch user:**
 - Multiple simultaneous sessions on different VTs
@@ -324,10 +325,10 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 
 ### Relationship to Existing Components
 
-- **isde-session:** Unchanged. DM daemon execs it via session `.desktop` Exec line after auth.
-- **isde-panel:** Shutdown/reboot buttons should call `org.isde.DisplayManager` D-Bus methods (phase 2+). `ISDE_CMD_LOGOUT` continues to work for logout.
+- **isde-session:** Xt-based event loop with confirmation dialogs for power actions. Listens for `ConfirmationRequested` D-Bus signal from DM. Forwards `ISDE_CMD_*` to DM via D-Bus.
+- **isde-panel:** Start menu has Shut Down, Reboot, and Log Out buttons with confirmation dialogs. Sends `ISDE_CMD_SHUTDOWN`/`ISDE_CMD_REBOOT`/`ISDE_CMD_LOGOUT` via IPC.
 - **isde-wm:** Lock keybinding sends `ISDE_CMD_LOCK` (phase 2).
-- **isde-settings:** Could gain DM config panel in future.
+- **isde-settings:** DM panel for greeter clock format customization via D-Bus system bus.
 - **libisde:** New IPC command constants added to `isde-ipc.h`.
 - **common/data/isde.desktop:** `Type` changed to `XSession`.
 
