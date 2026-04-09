@@ -624,9 +624,10 @@ int session_init(Session *s)
 
     /* Initialize Xt for confirmation dialogs */
     char **fallbacks = isde_theme_build_resources();
-    int argc = 0;
+    int argc = 1;
+    char *argv[] = { "isde-session", NULL };
     s->toplevel = XtAppInitialize(&s->app, "ISDE-Session",
-                                  NULL, 0, &argc, NULL,
+                                  NULL, 0, &argc, argv,
                                   fallbacks, NULL, 0);
 
     /* Realize but don't map — needed as parent for popup shells */
