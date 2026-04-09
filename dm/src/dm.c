@@ -178,6 +178,16 @@ int dm_init(Dm *dm)
     if (dm->dev_mode) {
         fprintf(stderr, "isde-dm: dev_mode enabled (Xephyr, no seat, "
                 "no root check)\n");
+        /* Use XDG_RUNTIME_DIR in dev mode so we don't need root */
+        const char *xdg_rt = getenv("XDG_RUNTIME_DIR");
+        if (xdg_rt) {
+            static DmPlatformOps dev_plat;
+            static char dev_rundir[256];
+            snprintf(dev_rundir, sizeof(dev_rundir), "%s/isde-dm", xdg_rt);
+            dev_plat = *dm->plat;
+            dev_plat.rundir = dev_rundir;
+            dm->plat = &dev_plat;
+        }
     }
 
     if (ensure_rundir(dm) != 0) {

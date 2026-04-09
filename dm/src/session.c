@@ -261,10 +261,20 @@ int dm_session_start(Dm *dm, const char *username,
     if (pid == 0) {
         /* Child: become the user and exec session */
 
-        /* Set up environment */
+        /* Set up environment.  In dev mode, preserve PATH so the
+         * build directory's binaries are found. */
+        char saved_path[1024] = "";
+        if (dm->dev_mode) {
+            const char *p = getenv("PATH");
+            if (p) { snprintf(saved_path, sizeof(saved_path), "%s", p); }
+        }
         clearenv();
         setenv("DISPLAY", dm->display, 1);
-        if (!dm->dev_mode) {
+        if (dm->dev_mode) {
+            /* Dev mode: Xephyr doesn't use auth, but set XAUTHORITY
+             * so XCB connections succeed. */
+            setenv("XAUTHORITY", dm->xauth_path, 1);
+        } else {
             /* Copy the DM's Xauthority to user-accessible location.
              * The DM's copy is root-owned 0600, unreadable after
              * we drop privileges. */
@@ -292,7 +302,9 @@ int dm_session_start(Dm *dm, const char *username,
         setenv("USER", pw->pw_name, 1);
         setenv("LOGNAME", pw->pw_name, 1);
         setenv("SHELL", pw->pw_shell ? pw->pw_shell : "/bin/sh", 1);
-        setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
+        setenv("PATH", (dm->dev_mode && saved_path[0])
+                       ? saved_path
+                       : "/usr/local/bin:/usr/bin:/bin", 1);
         setenv("XDG_SESSION_TYPE", "x11", 1);
         setenv("XDG_SEAT", "seat0", 1);
 
@@ -315,13 +327,15 @@ int dm_session_start(Dm *dm, const char *username,
         mkdir(xdg_rt, 0700);
         chown(xdg_rt, pw->pw_uid, pw->pw_gid);
 
-        /* Drop privileges */
-        if (initgroups(pw->pw_name, pw->pw_gid) != 0 ||
-            setgid(pw->pw_gid) != 0 ||
-            setuid(pw->pw_uid) != 0) {
-            fprintf(stderr, "isde-dm: failed to drop privileges: %s\n",
-                    strerror(errno));
-            _exit(1);
+        /* Drop privileges (skip in dev mode — already running as user) */
+        if (!dm->dev_mode) {
+            if (initgroups(pw->pw_name, pw->pw_gid) != 0 ||
+                setgid(pw->pw_gid) != 0 ||
+                setuid(pw->pw_uid) != 0) {
+                fprintf(stderr, "isde-dm: failed to drop privileges: %s\n",
+                        strerror(errno));
+                _exit(1);
+            }
         }
 
         /* Change to home directory */
