@@ -228,6 +228,8 @@ void wm_focus_client(Wm *wm, WmClient *c)
         xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
                             c->client, XCB_CURRENT_TIME);
         /* Raise frame */
+        fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
+                c->client, (unsigned)XtWindow(c->shell));
         uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
         xcb_configure_window(wm->conn, XtWindow(c->shell),
                              XCB_CONFIG_WINDOW_STACK_MODE, vals);
@@ -637,6 +639,8 @@ int wm_window_type_wants_decorations(Wm *wm, xcb_window_t win)
 
 static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 {
+    fprintf(stderr, "isde-wm: MapRequest for window 0x%x\n", ev->window);
+
     if (wm_find_client_by_window(wm, ev->window)) {
         return;
     }
@@ -647,6 +651,8 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             xcb_get_window_attributes(wm->conn, ev->window),
             NULL);
     if (attr) {
+        fprintf(stderr, "isde-wm:   override_redirect=%d map_state=%d\n",
+                attr->override_redirect, attr->map_state);
         if (attr->override_redirect) {
             free(attr);
             return;
@@ -968,7 +974,7 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
 
     uint32_t cmd;
     if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
-        if (cmd == ISDE_CMD_QUIT || cmd == ISDE_CMD_LOGOUT) {
+        if (cmd == ISDE_CMD_QUIT) {
             wm->running = 0;
         }
         return;
