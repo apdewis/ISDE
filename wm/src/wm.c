@@ -227,10 +227,47 @@ void wm_focus_client(Wm *wm, WmClient *c)
         c->focus_seq = ++wm->focus_seq;
         xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
                             c->client, XCB_CURRENT_TIME);
-        /* Raise frame */
-        uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
-        xcb_configure_window(wm->conn, XtWindow(c->shell),
-                             XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        /* Raise frame above other managed windows but below any
+         * override-redirect windows (overlays, menus, session
+         * confirmation dialogs).  Query the tree to find the lowest
+         * override-redirect window and stack just below it. */
+        {
+            xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+                wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+            xcb_window_t or_win = XCB_NONE;
+            if (tree) {
+                xcb_window_t *kids = xcb_query_tree_children(tree);
+                int nkids = xcb_query_tree_children_length(tree);
+                /* Walk bottom-to-top; find the first override-redirect
+                 * window that isn't one of our frames. */
+                for (int i = 0; i < nkids; i++) {
+                    xcb_get_window_attributes_reply_t *wa =
+                        xcb_get_window_attributes_reply(wm->conn,
+                            xcb_get_window_attributes(wm->conn, kids[i]),
+                            NULL);
+                    if (wa) {
+                        if (wa->override_redirect &&
+                            wa->map_state == XCB_MAP_STATE_VIEWABLE) {
+                            or_win = kids[i];
+                            free(wa);
+                            break;
+                        }
+                        free(wa);
+                    }
+                }
+                free(tree);
+            }
+            if (or_win != XCB_NONE) {
+                uint32_t vals[] = { or_win, XCB_STACK_MODE_BELOW };
+                xcb_configure_window(wm->conn, XtWindow(c->shell),
+                    XCB_CONFIG_WINDOW_SIBLING |
+                    XCB_CONFIG_WINDOW_STACK_MODE, vals);
+            } else {
+                uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
+                xcb_configure_window(wm->conn, XtWindow(c->shell),
+                    XCB_CONFIG_WINDOW_STACK_MODE, vals);
+            }
+        }
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
     }

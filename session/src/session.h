@@ -49,7 +49,7 @@ typedef struct Session {
     Widget            toplevel;
     Widget            confirm_shell;  /* active confirmation dialog, or NULL */
     XtSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
-    XtIntervalId      check_timer;    /* periodic WM-alive / appearance check */
+    XtIntervalId      check_timer;    /* periodic appearance check */
 
     /* D-Bus */
     IsdeDBus         *dbus;

@@ -257,34 +257,22 @@ static void confirm_cancel_cb(Widget w, XtPointer cd, XtPointer call)
     confirm_dismiss(s);
 }
 
-static void confirm_event_handler(Widget w, XtPointer cd,
-                                  xcb_generic_event_t *xev, Boolean *cont)
+static void confirm_key_handler(Widget w, XtPointer cd,
+                                xcb_generic_event_t *xev, Boolean *cont)
 {
     (void)w; (void)cont;
+    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+        return;
+    }
+    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
     Session *s = (Session *)cd;
-    uint8_t type = xev->response_type & ~0x80;
-
-    if (type == XCB_KEY_PRESS) {
-        xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-        xcb_connection_t *conn = s->conn;
-        xcb_key_symbols_t *syms = xcb_key_symbols_alloc(conn);
-        if (syms) {
-            xcb_keysym_t sym = xcb_key_symbols_get_keysym(syms, kev->detail, 0);
-            xcb_key_symbols_free(syms);
-            if (sym == XK_Escape) {
-                confirm_dismiss(s);
-            }
-        }
-    } else if (type == XCB_VISIBILITY_NOTIFY) {
-        xcb_visibility_notify_event_t *vev =
-            (xcb_visibility_notify_event_t *)xev;
-        if (vev->state != XCB_VISIBILITY_UNOBSCURED) {
-            /* Something covered us — raise back to top */
-            xcb_connection_t *conn = XtDisplay(s->toplevel);
-            uint32_t above = XCB_STACK_MODE_ABOVE;
-            xcb_configure_window(conn, XtWindow(s->confirm_shell),
-                                 XCB_CONFIG_WINDOW_STACK_MODE, &above);
-            xcb_flush(conn);
+    xcb_connection_t *conn = s->conn;
+    xcb_key_symbols_t *syms = xcb_key_symbols_alloc(conn);
+    if (syms) {
+        xcb_keysym_t sym = xcb_key_symbols_get_keysym(syms, kev->detail, 0);
+        xcb_key_symbols_free(syms);
+        if (sym == XK_Escape) {
+            confirm_dismiss(s);
         }
     }
 }
@@ -439,18 +427,16 @@ static void show_confirmation(Session *s, const char *action)
                                               dialog, args, n);
     XtAddCallback(cancel_btn, XtNcallback, confirm_cancel_cb, s);
 
-    /* Escape key dismisses; visibility re-raises over WM-managed windows */
-    XtAddEventHandler(s->confirm_shell,
-                      XCB_EVENT_MASK_KEY_PRESS |
-                      XCB_EVENT_MASK_VISIBILITY_CHANGE,
-                      False, confirm_event_handler, s);
+    /* Escape key dismisses */
+    XtAddEventHandler(s->confirm_shell, XCB_EVENT_MASK_KEY_PRESS, False,
+                      confirm_key_handler, s);
 
     XtPopup(s->confirm_shell, XtGrabNone);
 
     /* Position the dialog form centered after realization */
     XtConfigureWidget(dialog, dlg_x, dlg_y, dlg_w, dlg_h, 1);
 
-    /* Raise to top of stacking order so the WM can't cover us */
+    /* Raise to top of stacking order */
     uint32_t stack_above = XCB_STACK_MODE_ABOVE;
     xcb_configure_window(conn, XtWindow(s->confirm_shell),
                          XCB_CONFIG_WINDOW_STACK_MODE, &stack_above);
