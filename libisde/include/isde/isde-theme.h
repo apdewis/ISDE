@@ -99,6 +99,12 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
  * Returns the cached scheme (do not free). Returns NULL if no scheme configured. */
 const IsdeColorScheme *isde_theme_current(void);
 
+/* Override the active colour scheme.  Takes ownership of the scheme
+ * (it will be freed on reload or on a subsequent set call).
+ * Call before isde_theme_build_resources() to force a specific scheme
+ * instead of reading isde.toml — useful for the greeter. */
+void isde_theme_set_scheme(IsdeColorScheme *scheme);
+
 /* Reload the active colour scheme from config (call after D-Bus notification). */
 void isde_theme_reload(void);
 

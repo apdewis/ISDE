@@ -19,6 +19,10 @@ allow_suspend = true
 # Set xserver = "Xephyr" when using this.
 dev_mode = false
 
+# Greeter colour scheme (name from /usr/share/isde/themes/<name>.theme)
+# Defaults to "default-light" if not set.
+# color_scheme = "default-light"
+
 [clock]
 time_format = "%H:%M"
 date_format = "%Y-%m-%d"

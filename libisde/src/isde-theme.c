@@ -728,6 +728,12 @@ const IsdeColorScheme *isde_theme_current(void)
     return g_scheme;
 }
 
+void isde_theme_set_scheme(IsdeColorScheme *scheme)
+{
+    isde_scheme_free(g_scheme);
+    g_scheme = scheme;
+}
+
 void isde_theme_reload(void)
 {
     isde_scheme_free(g_scheme);

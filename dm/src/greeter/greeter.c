@@ -223,6 +223,10 @@ static void load_config(Greeter *g)
     }
 
     IsdeConfigTable *root = isde_config_root(cfg);
+    const char *cs = isde_config_string(root, "color_scheme", NULL);
+    if (cs) {
+        g->color_scheme = strdup(cs);
+    }
     g->allow_shutdown = isde_config_bool(root, "allow_shutdown", 1);
     g->allow_reboot   = isde_config_bool(root, "allow_reboot", 1);
     g->allow_suspend  = isde_config_bool(root, "allow_suspend", 1);
@@ -509,6 +513,14 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Load available sessions */
     greeter_sessions_load(g);
 
+    /* Apply colour scheme from DM config if set */
+    if (g->color_scheme) {
+        IsdeColorScheme *scheme = isde_scheme_load(g->color_scheme);
+        if (scheme) {
+            isde_theme_set_scheme(scheme);
+        }
+    }
+
     /* Initialize Xt with theme resources */
     char **fallbacks = isde_theme_build_resources();
     g->toplevel = XtAppInitialize(&g->app, "ISDE-Greeter",
@@ -569,6 +581,7 @@ void greeter_cleanup(Greeter *g)
     greeter_ipc_cleanup(g);
     greeter_sessions_cleanup(g);
 
+    free(g->color_scheme);
     free(g->clock_time_fmt);
     free(g->clock_date_fmt);
     free(g->lock_user);
