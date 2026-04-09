@@ -9,6 +9,8 @@
 #include "panel.h"
 #include <X11/ShellP.h>
 #include <ISW/List.h>
+#include <dbus/dbus.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -342,12 +344,40 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     }
 }
 
+static void dm_show_confirmation(const char *action)
+{
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+    if (!conn) {
+        fprintf(stderr, "isde-panel: D-Bus: %s\n",
+                err.message ? err.message : "cannot connect");
+        dbus_error_free(&err);
+        return;
+    }
+
+    DBusMessage *msg = dbus_message_new_method_call(
+        "org.isde.DisplayManager",
+        "/org/isde/DisplayManager",
+        "org.isde.DisplayManager",
+        "ShowConfirmation");
+    if (msg) {
+        dbus_message_append_args(msg,
+                                 DBUS_TYPE_STRING, &action,
+                                 DBUS_TYPE_INVALID);
+        dbus_connection_send(conn, msg, NULL);
+        dbus_connection_flush(conn);
+        dbus_message_unref(msg);
+    }
+    dbus_error_free(&err);
+}
+
 static void shutdown_cb(Widget w, XtPointer client_data, XtPointer call_data)
 {
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
+    dm_show_confirmation("shutdown");
 }
 
 static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
@@ -355,7 +385,7 @@ static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
+    dm_show_confirmation("reboot");
 }
 
 static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
@@ -363,7 +393,7 @@ static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
+    dm_show_confirmation("logout");
 }
 
 /* ---------- toggle ---------- */

@@ -128,7 +128,8 @@ handle_method(DBusConnection *conn, DBusMessage *msg, void *userdata)
             /* Validate action */
             if (strcmp(action, "shutdown") == 0 ||
                 strcmp(action, "reboot") == 0 ||
-                strcmp(action, "suspend") == 0) {
+                strcmp(action, "suspend") == 0 ||
+                strcmp(action, "logout") == 0) {
                 /* Emit ConfirmationRequested signal for session to pick up */
                 DBusMessage *sig = dbus_message_new_signal(
                     DM_DBUS_PATH, DM_DBUS_INTERFACE, "ConfirmationRequested");

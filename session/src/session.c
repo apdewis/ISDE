@@ -12,10 +12,18 @@
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
+#include <xcb/xcb_keysyms.h>
+#include <X11/keysym.h>
 #include <dbus/dbus.h>
 
-#include "isde/isde-dialog.h"
 #include "isde/isde-theme.h"
+
+#include <X11/Shell.h>
+#include <X11/StringDefs.h>
+#include <X11/IntrinsicP.h>
+#include <ISW/Form.h>
+#include <ISW/Label.h>
+#include <ISW/Command.h>
 
 /* ---------- DM D-Bus helper ---------- */
 
@@ -209,28 +217,70 @@ static void sigchld_xt_cb(XtPointer client_data, XtSignalId *id)
     child_reap(s);
 }
 
-/* ---------- Confirmation dialog ---------- */
+/* ---------- Fullscreen confirmation overlay ---------- */
 
-static void confirm_result_cb(IsdeDialogResult result, void *data)
+static void confirm_dismiss(Session *s)
 {
-    Session *s = (Session *)data;
+    if (!s->confirm_shell) {
+        return;
+    }
+    xcb_ungrab_keyboard(s->conn, XCB_CURRENT_TIME);
+    xcb_ungrab_pointer(s->conn, XCB_CURRENT_TIME);
+    xcb_flush(s->conn);
+    XtPopdown(s->confirm_shell);
+    XtDestroyWidget(s->confirm_shell);
     s->confirm_shell = NULL;
+    s->confirm_action[0] = '\0';
+}
 
-    if (result == ISDE_DIALOG_OK) {
-        if (strcmp(s->confirm_action, "shutdown") == 0) {
-            dm_dbus_call("Shutdown");
-        } else if (strcmp(s->confirm_action, "reboot") == 0) {
-            dm_dbus_call("Reboot");
-        } else if (strcmp(s->confirm_action, "suspend") == 0) {
-            dm_dbus_call("Suspend");
+static void confirm_action_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Session *s = (Session *)cd;
+
+    if (strcmp(s->confirm_action, "shutdown") == 0) {
+        dm_dbus_call("Shutdown");
+    } else if (strcmp(s->confirm_action, "reboot") == 0) {
+        dm_dbus_call("Reboot");
+    } else if (strcmp(s->confirm_action, "suspend") == 0) {
+        dm_dbus_call("Suspend");
+    } else if (strcmp(s->confirm_action, "logout") == 0) {
+        s->running = 0;
+    }
+    confirm_dismiss(s);
+}
+
+static void confirm_cancel_cb(Widget w, XtPointer cd, XtPointer call)
+{
+    (void)w; (void)call;
+    Session *s = (Session *)cd;
+    confirm_dismiss(s);
+}
+
+static void confirm_key_handler(Widget w, XtPointer cd,
+                                xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+        return;
+    }
+    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
+    /* Escape key — keycode 9 on most X servers, but check via keysym */
+    xcb_connection_t *conn = ((Session *)cd)->conn;
+    xcb_key_symbols_t *syms = xcb_key_symbols_alloc(conn);
+    if (syms) {
+        xcb_keysym_t sym = xcb_key_symbols_get_keysym(syms, kev->detail, 0);
+        xcb_key_symbols_free(syms);
+        if (sym == XK_Escape) {
+            confirm_dismiss((Session *)cd);
         }
     }
-    s->confirm_action[0] = '\0';
 }
 
 static void show_confirmation(Session *s, const char *action)
 {
-    /* Don't stack confirmations */
+    fprintf(stderr, "isde-session: show_confirmation(%s)\n", action);
+
     if (s->confirm_shell) {
         return;
     }
@@ -247,14 +297,161 @@ static void show_confirmation(Session *s, const char *action)
     } else if (strcmp(action, "suspend") == 0) {
         message = "Are you sure you want to suspend?";
         button_label = "Suspend";
+    } else if (strcmp(action, "logout") == 0) {
+        message = "Are you sure you want to log out?";
+        button_label = "Log Out";
     } else {
         return;
     }
 
     snprintf(s->confirm_action, sizeof(s->confirm_action), "%s", action);
-    s->confirm_shell = isde_dialog_confirm(s->toplevel, "Confirm",
-                                           message, button_label,
-                                           confirm_result_cb, s);
+
+    /* Get screen dimensions for fullscreen overlay */
+    xcb_screen_t *scr = XtScreen(s->toplevel);
+    int scr_w = scr->width_in_pixels;
+    int scr_h = scr->height_in_pixels;
+
+    /* Fullscreen override-redirect shell */
+    Arg args[20];
+    Cardinal n = 0;
+    XtSetArg(args[n], XtNx, 0);                      n++;
+    XtSetArg(args[n], XtNy, 0);                      n++;
+    XtSetArg(args[n], XtNwidth, scr_w);               n++;
+    XtSetArg(args[n], XtNheight, scr_h);              n++;
+    XtSetArg(args[n], XtNoverrideRedirect, True);     n++;
+    XtSetArg(args[n], XtNborderWidth, 0);             n++;
+    s->confirm_shell = XtCreatePopupShell("confirmOverlay",
+                                          overrideShellWidgetClass,
+                                          s->toplevel, args, n);
+
+    /* Semi-transparent background — use a dark tone from the theme,
+     * falling back to black */
+    const IsdeColorScheme *scheme = isde_theme_current();
+    xcb_connection_t *conn = XtDisplay(s->toplevel);
+    Pixel overlay_bg = scr->black_pixel;
+    Pixel form_bg = scr->white_pixel;
+    Pixel form_fg = scr->black_pixel;
+
+    if (scheme) {
+        xcb_alloc_color_reply_t *r;
+        /* Dark overlay background */
+        r = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, scr->default_colormap,
+                            0x1000, 0x1000, 0x1000), NULL);
+        if (r) { overlay_bg = r->pixel; free(r); }
+
+        /* Form background from theme */
+        unsigned int bg = scheme->bg;
+        r = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, scr->default_colormap,
+                            ((bg >> 16) & 0xFF) * 257,
+                            ((bg >> 8)  & 0xFF) * 257,
+                            ( bg        & 0xFF) * 257), NULL);
+        if (r) { form_bg = r->pixel; free(r); }
+
+        /* Form foreground from theme */
+        unsigned int fg = scheme->fg;
+        r = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, scr->default_colormap,
+                            ((fg >> 16) & 0xFF) * 257,
+                            ((fg >> 8)  & 0xFF) * 257,
+                            ( fg        & 0xFF) * 257), NULL);
+        if (r) { form_fg = r->pixel; free(r); }
+    }
+
+    /* Overlay form — fills the screen */
+    n = 0;
+    XtSetArg(args[n], XtNdefaultDistance, 0);         n++;
+    XtSetArg(args[n], XtNborderWidth, 0);             n++;
+    XtSetArg(args[n], XtNbackground, overlay_bg);     n++;
+    Widget overlay = XtCreateManagedWidget("overlay", formWidgetClass,
+                                           s->confirm_shell, args, n);
+
+    /* Centered dialog form */
+    int dlg_w = isde_scale(350);
+    int dlg_h = isde_scale(150);
+    int dlg_x = (scr_w - dlg_w) / 2;
+    int dlg_y = (scr_h - dlg_h) / 2;
+
+    n = 0;
+    XtSetArg(args[n], XtNhorizDistance, dlg_x);       n++;
+    XtSetArg(args[n], XtNvertDistance, dlg_y);        n++;
+    XtSetArg(args[n], XtNwidth, dlg_w);               n++;
+    XtSetArg(args[n], XtNheight, dlg_h);              n++;
+    XtSetArg(args[n], XtNborderWidth, 1);             n++;
+    XtSetArg(args[n], XtNbackground, form_bg);        n++;
+    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    Widget dialog = XtCreateManagedWidget("confirmDialog", formWidgetClass,
+                                          overlay, args, n);
+
+    /* Message label */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, message);             n++;
+    XtSetArg(args[n], XtNborderWidth, 0);             n++;
+    XtSetArg(args[n], XtNbackground, form_bg);        n++;
+    XtSetArg(args[n], XtNforeground, form_fg);        n++;
+    XtSetArg(args[n], XtNtop, XtChainTop);            n++;
+    XtSetArg(args[n], XtNbottom, XtChainTop);         n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);          n++;
+    XtSetArg(args[n], XtNright, XtChainRight);        n++;
+    Widget label = XtCreateManagedWidget("confirmLabel", labelWidgetClass,
+                                          dialog, args, n);
+
+    /* Button row — affirmative first, Cancel last (per HIG) */
+    int btn_w = isde_scale(80);
+    int btn_pad = isde_scale(8);
+    int total_btn = btn_w * 2 + btn_pad;
+    int first_horiz = dlg_w - total_btn - btn_pad * 2;
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, button_label);        n++;
+    XtSetArg(args[n], XtNwidth, btn_w);               n++;
+    XtSetArg(args[n], XtNfromVert, label);             n++;
+    XtSetArg(args[n], XtNhorizDistance, first_horiz);  n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);         n++;
+    XtSetArg(args[n], XtNright, XtChainRight);        n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);      n++;
+    Widget action_btn = XtCreateManagedWidget("confirmBtn",
+                                              commandWidgetClass,
+                                              dialog, args, n);
+    XtAddCallback(action_btn, XtNcallback, confirm_action_cb, s);
+
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "Cancel");            n++;
+    XtSetArg(args[n], XtNwidth, btn_w);               n++;
+    XtSetArg(args[n], XtNfromVert, label);             n++;
+    XtSetArg(args[n], XtNfromHoriz, action_btn);      n++;
+    XtSetArg(args[n], XtNhorizDistance, btn_pad);      n++;
+    XtSetArg(args[n], XtNleft, XtChainRight);         n++;
+    XtSetArg(args[n], XtNright, XtChainRight);        n++;
+    XtSetArg(args[n], XtNtop, XtChainBottom);         n++;
+    XtSetArg(args[n], XtNbottom, XtChainBottom);      n++;
+    Widget cancel_btn = XtCreateManagedWidget("cancelBtn",
+                                              commandWidgetClass,
+                                              dialog, args, n);
+    XtAddCallback(cancel_btn, XtNcallback, confirm_cancel_cb, s);
+
+    /* Escape key dismisses */
+    XtAddEventHandler(s->confirm_shell, XCB_EVENT_MASK_KEY_PRESS, False,
+                      confirm_key_handler, s);
+
+    XtPopup(s->confirm_shell, XtGrabNone);
+    fprintf(stderr, "isde-session: confirm overlay popped up, window=0x%x\n",
+            XtWindow(s->confirm_shell));
+
+    /* Grab keyboard and pointer to the overlay */
+    xcb_grab_keyboard(conn, 1, XtWindow(s->confirm_shell),
+                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
+                      XCB_GRAB_MODE_ASYNC);
+    xcb_grab_pointer(conn, 1, XtWindow(s->confirm_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE |
+                     XCB_EVENT_MASK_POINTER_MOTION,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XtWindow(s->confirm_shell),
+                     XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
 }
 
 /* ---------- System bus: ConfirmationRequested signal ---------- */
@@ -447,6 +644,15 @@ int session_init(Session *s)
     s->toplevel = XtAppInitialize(&s->app, "ISDE-Session",
                                   NULL, 0, &argc, NULL,
                                   fallbacks, NULL, 0);
+
+    /* Realize but don't map — needed as parent for popup shells */
+    Arg tl_args[20];
+    Cardinal tl_n = 0;
+    XtSetArg(tl_args[tl_n], XtNmappedWhenManaged, False); tl_n++;
+    XtSetArg(tl_args[tl_n], XtNwidth, 1);                 tl_n++;
+    XtSetArg(tl_args[tl_n], XtNheight, 1);                tl_n++;
+    XtSetValues(s->toplevel, tl_args, tl_n);
+    XtRealizeWidget(s->toplevel);
 
     /* Install SIGCHLD handler via Xt signal mechanism */
     sigchld_app = s->app;

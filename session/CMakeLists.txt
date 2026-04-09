@@ -12,6 +12,7 @@ target_link_libraries(isde-session
     PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_XKB
+    PkgConfig::XCB_KEYSYMS
     PkgConfig::SM
     PkgConfig::ICE
     PkgConfig::DBUS
