@@ -23,6 +23,10 @@ dev_mode = false
 # Defaults to "default-light" if not set.
 # color_scheme = "default-light"
 
+# UI scale factor for the greeter (e.g. 1.0, 1.5, 2.0).
+# If not set, auto-detected from the display's physical size via RandR.
+# scale = 1.0
+
 [clock]
 time_format = "%H:%M"
 date_format = "%Y-%m-%d"

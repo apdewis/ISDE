@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <xcb/randr.h>
 
 /* ---------- Geometry ---------- */
 
@@ -227,6 +228,7 @@ static void load_config(Greeter *g)
     if (cs) {
         g->color_scheme = strdup(cs);
     }
+    g->scale = isde_config_double(root, "scale", 0.0);
     g->allow_shutdown = isde_config_bool(root, "allow_shutdown", 1);
     g->allow_reboot   = isde_config_bool(root, "allow_reboot", 1);
     g->allow_suspend  = isde_config_bool(root, "allow_suspend", 1);
@@ -500,6 +502,123 @@ static void build_ui(Greeter *g)
     }
 }
 
+/* ---------- HiDPI detection ---------- */
+
+/*
+ * Query the primary (or first connected) output via xcb-randr and compute
+ * a scale factor from its physical size and pixel resolution.
+ * Sets ISW_SCALE_FACTOR so that isde_scale() picks it up.
+ * If config_scale > 0, that value is used as an explicit override.
+ */
+static void detect_hidpi(xcb_connection_t *conn, xcb_screen_t *screen,
+                         double config_scale)
+{
+    /* Explicit env var already set — honour it */
+    if (getenv("ISW_SCALE_FACTOR")) {
+        return;
+    }
+
+    /* Config override from isde-dm.toml */
+    if (config_scale > 0) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.2f", config_scale);
+        setenv("ISW_SCALE_FACTOR", buf, 1);
+        return;
+    }
+
+    /* Auto-detect from randr output physical size */
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, screen->root), NULL);
+    if (!res) {
+        return;
+    }
+
+    /* Find the primary output, or fall back to the first connected output */
+    xcb_randr_get_output_primary_reply_t *pri =
+        xcb_randr_get_output_primary_reply(conn,
+            xcb_randr_get_output_primary(conn, screen->root), NULL);
+    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
+    free(pri);
+
+    xcb_randr_output_t *outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int nouts =
+        xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    unsigned int best_px_w = 0;
+    unsigned int best_mm_w = 0;
+    int found = 0;
+
+    for (int i = 0; i < nouts; i++) {
+        xcb_randr_get_output_info_reply_t *oinfo =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, outs[i],
+                                          XCB_CURRENT_TIME), NULL);
+        if (!oinfo) { continue; }
+
+        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED ||
+            oinfo->crtc == XCB_NONE) {
+            free(oinfo);
+            continue;
+        }
+
+        xcb_randr_get_crtc_info_reply_t *cinfo =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, oinfo->crtc,
+                                        XCB_CURRENT_TIME), NULL);
+        if (!cinfo) {
+            free(oinfo);
+            continue;
+        }
+
+        /* Prefer the primary output; otherwise take the first connected */
+        if (outs[i] == primary_id || !found) {
+            best_px_w = cinfo->width;
+            best_mm_w = oinfo->mm_width;
+            found = 1;
+        }
+
+        free(cinfo);
+        free(oinfo);
+
+        /* If we just matched the primary, stop looking */
+        if (outs[i] == primary_id) {
+            break;
+        }
+    }
+
+    free(res);
+
+    if (!found || best_mm_w == 0) {
+        return;  /* no usable physical size — stay at 1x */
+    }
+
+    double dpi = (double)best_px_w / ((double)best_mm_w / 25.4);
+
+    /* Map DPI to a discrete scale factor:
+     *   < 144  → 1x
+     *   < 192  → 1.5x
+     *   < 240  → 2x
+     *   >= 240 → 2.5x  */
+    double scale;
+    if (dpi < 144) {
+        scale = 1.0;
+    } else if (dpi < 192) {
+        scale = 1.5;
+    } else if (dpi < 240) {
+        scale = 2.0;
+    } else {
+        scale = 2.5;
+    }
+
+    if (scale != 1.0) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.2f", scale);
+        setenv("ISW_SCALE_FACTOR", buf, 1);
+    }
+}
+
 /* ---------- Public API ---------- */
 
 int greeter_init(Greeter *g, int *argc, char **argv)
@@ -534,9 +653,11 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Get screen size */
     xcb_connection_t *conn = XtDisplay(g->toplevel);
     xcb_screen_t *screen = XtScreen(g->toplevel);
-    (void)conn;
     g->screen_w = screen->width_in_pixels;
     g->screen_h = screen->height_in_pixels;
+
+    /* Detect HiDPI and set ISW_SCALE_FACTOR before layout */
+    detect_hidpi(conn, screen, g->scale);
 
     /* Build UI */
     build_ui(g);

@@ -64,6 +64,7 @@ target_link_libraries(isde-greeter
     isde
     PkgConfig::ISW
     PkgConfig::XCB
+    PkgConfig::XCB_RANDR
     PkgConfig::XCB_UTIL
 )
 
