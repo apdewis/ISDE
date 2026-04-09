@@ -9,8 +9,6 @@
 #include "panel.h"
 #include <X11/ShellP.h>
 #include <ISW/List.h>
-#include <isde/isde-dialog.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -344,30 +342,12 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     }
 }
 
-static void shutdown_confirm_cb(IsdeDialogResult result, void *data)
-{
-    Panel *p = (Panel *)data;
-    if (result == ISDE_DIALOG_OK) {
-        isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
-    }
-}
-
 static void shutdown_cb(Widget w, XtPointer client_data, XtPointer call_data)
 {
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_dialog_confirm(p->toplevel, "Shut Down",
-                        "Are you sure you want to shut down?",
-                        "Shut Down", shutdown_confirm_cb, p);
-}
-
-static void reboot_confirm_cb(IsdeDialogResult result, void *data)
-{
-    Panel *p = (Panel *)data;
-    if (result == ISDE_DIALOG_OK) {
-        isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
-    }
+    isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
 }
 
 static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
@@ -375,17 +355,7 @@ static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_dialog_confirm(p->toplevel, "Reboot",
-                        "Are you sure you want to reboot?",
-                        "Reboot", reboot_confirm_cb, p);
-}
-
-static void logout_confirm_cb(IsdeDialogResult result, void *data)
-{
-    Panel *p = (Panel *)data;
-    if (result == ISDE_DIALOG_OK) {
-        isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
-    }
+    isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
 }
 
 static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
@@ -393,9 +363,7 @@ static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_dialog_confirm(p->toplevel, "Log Out",
-                        "Are you sure you want to log out?",
-                        "Log Out", logout_confirm_cb, p);
+    isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
 }
 
 /* ---------- toggle ---------- */
