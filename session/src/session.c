@@ -320,12 +320,7 @@ static void show_confirmation(Session *s, const char *action)
     XtSetArg(args[n], XtNheight, scr_h);              n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);     n++;
     XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    s->confirm_shell = XtCreatePopupShell("confirmOverlay",
-                                          overrideShellWidgetClass,
-                                          s->toplevel, args, n);
-
-    /* Semi-transparent background — use a dark tone from the theme,
-     * falling back to black */
+    /* Dark overlay background on the shell itself */
     const IsdeColorScheme *scheme = isde_theme_current();
     xcb_connection_t *conn = XtDisplay(s->toplevel);
     Pixel overlay_bg = scr->black_pixel;
@@ -334,13 +329,11 @@ static void show_confirmation(Session *s, const char *action)
 
     if (scheme) {
         xcb_alloc_color_reply_t *r;
-        /* Dark overlay background */
         r = xcb_alloc_color_reply(conn,
             xcb_alloc_color(conn, scr->default_colormap,
                             0x1000, 0x1000, 0x1000), NULL);
         if (r) { overlay_bg = r->pixel; free(r); }
 
-        /* Form background from theme */
         unsigned int bg = scheme->bg;
         r = xcb_alloc_color_reply(conn,
             xcb_alloc_color(conn, scr->default_colormap,
@@ -349,7 +342,6 @@ static void show_confirmation(Session *s, const char *action)
                             ( bg        & 0xFF) * 257), NULL);
         if (r) { form_bg = r->pixel; free(r); }
 
-        /* Form foreground from theme */
         unsigned int fg = scheme->fg;
         r = xcb_alloc_color_reply(conn,
             xcb_alloc_color(conn, scr->default_colormap,
@@ -359,7 +351,12 @@ static void show_confirmation(Session *s, const char *action)
         if (r) { form_fg = r->pixel; free(r); }
     }
 
-    /* Overlay form — fills the screen */
+    XtSetArg(args[n], XtNbackground, overlay_bg);     n++;
+    s->confirm_shell = XtCreatePopupShell("confirmOverlay",
+                                          overrideShellWidgetClass,
+                                          s->toplevel, args, n);
+
+    /* Overlay form — fills the shell, provides the dark background */
     n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 0);         n++;
     XtSetArg(args[n], XtNborderWidth, 0);             n++;
@@ -374,8 +371,6 @@ static void show_confirmation(Session *s, const char *action)
     int dlg_y = (scr_h - dlg_h) / 2;
 
     n = 0;
-    XtSetArg(args[n], XtNhorizDistance, dlg_x);       n++;
-    XtSetArg(args[n], XtNvertDistance, dlg_y);        n++;
     XtSetArg(args[n], XtNwidth, dlg_w);               n++;
     XtSetArg(args[n], XtNheight, dlg_h);              n++;
     XtSetArg(args[n], XtNborderWidth, 1);             n++;
@@ -437,8 +432,9 @@ static void show_confirmation(Session *s, const char *action)
                       confirm_key_handler, s);
 
     XtPopup(s->confirm_shell, XtGrabNone);
-    fprintf(stderr, "isde-session: confirm overlay popped up, window=0x%x\n",
-            XtWindow(s->confirm_shell));
+
+    /* Position the dialog form centered after realization */
+    XtConfigureWidget(dialog, dlg_x, dlg_y, dlg_w, dlg_h, 1);
 
     /* Grab keyboard and pointer to the overlay */
     xcb_grab_keyboard(conn, 1, XtWindow(s->confirm_shell),
@@ -540,19 +536,19 @@ static void xcb_input_cb(XtPointer client_data, int *fd, XtInputId *id)
         if (isde_ipc_decode(s->ipc, ev, &cmd, &d0, &d1, &d2, &d3)) {
             if (cmd == ISDE_CMD_LOGOUT) {
                 fprintf(stderr, "isde-session: logout requested\n");
-                s->running = 0;
+                show_confirmation(s, "logout");
             } else if (cmd == ISDE_CMD_LOCK) {
                 fprintf(stderr, "isde-session: lock requested\n");
                 dm_dbus_call("Lock");
             } else if (cmd == ISDE_CMD_SHUTDOWN) {
                 fprintf(stderr, "isde-session: shutdown requested\n");
-                dm_dbus_call("Shutdown");
+                show_confirmation(s, "shutdown");
             } else if (cmd == ISDE_CMD_REBOOT) {
                 fprintf(stderr, "isde-session: reboot requested\n");
-                dm_dbus_call("Reboot");
+                show_confirmation(s, "reboot");
             } else if (cmd == ISDE_CMD_SUSPEND) {
                 fprintf(stderr, "isde-session: suspend requested\n");
-                dm_dbus_call("Suspend");
+                show_confirmation(s, "suspend");
             }
         }
         free(ev);

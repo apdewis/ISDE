@@ -18,7 +18,6 @@ target_link_libraries(isde-panel
     PkgConfig::XCB_UTIL
     PkgConfig::XCB_RANDR
     PkgConfig::XCB_KEYSYMS
-    PkgConfig::DBUS
 )
 
 install(TARGETS isde-panel RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
