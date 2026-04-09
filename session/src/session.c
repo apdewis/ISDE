@@ -569,20 +569,8 @@ static void check_timer_cb(XtPointer client_data, XtIntervalId *id)
         restart_ui_children(s);
     }
 
-    /* If the WM died and wasn't respawned, shut down the session */
-    int wm_alive = 0;
-    for (Child *c = s->children; c; c = c->next) {
-        if (c->is_wm) { wm_alive = 1; break; }
-    }
-    if (!wm_alive) {
-        fprintf(stderr, "isde-session: WM exited, ending session\n");
-        s->running = 0;
-    }
-
-    /* Re-arm the timer if still running */
-    if (s->running) {
-        s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
-    }
+    /* Re-arm the timer */
+    s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
 }
 
 /* ---------- public API ---------- */

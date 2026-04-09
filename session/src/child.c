@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 
 Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
@@ -19,6 +21,9 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
     }
 
     if (pid == 0) {
+        /* Die when session manager dies */
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+
         /* Child process — exec via shell for command parsing */
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         perror("isde-session: exec");
