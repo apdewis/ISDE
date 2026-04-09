@@ -18,4 +18,17 @@ target_link_libraries(isde-session
     PkgConfig::DBUS
 )
 
-install(TARGETS isde-session RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+add_executable(isde-confirm
+    src/confirm.c
+)
+
+target_compile_definitions(isde-confirm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
+
+target_link_libraries(isde-confirm
+    isde
+    PkgConfig::ISW
+    PkgConfig::XCB
+    PkgConfig::XCB_KEYSYMS
+)
+
+install(TARGETS isde-session isde-confirm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

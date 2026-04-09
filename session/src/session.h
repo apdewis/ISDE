@@ -44,12 +44,14 @@ typedef struct Session {
     xcb_connection_t *conn;
     IsdeIpc          *ipc;
 
-    /* Xt (for confirmation dialogs) */
+    /* Xt */
     XtAppContext      app;
     Widget            toplevel;
-    Widget            confirm_shell;  /* active confirmation dialog, or NULL */
     XtSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
     XtIntervalId      check_timer;    /* periodic appearance check */
+
+    /* Confirmation overlay process */
+    pid_t             confirm_pid;    /* isde-confirm child, or 0 */
 
     /* D-Bus */
     IsdeDBus         *dbus;
