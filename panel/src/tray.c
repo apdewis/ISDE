@@ -64,7 +64,7 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     }
     p->tray_icons[p->ntray++] = icon;
 
-    int icon_size = PANEL_HEIGHT - 4;
+    int icon_size = p->shell->core.height - 4;
 
     /* Reparent the icon window into the tray box's X window */
     xcb_reparent_window(p->conn, icon, XtWindow(p->tray_box),
@@ -117,7 +117,7 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
     }
 
     /* Reposition remaining icons */
-    int icon_size = PANEL_HEIGHT - 4;
+    int icon_size = p->shell->core.height - 4;
     for (int i = found; i < p->ntray; i++) {
         uint32_t xy[] = { i * (icon_size + 2), 2 };
         xcb_configure_window(p->conn, p->tray_icons[i],

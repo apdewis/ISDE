@@ -15,7 +15,7 @@
 #include <string.h>
 #include <xcb/xcb_cursor.h>
 
-#define GRIP_SIZE isde_scale(6)
+#define GRIP_SIZE 6
 
 /* Convert 0xRRGGBB to an X11 Pixel via AllocColor */
 static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
@@ -54,7 +54,8 @@ void frame_apply_theme(Wm *wm, WmClient *c)
 
     /* Include explicit width/height so XtSetValues doesn't resize the
      * label to its preferred (text-fitting) geometry. */
-    int btn_area = 3 * WM_TITLE_HEIGHT;
+    int th = wm->title_height;
+    int btn_area = 3 * th;
     int title_w = c->width - btn_area;
     if (title_w < 1) { title_w = 1; }
 
@@ -63,7 +64,7 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     XtSetArg(args[n], XtNbackground, color_to_pixel(wm, tb->bg)); n++;
     XtSetArg(args[n], XtNforeground, color_to_pixel(wm, tb->fg)); n++;
     XtSetArg(args[n], XtNwidth, title_w);                          n++;
-    XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);                 n++;
+    XtSetArg(args[n], XtNheight, th);                              n++;
     XtSetValues(c->title_label, args, n);
 }
 
@@ -158,8 +159,8 @@ static void maximize_callback(Widget w, XtPointer client_data,
                     Arg a[20];
                     Cardinal an = 0;
                     XtSetArg(a[an], XtNimage, data);          an++;
-                    XtSetArg(a[an], XtNwidth, WM_TITLE_HEIGHT);  an++;
-                    XtSetArg(a[an], XtNheight, WM_TITLE_HEIGHT); an++;
+                    XtSetArg(a[an], XtNwidth, wm->title_height);  an++;
+                    XtSetArg(a[an], XtNheight, wm->title_height); an++;
                     XtSetValues(c->maximize_btn, a, an);
                     free(data);
                 }
@@ -254,7 +255,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     wm_place_client(wm, c);
 
     int fw = frame_total_width(c);
-    int fh = frame_total_height(c);
+    int fh = frame_total_height(wm, c);
 
     /* Callback closure: array of [wm, client] pointers.
      * Allocated once, freed in frame_destroy. */
@@ -282,7 +283,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Title bar widgets — only for decorated windows */
     if (c->decorated) {
-        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int btn_area = 3 * wm->title_height;
         int title_w = fw - btn_area;
         if (title_w < 1) { title_w = 1; }
 
@@ -363,7 +364,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Reparent the client window into the frame, below the title bar.
      * Client keeps its full requested size; border is extra space around it. */
-    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
+    int title = c->decorated ? wm->title_height : 0;
     xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
                         WM_BORDER_WIDTH,
                         WM_BORDER_WIDTH + title);
@@ -439,9 +440,9 @@ int frame_total_width(WmClient *c)
     return c->width + 2 * WM_BORDER_WIDTH;
 }
 
-int frame_total_height(WmClient *c)
+int frame_total_height(Wm *wm, WmClient *c)
 {
-    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
+    int title = c->decorated ? wm->title_height : 0;
     return c->height + title + 2 * WM_BORDER_WIDTH;
 }
 
@@ -450,8 +451,9 @@ int frame_total_height(WmClient *c)
 void frame_configure(Wm *wm, WmClient *c)
 {
     int fw = frame_total_width(c);
-    int fh = frame_total_height(c);
-    int title = c->decorated ? WM_TITLE_HEIGHT : 0;
+    int fh = frame_total_height(wm, c);
+    int th = wm->title_height;
+    int title = c->decorated ? th : 0;
 
     /* Use XtConfigureWidget to update both Xt internal state and
      * the X window atomically — avoids Xt and XCB disagreeing.
@@ -466,20 +468,20 @@ void frame_configure(Wm *wm, WmClient *c)
                          XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw32);
 
     if (c->decorated) {
-        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int btn_area = 3 * th;
         int inner_w = c->width;
         int title_w = inner_w - btn_area;
         if (title_w < 1) { title_w = 1; }
         int bx = WM_BORDER_WIDTH;
         int by = WM_BORDER_WIDTH;
         XtConfigureWidget(c->title_label, bx, by,
-                          title_w, WM_TITLE_HEIGHT, 0);
+                          title_w, th, 0);
         XtConfigureWidget(c->minimize_btn, bx + title_w, by,
-                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-        XtConfigureWidget(c->maximize_btn, bx + title_w + WM_TITLE_HEIGHT, by,
-                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
-        XtConfigureWidget(c->close_btn, bx + title_w + 2 * WM_TITLE_HEIGHT, by,
-                          WM_TITLE_HEIGHT, WM_TITLE_HEIGHT, 0);
+                          th, th, 0);
+        XtConfigureWidget(c->maximize_btn, bx + title_w + th, by,
+                          th, th, 0);
+        XtConfigureWidget(c->close_btn, bx + title_w + 2 * th, by,
+                          th, th, 0);
     }
 
     /* Reposition client window within the frame */
@@ -510,7 +512,8 @@ void frame_update_title(Wm *wm, WmClient *c)
     c->title = fetch_title(wm, c->client);
 
     if (c->title_label) {
-        int btn_area = 3 * WM_TITLE_HEIGHT;
+        int th = wm->title_height;
+        int btn_area = 3 * th;
         int title_w = c->width - btn_area;
         if (title_w < 1) { title_w = 1; }
 
@@ -518,7 +521,7 @@ void frame_update_title(Wm *wm, WmClient *c)
         Cardinal n = 0;
         XtSetArg(args[n], XtNlabel, c->title ? c->title : "(untitled)"); n++;
         XtSetArg(args[n], XtNwidth, title_w);                             n++;
-        XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);                    n++;
+        XtSetArg(args[n], XtNheight, th);                                 n++;
         XtSetValues(c->title_label, args, n);
     }
 }
@@ -570,9 +573,9 @@ void frame_create_grips(Wm *wm, WmClient *c)
 void frame_update_grips(Wm *wm, WmClient *c)
 {
     int fw = frame_total_width(c);
-    int fh = frame_total_height(c);
+    int fh = frame_total_height(wm, c);
     int g = GRIP_SIZE;
-    int th = WM_TITLE_HEIGHT;
+    int th = wm->title_height;
 
     /* Grips sit on client edges, below the title bar.
      * No top edge grip — title bar handles that area.

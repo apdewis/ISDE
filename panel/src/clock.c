@@ -75,11 +75,11 @@ void clock_init(Panel *p)
      * Each half has ~2px internal padding per side from the Label widget,
      * so available text height is (half - 4) pixels.
      * Convert back to pt: pt = px * 72 / 96 = px * 3 / 4 */
-    int avail_px = half - isde_scale(4);
-    if (avail_px < isde_scale(6)) {
-        avail_px = isde_scale(6);
+    int avail_px = half - 4;
+    if (avail_px < 6) {
+        avail_px = 6;
     }
-    int time_pt = (avail_px * 3) / (4 * isde_scale(1));
+    int time_pt = (avail_px * 3) / 4;
     int date_pt = time_pt > 2 ? time_pt - 2 : time_pt;
 
     /* Build font spec strings: "General-<size>" */

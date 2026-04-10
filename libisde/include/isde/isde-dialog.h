@@ -26,7 +26,7 @@ extern "C" {
  * Create a transient popup shell with:
  *   - WM_DELETE_WINDOW → dismiss
  *   - Escape key → dismiss
- *   - isde_scale() applied to width/height
+ *   - ISW auto-scales width/height for HiDPI
  *   - borderWidth = 1
  *   - transient-for = nearest Shell ancestor of parent
  *
@@ -43,7 +43,7 @@ void isde_dialog_dismiss(Widget shell);
 
 /*
  * Create a row of HIG-compliant buttons inside a Form widget:
- *   - Each button: isde_scale(80) wide, isde_scale(8) internal padding
+ *   - Each button: 80 logical pixels wide, 8px internal padding
  *   - Anchored bottom-right (XtChainRight, XtChainBottom)
  *   - Affirmative action first (leftmost), Cancel last (rightmost)
  *

@@ -371,7 +371,7 @@ Widget isde_filechooser_show(Widget parent, const char *title,
 
     /* Main form */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     Widget form = XtCreateManagedWidget("fcMainForm", formWidgetClass,
                                         fc->shell, args, n);
@@ -407,8 +407,8 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     const IsdeColorScheme *scheme = isde_theme_current();
 
     /* Directory list viewport (left pane) */
-    int pane_h = isde_scale(250);
-    int dir_w  = isde_scale(160);
+    int pane_h = 250;
+    int dir_w  = 160;
 
     n = 0;
     XtSetArg(args[n], XtNfromVert, loc_label);             n++;
@@ -540,7 +540,7 @@ Widget isde_filechooser_show(Widget parent, const char *title,
         { "Cancel",     cancel_cb, fc },
     };
     isde_dialog_add_buttons(form, filter_label,
-                            isde_scale(500) - isde_scale(8) * 2,
+                            500 - 8 * 2,
                             btns, 2);
 
     /* Initial scan */

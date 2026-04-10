@@ -1050,5 +1050,5 @@ int isde_font_height(const char *category, int padding)
     /* Convert point size to pixel height:
      * pixels = pt * (96 / 72) = pt * 4/3, then add padding and scale */
     int px = (g_font_sizes[idx] * 4 + 2) / 3 + padding;
-    return isde_scale(px);
+    return px;
 }

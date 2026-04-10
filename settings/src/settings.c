@@ -18,7 +18,7 @@
 #include <ISW/Viewport.h>
 #include <ISW/Dialog.h>
 
-#define PANEL_LIST_WIDTH isde_scale(140)
+#define PANEL_LIST_WIDTH 140
 
 /* ---------- panel management ---------- */
 
@@ -215,16 +215,16 @@ int settings_init(Settings *s, int *argc, char **argv)
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
 
-    int init_w = isde_scale(600);
-    int init_h = isde_scale(450);
+    int init_w = 600;
+    int init_h = 450;
     isde_clamp_to_workarea(XtDisplay(s->toplevel), 0, &init_w, &init_h);
 
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNwidth, init_w);              n++;
     XtSetArg(args[n], XtNheight, init_h);             n++;
-    XtSetArg(args[n], XtNminWidth, isde_scale(400));  n++;
-    XtSetArg(args[n], XtNminHeight, isde_scale(300)); n++;
+    XtSetArg(args[n], XtNminWidth, 400);  n++;
+    XtSetArg(args[n], XtNminHeight, 300); n++;
     XtSetValues(s->toplevel, args, n);
 
     XtAddCallback(s->toplevel, XtNdestroyCallback,
@@ -263,7 +263,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNforceColumns, True);        n++;
     XtSetArg(args[n], XtNverticalList, True);        n++;
     XtSetArg(args[n], XtNwidth, PANEL_LIST_WIDTH);   n++;
-    XtSetArg(args[n], XtNheight, isde_scale(440));    n++;
+    XtSetArg(args[n], XtNheight, 440);    n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
@@ -274,11 +274,11 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtAddCallback(s->panel_bar, XtNcallback, panel_list_cb, s);
 
     /* Right pane: form with scrollable content + fixed buttons at bottom */
-    int right_w = isde_scale(600) - PANEL_LIST_WIDTH - isde_scale(4);
-    int right_h = isde_scale(440);
-    int btn_h = isde_scale(32);
-    int btn_pad = isde_scale(8);
-    int sb_w = isde_scale(14);  /* scrollbar thickness */
+    int right_w = 600 - PANEL_LIST_WIDTH - 4;
+    int right_h = 440;
+    int btn_h = 32;
+    int btn_pad = 8;
+    int sb_w = 14;  /* scrollbar thickness */
 
     n = 0;
     XtSetArg(args[n], XtNfromHoriz, s->panel_bar);  n++;
@@ -309,15 +309,15 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     /* Panel content container inside viewport */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, right_w - isde_scale(20)); n++;
+    XtSetArg(args[n], XtNwidth, right_w - 20); n++;
     XtSetArg(args[n], XtNheight, right_h - btn_h);       n++;
     s->content_area = XtCreateManagedWidget("content", formWidgetClass,
                                             s->content_vp, args, n);
 
     /* Save / Revert buttons — fixed at bottom right. */
-    int btn_w = isde_scale(80);
+    int btn_w = 80;
 
     n = 0;
     XtSetArg(args[n], XtNfromVert, s->content_vp);          n++;

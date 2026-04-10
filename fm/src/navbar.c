@@ -83,8 +83,8 @@ static Widget make_nav_button(Fm *fm, const char *name,
     } else {
         XtSetArg(args[n], XtNlabel, fallback_label); n++;
     }
-    XtSetArg(args[n], XtNwidth, isde_scale(32));     n++;
-    XtSetArg(args[n], XtNheight, isde_scale(32));  n++;
+    XtSetArg(args[n], XtNwidth, 32);     n++;
+    XtSetArg(args[n], XtNheight, 32);  n++;
     XtSetArg(args[n], XtNinternalWidth, 0);        n++;
     XtSetArg(args[n], XtNinternalHeight, 0);       n++;
     XtSetArg(args[n], XtNborderWidth, 0);          n++;
@@ -105,9 +105,9 @@ void navbar_init(Fm *fm)
     n = 0;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
     XtSetArg(args[n], XtNborderWidth, 1);                   n++;
-    XtSetArg(args[n], XtNhSpace, isde_scale(4));              n++;
-    XtSetArg(args[n], XtNvSpace, isde_scale(2));             n++;
-    XtSetArg(args[n], XtNheight, isde_scale(36));            n++;
+    XtSetArg(args[n], XtNhSpace, 4);              n++;
+    XtSetArg(args[n], XtNvSpace, 2);             n++;
+    XtSetArg(args[n], XtNheight, 36);            n++;
     fm->nav_box = XtCreateManagedWidget("navBar", boxWidgetClass,
                                         fm->vbox, args, n);
 

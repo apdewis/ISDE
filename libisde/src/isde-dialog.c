@@ -71,8 +71,8 @@ Widget isde_dialog_create_shell(Widget parent, const char *name,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, isde_scale(width));   n++;
-    XtSetArg(args[n], XtNheight, isde_scale(height));  n++;
+    XtSetArg(args[n], XtNwidth, width);   n++;
+    XtSetArg(args[n], XtNheight, height);  n++;
     XtSetArg(args[n], XtNborderWidth, 1);              n++;
     if (title) {
         XtSetArg(args[n], XtNtitle, title);            n++;
@@ -109,8 +109,8 @@ Widget isde_dialog_add_buttons(Widget form, Widget above_widget,
     if (nbuttons <= 0)
         return NULL;
 
-    int btn_w   = isde_scale(80);
-    int btn_pad = isde_scale(8);
+    int btn_w   = 80;
+    int btn_pad = 8;
 
     /* First button horizDistance: push buttons to the right edge */
     int total_btn_width = btn_w * nbuttons + btn_pad * (nbuttons - 1);
@@ -226,7 +226,7 @@ Widget isde_dialog_confirm(Widget parent, const char *title,
         { action_label, confirm_action_cb, ctx },
         { "Cancel",     confirm_cancel_cb, ctx },
     };
-    isde_dialog_add_buttons(dialog, anchor, isde_scale(300), btns, 2);
+    isde_dialog_add_buttons(dialog, anchor, 300, btns, 2);
 
     isde_dialog_popup(ctx->shell, XtGrabExclusive);
     return ctx->shell;
@@ -267,7 +267,7 @@ Widget isde_dialog_message(Widget parent, const char *title,
     IsdeDialogButton btns[1] = {
         { "OK", message_ok_cb, ctx },
     };
-    isde_dialog_add_buttons(dialog, anchor, isde_scale(300), btns, 1);
+    isde_dialog_add_buttons(dialog, anchor, 300, btns, 1);
 
     isde_dialog_popup(ctx->shell, XtGrabExclusive);
     return ctx->shell;
@@ -328,7 +328,7 @@ Widget isde_dialog_input(Widget parent, const char *title,
         { "Cancel", input_cancel_cb, ctx },
     };
     isde_dialog_add_buttons(ctx->dialog_widget, anchor,
-                            isde_scale(300), btns, 2);
+                            300, btns, 2);
 
     isde_dialog_popup(ctx->shell, XtGrabExclusive);
     return ctx->shell;
@@ -375,7 +375,7 @@ Widget isde_dialog_font(Widget parent, const char *title,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     Widget form = XtCreateManagedWidget("fcForm", formWidgetClass,
                                         ctx->shell, args, n);
@@ -391,8 +391,8 @@ Widget isde_dialog_font(Widget parent, const char *title,
     XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
     XtSetArg(args[n], XtNright, XtChainRight);             n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(390));          n++;
-    XtSetArg(args[n], XtNheight, isde_scale(290));         n++;
+    XtSetArg(args[n], XtNwidth, 390);          n++;
+    XtSetArg(args[n], XtNheight, 290);         n++;
     ctx->chooser_widget = XtCreateManagedWidget("fontChooser",
                                                  fontChooserWidgetClass,
                                                  form, args, n);
@@ -402,7 +402,7 @@ Widget isde_dialog_font(Widget parent, const char *title,
         { "Cancel", font_cancel_cb, ctx },
     };
     isde_dialog_add_buttons(form, ctx->chooser_widget,
-                            isde_scale(400) - isde_scale(8) * 2, btns, 2);
+                            400 - 8 * 2, btns, 2);
 
     isde_dialog_popup(ctx->shell, XtGrabExclusive);
     return ctx->shell;
@@ -430,7 +430,7 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     Widget form = XtCreateManagedWidget("aboutForm", formWidgetClass,
                                         ctx->shell, args, n);
@@ -472,7 +472,7 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
     IsdeDialogButton btns[1] = {
         { "Close", about_close_cb, ctx },
     };
-    isde_dialog_add_buttons(form, prev, isde_scale(300) - isde_scale(8) * 2,
+    isde_dialog_add_buttons(form, prev, 300 - 8 * 2,
                             btns, 1);
 
     isde_dialog_popup(ctx->shell, XtGrabExclusive);
@@ -528,9 +528,9 @@ static void progress_create_dialog(IsdeProgress *p)
     /* Cancel button — right-aligned */
     n = 0;
     XtSetArg(args[n], XtNlabel, "Cancel");                 n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(80));           n++;
-    XtSetArg(args[n], XtNinternalWidth, isde_scale(8));    n++;
-    XtSetArg(args[n], XtNinternalHeight, isde_scale(8));   n++;
+    XtSetArg(args[n], XtNwidth, 80);           n++;
+    XtSetArg(args[n], XtNinternalWidth, 8);    n++;
+    XtSetArg(args[n], XtNinternalHeight, 8);   n++;
     XtSetArg(args[n], XtNflexAlign, XtflexAlignEnd);       n++;
     Widget cancel = XtCreateManagedWidget("cancelBtn", commandWidgetClass,
                                            vbox, args, n);

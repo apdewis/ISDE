@@ -190,17 +190,15 @@ int main(int argc, char **argv)
                                            shell, args, n);
 
     /* Centered dialog form */
-    int dlg_w = isde_scale(350);
-    int dlg_h = isde_scale(150);
-    int dlg_x = (scr_w - dlg_w) / 2;
-    int dlg_y = (scr_h - dlg_h) / 2;
+    int dlg_w = 350;
+    int dlg_h = 150;
 
     n = 0;
     XtSetArg(args[n], XtNwidth, dlg_w);               n++;
     XtSetArg(args[n], XtNheight, dlg_h);              n++;
     XtSetArg(args[n], XtNborderWidth, 1);             n++;
     XtSetArg(args[n], XtNbackground, form_bg);        n++;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     Widget dialog = XtCreateManagedWidget("confirmDialog", formWidgetClass,
                                           overlay, args, n);
 
@@ -218,8 +216,8 @@ int main(int argc, char **argv)
                                           dialog, args, n);
 
     /* Button row — affirmative first, Cancel last (per HIG) */
-    int btn_w = isde_scale(80);
-    int btn_pad = isde_scale(8);
+    int btn_w = 80;
+    int btn_pad = 8;
     int total_btn = btn_w * 2 + btn_pad;
     int first_horiz = dlg_w - total_btn - btn_pad * 2;
 
@@ -258,8 +256,17 @@ int main(int argc, char **argv)
 
     XtPopup(shell, XtGrabExclusive);
 
-    /* Position dialog centered after realization */
-    XtConfigureWidget(dialog, dlg_x, dlg_y, dlg_w, dlg_h, 1);
+    /* ISW auto-scaled the shell's width/height during creation, but we
+     * need exact physical screen coverage.  Force it back. */
+    XtConfigureWidget(shell, 0, 0, scr_w, scr_h, 0);
+
+    /* Position dialog centered — use physical size from the realized
+     * widget (ISW has applied HiDPI scaling) */
+    int phys_dw = dialog->core.width;
+    int phys_dh = dialog->core.height;
+    int cx = (scr_w - phys_dw) / 2;
+    int cy = (scr_h - phys_dh) / 2;
+    XtConfigureWidget(dialog, cx, cy, phys_dw, phys_dh, 1);
 
     /* Grab keyboard and pointer */
     xcb_window_t grab_win = XtWindow(shell);

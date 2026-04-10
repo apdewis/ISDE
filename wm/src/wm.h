@@ -22,7 +22,10 @@
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 
-/* ---------- Frame geometry (scaled) ---------- */
+/* ---------- Frame geometry ---------- */
+/* Logical title height — ISW auto-scales during widget creation.
+ * For physical pixel calculations (XtConfigureWidget, XCB ops),
+ * use wm->title_height which is set after the first frame creation. */
 #define WM_TITLE_HEIGHT    isde_font_height("title", 10)
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
@@ -117,6 +120,9 @@ typedef struct Wm {
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
 
+    /* Physical (HiDPI-scaled) title bar height, set after first frame */
+    int                    title_height;
+
     int                    running;
     int                    restart;
 } Wm;
@@ -151,7 +157,7 @@ void      frame_destroy(Wm *wm, WmClient *c);
 void      frame_update_title(Wm *wm, WmClient *c);
 void      frame_configure(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
-int       frame_total_height(WmClient *c);
+int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
 void      frame_create_grips(Wm *wm, WmClient *c);
 void      frame_update_grips(Wm *wm, WmClient *c);

@@ -50,7 +50,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     n = 0;
     XtSetArg(args[n], XtNlabel, label_text);               n++;
     XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(180));           n++;
+    XtSetArg(args[n], XtNwidth, 180);           n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
     if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
     Widget lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
@@ -65,7 +65,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
     XtSetArg(args[n], XtNshowValue, True);                   n++;
     XtSetArg(args[n], XtNtickInterval, 1);                   n++;
-    XtSetArg(args[n], XtNwidth, isde_scale(280));            n++;
+    XtSetArg(args[n], XtNwidth, 280);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);                    n++;
     *out_scale = XtCreateManagedWidget("scale", scaleWidgetClass,
                                        form, args, n);
@@ -96,7 +96,7 @@ static Widget desktops_create(Widget parent, XtAppContext app)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("desktopsPanel", formWidgetClass,
                                  parent, args, n);

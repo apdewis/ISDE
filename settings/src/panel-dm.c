@@ -181,13 +181,13 @@ static Widget dm_create(Widget parent, XtAppContext app)
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     Widget form = XtCreateWidget("dmPanel", formWidgetClass,
                                  parent, args, n);
 
-    int label_w = isde_scale(120);
-    int input_w = isde_scale(200);
+    int label_w = 120;
+    int input_w = 200;
 
     /* Time Format */
     n = 0;

@@ -11,6 +11,7 @@
 #include <xcb/xcb_aux.h>
 #include <isde/isde-theme.h>
 #include <xcb/xcb_cursor.h>
+#include <ISW/ISWRender.h>
 #include "isde/isde-config.h"
 
 /* ---------- helpers ---------- */
@@ -62,6 +63,12 @@ int wm_init(Wm *wm, int *argc, char **argv)
         fprintf(stderr, "isde-wm: cannot connect to X server\n");
         return -1;
     }
+
+    /* Compute physical title height: logical height × HiDPI scale factor.
+     * Needed before any frame is created, since frame geometry mixes
+     * physical client dimensions with title bar height. */
+    double sf = ISWScaleFactor(wm->toplevel);
+    wm->title_height = (int)(WM_TITLE_HEIGHT * sf + 0.5);
 
     wm->screen = XtScreen(wm->toplevel);
     wm->root = wm->screen->root;
@@ -369,7 +376,7 @@ enum {
     SNAP_TL, SNAP_TR, SNAP_BL, SNAP_BR
 };
 
-#define SNAP_THRESHOLD isde_scale(8)
+#define SNAP_THRESHOLD 8
 
 static int detect_snap_zone(Wm *wm, int rx, int ry)
 {
@@ -436,7 +443,7 @@ static void snap_preview_show(Wm *wm, int zone)
     if (pw <= 0 || ph <= 0) { return; }
 
     /* Inset by 2px for a border-like appearance */
-    int inset = isde_scale(2);
+    int inset = 2;
     px += inset; py += inset;
     pw -= 2 * inset; ph -= 2 * inset;
     if (pw < 1) { pw = 1; }
@@ -506,7 +513,7 @@ static void apply_snap(Wm *wm, WmClient *c, int zone)
     int sx, sy, sw, sh;
     snap_geometry(wm, zone, &sx, &sy, &sw, &sh);
 
-    int th = WM_TITLE_HEIGHT;
+    int th = wm->title_height;
 
     /* Save geometry for restore */
     c->save_x = c->x;
@@ -543,7 +550,7 @@ void wm_maximize_client(Wm *wm, WmClient *c)
         wm_get_work_area(wm, &wx, &wy, &ww, &wh);
         c->x = wx;
         c->y = wy;
-        int title = c->decorated ? WM_TITLE_HEIGHT : 0;
+        int title = c->decorated ? wm->title_height : 0;
         c->width  = ww - 2 * WM_BORDER_WIDTH;
         c->height = wh - title - 2 * WM_BORDER_WIDTH;
         c->maximized = 1;
@@ -791,7 +798,7 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         int ny = wm->drag_orig_y;
         int nw = wm->drag_orig_w;
         int nh = wm->drag_orig_h;
-        int min_sz = isde_scale(50);
+        int min_sz = 50;
 
         if (e == GRIP_TOP || e == GRIP_TL || e == GRIP_TR) {
             nh = wm->drag_orig_h - dy;

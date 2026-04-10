@@ -285,17 +285,4 @@ char *isde_xdg_user_dir(const char *name)
     return result;
 }
 
-int isde_scale_percent(void)
-{
-    const char *env = getenv("ISW_SCALE_FACTOR");
-    if (env) {
-        int v = (int)(atof(env) * 100 + 0.5);
-        return v > 0 ? v : 100;
-    }
-    return 100;
-}
 
-int isde_scale(int value)
-{
-    return value * isde_scale_percent() / 100;
-}

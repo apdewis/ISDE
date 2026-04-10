@@ -8,6 +8,7 @@
  */
 #include "wm.h"
 #include "isde/isde-config.h"
+#include <ISW/ISWRender.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,9 +122,9 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
 
 /* ---------- OSD popup ---------- */
 
-#define OSD_CELL   isde_scale(30)
-#define OSD_GAP    isde_scale(4)
-#define OSD_PAD    isde_scale(8)
+#define OSD_CELL   30
+#define OSD_GAP    4
+#define OSD_PAD    8
 #define OSD_TIMEOUT 800  /* ms */
 
 static void osd_hide_cb(XtPointer client_data, XtIntervalId *id)
@@ -144,9 +145,13 @@ void wm_desktops_show_osd(Wm *wm)
     int w = 2 * OSD_PAD + cols * OSD_CELL + (cols - 1) * OSD_GAP;
     int h = 2 * OSD_PAD + rows * OSD_CELL + (rows - 1) * OSD_GAP;
 
-    /* Center on screen */
-    int sx = (wm->screen->width_in_pixels - w) / 2;
-    int sy = (wm->screen->height_in_pixels - h) / 2;
+    /* Center on screen — w/h are logical; scale to physical for positioning
+     * since x/y are not auto-scaled by ISW */
+    double sf = ISWScaleFactor(wm->toplevel);
+    int phys_w = (int)(w * sf + 0.5);
+    int phys_h = (int)(h * sf + 0.5);
+    int sx = (wm->screen->width_in_pixels - phys_w) / 2;
+    int sy = (wm->screen->height_in_pixels - phys_h) / 2;
 
     /* Destroy and recreate each time for simplicity */
     if (wm->desk_osd) {

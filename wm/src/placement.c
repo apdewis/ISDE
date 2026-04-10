@@ -19,7 +19,7 @@ static void clamp_to_work_area(Wm *wm, WmClient *c)
 
     /* Shrink client if it exceeds available space (accounting for frame) */
     int max_cw = ww - 2 * WM_BORDER_WIDTH;
-    int max_ch = wh - WM_TITLE_HEIGHT - 2 * WM_BORDER_WIDTH;
+    int max_ch = wh - wm->title_height - 2 * WM_BORDER_WIDTH;
     if (max_cw < 1) { max_cw = 1; }
     if (max_ch < 1) { max_ch = 1; }
 
@@ -32,7 +32,7 @@ static void clamp_to_work_area(Wm *wm, WmClient *c)
 
     /* Clamp position so the frame fits within work area */
     int fw = frame_total_width(c);
-    int fh = frame_total_height(c);
+    int fh = frame_total_height(wm, c);
 
     if (c->x + fw > wx + ww) {
         c->x = wx + ww - fw;
@@ -63,10 +63,10 @@ static int place_transient(Wm *wm, WmClient *c)
 
     /* Center dialog over parent's frame */
     int parent_cx = parent->x + frame_total_width(parent) / 2;
-    int parent_cy = parent->y + frame_total_height(parent) / 2;
+    int parent_cy = parent->y + frame_total_height(wm, parent) / 2;
 
     c->x = parent_cx - frame_total_width(c) / 2;
-    c->y = parent_cy - frame_total_height(c) / 2;
+    c->y = parent_cy - frame_total_height(wm, c) / 2;
 
     clamp_to_work_area(wm, c);
     return 1;
@@ -88,7 +88,7 @@ static int place_dialog_type(Wm *wm, WmClient *c)
     wm_get_work_area(wm, &wx, &wy, &ww, &wh);
 
     c->x = wx + (ww - frame_total_width(c)) / 2;
-    c->y = wy + (wh - frame_total_height(c)) / 2;
+    c->y = wy + (wh - frame_total_height(wm, c)) / 2;
 
     clamp_to_work_area(wm, c);
     return 1;
@@ -96,7 +96,7 @@ static int place_dialog_type(Wm *wm, WmClient *c)
 
 /* ---------- cascade placement for normal windows ---------- */
 
-#define CASCADE_STEP  isde_scale(24)
+#define CASCADE_STEP  24
 
 static void place_cascade(Wm *wm, WmClient *c)
 {

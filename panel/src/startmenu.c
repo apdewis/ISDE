@@ -63,10 +63,10 @@ static void set_start_btn_active(Panel *p, int active)
     XtSetValues(p->start_btn, args, 2);
 }
 
-#define MENU_WIDTH       isde_scale(400)
-#define MENU_HEIGHT      isde_scale(350)
-#define CAT_PANE_WIDTH   isde_scale(150)
-#define TOOLBAR_HEIGHT   isde_scale(28)
+#define MENU_WIDTH       400
+#define MENU_HEIGHT      350
+#define CAT_PANE_WIDTH   150
+#define TOOLBAR_HEIGHT   28
 
 /* Standard freedesktop.org category mapping */
 static const struct { const char *key; const char *label; } CAT_MAP[] = {
@@ -381,15 +381,19 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     }
     set_start_btn_active(p, 1);
 
-    /* Position above the panel at the left edge of primary monitor */
-    int panel_y = p->mon_y + p->mon_h - PANEL_HEIGHT;
-    int menu_y = panel_y - MENU_HEIGHT;
+    /* Position above the panel at the left edge of primary monitor.
+     * Use physical dimensions from the realized widgets. */
+    int phys_panel_h = p->shell->core.height;
+    int panel_y = p->mon_y + p->mon_h - phys_panel_h;
 
     if (!XtIsRealized(p->start_shell)) {
         XtRealizeWidget(p->start_shell);
     }
+    int menu_w = p->start_shell->core.width;
+    int menu_h = p->start_shell->core.height;
+    int menu_y = panel_y - menu_h;
     XtConfigureWidget(p->start_shell, p->mon_x, menu_y,
-                      MENU_WIDTH, MENU_HEIGHT, 1);
+                      menu_w, menu_h, 1);
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
@@ -568,7 +572,7 @@ void startmenu_init(Panel *p)
                                             form, args, n);
 
     /* btn_size = TOOLBAR_HEIGHT - top_margin(4) - bottom_margin(4) */
-    int btn_margin = isde_scale(4);
+    int btn_margin = 4;
     int btn_size   = TOOLBAR_HEIGHT - btn_margin * 2;
     int btn_x      = MENU_WIDTH - btn_size - btn_margin;
 

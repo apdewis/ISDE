@@ -12,19 +12,19 @@ UI and interaction conventions for all ISDE components. Follow these rules when 
 
 ## Spacing
 
-- **Pane padding**: Side menus (navigation lists, category bars) and content areas must have `isde_scale(8)` padding on all four sides. Use `XtNdefaultDistance` on the containing Form, or explicit `XtNhorizDistance` / `XtNvertDistance` constraints on edge children.
+- **Pane padding**: Side menus (navigation lists, category bars) and content areas must have `8` padding on all four sides. Use `XtNdefaultDistance` on the containing Form, or explicit `XtNhorizDistance` / `XtNvertDistance` constraints on edge children.
 
 ## Form Layout
 
 - **Label placement**: Labels go to the left of their control, on the same row. Never above. Right-align labels to form a clean column edge against the controls. Use a consistent `XtNwidth` for all labels in a form with `XtNjustify, XtJustifyRight`.
 - **Navigation menus**: Side menus and category lists are single-column. Items in these menus use section heading style — `sectionHd` widget name for the heading font (general +2pt bold).
 - **Control column**: Controls start at the same horizontal position, forming a left-aligned column to the right of the label column.
-- **Row spacing**: Use the standard `isde_scale(8)` vertical distance between rows (`XtNvertDistance` or Form `XtNdefaultDistance`).
-- **Group spacing**: Visually related controls share the standard row spacing. Use `isde_scale(16)` between unrelated groups or sections.
+- **Row spacing**: Use the standard `8` vertical distance between rows (`XtNvertDistance` or Form `XtNdefaultDistance`).
+- **Group spacing**: Visually related controls share the standard row spacing. Use `16` between unrelated groups or sections.
 
 ## Window Conventions
 
-- **Initial size**: Set a sensible default via `XtNwidth` / `XtNheight` on the shell. All sizes must use `isde_scale()`.
+- **Initial size**: Set a sensible default via `XtNwidth` / `XtNheight` on the shell. ISW auto-scales all widget dimensions for HiDPI.
 - **Minimum size**: Set `XtNminWidth` / `XtNminHeight` WM hints on all resizable top-level windows. The minimum must be large enough to keep the UI usable (no clipped controls or overlapping buttons).
 - **Working area limit**: Never set an initial window size that exceeds the available working area. Query the screen geometry and `_NET_WORKAREA` and clamp if needed.
 - **Window borders**: All non-maximized windows, including dialogs, must have a 1px border in `scheme->fg`. Maximized windows have no border (borderWidth 0).
@@ -62,7 +62,7 @@ UI and interaction conventions for all ISDE components. Follow these rules when 
 
 - **Button order**: Affirmative action first (leftmost), Cancel/dismiss last (rightmost). E.g. "OK / Cancel", "Save / Revert", "Delete / Cancel".
 - **Alignment**: Action buttons sit at the **bottom-right** of the dialog or panel. Anchor with `XtChainRight` / `XtChainBottom`.
-- **Button width**: All buttons in an action row must be the same width. Use `isde_scale(80)` as the standard — enough to fit 10 characters comfortably.
-- **Button spacing**: `isde_scale(8)` between buttons in an action row (`XtNhorizDistance`).
-- **Button padding**: `isde_scale(8)` internal padding on all sides (`XtNinternalHeight`, `XtNinternalWidth`).
+- **Button width**: All buttons in an action row must be the same width. Use `80` as the standard — enough to fit 10 characters comfortably.
+- **Button spacing**: `8` between buttons in an action row (`XtNhorizDistance`).
+- **Button padding**: `8` internal padding on all sides (`XtNinternalHeight`, `XtNinternalWidth`).
 - **Destructive actions**: No special button style. The label alone (e.g. "Delete") communicates the action.

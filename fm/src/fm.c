@@ -964,8 +964,8 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     /* Create toplevel shell — first window reuses XtAppInitialize's shell,
      * subsequent windows create new application shells. */
-    int fm_w = isde_scale(700);
-    int fm_h = isde_scale(500);
+    int fm_w = 700;
+    int fm_h = 500;
     isde_clamp_to_workarea(XtDisplay(app->first_toplevel), 0, &fm_w, &fm_h);
 
     if (app->nwindows == 0) {
@@ -975,8 +975,8 @@ Fm *fm_window_new(FmApp *app, const char *path)
         Cardinal n = 0;
         XtSetArg(args[n], XtNwidth, fm_w);                n++;
         XtSetArg(args[n], XtNheight, fm_h);               n++;
-        XtSetArg(args[n], XtNminWidth, isde_scale(400));  n++;
-        XtSetArg(args[n], XtNminHeight, isde_scale(300)); n++;
+        XtSetArg(args[n], XtNminWidth, 400);  n++;
+        XtSetArg(args[n], XtNminHeight, 300); n++;
         fm->toplevel = XtAppCreateShell("isde-fm", "ISDE-FM",
                                         applicationShellWidgetClass,
                                         XtDisplay(app->first_toplevel),
@@ -988,8 +988,8 @@ Fm *fm_window_new(FmApp *app, const char *path)
         Cardinal n = 0;
         XtSetArg(args[n], XtNwidth, fm_w);                n++;
         XtSetArg(args[n], XtNheight, fm_h);               n++;
-        XtSetArg(args[n], XtNminWidth, isde_scale(400));  n++;
-        XtSetArg(args[n], XtNminHeight, isde_scale(300)); n++;
+        XtSetArg(args[n], XtNminWidth, 400);  n++;
+        XtSetArg(args[n], XtNminHeight, 300); n++;
         XtSetValues(fm->toplevel, args, n);
     }
 

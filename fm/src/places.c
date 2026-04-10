@@ -339,8 +339,8 @@ void places_init(Fm *fm)
         snprintf(wname, sizeof(wname), "placeHdr%d", i);
         XtSetArg(args[n], XtNlabel, pd->places[hdr_idx].label); n++;
         XtSetArg(args[n], XtNborderWidth, 0);                n++;
-        XtSetArg(args[n], XtNinternalWidth, isde_scale(6));  n++;
-        XtSetArg(args[n], XtNinternalHeight, isde_scale(2)); n++;
+        XtSetArg(args[n], XtNinternalWidth, 6);  n++;
+        XtSetArg(args[n], XtNinternalHeight, 2); n++;
         XtSetArg(args[n], XtNjustify, XtJustifyLeft);        n++;
         s->header = XtCreateManagedWidget(wname, labelWidgetClass,
                                            fm->places_box, args, n);
@@ -355,8 +355,8 @@ void places_init(Fm *fm)
             XtSetArg(args[n], XtNforceColumns, True);             n++;
             XtSetArg(args[n], XtNverticalList, True);             n++;
             XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-            XtSetArg(args[n], XtNinternalWidth, isde_scale(4));   n++;
-            XtSetArg(args[n], XtNinternalHeight, isde_scale(2));  n++;
+            XtSetArg(args[n], XtNinternalWidth, 4);   n++;
+            XtSetArg(args[n], XtNinternalHeight, 2);  n++;
             s->list = XtCreateManagedWidget(wname, listWidgetClass,
                                              fm->places_box, args, n);
             XtAddCallback(s->list, XtNcallback, place_list_cb, fm);

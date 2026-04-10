@@ -110,7 +110,7 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     XtGetValues(parent, qargs, 2);
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("appearForm", formWidgetClass,
                                  parent, args, n);
@@ -137,9 +137,9 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     Widget prev = NULL;
     int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
 
-    int lbl_w = isde_scale(60);
-    int list_max = isde_scale(200);
-    int list_w = (pw > 0 ? pw - lbl_w - isde_scale(24) : list_max);
+    int lbl_w = 60;
+    int list_max = 200;
+    int list_w = (pw > 0 ? pw - lbl_w - 24 : list_max);
     if (list_w > list_max) list_w = list_max;
 
     /* --- Colour Scheme --- */

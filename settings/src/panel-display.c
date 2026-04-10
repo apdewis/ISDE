@@ -234,7 +234,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtGetValues(parent, qargs, 2);
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("displayForm", formWidgetClass,
                                  parent, args, n);
@@ -250,7 +250,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     Widget prev = NULL;
 
     /* --- Output list (label-left) --- */
-    int lbl_w = isde_scale(180);
+    int lbl_w = 180;
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Outputs:");            n++;

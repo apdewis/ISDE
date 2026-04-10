@@ -63,7 +63,7 @@ Triggered by daemon sending `MODE_LOCK <username>` to greeter.
 The logout/shutdown/reboot confirmation panel runs within the user's X session as a fullscreen override-redirect window, not on the greeter VT. This avoids VT switch latency for a transient dialog.
 
 Implementation: a small helper binary or a mode of isde-session that creates an OverrideShell with:
-- Centered Form (~`isde_scale(350)` x `isde_scale(150)`)
+- Centered Form (~350 x 150 logical pixels)
 - Label: "Are you sure you want to shut down?" / "...log out?" / "...reboot?"
 - Button row (bottom-right per HIG): affirmative action first ("Shut Down"), "Cancel" last
 - Escape or Cancel dismisses

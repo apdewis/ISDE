@@ -539,7 +539,7 @@ static void build_ui(Greeter *g)
 /*
  * Query the primary (or first connected) output via xcb-randr and compute
  * a scale factor from its physical size and pixel resolution.
- * Sets ISW_SCALE_FACTOR so that isde_scale() picks it up.
+ * Sets ISW_SCALE_FACTOR so that ISW picks it up.
  * If config_scale > 0, that value is used as an explicit override.
  */
 static void detect_hidpi(xcb_connection_t *conn, xcb_screen_t *screen,

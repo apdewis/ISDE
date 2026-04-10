@@ -152,7 +152,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, isde_scale(8)); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
     Widget form = XtCreateWidget("fontsForm", formWidgetClass,
                                  parent, args, n);
@@ -197,7 +197,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         n = 0;
         XtSetArg(args[n], XtNlabel, font_labels[i]);  n++;
         XtSetArg(args[n], XtNborderWidth, 0);          n++;
-        XtSetArg(args[n], XtNwidth, isde_scale(100));  n++;
+        XtSetArg(args[n], XtNwidth, 100);  n++;
         XtSetArg(args[n], XtNjustify, XtJustifyLeft);  n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
         Widget lbl = XtCreateManagedWidget("fontCatLbl", labelWidgetClass,
@@ -210,7 +210,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         n = 0;
         XtSetArg(args[n], XtNlabel, desc);             n++;
         XtSetArg(args[n], XtNborderWidth, 0);           n++;
-        XtSetArg(args[n], XtNwidth, isde_scale(180));   n++;
+        XtSetArg(args[n], XtNwidth, 180);   n++;
         XtSetArg(args[n], XtNjustify, XtJustifyLeft);   n++;
         XtSetArg(args[n], XtNfromHoriz, lbl);           n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }

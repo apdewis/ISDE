@@ -35,9 +35,9 @@
 
 /* ---------- Panel geometry (scaled) ---------- */
 #define PANEL_HEIGHT      isde_font_height("toolbar", 16)
-#define PANEL_ICON_SIZE   isde_scale(22)
-#define PANEL_BUTTON_PAD  isde_scale(4)
-#define PANEL_CLOCK_WIDTH isde_scale(90)
+#define PANEL_ICON_SIZE   22
+#define PANEL_BUTTON_PAD  4
+#define PANEL_CLOCK_WIDTH 90
 
 /* ---------- Taskbar: one entry per WM_CLASS group ---------- */
 typedef struct TaskGroup {
