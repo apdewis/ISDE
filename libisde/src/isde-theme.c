@@ -881,11 +881,11 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*ctxList.background", s->menu.bg);
     res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
 
-    /* Clock */
-    res[i++] = fmt_color("*clockTime.background", s->taskbar.bg);
-    res[i++] = fmt_color("*clockTime.foreground", s->taskbar.fg);
-    res[i++] = fmt_color("*clockDate.background", s->taskbar.bg);
-    res[i++] = fmt_color("*clockDate.foreground", s->taskbar.fg);
+    /* Panel clock (scoped to panelForm so greeter clock is unaffected) */
+    res[i++] = fmt_color("*panelForm.clockTime.background", s->taskbar.bg);
+    res[i++] = fmt_color("*panelForm.clockTime.foreground", s->taskbar.fg);
+    res[i++] = fmt_color("*panelForm.clockDate.background", s->taskbar.bg);
+    res[i++] = fmt_color("*panelForm.clockDate.foreground", s->taskbar.fg);
 
     /* WM title bar (unfocused defaults — focused set via XtSetValues) */
     res[i++] = fmt_color("*titleBar.background", s->titlebar.bg);
