@@ -419,13 +419,22 @@ static void build_ui(Greeter *g)
                                          g->form, args, n);
     XtAddCallback(g->login_btn, XtNcallback, login_cb, g);
 
-    /* --- Power buttons (bottom-left) --- */
+    /* --- Power buttons (horizontally centered at bottom) --- */
     int btn_y = g->screen_h - isde_scale(40) - BOTTOM_MARGIN;
-    int btn_x = BUTTON_PAD;
+    int btn_count = g->allow_shutdown + g->allow_reboot + g->allow_suspend;
+    int btn_total_w = btn_count * BUTTON_W + (btn_count - 1) * BUTTON_PAD;
+    int btn_x = (g->screen_w - btn_total_w) / 2;
+
+    char *shutdown_icon = isde_icon_find("actions", "system-shutdown");
+    char *reboot_icon   = isde_icon_find("actions", "system-reboot");
+    char *suspend_icon  = isde_icon_find("actions", "system-suspend");
 
     if (g->allow_shutdown) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "Shut Down");         n++;
+        XtSetArg(args[n], XtNlabel, "");                   n++;
+        if (shutdown_icon) {
+            XtSetArg(args[n], XtNimage, shutdown_icon);    n++;
+        }
         XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
         XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
         XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
@@ -444,7 +453,10 @@ static void build_ui(Greeter *g)
 
     if (g->allow_reboot) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "Reboot");            n++;
+        XtSetArg(args[n], XtNlabel, "");                   n++;
+        if (reboot_icon) {
+            XtSetArg(args[n], XtNimage, reboot_icon);     n++;
+        }
         XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
         XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
         XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
@@ -463,7 +475,10 @@ static void build_ui(Greeter *g)
 
     if (g->allow_suspend) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "Suspend");            n++;
+        XtSetArg(args[n], XtNlabel, "");                   n++;
+        if (suspend_icon) {
+            XtSetArg(args[n], XtNimage, suspend_icon);    n++;
+        }
         XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
         XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
         XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
@@ -478,6 +493,10 @@ static void build_ui(Greeter *g)
                                                g->form, args, n);
         XtAddCallback(g->suspend_btn, XtNcallback, suspend_cb, g);
     }
+
+    free(shutdown_icon);
+    free(reboot_icon);
+    free(suspend_icon);
 }
 
 /* ---------- HiDPI detection ---------- */
