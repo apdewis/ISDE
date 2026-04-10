@@ -259,10 +259,14 @@ static void build_ui(Greeter *g)
     int form_x = (g->screen_w - LOGIN_FORM_W) / 2;
     int form_y = g->screen_h / 3;  /* roughly 1/3 down */
 
+    /* 4 rows (user, pass, session, error) fit in 1/4 screen height */
+    int input_h = (g->screen_h / 4 - 3 * ROW_GAP - SECTION_GAP) / 4;
+
     /* Username label */
     n = 0;
     XtSetArg(args[n], XtNlabel, "Username");              n++;
     XtSetArg(args[n], XtNwidth, LABEL_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                 n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNhorizDistance, form_x);           n++;
@@ -277,6 +281,7 @@ static void build_ui(Greeter *g)
     /* Username text input */
     n = 0;
     XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                  n++;
     XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
     XtSetArg(args[n], XtNfromHoriz, g->user_label);        n++;
@@ -293,6 +298,7 @@ static void build_ui(Greeter *g)
     n = 0;
     XtSetArg(args[n], XtNlabel, "Password");              n++;
     XtSetArg(args[n], XtNwidth, LABEL_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                 n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNhorizDistance, form_x);           n++;
@@ -308,6 +314,7 @@ static void build_ui(Greeter *g)
     /* Password text input (echo off) */
     n = 0;
     XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                  n++;
     XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
     XtSetArg(args[n], XtNecho, False);                     n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
@@ -330,6 +337,7 @@ static void build_ui(Greeter *g)
     n = 0;
     XtSetArg(args[n], XtNlabel, "Session");                n++;
     XtSetArg(args[n], XtNwidth, LABEL_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                 n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNhorizDistance, form_x);           n++;
@@ -356,6 +364,7 @@ static void build_ui(Greeter *g)
     XtSetArg(args[n], XtNdefaultColumns, 1);               n++;
     XtSetArg(args[n], XtNforceColumns, True);              n++;
     XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
+    XtSetArg(args[n], XtNheight, input_h);                 n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
     XtSetArg(args[n], XtNfromHoriz, g->session_label);     n++;
     XtSetArg(args[n], XtNfromVert, g->pass_text);          n++;
@@ -376,6 +385,7 @@ static void build_ui(Greeter *g)
     n = 0;
     XtSetArg(args[n], XtNlabel, " ");                     n++;
     XtSetArg(args[n], XtNwidth, LOGIN_FORM_W);            n++;
+    XtSetArg(args[n], XtNheight, input_h);                 n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNhorizDistance, form_x);           n++;
     XtSetArg(args[n], XtNfromVert, g->session_btn);        n++;
@@ -387,15 +397,19 @@ static void build_ui(Greeter *g)
     g->error_label = XtCreateManagedWidget("errorLabel", labelWidgetClass,
                                            g->form, args, n);
 
-    /* Login button */
+    /* Login button (inline right of password field) */
+    char *login_icon = isde_icon_find("actions", "system-log-in");
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Log In");                 n++;
-    XtSetArg(args[n], XtNwidth, BUTTON_W);                 n++;
+    XtSetArg(args[n], XtNlabel, "");                       n++;
+    if (login_icon) {
+        XtSetArg(args[n], XtNimage, login_icon);           n++;
+    }
+    XtSetArg(args[n], XtNheight, input_h);                  n++;
     XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);       n++;
-    XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);      n++;
-    int login_x = form_x + LABEL_W + ROW_GAP;
-    XtSetArg(args[n], XtNhorizDistance, login_x);          n++;
-    XtSetArg(args[n], XtNfromVert, g->error_label);        n++;
+    XtSetArg(args[n], XtNinternalHeight, 0);               n++;
+    XtSetArg(args[n], XtNfromHoriz, g->pass_text);         n++;
+    XtSetArg(args[n], XtNhorizDistance, ROW_GAP);          n++;
+    XtSetArg(args[n], XtNfromVert, g->user_text);          n++;
     XtSetArg(args[n], XtNvertDistance, ROW_GAP);           n++;
     XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
     XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
