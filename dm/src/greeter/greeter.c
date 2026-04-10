@@ -13,7 +13,7 @@
 /* ---------- Geometry ---------- */
 
 #define LABEL_W          100
-#define INPUT_W          200
+#define INPUT_W          300
 #define LOGIN_FORM_W     (LABEL_W + ROW_GAP + INPUT_W)
 #define BUTTON_W         80
 #define BUTTON_PAD       8
