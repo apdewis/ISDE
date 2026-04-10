@@ -260,10 +260,24 @@ static void build_ui(Greeter *g)
     /* --- Login form (centered on 5/8 line, fits in 3rd quarter) --- */
     int input_x = (g->logical_w - INPUT_W) / 2;
     int label_x = input_x - ROW_GAP - LABEL_W;
-    int quarter_h = g->logical_h / 4;
 
-    /* 4 rows (user, pass, session, error) fit in the 3rd quarter */
-    int input_h = (quarter_h - 3 * ROW_GAP - SECTION_GAP) / 4;
+    /* Measure font-derived row height: create a temporary label, read
+     * its natural height, destroy it, then use that for layout. */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "X");                     n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
+    Widget probe = XtCreateWidget("probe", labelWidgetClass,
+                                  g->form, args, n);
+    Dimension natural_h = 0;
+    XtVaGetValues(probe, XtNheight, &natural_h, NULL);
+    XtDestroyWidget(probe);
+
+    double sf = ISWScaleFactor(g->toplevel);
+    if (sf < 1.0) {
+        sf = 1.0;
+    }
+    int input_h = (int)(natural_h / sf + 0.5);
+
     int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
     int form_y = g->logical_h * 5 / 8 - form_total_h / 2;
     int row1_y = form_y;
