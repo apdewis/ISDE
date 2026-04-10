@@ -84,30 +84,13 @@ static void suspend_cb(Widget w, XtPointer cd, XtPointer call)
     greeter_ipc_send(g, "SUSPEND");
 }
 
-static void session_select_cb(Widget w, XtPointer cd, XtPointer call)
+static void session_dropdown_cb(Widget w, XtPointer cd, XtPointer call)
 {
-    (void)w; (void)call;
+    (void)w;
     Greeter *g = (Greeter *)cd;
-
-    /* Find which SmeBSB was selected */
-    for (int i = 0; i < g->nsessions; i++) {
-        /* The client_data carries the index encoded as a pointer */
-        /* We use the widget name to identify */
-    }
-    /* This is handled per-item in the menu creation */
-}
-
-static void session_item_cb(Widget w, XtPointer cd, XtPointer call)
-{
-    (void)w; (void)call;
-    Greeter *g = (Greeter *)((void **)cd)[0];
-    int idx = (int)(long)((void **)cd)[1];
-
-    if (idx >= 0 && idx < g->nsessions) {
-        g->active_session = idx;
-        Arg args[20];
-        XtSetArg(args[0], XtNlabel, g->sessions[idx].name);
-        XtSetValues(g->session_btn, args, 1);
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    if (ret->list_index >= 0 && ret->list_index < g->nsessions) {
+        g->active_session = ret->list_index;
     }
 }
 
@@ -246,32 +229,6 @@ static void load_config(Greeter *g)
 
 /* ---------- UI construction ---------- */
 
-static void build_session_menu(Greeter *g)
-{
-    /* Create SimpleMenu popup */
-    g->session_menu = XtCreatePopupShell("sessionMenu",
-                                         simpleMenuWidgetClass,
-                                         g->session_btn, NULL, 0);
-
-    /* Static storage for callback data — we need it to persist */
-    static void *cb_data[64][2];
-
-    for (int i = 0; i < g->nsessions && i < 64; i++) {
-        Arg args[20];
-        Cardinal n = 0;
-        XtSetArg(args[n], XtNlabel, g->sessions[i].name); n++;
-        char name[32];
-        snprintf(name, sizeof(name), "sess%d", i);
-
-        Widget item = XtCreateManagedWidget(name, smeBSBObjectClass,
-                                            g->session_menu, args, n);
-
-        cb_data[i][0] = g;
-        cb_data[i][1] = (void *)(long)i;
-        XtAddCallback(item, XtNcallback, session_item_cb, cb_data[i]);
-    }
-}
-
 static void build_ui(Greeter *g)
 {
     Arg args[20];
@@ -385,27 +342,34 @@ static void build_ui(Greeter *g)
     g->session_label = XtCreateManagedWidget("sessionLabel", labelWidgetClass,
                                              g->form, args, n);
 
-    /* Session MenuButton */
-    const char *sess_label = g->nsessions > 0
-        ? g->sessions[g->active_session].name : "(none)";
+    /* Session dropdown */
+    g->session_names = malloc((g->nsessions + 1) * sizeof(String));
+    for (int i = 0; i < g->nsessions; i++) {
+        g->session_names[i] = g->sessions[i].name;
+    }
+    g->session_names[g->nsessions] = NULL;
+
     n = 0;
-    XtSetArg(args[n], XtNlabel, sess_label);               n++;
+    XtSetArg(args[n], XtNlist, g->session_names);          n++;
+    XtSetArg(args[n], XtNnumberStrings, g->nsessions);    n++;
+    XtSetArg(args[n], XtNdropdownMode, True);              n++;
+    XtSetArg(args[n], XtNdefaultColumns, 1);               n++;
+    XtSetArg(args[n], XtNforceColumns, True);              n++;
     XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
     XtSetArg(args[n], XtNfromHoriz, g->session_label);     n++;
     XtSetArg(args[n], XtNfromVert, g->pass_text);          n++;
     XtSetArg(args[n], XtNhorizDistance, ROW_GAP);          n++;
     XtSetArg(args[n], XtNvertDistance, ROW_GAP);           n++;
-    XtSetArg(args[n], XtNmenuName, "sessionMenu");         n++;
     XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
     XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
     XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->session_btn = XtCreateManagedWidget("sessionBtn", menuButtonWidgetClass,
+    g->session_btn = XtCreateManagedWidget("sessionBtn", listWidgetClass,
                                            g->form, args, n);
-
+    XtAddCallback(g->session_btn, XtNcallback, session_dropdown_cb, g);
     if (g->nsessions > 0) {
-        build_session_menu(g);
+        IswListHighlight(g->session_btn, g->active_session);
     }
 
     /* Error label */

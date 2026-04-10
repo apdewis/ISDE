@@ -12,9 +12,7 @@
 #include <ISW/Label.h>
 #include <ISW/Command.h>
 #include <ISW/AsciiText.h>
-#include <ISW/SimpleMenu.h>
-#include <ISW/SmeBSB.h>
-#include <ISW/MenuButton.h>
+#include <ISW/List.h>
 
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
@@ -49,7 +47,7 @@ typedef struct Greeter {
     Widget          pass_text;
     Widget          session_label;
     Widget          session_btn;
-    Widget          session_menu;
+    String         *session_names;   /* backing array for dropdown List */
     Widget          error_label;
     Widget          login_btn;
 

@@ -75,6 +75,8 @@ void greeter_sessions_load(Greeter *g)
 
 void greeter_sessions_cleanup(Greeter *g)
 {
+    free(g->session_names);
+    g->session_names = NULL;
     for (int i = 0; i < g->nsessions; i++) {
         free(g->sessions[i].name);
         free(g->sessions[i].desktop_file);
