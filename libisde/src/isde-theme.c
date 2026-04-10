@@ -796,7 +796,8 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*foreground", s->fg);
     res[i++] = fmt_color("*borderColor", s->border);
 
-    /* Window borders — 1px in fg color */
+    /* Shell backgrounds and borders */
+    res[i++] = fmt_color("*OverrideShell.background", s->bg);
     res[i++] = fmt_color("*TransientShell.borderColor", s->fg);
     res[i++] = fmt_color("*TopLevelShell.borderColor", s->fg);
 

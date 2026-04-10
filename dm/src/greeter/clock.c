@@ -34,27 +34,25 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
 
 void greeter_clock_init(Greeter *g)
 {
-    /* Calculate font size string for clock.
-     * Use a large font for time, smaller for date. */
-    int time_pt = isde_scale(36);
-    int date_pt = isde_scale(14);
-    char time_font[128], date_font[128];
-    snprintf(time_font, sizeof(time_font),
-             "-*-sans-bold-r-*-*-%d-*-*-*-*-*-*-*", time_pt);
-    snprintf(date_font, sizeof(date_font),
-             "-*-sans-medium-r-*-*-%d-*-*-*-*-*-*-*", date_pt);
+    /* Time label fills the 2nd eighth of screen (1/8 to 2/8).
+     * Font size ~72% of the slot height for visual fill. */
+    int eighth = g->screen_h / 8;
+    int time_pt = eighth * 58 / 100;
+    char time_font[64], date_font[64];
+    snprintf(time_font, sizeof(time_font), "Sans Bold-%d", time_pt);
+    snprintf(date_font, sizeof(date_font), "Sans-%d", 14);
 
-    int clock_x = g->screen_w / 2 - isde_scale(100);
-    int clock_y = isde_scale(60);
+    int clock_y = eighth;  /* top of 2nd eighth */
 
     /* Time label */
     g->clock_time = XtVaCreateManagedWidget("clockTime", labelWidgetClass,
         g->form,
         XtNlabel,         "00:00",
-        XtNwidth,         isde_scale(200),
+        XtNwidth,         g->screen_w,
+        XtNheight,        eighth,
         XtNborderWidth,   0,
         XtNjustify,       XtJustifyCenter,
-        XtNhorizDistance,  clock_x,
+        XtNhorizDistance,  0,
         XtNvertDistance,   clock_y,
         XtNtop,           XtChainTop,
         XtNbottom,        XtChainTop,
@@ -67,12 +65,12 @@ void greeter_clock_init(Greeter *g)
     g->clock_date = XtVaCreateManagedWidget("clockDate", labelWidgetClass,
         g->form,
         XtNlabel,         "0000-00-00",
-        XtNwidth,         isde_scale(200),
+        XtNwidth,         g->screen_w,
         XtNborderWidth,   0,
         XtNjustify,       XtJustifyCenter,
-        XtNhorizDistance,  clock_x,
+        XtNhorizDistance,  0,
         XtNfromVert,      g->clock_time,
-        XtNvertDistance,   isde_scale(4),
+        XtNvertDistance,   4,
         XtNtop,           XtChainTop,
         XtNbottom,        XtChainTop,
         XtNleft,          XtChainLeft,

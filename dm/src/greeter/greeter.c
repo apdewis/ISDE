@@ -12,14 +12,14 @@
 
 /* ---------- Geometry ---------- */
 
-#define LOGIN_FORM_W     isde_scale(320)
-#define INPUT_W          isde_scale(200)
-#define LABEL_W          isde_scale(80)
-#define BUTTON_W         isde_scale(80)
-#define BUTTON_PAD       isde_scale(8)
-#define ROW_GAP          isde_scale(8)
-#define SECTION_GAP      isde_scale(16)
-#define BOTTOM_MARGIN    isde_scale(32)
+#define LOGIN_FORM_W     320
+#define INPUT_W          200
+#define LABEL_W          80
+#define BUTTON_W         80
+#define BUTTON_PAD       8
+#define ROW_GAP          8
+#define SECTION_GAP      16
+#define BOTTOM_MARGIN    32
 
 /* ---------- Callbacks ---------- */
 
@@ -247,20 +247,24 @@ static void build_ui(Greeter *g)
 
     /* Main form */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 0); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);     n++;
+    XtSetArg(args[n], XtNdefaultDistance, 0);     n++;
+    XtSetArg(args[n], XtNborderWidth, 0);         n++;
+    XtSetArg(args[n], XtNwidth, g->screen_w);     n++;
+    XtSetArg(args[n], XtNheight, g->screen_h);    n++;
     g->form = XtCreateManagedWidget("greeterForm", formWidgetClass,
                                     g->shell, args, n);
 
     /* --- Clock area (centered at top) --- */
     greeter_clock_init(g);
 
-    /* --- Login form (centered) --- */
+    /* --- Login form (centered on 5/8 line, fits in 3rd quarter) --- */
     int form_x = (g->screen_w - LOGIN_FORM_W) / 2;
-    int form_y = g->screen_h / 3;  /* roughly 1/3 down */
+    int quarter_h = g->screen_h / 4;
 
-    /* 4 rows (user, pass, session, error) fit in 1/4 screen height */
-    int input_h = (g->screen_h / 4 - 3 * ROW_GAP - SECTION_GAP) / 4;
+    /* 4 rows (user, pass, session, error) fit in the 3rd quarter */
+    int input_h = (quarter_h - 3 * ROW_GAP - SECTION_GAP) / 4;
+    int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
+    int form_y = g->screen_h * 5 / 8 - form_total_h / 2;
 
     /* Username label */
     n = 0;
@@ -420,7 +424,8 @@ static void build_ui(Greeter *g)
     XtAddCallback(g->login_btn, XtNcallback, login_cb, g);
 
     /* --- Power buttons (horizontally centered at bottom) --- */
-    int btn_y = g->screen_h - isde_scale(40) - BOTTOM_MARGIN;
+    int btn_h = 40;
+    int btn_y = g->screen_h * 7 / 8 - btn_h / 2;
     int btn_count = g->allow_shutdown + g->allow_reboot + g->allow_suspend;
     int btn_total_w = btn_count * BUTTON_W + (btn_count - 1) * BUTTON_PAD;
     int btn_x = (g->screen_w - btn_total_w) / 2;
