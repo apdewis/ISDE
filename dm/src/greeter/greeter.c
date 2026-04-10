@@ -712,6 +712,9 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Build UI */
     build_ui(g);
 
+    /* Default focus to username field so the cursor is visible */
+    XtSetKeyboardFocus(g->form, g->user_text);
+
     /* Realize and show */
     XtRealizeWidget(g->shell);
     XtPopup(g->shell, XtGrabNone);
