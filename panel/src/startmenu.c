@@ -381,10 +381,8 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     }
     set_start_btn_active(p, 1);
 
-    /* Position above the panel at the left edge of primary monitor.
-     * Use physical dimensions from the realized widgets. */
-    int phys_panel_h = p->shell->core.height;
-    int panel_y = p->mon_y + p->mon_h - phys_panel_h;
+    /* Position above the panel at the left edge of primary monitor. */
+    int panel_y = p->mon_y + p->mon_h - p->phys_panel_h;
 
     if (!XtIsRealized(p->start_shell)) {
         XtRealizeWidget(p->start_shell);
@@ -458,7 +456,7 @@ void startmenu_init(Panel *p)
     Pixel border_px = scheme_border
         ? start_color_pixel(p, scheme_border->border)
         : XtScreen(p->start_btn)->white_pixel;
-    XtSetArg(args[n], XtNwidth, MENU_WIDTH);          n++;
+    XtSetArg(args[n], XtNwidth, MENU_WIDTH);           n++;
     XtSetArg(args[n], XtNheight, MENU_HEIGHT);         n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);      n++;
     XtSetArg(args[n], XtNborderWidth, 1);              n++;

@@ -263,13 +263,20 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     closure[0] = wm;
     closure[1] = c;
 
-    /* Create OverrideShell for the frame */
+    /* Create OverrideShell for the frame.  Shell dimensions are in
+       physical pixels (from client geometry), but ISW scales shell
+       resources during creation — divide by scale factor to get logical
+       values that ISW will scale back to the correct physical size. */
+    double sf = wm->scale_factor;
+    int log_fw = (int)(fw / sf + 0.5);
+    int log_fh = (int)(fh / sf + 0.5);
+
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNx, c->x);               n++;
     XtSetArg(args[n], XtNy, c->y);               n++;
-    XtSetArg(args[n], XtNwidth, fw);              n++;
-    XtSetArg(args[n], XtNheight, fh);             n++;
+    XtSetArg(args[n], XtNwidth, log_fw);          n++;
+    XtSetArg(args[n], XtNheight, log_fh);         n++;
     XtSetArg(args[n], XtNoverrideRedirect, True); n++;
     XtSetArg(args[n], XtNborderWidth, 1);         n++;
     {

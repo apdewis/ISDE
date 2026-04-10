@@ -67,8 +67,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* Compute physical title height: logical height × HiDPI scale factor.
      * Needed before any frame is created, since frame geometry mixes
      * physical client dimensions with title bar height. */
-    double sf = ISWScaleFactor(wm->toplevel);
-    wm->title_height = (int)(WM_TITLE_HEIGHT * sf + 0.5);
+    wm->scale_factor = ISWScaleFactor(wm->toplevel);
+    if (wm->scale_factor < 1.0) { wm->scale_factor = 1.0; }
+    wm->title_height = (int)(WM_TITLE_HEIGHT * wm->scale_factor + 0.5);
 
     wm->screen = XtScreen(wm->toplevel);
     wm->root = wm->screen->root;

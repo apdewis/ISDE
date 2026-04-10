@@ -19,6 +19,7 @@
 #include <ISW/MenuButton.h>
 #include <ISW/Viewport.h>
 #include <ISW/ISWSVG.h>
+#include <ISW/ISWRender.h>
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
@@ -34,7 +35,7 @@
 #include "isde/isde-config.h"
 
 /* ---------- Panel geometry (scaled) ---------- */
-#define PANEL_HEIGHT      isde_font_height("toolbar", 16)
+#define PANEL_HEIGHT      64
 #define PANEL_ICON_SIZE   22
 #define PANEL_BUTTON_PAD  4
 #define PANEL_CLOCK_WIDTH 90
@@ -125,11 +126,14 @@ typedef struct Panel {
     IsdeEwmh          *ewmh;
     IsdeIpc           *ipc;
 
-    /* Primary monitor geometry */
+    /* Primary monitor geometry (physical pixels) */
     int16_t            mon_x;
     int16_t            mon_y;
     uint16_t           mon_w;
     uint16_t           mon_h;
+
+    /* HiDPI: physical panel height (PANEL_HEIGHT * scale factor) */
+    int                phys_panel_h;
 
     /* Atoms */
     xcb_atom_t         atom_net_wm_name;

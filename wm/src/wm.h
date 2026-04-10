@@ -120,8 +120,9 @@ typedef struct Wm {
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
 
-    /* Physical (HiDPI-scaled) title bar height, set after first frame */
+    /* Physical (HiDPI-scaled) title bar height */
     int                    title_height;
+    double                 scale_factor;
 
     int                    running;
     int                    restart;

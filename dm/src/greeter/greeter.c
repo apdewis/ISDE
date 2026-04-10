@@ -227,41 +227,6 @@ static void load_config(Greeter *g)
     isde_config_free(cfg);
 }
 
-/* ---------- Post-realize positioning ---------- */
-
-static void greeter_position_form(Greeter *g)
-{
-    int input_x = (g->screen_w - INPUT_W) / 2;
-    int label_x = input_x - ROW_GAP - LABEL_W;
-    int quarter_h = g->screen_h / 4;
-    int input_h = (quarter_h - 3 * ROW_GAP - SECTION_GAP) / 4;
-    int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
-    int form_y = g->screen_h * 5 / 8 - form_total_h / 2;
-    int row1_y = form_y;
-    int row2_y = row1_y + input_h + ROW_GAP;
-    int row3_y = row2_y + input_h + ROW_GAP;
-    int row4_y = row3_y + input_h + SECTION_GAP;
-
-    XtConfigureWidget(g->user_label, label_x, row1_y, LABEL_W, input_h, 0);
-    XtConfigureWidget(g->user_text, input_x, row1_y, INPUT_W, input_h, 1);
-    XtConfigureWidget(g->pass_label, label_x, row2_y, LABEL_W, input_h, 0);
-    XtConfigureWidget(g->pass_text, input_x, row2_y, INPUT_W, input_h, 1);
-    XtConfigureWidget(g->session_label, label_x, row3_y, LABEL_W, input_h, 0);
-    XtConfigureWidget(g->session_btn, input_x, row3_y, INPUT_W, input_h, 1);
-    XtConfigureWidget(g->error_label, label_x, row4_y, LOGIN_FORM_W, input_h, 0);
-
-    /* Login button: right of password field */
-    Dimension btn_w = 0;
-    Arg args[20];
-    XtSetArg(args[0], XtNwidth, &btn_w);
-    XtGetValues(g->login_btn, args, 1);
-    if (btn_w == 0) {
-        btn_w = 32;
-    }
-    XtConfigureWidget(g->login_btn, input_x + INPUT_W + ROW_GAP, row2_y,
-                      btn_w, input_h, 0);
-}
-
 /* ---------- UI construction ---------- */
 
 static void build_ui(Greeter *g)
@@ -273,19 +238,19 @@ static void build_ui(Greeter *g)
     n = 0;
     XtSetArg(args[n], XtNx, 0);                          n++;
     XtSetArg(args[n], XtNy, 0);                          n++;
-    XtSetArg(args[n], XtNwidth, g->screen_w);             n++;
-    XtSetArg(args[n], XtNheight, g->screen_h);            n++;
+    XtSetArg(args[n], XtNwidth, g->logical_w);             n++;
+    XtSetArg(args[n], XtNheight, g->logical_h);           n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);         n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     g->shell = XtCreatePopupShell("greeter", overrideShellWidgetClass,
                                   g->toplevel, args, n);
 
-    /* Main form */
+    /* Main form — uses logical pixels; ISW scales internally */
     n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 0);     n++;
     XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    XtSetArg(args[n], XtNwidth, g->screen_w);     n++;
-    XtSetArg(args[n], XtNheight, g->screen_h);    n++;
+    XtSetArg(args[n], XtNwidth, g->logical_w);    n++;
+    XtSetArg(args[n], XtNheight, g->logical_h);   n++;
     g->form = XtCreateManagedWidget("greeterForm", formWidgetClass,
                                     g->shell, args, n);
 
@@ -293,14 +258,14 @@ static void build_ui(Greeter *g)
     greeter_clock_init(g);
 
     /* --- Login form (centered on 5/8 line, fits in 3rd quarter) --- */
-    int input_x = (g->screen_w - INPUT_W) / 2;
+    int input_x = (g->logical_w - INPUT_W) / 2;
     int label_x = input_x - ROW_GAP - LABEL_W;
-    int quarter_h = g->screen_h / 4;
+    int quarter_h = g->logical_h / 4;
 
     /* 4 rows (user, pass, session, error) fit in the 3rd quarter */
     int input_h = (quarter_h - 3 * ROW_GAP - SECTION_GAP) / 4;
     int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
-    int form_y = g->screen_h * 5 / 8 - form_total_h / 2;
+    int form_y = g->logical_h * 5 / 8 - form_total_h / 2;
     int row1_y = form_y;
     int row2_y = row1_y + input_h + ROW_GAP;
     int row3_y = row2_y + input_h + ROW_GAP;
@@ -455,10 +420,10 @@ static void build_ui(Greeter *g)
 
     /* --- Power buttons (horizontally centered at bottom) --- */
     int btn_h = 40;
-    int btn_y = g->screen_h * 7 / 8 - btn_h / 2;
+    int btn_y = g->logical_h * 7 / 8 - btn_h / 2;
     int btn_count = g->allow_shutdown + g->allow_reboot + g->allow_suspend;
     int btn_total_w = btn_count * BUTTON_W + (btn_count - 1) * BUTTON_PAD;
-    int btn_x = (g->screen_w - btn_total_w) / 2;
+    int btn_x = (g->logical_w - btn_total_w) / 2;
 
     char *shutdown_icon = isde_icon_find("actions", "system-shutdown");
     char *reboot_icon   = isde_icon_find("actions", "system-reboot");
@@ -542,8 +507,12 @@ static void build_ui(Greeter *g)
  * Sets ISW_SCALE_FACTOR so that ISW picks it up.
  * If config_scale > 0, that value is used as an explicit override.
  */
-static void detect_hidpi(xcb_connection_t *conn, xcb_screen_t *screen,
-                         double config_scale)
+/*
+ * Detect HiDPI and set ISW_SCALE_FACTOR *before* XtAppInitialize so the
+ * toolkit picks up the correct scale factor during display initialisation.
+ * Opens its own temporary xcb connection for the randr query.
+ */
+static void detect_hidpi(double config_scale)
 {
     /* Explicit env var already set — honour it */
     if (getenv("ISW_SCALE_FACTOR")) {
@@ -558,11 +527,34 @@ static void detect_hidpi(xcb_connection_t *conn, xcb_screen_t *screen,
         return;
     }
 
+    /* Open a temporary connection for the randr query */
+    int screen_num;
+    xcb_connection_t *conn = xcb_connect(NULL, &screen_num);
+    if (!conn || xcb_connection_has_error(conn)) {
+        if (conn) {
+            xcb_disconnect(conn);
+        }
+        return;
+    }
+
+    /* Find the screen */
+    const xcb_setup_t *setup = xcb_get_setup(conn);
+    xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup);
+    for (int i = 0; i < screen_num; i++) {
+        xcb_screen_next(&iter);
+    }
+    xcb_screen_t *screen = iter.data;
+    if (!screen) {
+        xcb_disconnect(conn);
+        return;
+    }
+
     /* Auto-detect from randr output physical size */
     xcb_randr_get_screen_resources_current_reply_t *res =
         xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, screen->root), NULL);
     if (!res) {
+        xcb_disconnect(conn);
         return;
     }
 
@@ -621,6 +613,7 @@ static void detect_hidpi(xcb_connection_t *conn, xcb_screen_t *screen,
     }
 
     free(res);
+    xcb_disconnect(conn);
 
     if (!found || best_mm_w == 0) {
         return;  /* no usable physical size — stay at 1x */
@@ -672,6 +665,10 @@ int greeter_init(Greeter *g, int *argc, char **argv)
         }
     }
 
+    /* Detect HiDPI and set ISW_SCALE_FACTOR before Xt init so the
+       toolkit picks up the correct scale factor during display setup. */
+    detect_hidpi(g->scale);
+
     /* Initialize Xt with theme resources */
     char **fallbacks = isde_theme_build_resources();
     g->toplevel = XtAppInitialize(&g->app, "ISDE-Greeter",
@@ -688,19 +685,21 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     g->screen_w = screen->width_in_pixels;
     g->screen_h = screen->height_in_pixels;
 
-    /* Detect HiDPI and set ISW_SCALE_FACTOR before layout */
-    detect_hidpi(conn, screen, g->scale);
+    /* Compute logical screen dimensions — ISW scales widget dimensions
+       and Form constraints internally, so all layout math must use logical
+       pixels.  The shell gets physical pixels (Shells are not scaled). */
+    double sf = ISWScaleFactor(g->toplevel);
+    if (sf < 1.0) {
+        sf = 1.0;
+    }
+    g->logical_w = (int)(g->screen_w / sf + 0.5);
+    g->logical_h = (int)(g->screen_h / sf + 0.5);
 
     /* Build UI */
     build_ui(g);
 
     /* Realize and show */
     XtRealizeWidget(g->shell);
-
-    /* Force exact widget positions after realization — Form geometry
-       management may override horizDistance/vertDistance values. */
-    greeter_position_form(g);
-
     XtPopup(g->shell, XtGrabNone);
 
     /* Connect to daemon IPC */

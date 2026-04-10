@@ -13,6 +13,7 @@
 #include <ISW/Command.h>
 #include <ISW/AsciiText.h>
 #include <ISW/List.h>
+#include <ISW/ISWRender.h>
 
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
@@ -67,9 +68,11 @@ typedef struct Greeter {
     char            ipc_buf[4096];
     int             ipc_buf_len;
 
-    /* Screen geometry */
+    /* Screen geometry (physical pixels and logical pixels) */
     int             screen_w;
     int             screen_h;
+    int             logical_w;
+    int             logical_h;
 
     /* Config */
     char           *color_scheme;    /* colour scheme name from DM config */

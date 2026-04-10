@@ -26,6 +26,7 @@
 #include <ISW/Form.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
+#include <ISW/ISWRender.h>
 
 static int result = 1;  /* default: cancelled */
 static XtAppContext app;
@@ -133,8 +134,10 @@ int main(int argc, char **argv)
     XtRealizeWidget(toplevel);
 
     xcb_screen_t *scr = XtScreen(toplevel);
-    int scr_w = scr->width_in_pixels;
-    int scr_h = scr->height_in_pixels;
+    double sf = ISWScaleFactor(toplevel);
+    if (sf < 1.0) { sf = 1.0; }
+    int scr_w = (int)(scr->width_in_pixels / sf + 0.5);
+    int scr_h = (int)(scr->height_in_pixels / sf + 0.5);
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
@@ -256,16 +259,13 @@ int main(int argc, char **argv)
 
     XtPopup(shell, XtGrabExclusive);
 
-    /* ISW auto-scaled the shell's width/height during creation, but we
-     * need exact physical screen coverage.  Force it back. */
-    XtConfigureWidget(shell, 0, 0, scr_w, scr_h, 0);
-
-    /* Position dialog centered — use physical size from the realized
-     * widget (ISW has applied HiDPI scaling) */
+    /* Center dialog — use physical size from the realized widget */
+    int phys_scr_w = scr->width_in_pixels;
+    int phys_scr_h = scr->height_in_pixels;
     int phys_dw = dialog->core.width;
     int phys_dh = dialog->core.height;
-    int cx = (scr_w - phys_dw) / 2;
-    int cy = (scr_h - phys_dh) / 2;
+    int cx = (phys_scr_w - phys_dw) / 2;
+    int cy = (phys_scr_h - phys_dh) / 2;
     XtConfigureWidget(dialog, cx, cy, phys_dw, phys_dh, 1);
 
     /* Grab keyboard and pointer */

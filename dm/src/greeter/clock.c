@@ -36,7 +36,7 @@ void greeter_clock_init(Greeter *g)
 {
     /* Time label fills the 2nd eighth of screen (1/8 to 2/8).
      * Font size ~72% of the slot height for visual fill. */
-    int eighth = g->screen_h / 8;
+    int eighth = g->logical_h / 8;
     int time_pt = eighth * 58 / 100;
     char time_font[64], date_font[64];
     snprintf(time_font, sizeof(time_font), "Sans Bold-%d", time_pt);
@@ -48,7 +48,7 @@ void greeter_clock_init(Greeter *g)
     g->clock_time = XtVaCreateManagedWidget("clockTime", labelWidgetClass,
         g->form,
         XtNlabel,         "00:00",
-        XtNwidth,         g->screen_w,
+        XtNwidth,         g->logical_w,
         XtNheight,        eighth,
         XtNborderWidth,   0,
         XtNjustify,       XtJustifyCenter,
@@ -65,7 +65,7 @@ void greeter_clock_init(Greeter *g)
     g->clock_date = XtVaCreateManagedWidget("clockDate", labelWidgetClass,
         g->form,
         XtNlabel,         "0000-00-00",
-        XtNwidth,         g->screen_w,
+        XtNwidth,         g->logical_w,
         XtNborderWidth,   0,
         XtNjustify,       XtJustifyCenter,
         XtNhorizDistance,  0,

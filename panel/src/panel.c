@@ -232,13 +232,22 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Query primary monitor geometry */
     query_primary_monitor(p);
 
+    /* Convert monitor width to logical pixels — ISW scales shell
+       dimensions during creation, so all sizes must be logical. */
+    double sf = ISWScaleFactor(p->toplevel);
+    int logical_mon_w = (int)(p->mon_w / sf + 0.5);
+
+    /* Physical panel height for EWMH strut and XtConfigureWidget
+       (both operate in physical pixels). */
+    p->phys_panel_h = (int)(PANEL_HEIGHT * sf + 0.5);
+
     /* Create panel shell — override-redirect dock at bottom of primary */
     Arg args[20];
     Cardinal n = 0;
     XtSetArg(args[n], XtNx, p->mon_x);                    n++;
     XtSetArg(args[n], XtNy, p->mon_y + p->mon_h
-                              - PANEL_HEIGHT);             n++;
-    XtSetArg(args[n], XtNwidth, p->mon_w);                  n++;
+                              - p->phys_panel_h);          n++;
+    XtSetArg(args[n], XtNwidth, logical_mon_w);             n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);            n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);          n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
@@ -275,13 +284,6 @@ int panel_init(Panel *p, int *argc, char **argv)
     clock_init(p);
 
     XtRealizeWidget(p->shell);
-
-    /* After realization, ISW has applied HiDPI scaling to the shell's
-     * height.  Re-derive the y position from the actual physical height
-     * so the panel sits flush at the bottom of the monitor. */
-    int phys_h = p->shell->core.height;
-    XtMoveWidget(p->shell, p->mon_x, p->mon_y + p->mon_h - phys_h);
-
     XtPopup(p->shell, XtGrabNone);
 
     /* Claim system tray selection (needs realized window) */
@@ -297,7 +299,7 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Reserve space at bottom of screen — use physical height */
     xcb_ewmh_wm_strut_partial_t strut;
     memset(&strut, 0, sizeof(strut));
-    strut.bottom = phys_h;
+    strut.bottom = p->phys_panel_h;
     strut.bottom_start_x = p->mon_x;
     strut.bottom_end_x = p->mon_x + p->mon_w - 1;
     xcb_ewmh_set_wm_strut_partial(ewmh, panel_win, strut);
@@ -342,17 +344,15 @@ static void panel_reconfigure(Panel *p)
         return;
     }
 
-    /* Use the shell's actual physical height (ISW-scaled) */
-    int phys_h = p->shell->core.height;
-    int panel_y = p->mon_y + p->mon_h - phys_h;
+    int panel_y = p->mon_y + p->mon_h - p->phys_panel_h;
 
     /* Resize panel shell */
     XtConfigureWidget(p->shell, p->mon_x, panel_y,
-                      p->mon_w, phys_h, 0);
+                      p->mon_w, p->phys_panel_h, 0);
 
     /* Reposition clock — use physical dimensions from realized widgets */
     int clock_w = p->clock_time->core.width;
-    int half = phys_h / 2;
+    int half = p->phys_panel_h / 2;
     int clock_x = p->mon_w - clock_w - 2;
     XtConfigureWidget(p->clock_time, clock_x, 0,
                       clock_w, half, 0);
@@ -363,7 +363,7 @@ static void panel_reconfigure(Panel *p)
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_ewmh_wm_strut_partial_t strut;
     memset(&strut, 0, sizeof(strut));
-    strut.bottom = phys_h;
+    strut.bottom = p->phys_panel_h;
     strut.bottom_start_x = p->mon_x;
     strut.bottom_end_x = p->mon_x + p->mon_w - 1;
     xcb_ewmh_set_wm_strut_partial(ewmh, XtWindow(p->shell), strut);
