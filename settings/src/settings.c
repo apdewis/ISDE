@@ -151,25 +151,58 @@ void settings_switch_panel(Settings *s, int index)
 
     /* Create panel widget if needed */
     if (!s->panel_widgets[index]) {
+        /* Query the viewport clip width so panels fit without overflow.
+         * The Viewport expands its child to its own width, but the
+         * vertical scrollbar eats into the visible area. */
+        Dimension vpw, vph;
+        Arg qa[20];
+        XtSetArg(qa[0], XtNwidth, &vpw);
+        XtSetArg(qa[1], XtNheight, &vph);
+        XtGetValues(s->content_vp, qa, 2);
+
+        /* Scrollbar width — use 14 as the standard ISW scrollbar size */
+        Dimension usable_w = (vpw > 20) ? vpw - 20 : vpw;
+
+        /* Set content_area to usable width so panels query it correctly */
+        Arg ca[20];
+        Cardinal cn = 0;
+        if (usable_w > 0) { XtSetArg(ca[cn], XtNwidth, usable_w); cn++; }
+        if (cn > 0) {
+            XtSetValues(s->content_area, ca, cn);
+        }
+
         s->panel_widgets[index] =
             s->panels[index]->create(s->content_area, s->app);
 
-        /* Size the panel to fill the content area */
-        Dimension cw, ch;
-        Arg qa[20];
-        XtSetArg(qa[0], XtNwidth, &cw);
-        XtSetArg(qa[1], XtNheight, &ch);
-        XtGetValues(s->content_area, qa, 2);
+        /* Size the panel to fill the usable area */
         Arg sa[20];
         Cardinal sn = 0;
-        if (cw > 0) { XtSetArg(sa[sn], XtNwidth, cw);  sn++; }
-        if (ch > 0) { XtSetArg(sa[sn], XtNheight, ch); sn++; }
+        if (usable_w > 0) { XtSetArg(sa[sn], XtNwidth, usable_w); sn++; }
+        if (vph > 0) { XtSetArg(sa[sn], XtNheight, vph); sn++; }
         if (sn > 0) {
             XtSetValues(s->panel_widgets[index], sa, sn);
         }
     }
 
     XtManageChild(s->panel_widgets[index]);
+
+    /* Debug: dump widget dimensions */
+    {
+        Dimension tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph;
+        Arg da[20];
+        XtSetArg(da[0], XtNwidth, &tw); XtSetArg(da[1], XtNheight, &th);
+        XtGetValues(s->toplevel, da, 2);
+        XtSetArg(da[0], XtNwidth, &cfw); XtSetArg(da[1], XtNheight, &cfh);
+        XtGetValues(s->content_form, da, 2);
+        XtSetArg(da[0], XtNwidth, &vpw); XtSetArg(da[1], XtNheight, &vph);
+        XtGetValues(s->content_vp, da, 2);
+        XtSetArg(da[0], XtNwidth, &caw); XtSetArg(da[1], XtNheight, &cah);
+        XtGetValues(s->content_area, da, 2);
+        XtSetArg(da[0], XtNwidth, &pw); XtSetArg(da[1], XtNheight, &pph);
+        XtGetValues(s->panel_widgets[index], da, 2);
+        fprintf(stderr, "DEBUG: toplevel=%dx%d content_form=%dx%d viewport=%dx%d content_area=%dx%d panel=%dx%d\n",
+                tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph);
+    }
 }
 
 /* ---------- list selection callback ---------- */
@@ -263,8 +296,9 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNforceColumns, True);        n++;
     XtSetArg(args[n], XtNverticalList, True);        n++;
     XtSetArg(args[n], XtNwidth, PANEL_LIST_WIDTH);   n++;
-    XtSetArg(args[n], XtNheight, 440);    n++;
+    XtSetArg(args[n], XtNheight, init_h - 10);       n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
+    XtSetArg(args[n], XtNresizable, True);           n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
@@ -274,8 +308,8 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtAddCallback(s->panel_bar, XtNcallback, panel_list_cb, s);
 
     /* Right pane: form with scrollable content + fixed buttons at bottom */
-    int right_w = 600 - PANEL_LIST_WIDTH - 4;
-    int right_h = 440;
+    int right_w = init_w - PANEL_LIST_WIDTH - 4;
+    int right_h = init_h - 10;
     int btn_h = 32;
     int btn_pad = 8;
     int sb_w = 14;  /* scrollbar thickness */
@@ -286,6 +320,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNdefaultDistance, 0);        n++;
     XtSetArg(args[n], XtNwidth, right_w);            n++;
     XtSetArg(args[n], XtNheight, right_h);           n++;
+    XtSetArg(args[n], XtNresizable, True);           n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
@@ -300,6 +335,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
     XtSetArg(args[n], XtNwidth, right_w);            n++;
     XtSetArg(args[n], XtNheight, right_h - btn_h - btn_pad); n++;
+    XtSetArg(args[n], XtNresizable, True);           n++;
     XtSetArg(args[n], XtNtop, XtChainTop);           n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
@@ -309,10 +345,8 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     /* Panel content container inside viewport */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
+    XtSetArg(args[n], XtNdefaultDistance, 0); n++;
     XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNwidth, right_w - 20); n++;
-    XtSetArg(args[n], XtNheight, right_h - btn_h);       n++;
     s->content_area = XtCreateManagedWidget("content", formWidgetClass,
                                             s->content_vp, args, n);
 
@@ -329,6 +363,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNinternalHeight, btn_pad);           n++;
     XtSetArg(args[n], XtNvertDistance, btn_pad);             n++;
     XtSetArg(args[n], XtNhorizDistance, right_w - btn_w * 2 - btn_pad * 2 - sb_w); n++;
+    XtSetArg(args[n], XtNresizable, True);                   n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
@@ -348,6 +383,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     XtSetArg(args[n], XtNheight, btn_h - btn_pad);           n++;
     XtSetArg(args[n], XtNinternalWidth, btn_pad);            n++;
     XtSetArg(args[n], XtNinternalHeight, btn_pad);           n++;
+    XtSetArg(args[n], XtNresizable, True);                   n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
     XtSetArg(args[n], XtNleft, XtChainRight);                n++;
     XtSetArg(args[n], XtNbottom, XtChainBottom);             n++;
@@ -375,6 +411,30 @@ int settings_init(Settings *s, int *argc, char **argv)
     /* Show first panel by default */
     if (s->npanels > 0) {
         settings_switch_panel(s, 0);
+    }
+
+    /* Debug: post-realize dimensions */
+    {
+        Dimension tw, th, plw, plh, cfw, cfh, vpw, vph, caw, cah;
+        Arg da[20];
+        XtSetArg(da[0], XtNwidth, &tw); XtSetArg(da[1], XtNheight, &th);
+        XtGetValues(s->toplevel, da, 2);
+        XtSetArg(da[0], XtNwidth, &plw); XtSetArg(da[1], XtNheight, &plh);
+        XtGetValues(s->panel_bar, da, 2);
+        XtSetArg(da[0], XtNwidth, &cfw); XtSetArg(da[1], XtNheight, &cfh);
+        XtGetValues(s->content_form, da, 2);
+        XtSetArg(da[0], XtNwidth, &vpw); XtSetArg(da[1], XtNheight, &vph);
+        XtGetValues(s->content_vp, da, 2);
+        XtSetArg(da[0], XtNwidth, &caw); XtSetArg(da[1], XtNheight, &cah);
+        XtGetValues(s->content_area, da, 2);
+        fprintf(stderr, "POST-REALIZE: toplevel=%dx%d panel_bar=%dx%d content_form=%dx%d viewport=%dx%d content_area=%dx%d\n",
+                tw, th, plw, plh, cfw, cfh, vpw, vph, caw, cah);
+        if (s->panel_widgets[0]) {
+            Dimension pw, pph;
+            XtSetArg(da[0], XtNwidth, &pw); XtSetArg(da[1], XtNheight, &pph);
+            XtGetValues(s->panel_widgets[0], da, 2);
+            fprintf(stderr, "POST-REALIZE: panel[0]=%dx%d\n", pw, pph);
+        }
     }
 
     s->running = 1;

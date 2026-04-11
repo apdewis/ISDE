@@ -41,6 +41,9 @@ static void desktops_revert(void)
     IswScaleSetValue(scale_cols, saved_cols);
 }
 
+static int lbl_w;
+static int scale_w;
+
 static Widget make_scale_row(Widget form, Widget above, const char *label_text,
                              int min, int max, int value, Widget *out_scale)
 {
@@ -50,8 +53,10 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     n = 0;
     XtSetArg(args[n], XtNlabel, label_text);               n++;
     XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNwidth, 180);           n++;
+    XtSetArg(args[n], XtNwidth, lbl_w);                     n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);                n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);               n++;
     if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
     Widget lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
                                        form, args, n);
@@ -65,8 +70,11 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
     XtSetArg(args[n], XtNshowValue, True);                   n++;
     XtSetArg(args[n], XtNtickInterval, 1);                   n++;
-    XtSetArg(args[n], XtNwidth, 280);            n++;
+    XtSetArg(args[n], XtNwidth, scale_w);                    n++;
     XtSetArg(args[n], XtNborderWidth, 0);                    n++;
+    XtSetArg(args[n], XtNresizable, True);                   n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
+    XtSetArg(args[n], XtNright, XtChainRight);               n++;
     *out_scale = XtCreateManagedWidget("scale", scaleWidgetClass,
                                        form, args, n);
     return *out_scale;
@@ -93,6 +101,15 @@ static Widget desktops_create(Widget parent, XtAppContext app)
         }
         isde_config_free(cfg);
     }
+
+    Dimension pw;
+    Arg qa[20];
+    XtSetArg(qa[0], XtNwidth, &pw);
+    XtGetValues(parent, qa, 1);
+
+    lbl_w = 180;
+    scale_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
+    if (scale_w < 100) { scale_w = 100; }
 
     Arg args[20];
     Cardinal n = 0;

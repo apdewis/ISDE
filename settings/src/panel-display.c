@@ -251,12 +251,16 @@ static Widget display_create(Widget parent, XtAppContext app)
 
     /* --- Output list (label-left) --- */
     int lbl_w = 180;
+    int ctrl_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
+    if (ctrl_w < 100) { ctrl_w = 100; }
 
     n = 0;
     XtSetArg(args[n], XtNlabel, "Outputs:");            n++;
     XtSetArg(args[n], XtNborderWidth, 0);                n++;
     XtSetArg(args[n], XtNwidth, lbl_w);                   n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);        n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);              n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);             n++;
     Widget out_lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
                                            form, args, n);
 
@@ -270,6 +274,9 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNheight, list_height);            n++;
     XtSetArg(args[n], XtNborderWidth, 0);                 n++;
     XtSetArg(args[n], XtNfromHoriz, out_lbl);             n++;
+    XtSetArg(args[n], XtNresizable, True);                n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);              n++;
+    XtSetArg(args[n], XtNright, XtChainRight);            n++;
     output_list = XtCreateManagedWidget("outputList", listWidgetClass,
                                         form, args, n);
     XtAddCallback(output_list, XtNcallback, output_select_cb, NULL);
@@ -290,6 +297,8 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNfromVert, prev);             n++;
     XtSetArg(args[n], XtNwidth, lbl_w);               n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);    n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);          n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);         n++;
     Widget res_lbl_static = XtCreateManagedWidget("lbl", labelWidgetClass,
                                                    form, args, n);
 
@@ -299,6 +308,8 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNfromVert, prev);             n++;
     XtSetArg(args[n], XtNfromHoriz, res_lbl_static);  n++;
     XtSetArg(args[n], XtNjustify, XtJustifyLeft);     n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);          n++;
+    XtSetArg(args[n], XtNright, XtChainRight);        n++;
     res_label = XtCreateManagedWidget("resValue", labelWidgetClass,
                                       form, args, n);
     update_res_label();
@@ -311,6 +322,8 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNfromVert, prev);               n++;
     XtSetArg(args[n], XtNwidth, lbl_w);                 n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);      n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);            n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);           n++;
     scale_label = XtCreateManagedWidget("lbl", labelWidgetClass,
                                         form, args, n);
 
@@ -323,7 +336,10 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNborderWidth, 0);                n++;
     XtSetArg(args[n], XtNfromVert, prev);                 n++;
     XtSetArg(args[n], XtNfromHoriz, scale_label);         n++;
-    if (pw > lbl_w + 100) { XtSetArg(args[n], XtNwidth, pw - lbl_w - 40); n++; }
+    XtSetArg(args[n], XtNwidth, ctrl_w);                 n++;
+    XtSetArg(args[n], XtNresizable, True);               n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);             n++;
+    XtSetArg(args[n], XtNright, XtChainRight);           n++;
     scale_slider = XtCreateManagedWidget("scaleSlider", scaleWidgetClass,
                                           form, args, n);
     XtAddCallback(scale_slider, XtNvalueChanged, scale_changed_cb, NULL);

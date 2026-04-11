@@ -151,6 +151,16 @@ static Widget fonts_create(Widget parent, XtAppContext app)
     Arg args[20];
     Cardinal n;
 
+    Dimension pw;
+    Arg qa[20];
+    XtSetArg(qa[0], XtNwidth, &pw);
+    XtGetValues(parent, qa, 1);
+
+    int cat_w = 100;
+    int btn_w = 60;
+    int desc_w = (pw > 0 ? (int)pw - cat_w - btn_w - 8 * 4 : 180);
+    if (desc_w < 80) { desc_w = 80; }
+
     n = 0;
     XtSetArg(args[n], XtNdefaultDistance, 8); n++;
     XtSetArg(args[n], XtNborderWidth, 0);    n++;
@@ -197,8 +207,10 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         n = 0;
         XtSetArg(args[n], XtNlabel, font_labels[i]);  n++;
         XtSetArg(args[n], XtNborderWidth, 0);          n++;
-        XtSetArg(args[n], XtNwidth, 100);  n++;
-        XtSetArg(args[n], XtNjustify, XtJustifyLeft);  n++;
+        XtSetArg(args[n], XtNwidth, 100);              n++;
+        XtSetArg(args[n], XtNjustify, XtJustifyRight); n++;
+        XtSetArg(args[n], XtNleft, XtChainLeft);       n++;
+        XtSetArg(args[n], XtNright, XtChainLeft);      n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
         Widget lbl = XtCreateManagedWidget("fontCatLbl", labelWidgetClass,
                                             form, args, n);
@@ -210,9 +222,12 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         n = 0;
         XtSetArg(args[n], XtNlabel, desc);             n++;
         XtSetArg(args[n], XtNborderWidth, 0);           n++;
-        XtSetArg(args[n], XtNwidth, 180);   n++;
+        XtSetArg(args[n], XtNwidth, desc_w);              n++;
         XtSetArg(args[n], XtNjustify, XtJustifyLeft);   n++;
         XtSetArg(args[n], XtNfromHoriz, lbl);           n++;
+        XtSetArg(args[n], XtNresizable, True);          n++;
+        XtSetArg(args[n], XtNleft, XtChainLeft);        n++;
+        XtSetArg(args[n], XtNright, XtChainRight);      n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
         desc_labels[i] = XtCreateManagedWidget("fontDescLbl", labelWidgetClass,
                                                 form, args, n);
@@ -222,6 +237,9 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         XtSetArg(args[n], XtNlabel, "Edit...");          n++;
         XtSetArg(args[n], XtNborderWidth, 0);             n++;
         XtSetArg(args[n], XtNfromHoriz, desc_labels[i]);  n++;
+        XtSetArg(args[n], XtNresizable, True);            n++;
+        XtSetArg(args[n], XtNleft, XtChainRight);         n++;
+        XtSetArg(args[n], XtNright, XtChainRight);        n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
         Widget btn = XtCreateManagedWidget("fontEditBtn", commandWidgetClass,
                                             form, args, n);

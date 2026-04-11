@@ -186,8 +186,14 @@ static Widget dm_create(Widget parent, XtAppContext app)
     Widget form = XtCreateWidget("dmPanel", formWidgetClass,
                                  parent, args, n);
 
+    Dimension pw;
+    Arg qa[20];
+    XtSetArg(qa[0], XtNwidth, &pw);
+    XtGetValues(parent, qa, 1);
+
     int label_w = 120;
-    int input_w = 200;
+    int input_w = (pw > 0 ? (int)pw - label_w - 8 * 4 : 200);
+    if (input_w < 100) { input_w = 100; }
 
     /* Time Format */
     n = 0;
@@ -195,6 +201,8 @@ static Widget dm_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNwidth, label_w);                  n++;
     XtSetArg(args[n], XtNjustify, XtJustifyRight);        n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
     Widget time_lbl = XtCreateManagedWidget("timeFmtLabel",
                                             labelWidgetClass,
                                             form, args, n);
@@ -205,6 +213,9 @@ static Widget dm_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
     XtSetArg(args[n], XtNstring, saved_time_fmt);          n++;
+    XtSetArg(args[n], XtNresizable, True);                 n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
+    XtSetArg(args[n], XtNright, XtChainRight);             n++;
     text_time_fmt = XtCreateManagedWidget("timeFmtText",
                                           asciiTextWidgetClass,
                                           form, args, n);
@@ -216,6 +227,8 @@ static Widget dm_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNjustify, XtJustifyRight);        n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNfromVert, time_lbl);              n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
+    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
     Widget date_lbl = XtCreateManagedWidget("dateFmtLabel",
                                             labelWidgetClass,
                                             form, args, n);
@@ -227,6 +240,9 @@ static Widget dm_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
     XtSetArg(args[n], XtNborderWidth, 1);                  n++;
     XtSetArg(args[n], XtNstring, saved_date_fmt);          n++;
+    XtSetArg(args[n], XtNresizable, True);                 n++;
+    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
+    XtSetArg(args[n], XtNright, XtChainRight);             n++;
     text_date_fmt = XtCreateManagedWidget("dateFmtText",
                                           asciiTextWidgetClass,
                                           form, args, n);
