@@ -35,10 +35,10 @@
 #include "isde/isde-config.h"
 
 /* ---------- Panel geometry (scaled) ---------- */
-#define PANEL_HEIGHT      64
+#define PANEL_HEIGHT      40
 #define PANEL_ICON_SIZE   22
 #define PANEL_BUTTON_PAD  4
-#define PANEL_CLOCK_WIDTH 90
+#define PANEL_CLOCK_WIDTH 120
 
 /* ---------- Taskbar: one entry per WM_CLASS group ---------- */
 typedef struct TaskGroup {
