@@ -227,7 +227,7 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         XtSetArg(args[n], XtNfromHoriz, lbl);           n++;
         XtSetArg(args[n], XtNresizable, True);          n++;
         XtSetArg(args[n], XtNleft, XtChainLeft);        n++;
-        XtSetArg(args[n], XtNright, XtChainRight);      n++;
+        XtSetArg(args[n], XtNright, XtChainLeft);       n++;
         if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
         desc_labels[i] = XtCreateManagedWidget("fontDescLbl", labelWidgetClass,
                                                 form, args, n);
