@@ -397,6 +397,14 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     XtConfigureWidget(p->start_shell, log_mon_x, menu_y,
                       menu_w, menu_h, 1);
     XtPopup(p->start_shell, XtGrabNone);
+
+    /* Force immediate redraw — the shell content may be stale from the
+     * previous popdown, causing a blank menu on some redraws. */
+    XtExposeProc expose = XtClass(p->start_shell)->core_class.expose;
+    if (expose) {
+        expose(p->start_shell, NULL, 0);
+    }
+
     panel_show_popup(p, p->start_shell);
     p->active_cat = -1;
     p->cat_highlight = 0;
