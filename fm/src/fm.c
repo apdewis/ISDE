@@ -425,8 +425,8 @@ static void ctx_handler(Widget w, XtPointer client_data,
         ctx_build_menu(fm);
     }
 
-    Position rx, ry;
-    XtTranslateCoords(w, ev->event_x, ev->event_y, &rx, &ry);
+    Position rx = ev->root_x;
+    Position ry = ev->root_y;
 
     Arg args[20];
     Cardinal n = 0;
