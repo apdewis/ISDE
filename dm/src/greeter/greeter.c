@@ -216,6 +216,13 @@ static void load_config(Greeter *g)
     g->allow_reboot   = isde_config_bool(root, "allow_reboot", 1);
     g->allow_suspend  = isde_config_bool(root, "allow_suspend", 1);
 
+    IsdeConfigTable *fonts = isde_config_table(root, "fonts");
+    if (fonts) {
+        const char *fam = isde_config_string(fonts, "family", NULL);
+        if (fam) { g->font_family = strdup(fam); }
+        g->font_size = (int)isde_config_int(fonts, "size", 10);
+    }
+
     IsdeConfigTable *clock = isde_config_table(root, "clock");
     if (clock) {
         const char *tf = isde_config_string(clock, "time_format", NULL);
@@ -272,11 +279,7 @@ static void build_ui(Greeter *g)
     XtVaGetValues(probe, XtNheight, &natural_h, NULL);
     XtDestroyWidget(probe);
 
-    double sf = ISWScaleFactor(g->toplevel);
-    if (sf < 1.0) {
-        sf = 1.0;
-    }
-    int input_h = (int)(natural_h / sf + 0.5);
+    int input_h = natural_h;
 
     int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
     int form_y = g->logical_h * 5 / 8 - form_total_h / 2;
@@ -671,9 +674,10 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Load available sessions */
     greeter_sessions_load(g);
 
-    /* Apply colour scheme from DM config if set */
-    if (g->color_scheme) {
-        IsdeColorScheme *scheme = isde_scheme_load(g->color_scheme);
+    /* Apply colour scheme — default to light if not configured */
+    {
+        const char *cs = g->color_scheme ? g->color_scheme : "default-light";
+        IsdeColorScheme *scheme = isde_scheme_load(cs);
         if (scheme) {
             isde_theme_set_scheme(scheme);
         }
@@ -685,6 +689,36 @@ int greeter_init(Greeter *g, int *argc, char **argv)
 
     /* Initialize Xt with theme resources */
     char **fallbacks = isde_theme_build_resources();
+
+    /* Append font resources from DM config — the greeter runs in a
+       minimal environment where isde.toml (user config) is unavailable,
+       so isde_theme_build_resources() won't produce font entries. */
+    if (g->font_family) {
+        int count = 0;
+        if (fallbacks) {
+            while (fallbacks[count]) count++;
+        }
+        /* 5 entries + NULL */
+        fallbacks = realloc(fallbacks, (count + 6) * sizeof(char *));
+        char buf[128];
+        snprintf(buf, sizeof(buf), "*font: %s-%d",
+                 g->font_family, g->font_size);
+        fallbacks[count++] = strdup(buf);
+        snprintf(buf, sizeof(buf), "*Text.font: %s-%d",
+                 g->font_family, g->font_size);
+        fallbacks[count++] = strdup(buf);
+        snprintf(buf, sizeof(buf), "*AsciiSink.font: %s-%d",
+                 g->font_family, g->font_size);
+        fallbacks[count++] = strdup(buf);
+        snprintf(buf, sizeof(buf), "*Text*textSink.font: %s-%d",
+                 g->font_family, g->font_size);
+        fallbacks[count++] = strdup(buf);
+        snprintf(buf, sizeof(buf), "*textSink.font: %s-%d",
+                 g->font_family, g->font_size);
+        fallbacks[count++] = strdup(buf);
+        fallbacks[count] = NULL;
+    }
+
     g->toplevel = XtAppInitialize(&g->app, "ISDE-Greeter",
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
@@ -718,6 +752,13 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Realize and show */
     XtRealizeWidget(g->shell);
     XtPopup(g->shell, XtGrabNone);
+
+    /* Override-redirect windows don't receive X focus automatically.
+       Focus the text widget's window directly so key events reach it. */
+    xcb_connection_t *xc = XtDisplay(g->shell);
+    xcb_set_input_focus(xc, XCB_INPUT_FOCUS_PARENT,
+                        XtWindow(g->user_text), XCB_CURRENT_TIME);
+    xcb_flush(xc);
 
     /* Connect to daemon IPC */
     if (greeter_ipc_init(g) != 0) {
@@ -756,6 +797,7 @@ void greeter_cleanup(Greeter *g)
     greeter_sessions_cleanup(g);
 
     free(g->color_scheme);
+    free(g->font_family);
     free(g->clock_time_fmt);
     free(g->clock_date_fmt);
     free(g->lock_user);
@@ -819,6 +861,8 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
     xcb_window_t win = XtWindow(g->shell);
     xcb_window_t pass_win = XtWindow(g->pass_text);
 
+    xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT,
+                        pass_win, XCB_CURRENT_TIME);
     xcb_grab_keyboard(conn, 1, pass_win, XCB_CURRENT_TIME,
                       XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
     xcb_grab_pointer(conn, 1, win,

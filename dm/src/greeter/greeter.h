@@ -77,6 +77,8 @@ typedef struct Greeter {
     /* Config */
     char           *color_scheme;    /* colour scheme name from DM config */
     double          scale;           /* explicit scale factor (0 = auto) */
+    char           *font_family;     /* greeter font family */
+    int             font_size;       /* greeter font size (pt) */
     int             allow_shutdown;
     int             allow_reboot;
     int             allow_suspend;

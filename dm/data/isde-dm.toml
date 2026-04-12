@@ -27,6 +27,10 @@ dev_mode = false
 # If not set, auto-detected from the display's physical size via RandR.
 # scale = 1.0
 
+[fonts]
+family = "Sans"
+size = 10
+
 [clock]
 time_format = "%H:%M"
 date_format = "%Y-%m-%d"

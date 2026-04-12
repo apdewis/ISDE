@@ -788,7 +788,7 @@ char **isde_theme_build_resources(void)
     const IsdeColorScheme *s = isde_theme_current();
     if (!s) { return NULL; }
 
-    char **res = calloc(128, sizeof(char *));
+    char **res = calloc(160, sizeof(char *));
     int i = 0;
 
     /* Global defaults */
