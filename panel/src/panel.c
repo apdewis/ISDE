@@ -232,10 +232,13 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Query primary monitor geometry */
     query_primary_monitor(p);
 
-    /* Convert monitor width to logical pixels — ISW scales shell
+    /* Convert monitor geometry to logical pixels — ISW scales shell
        dimensions during creation, so all sizes must be logical. */
     double sf = ISWScaleFactor(p->toplevel);
+    int logical_mon_x = (int)(p->mon_x / sf + 0.5);
     int logical_mon_w = (int)(p->mon_w / sf + 0.5);
+    int logical_mon_h = (int)(p->mon_h / sf + 0.5);
+    int logical_mon_y = (int)(p->mon_y / sf + 0.5);
 
     /* Physical panel height for EWMH strut and XtConfigureWidget
        (both operate in physical pixels). */
@@ -244,9 +247,9 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Create panel shell — override-redirect dock at bottom of primary */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, p->mon_x);                    n++;
-    XtSetArg(args[n], XtNy, p->mon_y + p->mon_h
-                              - p->phys_panel_h);          n++;
+    XtSetArg(args[n], XtNx, logical_mon_x);                n++;
+    XtSetArg(args[n], XtNy, logical_mon_y + logical_mon_h
+                              - PANEL_HEIGHT);              n++;
     XtSetArg(args[n], XtNwidth, logical_mon_w);             n++;
     XtSetArg(args[n], XtNheight, PANEL_HEIGHT);            n++;
     XtSetArg(args[n], XtNoverrideRedirect, True);          n++;
