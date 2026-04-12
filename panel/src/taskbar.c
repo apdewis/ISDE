@@ -266,11 +266,40 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
 
+    /* Multi-window case is handled on button press (see below)
+     * so the release can land on the popup list item */
     if (g->nwindows == 0) {
         launch_app(p, g);
     } else if (g->nwindows == 1) {
         focus_window(p, g->windows[0]);
-    } else if (p->active_popup && wl_shell && wl_group == g) {
+    }
+}
+
+/* Button-press handler for multi-window popup: showing the window list
+ * on press (not release) lets the user drag into the list and release
+ * to select, matching standard menu behaviour. */
+static void taskbar_press_handler(Widget w, XtPointer client_data,
+                                  xcb_generic_event_t *event, Boolean *cont)
+{
+    (void)w;
+    (void)cont;
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+        return;
+    }
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    if (ev->detail != 1) {
+        return;
+    }
+
+    TaskClosure *tc = (TaskClosure *)client_data;
+    Panel *p = tc->panel;
+    TaskGroup *g = tc->group;
+
+    if (g->nwindows <= 1) {
+        return;  /* handled by the Command callback on release */
+    }
+
+    if (p->active_popup && wl_shell && wl_group == g) {
         panel_dismiss_popup(p);
     } else {
         show_window_menu(p, g);
@@ -612,7 +641,10 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     tc->group = g;
     XtAddCallback(g->button, XtNcallback, taskbar_button_callback, tc);
 
-    /* Right-click handler for pin/unpin */
+    /* Button-press handler: left-click shows window list for multi-window
+     * groups; right-click opens pin/unpin context menu */
+    XtAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
+                      taskbar_press_handler, tc);
     XtAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
                       context_menu_handler, tc);
 
