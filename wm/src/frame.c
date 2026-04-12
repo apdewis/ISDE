@@ -240,10 +240,12 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     if (!c) { free(geo); return NULL; }
 
     c->client = client;
-    c->x      = geo->x;
-    c->y      = geo->y;
-    c->width  = geo->width;
-    c->height = geo->height;
+    /* xcb_get_geometry returns physical pixels — convert to logical */
+    double sf = wm->scale_factor;
+    c->x      = (int)(geo->x / sf + 0.5);
+    c->y      = (int)(geo->y / sf + 0.5);
+    c->width  = (int)(geo->width / sf + 0.5);
+    c->height = (int)(geo->height / sf + 0.5);
     free(geo);
 
     c->decorated = wm_client_wants_decorations(wm, client) &&
@@ -263,22 +265,14 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     closure[0] = wm;
     closure[1] = c;
 
-    /* Create OverrideShell for the frame.  Shell dimensions are in
-       physical pixels (from client geometry), but ISW scales shell
-       resources during creation — divide by scale factor to get logical
-       values that ISW will scale back to the correct physical size. */
-    double sf = wm->scale_factor;
-    int log_fx = (int)(c->x / sf + 0.5);
-    int log_fy = (int)(c->y / sf + 0.5);
-    int log_fw = (int)(fw / sf + 0.5);
-    int log_fh = (int)(fh / sf + 0.5);
-
+    /* Create OverrideShell for the frame.  All geometry is logical;
+       ISW scales to physical when creating the X window. */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, log_fx);             n++;
-    XtSetArg(args[n], XtNy, log_fy);             n++;
-    XtSetArg(args[n], XtNwidth, log_fw);          n++;
-    XtSetArg(args[n], XtNheight, log_fh);         n++;
+    XtSetArg(args[n], XtNx, c->x);               n++;
+    XtSetArg(args[n], XtNy, c->y);               n++;
+    XtSetArg(args[n], XtNwidth, fw);              n++;
+    XtSetArg(args[n], XtNheight, fh);             n++;
     XtSetArg(args[n], XtNoverrideRedirect, True); n++;
     XtSetArg(args[n], XtNborderWidth, 1);         n++;
     {
@@ -372,11 +366,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     xcb_change_save_set(wm->conn, XCB_SET_MODE_INSERT, client);
 
     /* Reparent the client window into the frame, below the title bar.
-     * Client keeps its full requested size; border is extra space around it. */
-    int title = c->decorated ? wm->title_height : 0;
-    xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
-                        WM_BORDER_WIDTH,
-                        WM_BORDER_WIDTH + title);
+     * Client keeps its full requested size; border is extra space around it.
+     * xcb_reparent_window needs physical pixel offsets. */
+    {
+        double sf = wm->scale_factor;
+        int title = c->decorated ? wm->title_height : 0;
+        int phys_bw = (int)(WM_BORDER_WIDTH * sf + 0.5);
+        int phys_title = (int)(title * sf + 0.5);
+        xcb_reparent_window(wm->conn, client, XtWindow(c->shell),
+                            phys_bw, phys_bw + phys_title);
+    }
 
     /* Create invisible resize grips — after reparent so they stack on top.
      * Undecorated windows handle their own resize. */
@@ -428,7 +427,10 @@ void frame_destroy(Wm *wm, WmClient *c)
      * X auto-unmaps a mapped window during reparent, so we re-map it
      * unless it was intentionally minimized. */
     xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);
-    xcb_reparent_window(wm->conn, c->client, wm->root, c->x, c->y);
+    /* Reparent back to root — xcb needs physical pixel coords */
+    double sf = wm->scale_factor;
+    xcb_reparent_window(wm->conn, c->client, wm->root,
+                        (int)(c->x * sf + 0.5), (int)(c->y * sf + 0.5));
     if (!c->minimized) {
         xcb_map_window(wm->conn, c->client);
     }
@@ -471,8 +473,9 @@ void frame_configure(Wm *wm, WmClient *c)
     XtConfigureWidget(c->shell, c->x, c->y, fw, fh, bw);
 
     /* XtConfigureWidget may skip the border_width change if Xt thinks
-     * it hasn't changed, so force it via XCB as well. */
-    uint32_t bw32 = bw;
+     * it hasn't changed, so force it via XCB as well (physical pixels). */
+    double sf = wm->scale_factor;
+    uint32_t bw32 = log_to_phys(sf, bw);
     xcb_configure_window(wm->conn, XtWindow(c->shell),
                          XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw32);
 
@@ -493,14 +496,17 @@ void frame_configure(Wm *wm, WmClient *c)
                           th, th, 0);
     }
 
-    /* Reposition client window within the frame */
-    uint32_t cpos[] = { WM_BORDER_WIDTH, WM_BORDER_WIDTH + title };
+    /* Reposition client window within the frame (physical pixels for XCB) */
+    int phys_bw = (int)(WM_BORDER_WIDTH * sf + 0.5);
+    int phys_title = (int)(title * sf + 0.5);
+    uint32_t cpos[] = { phys_bw, phys_bw + phys_title };
     xcb_configure_window(wm->conn, c->client,
                          XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
                          cpos);
 
-    /* Resize client window */
-    uint32_t cvals[] = { c->width, c->height };
+    /* Resize client window (physical pixels for XCB) */
+    uint32_t cvals[] = { (uint32_t)(c->width * sf + 0.5),
+                         (uint32_t)(c->height * sf + 0.5) };
     xcb_configure_window(wm->conn, c->client,
                          XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                          cvals);
@@ -581,10 +587,13 @@ void frame_create_grips(Wm *wm, WmClient *c)
 
 void frame_update_grips(Wm *wm, WmClient *c)
 {
-    int fw = frame_total_width(c);
-    int fh = frame_total_height(wm, c);
-    int g = GRIP_SIZE;
-    int th = wm->title_height;
+    /* Grips are raw XCB children of the frame shell window, so their
+     * coordinates must be in physical pixels. */
+    double sf = wm->scale_factor;
+    int fw = log_to_phys(sf, frame_total_width(c));
+    int fh = log_to_phys(sf, frame_total_height(wm, c));
+    int g = log_to_phys(sf, GRIP_SIZE);
+    int th = log_to_phys(sf, wm->title_height);
 
     /* Grips sit on client edges, below the title bar.
      * No top edge grip — title bar handles that area.

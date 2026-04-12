@@ -64,12 +64,10 @@ int wm_init(Wm *wm, int *argc, char **argv)
         return -1;
     }
 
-    /* Compute physical title height: logical height × HiDPI scale factor.
-     * Needed before any frame is created, since frame geometry mixes
-     * physical client dimensions with title bar height. */
+    /* Cache HiDPI scale factor and logical title bar height. */
     wm->scale_factor = ISWScaleFactor(wm->toplevel);
     if (wm->scale_factor < 1.0) { wm->scale_factor = 1.0; }
-    wm->title_height = (int)(WM_TITLE_HEIGHT * wm->scale_factor + 0.5);
+    wm->title_height = WM_TITLE_HEIGHT;
 
     wm->screen = XtScreen(wm->toplevel);
     wm->root = wm->screen->root;
@@ -363,10 +361,12 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
         free(tree);
     }
 
-    *wx = left;
-    *wy = top;
-    *ww = wm->screen->width_in_pixels - left - right;
-    *wh = wm->screen->height_in_pixels - top - bottom;
+    /* Struts and screen dimensions are physical — convert to logical */
+    double sf = wm->scale_factor;
+    *wx = (int)(left / sf + 0.5);
+    *wy = (int)(top / sf + 0.5);
+    *ww = (int)((wm->screen->width_in_pixels - left - right) / sf + 0.5);
+    *wh = (int)((wm->screen->height_in_pixels - top - bottom) / sf + 0.5);
 }
 
 /* ---------- snap detection ---------- */
@@ -381,8 +381,9 @@ enum {
 
 static int detect_snap_zone(Wm *wm, int rx, int ry)
 {
-    int sw = wm->screen->width_in_pixels;
-    int sh = wm->screen->height_in_pixels;
+    double sf = wm->scale_factor;
+    int sw = phys_to_log(sf, wm->screen->width_in_pixels);
+    int sh = phys_to_log(sf, wm->screen->height_in_pixels);
     int t = SNAP_THRESHOLD;
 
     int at_left   = (rx <= t);
@@ -439,16 +440,23 @@ static void snap_geometry(Wm *wm, int zone, int *sx, int *sy, int *sw, int *sh)
 /* Show or reposition the snap preview overlay */
 static void snap_preview_show(Wm *wm, int zone)
 {
-    int px, py, pw, ph;
-    snap_geometry(wm, zone, &px, &py, &pw, &ph);
-    if (pw <= 0 || ph <= 0) { return; }
+    int lx, ly, lw, lh;
+    snap_geometry(wm, zone, &lx, &ly, &lw, &lh);
+    if (lw <= 0 || lh <= 0) { return; }
 
-    /* Inset by 2px for a border-like appearance */
+    /* Inset by 2 logical px for a border-like appearance */
     int inset = 2;
-    px += inset; py += inset;
-    pw -= 2 * inset; ph -= 2 * inset;
-    if (pw < 1) { pw = 1; }
-    if (ph < 1) { ph = 1; }
+    lx += inset; ly += inset;
+    lw -= 2 * inset; lh -= 2 * inset;
+    if (lw < 1) { lw = 1; }
+    if (lh < 1) { lh = 1; }
+
+    /* Convert to physical for the raw XCB overlay window */
+    double sf = wm->scale_factor;
+    int px = log_to_phys(sf, lx);
+    int py = log_to_phys(sf, ly);
+    int pw = log_to_phys(sf, lw);
+    int ph = log_to_phys(sf, lh);
 
     /* Pick the active/accent colour from the theme */
     const IsdeColorScheme *s = isde_theme_current();
@@ -700,12 +708,14 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
         return;
     }
 
+    /* Raw XCB event — convert to logical */
+    double sf = wm->scale_factor;
     wm_focus_client(wm, c);
     wm->drag_mode    = DRAG_RESIZE;
     wm->resize_edge  = edge;
     wm->drag_client  = c;
-    wm->drag_start_x = ev->root_x;
-    wm->drag_start_y = ev->root_y;
+    wm->drag_start_x = phys_to_log(sf, ev->root_x);
+    wm->drag_start_y = phys_to_log(sf, ev->root_y);
     wm->drag_orig_x  = c->x;
     wm->drag_orig_y  = c->y;
     wm->drag_orig_w  = c->width;
@@ -723,17 +733,19 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
+        /* ConfigureRequest values are physical — convert to logical */
+        double sf = wm->scale_factor;
         if (ev->value_mask & XCB_CONFIG_WINDOW_X) {
-            c->x = ev->x;
+            c->x = phys_to_log(sf, ev->x);
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_Y) {
-            c->y = ev->y;
+            c->y = phys_to_log(sf, ev->y);
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
-            c->width = ev->width;
+            c->width = phys_to_log(sf, ev->width);
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
-            c->height = ev->height;
+            c->height = phys_to_log(sf, ev->height);
         }
         frame_configure(wm, c);
     } else {
@@ -777,14 +789,18 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         return;
     }
 
-    int dx = ev->root_x - wm->drag_start_x;
-    int dy = ev->root_y - wm->drag_start_y;
+    /* Raw XCB events are physical — convert to logical */
+    double sf = wm->scale_factor;
+    int rx = phys_to_log(sf, ev->root_x);
+    int ry = phys_to_log(sf, ev->root_y);
+    int dx = rx - wm->drag_start_x;
+    int dy = ry - wm->drag_start_y;
 
     if (wm->drag_mode == DRAG_MOVE) {
         c->x = wm->drag_orig_x + dx;
         c->y = wm->drag_orig_y + dy;
         XtMoveWidget(c->shell, c->x, c->y);
-        int zone = detect_snap_zone(wm, ev->root_x, ev->root_y);
+        int zone = detect_snap_zone(wm, rx, ry);
         if (zone != SNAP_NONE) {
             if (wm->snap_pending != zone) {
                 snap_preview_show(wm, zone);
@@ -916,8 +932,10 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (!c) { return 1; }
 
-        int root_x   = ev->data.data32[0];
-        int root_y   = ev->data.data32[1];
+        /* EWMH moveresize coords are physical root pixels — convert */
+        double sf = wm->scale_factor;
+        int root_x   = phys_to_log(sf, (int)ev->data.data32[0]);
+        int root_y   = phys_to_log(sf, (int)ev->data.data32[1]);
         uint32_t dir = ev->data.data32[2];
 
         if (dir == XCB_EWMH_WM_MOVERESIZE_CANCEL) {

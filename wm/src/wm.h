@@ -22,10 +22,11 @@
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 
-/* ---------- Frame geometry ---------- */
-/* Logical title height — ISW auto-scales during widget creation.
- * For physical pixel calculations (XtConfigureWidget, XCB ops),
- * use wm->title_height which is set after the first frame creation. */
+/* ---------- Frame geometry (all in logical pixels) ---------- */
+/* All client geometry (WmClient.x/y/width/height) and frame metrics are
+ * stored in logical (unscaled) pixels.  Xt functions (XtConfigureWidget,
+ * XtMoveWidget) accept logical values and scale internally.  Raw XCB
+ * calls that talk to the X server must multiply by wm->scale_factor. */
 #define WM_TITLE_HEIGHT    isde_font_height("title", 10)
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
@@ -120,13 +121,25 @@ typedef struct Wm {
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
 
-    /* Physical (HiDPI-scaled) title bar height */
+    /* Logical title bar height (unscaled) and HiDPI scale factor */
     int                    title_height;
     double                 scale_factor;
 
     int                    running;
     int                    restart;
 } Wm;
+
+/* ---------- coordinate conversion ---------- */
+/* Convert physical pixels to logical (divide by scale factor) */
+static inline int phys_to_log(double sf, int v)
+{
+    return (int)(v / sf + 0.5);
+}
+/* Convert logical pixels to physical (multiply by scale factor) */
+static inline int log_to_phys(double sf, int v)
+{
+    return (int)(v * sf + 0.5);
+}
 
 /* ---------- wm.c — core ---------- */
 int   wm_init(Wm *wm, int *argc, char **argv);
