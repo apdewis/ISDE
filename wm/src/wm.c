@@ -165,6 +165,39 @@ int wm_init(Wm *wm, int *argc, char **argv)
                     WmClient *c = frame_create(wm, children[i]);
                     if (c) {
                         c->desktop = wm->current_desktop;
+
+                        /* Restore maximize state from previous WM session.
+                         * The client's _NET_WM_STATE survives WM restarts;
+                         * use it to re-maximize and set sane restore geometry. */
+                        xcb_ewmh_get_atoms_reply_t state;
+                        if (xcb_ewmh_get_wm_state_reply(
+                                isde_ewmh_connection(wm->ewmh),
+                                xcb_ewmh_get_wm_state(
+                                    isde_ewmh_connection(wm->ewmh),
+                                    children[i]),
+                                &state, NULL)) {
+                            int was_max = 0;
+                            for (uint32_t s = 0; s < state.atoms_len; s++) {
+                                if (state.atoms[s] == isde_ewmh_connection(wm->ewmh)->_NET_WM_STATE_MAXIMIZED_VERT ||
+                                    state.atoms[s] == isde_ewmh_connection(wm->ewmh)->_NET_WM_STATE_MAXIMIZED_HORZ) {
+                                    was_max = 1;
+                                }
+                            }
+                            xcb_ewmh_get_atoms_reply_wipe(&state);
+                            if (was_max) {
+                                /* Current geometry is the maximized size;
+                                 * use a centered default as restore target */
+                                int wx, wy, ww, wh;
+                                wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+                                c->save_x = wx + ww / 4;
+                                c->save_y = wy + wh / 4;
+                                c->save_w = ww / 2;
+                                c->save_h = wh / 2;
+                                c->maximized = 0;
+                                wm_maximize_client(wm, c);
+                            }
+                        }
+
                         XtPopup(c->shell, XtGrabNone);
                         xcb_map_window(wm->conn, c->client);
                     }
