@@ -87,7 +87,6 @@ static Widget make_nav_button(Fm *fm, const char *name,
     XtSetArg(args[n], XtNheight, 32);  n++;
     XtSetArg(args[n], XtNinternalWidth, 0);        n++;
     XtSetArg(args[n], XtNinternalHeight, 0);       n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
 
     Widget btn = XtCreateManagedWidget(name, commandWidgetClass,
                                        fm->nav_box, args, n);
@@ -103,12 +102,11 @@ void navbar_init(Fm *fm)
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
     XtSetArg(args[n], XtNborderWidth, 1);                   n++;
     XtSetArg(args[n], XtNhSpace, 4);              n++;
     XtSetArg(args[n], XtNvSpace, 2);             n++;
     XtSetArg(args[n], XtNheight, 36);            n++;
-    fm->nav_box = XtCreateManagedWidget("navBar", boxWidgetClass,
+    fm->nav_box = XtCreateManagedWidget("navBar", toolbarWidgetClass,
                                         fm->vbox, args, n);
 
     fm->back_btn = make_nav_button(fm, "backBtn", "go-back", "<", back_cb);
@@ -121,11 +119,20 @@ void navbar_init(Fm *fm)
     fm->path_label = XtCreateManagedWidget("pathLabel", labelWidgetClass,
                                            fm->nav_box, args, n);
 
-    /* View mode toggle buttons */
+    n = 0;
+    XtSetArg(args[n], XtNtoolbarAlignment, XtToolbarAlignCenter); n++;
+    XtSetValues(fm->path_label, args, n);
+
+    /* View mode toggle buttons — right-aligned */
     fm->icon_view_btn = make_nav_button(fm, "iconViewBtn", "view-grid",
                                         "Grid", icon_view_cb);
     fm->list_view_btn = make_nav_button(fm, "listViewBtn", "view-list",
                                         "List", list_view_cb);
+
+    n = 0;
+    XtSetArg(args[n], XtNtoolbarAlignment, XtToolbarAlignRight); n++;
+    XtSetValues(fm->icon_view_btn, args, n);
+    XtSetValues(fm->list_view_btn, args, n);
 }
 
 void navbar_update(Fm *fm)

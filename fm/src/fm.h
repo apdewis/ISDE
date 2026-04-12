@@ -14,6 +14,7 @@
 #include <ISW/Form.h>
 #include <ISW/Paned.h>
 #include <ISW/Box.h>
+#include <ISW/Toolbar.h>
 #include <ISW/FlexBox.h>
 #include <ISW/Viewport.h>
 #include <ISW/IconView.h>
