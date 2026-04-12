@@ -223,11 +223,23 @@ static void title_button_handler(Widget w, XtPointer client_data,
     xcb_flush(wm->conn);
 }
 
+/* Command widget default translations lack LeaveWindow/EnterWindow bindings,
+ * so the button stays "set" when the pointer leaves and fires on release
+ * anywhere.  Override with the missing bindings so that leaving the button
+ * cancels the press. */
+static XtTranslations btn_leave_fixup;
+
 /* ---------- frame creation ---------- */
 
 WmClient *frame_create(Wm *wm, xcb_window_t client)
 {
     frame_init_icons();
+
+    if (!btn_leave_fixup) {
+        btn_leave_fixup = XtParseTranslationTable(
+            "<LeaveWindow>: reset()\n"
+            "<EnterWindow>: highlight(Always)");
+    }
 
     /* Get client geometry */
     xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(
@@ -313,8 +325,10 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        XtSetArg(args[n], XtNcornerRadius, 0);             n++;
         c->minimize_btn = XtCreateWidget("minimizeBtn", commandWidgetClass,
                                          c->shell, args, n);
+        XtOverrideTranslations(c->minimize_btn, btn_leave_fixup);
         XtAddCallback(c->minimize_btn, XtNcallback, minimize_callback, closure);
 
         /* Maximize / restore button */
@@ -326,8 +340,10 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        XtSetArg(args[n], XtNcornerRadius, 0);             n++;
         c->maximize_btn = XtCreateWidget("maximizeBtn", commandWidgetClass,
                                          c->shell, args, n);
+        XtOverrideTranslations(c->maximize_btn, btn_leave_fixup);
         XtAddCallback(c->maximize_btn, XtNcallback, maximize_callback, closure);
 
         /* Close button */
@@ -339,8 +355,10 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         XtSetArg(args[n], XtNheight, WM_TITLE_HEIGHT);    n++;
         XtSetArg(args[n], XtNinternalWidth, 0);            n++;
         XtSetArg(args[n], XtNinternalHeight, 0);           n++;
+        XtSetArg(args[n], XtNcornerRadius, 0);             n++;
         c->close_btn = XtCreateWidget("closeBtn", commandWidgetClass,
                                       c->shell, args, n);
+        XtOverrideTranslations(c->close_btn, btn_leave_fixup);
         XtAddCallback(c->close_btn, XtNcallback, close_callback, closure);
     }
 
