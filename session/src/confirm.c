@@ -259,14 +259,10 @@ int main(int argc, char **argv)
 
     XtPopup(shell, XtGrabExclusive);
 
-    /* Center dialog — use physical size from the realized widget */
-    int phys_scr_w = scr->width_in_pixels;
-    int phys_scr_h = scr->height_in_pixels;
-    int phys_dw = dialog->core.width;
-    int phys_dh = dialog->core.height;
-    int cx = (phys_scr_w - phys_dw) / 2;
-    int cy = (phys_scr_h - phys_dh) / 2;
-    XtConfigureWidget(dialog, cx, cy, phys_dw, phys_dh, 1);
+    /* Center dialog — all values logical; ISW scales to physical internally */
+    int cx = (scr_w - dlg_w) / 2;
+    int cy = (scr_h - dlg_h) / 2;
+    XtConfigureWidget(dialog, cx, cy, dlg_w, dlg_h, 1);
 
     /* Grab keyboard and pointer */
     xcb_window_t grab_win = XtWindow(shell);

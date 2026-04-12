@@ -87,6 +87,7 @@ typedef struct Panel {
     /* Applets */
     Widget             start_btn;   /* Start menu button (triangle icon) */
     Widget             start_shell; /* Start menu OverrideShell */
+    Widget             cat_viewport;/* Left pane: scrollable viewport */
     Widget             cat_box;     /* Left pane: category buttons */
     Widget             app_viewport;/* Right pane: scrollable viewport */
     Widget             app_box;     /* Right pane: app entries for selected category */

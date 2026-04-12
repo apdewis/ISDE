@@ -381,16 +381,20 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     }
     set_start_btn_active(p, 1);
 
-    /* Position above the panel at the left edge of primary monitor. */
-    int panel_y = p->mon_y + p->mon_h - p->phys_panel_h;
+    /* Position above the panel at the left edge of primary monitor.
+     * All values must be logical — ISW scales to physical internally. */
+    double sf = ISWScaleFactor(p->toplevel);
+    int log_mon_x = (int)(p->mon_x / sf + 0.5);
+    int log_panel_top = (int)((p->mon_y + p->mon_h) / sf + 0.5)
+                        - PANEL_HEIGHT;
 
     if (!XtIsRealized(p->start_shell)) {
         XtRealizeWidget(p->start_shell);
     }
     int menu_w = p->start_shell->core.width;
     int menu_h = p->start_shell->core.height;
-    int menu_y = panel_y - menu_h;
-    XtConfigureWidget(p->start_shell, p->mon_x, menu_y,
+    int menu_y = log_panel_top - menu_h;
+    XtConfigureWidget(p->start_shell, log_mon_x, menu_y,
                       menu_w, menu_h, 1);
     XtPopup(p->start_shell, XtGrabNone);
     panel_show_popup(p, p->start_shell);
@@ -479,7 +483,19 @@ void startmenu_init(Panel *p)
     Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
                            : XtScreen(p->start_btn)->white_pixel;
 
-    /* Category list (left pane) — darker tone */
+    /* Viewport for category list (left pane) — darker tone, vertical scroll */
+    n = 0;
+    XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
+    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                     n++;
+    XtSetArg(args[n], XtNallowVert, True);                    n++;
+    XtSetArg(args[n], XtNallowHoriz, False);                  n++;
+    XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
+    p->cat_viewport = XtCreateManagedWidget("catViewport",
+                                            viewportWidgetClass,
+                                            form, args, n);
+
+    /* Category list — child of viewport */
     String *cat_names = malloc((p->ncategories + 1) * sizeof(String));
     for (int i = 0; i < p->ncategories; i++) {
         cat_names[i] = (String)p->categories[i].label;
@@ -494,17 +510,16 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNverticalList, True);                 n++;
     XtSetArg(args[n], XtNborderWidth, 0);                     n++;
     XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
     XtSetArg(args[n], XtNcursor, None);                       n++;
     XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
     p->cat_box = XtCreateManagedWidget("catList", listWidgetClass,
-                                       form, args, n);
+                                       p->cat_viewport, args, n);
     XtAddCallback(p->cat_box, XtNcallback, category_selected, p);
     /* Don't free cat_names — the List widget holds a pointer to it */
 
     /* Viewport for app list (right pane) — lighter tone, vertical scroll */
     n = 0;
-    XtSetArg(args[n], XtNfromHoriz, p->cat_box);                  n++;
+    XtSetArg(args[n], XtNfromHoriz, p->cat_viewport);              n++;
     XtSetArg(args[n], XtNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
     XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
     XtSetArg(args[n], XtNborderWidth, 0);                         n++;
@@ -526,6 +541,7 @@ void startmenu_init(Panel *p)
     XtSetArg(args[n], XtNforceColumns, True);                     n++;
     XtSetArg(args[n], XtNverticalList, True);                     n++;
     XtSetArg(args[n], XtNborderWidth, 0);                         n++;
+    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
     XtSetArg(args[n], XtNcursor, None);                            n++;
     XtSetArg(args[n], XtNbackground, app_bg);                      n++;
     p->app_box = XtCreateManagedWidget("appList", listWidgetClass,
@@ -560,7 +576,7 @@ void startmenu_init(Panel *p)
      * No defaultDistance override: the Form's default 4px acts as bottom margin,
      * so the natural height = vertDistance + btn_size + 4 = TOOLBAR_HEIGHT. */
     n = 0;
-    XtSetArg(args[n], XtNfromVert, p->cat_box);             n++;
+    XtSetArg(args[n], XtNfromVert, p->cat_viewport);         n++;
     XtSetArg(args[n], XtNvertDistance, 0);                   n++;
     XtSetArg(args[n], XtNwidth, MENU_WIDTH);                 n++;
     XtSetArg(args[n], XtNheight, TOOLBAR_HEIGHT);            n++;

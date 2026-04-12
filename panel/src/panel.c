@@ -347,16 +347,18 @@ static void panel_reconfigure(Panel *p)
         return;
     }
 
-    int panel_y = p->mon_y + p->mon_h - p->phys_panel_h;
+    /* All XtConfigureWidget values must be logical — ISW scales internally */
+    double sf = ISWScaleFactor(p->toplevel);
+    int log_x = (int)(p->mon_x / sf + 0.5);
+    int log_w = (int)(p->mon_w / sf + 0.5);
+    int log_y = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
 
-    /* Resize panel shell */
-    XtConfigureWidget(p->shell, p->mon_x, panel_y,
-                      p->mon_w, p->phys_panel_h, 0);
+    XtConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
 
-    /* Reposition clock — use physical dimensions from realized widgets */
+    /* Reposition clock — core dimensions are already logical */
     int clock_w = p->clock_time->core.width;
-    int half = p->phys_panel_h / 2;
-    int clock_x = p->mon_w - clock_w - 2;
+    int half = PANEL_HEIGHT / 2;
+    int clock_x = log_w - clock_w - 2;
     XtConfigureWidget(p->clock_time, clock_x, 0,
                       clock_w, half, 0);
     XtConfigureWidget(p->clock_date, clock_x, half,
