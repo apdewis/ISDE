@@ -188,6 +188,7 @@ static void create_window_menu(Panel *p, TaskGroup *g)
     Cardinal n = 0;
     XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
     XtSetArg(args[n], XtNborderWidth, 1);            n++;
+    XtSetArg(args[n], XtNallowShellResize, True);    n++;
     XtSetArg(args[n], XtNborderColor, border_px);    n++;
     g->menu = XtCreatePopupShell("winListMenu", overrideShellWidgetClass,
                                  g->button, args, n);
@@ -198,6 +199,7 @@ static void create_window_menu(Panel *p, TaskGroup *g)
     XtSetArg(args[n], XtNdefaultColumns, 1);          n++;
     XtSetArg(args[n], XtNforceColumns, True);         n++;
     XtSetArg(args[n], XtNverticalList, True);         n++;
+    XtSetArg(args[n], XtNallowShellResize, True);     n++;
     XtSetArg(args[n], XtNborderWidth, 0);             n++;
     XtSetArg(args[n], XtNcursor, None);               n++;
     g->menu_list = XtCreateManagedWidget("winList", listWidgetClass,
@@ -256,11 +258,7 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 
     Position bx, by;
     XtTranslateCoords(g->button, 0, 0, &bx, &by);
-
-    XtConfigureWidget(g->menu, bx,
-                      by - (Position)list_h - (Position)(2 * bw),
-                      list_w, list_h, bw);
-
+    XtMoveWidget(g->menu, bx, by - (Position)list_h - (Position)(2 * bw));
     XtPopup(g->menu, XtGrabNone);
 
     /* Force immediate redraw — the list content changed since last popup */
