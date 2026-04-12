@@ -3,7 +3,7 @@
  * panel-desktops.c — Virtual desktop settings: grid rows and columns
  */
 #include "settings.h"
-#include <ISW/Scale.h>
+#include <ISW/Slider.h>
 
 #include <stdlib.h>
 
@@ -17,8 +17,8 @@ static IsdeDBus *panel_dbus;
 
 static void desktops_apply(void)
 {
-    int rows = IswScaleGetValue(scale_rows);
-    int cols = IswScaleGetValue(scale_cols);
+    int rows = IswSliderGetValue(scale_rows);
+    int cols = IswSliderGetValue(scale_cols);
 
     char *path = isde_xdg_config_path("isde.toml");
     if (path) {
@@ -37,8 +37,8 @@ static void desktops_apply(void)
 
 static void desktops_revert(void)
 {
-    IswScaleSetValue(scale_rows, saved_rows);
-    IswScaleSetValue(scale_cols, saved_cols);
+    IswSliderSetValue(scale_rows, saved_rows);
+    IswSliderSetValue(scale_cols, saved_cols);
 }
 
 static int lbl_w;
@@ -66,7 +66,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
     XtSetArg(args[n], XtNminimumValue, min);                 n++;
     XtSetArg(args[n], XtNmaximumValue, max);                 n++;
-    XtSetArg(args[n], XtNscaleValue, value);                 n++;
+    XtSetArg(args[n], XtNsliderValue, value);                 n++;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
     XtSetArg(args[n], XtNshowValue, True);                   n++;
     XtSetArg(args[n], XtNtickInterval, 1);                   n++;
@@ -75,7 +75,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     XtSetArg(args[n], XtNresizable, True);                   n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
-    *out_scale = XtCreateManagedWidget("scale", scaleWidgetClass,
+    *out_scale = XtCreateManagedWidget("slider", sliderWidgetClass,
                                        form, args, n);
     return *out_scale;
 }
@@ -130,8 +130,8 @@ static Widget desktops_create(Widget parent, XtAppContext app)
 static int desktops_has_changes(void)
 {
     if (!scale_rows) { return 0; }
-    return IswScaleGetValue(scale_rows) != saved_rows ||
-           IswScaleGetValue(scale_cols) != saved_cols;
+    return IswSliderGetValue(scale_rows) != saved_rows ||
+           IswSliderGetValue(scale_cols) != saved_cols;
 }
 
 static void desktops_destroy(void)

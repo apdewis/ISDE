@@ -48,8 +48,8 @@ static void read_current_keyboard(void)
 
 static void keyboard_apply(void)
 {
-    int delay    = IswScaleGetValue(scale_repeat_delay);
-    int interval = IswScaleGetValue(scale_repeat_interval);
+    int delay    = IswSliderGetValue(scale_repeat_delay);
+    int interval = IswSliderGetValue(scale_repeat_interval);
 
     apply_keyboard(delay, interval);
 
@@ -70,8 +70,8 @@ static void keyboard_apply(void)
 
 static void keyboard_revert(void)
 {
-    IswScaleSetValue(scale_repeat_delay, saved_repeat_delay);
-    IswScaleSetValue(scale_repeat_interval, saved_repeat_interval);
+    IswSliderSetValue(scale_repeat_delay, saved_repeat_delay);
+    IswSliderSetValue(scale_repeat_interval, saved_repeat_interval);
     apply_keyboard(saved_repeat_delay, saved_repeat_interval);
 }
 
@@ -100,7 +100,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
     XtSetArg(args[n], XtNminimumValue, min);                 n++;
     XtSetArg(args[n], XtNmaximumValue, max);                 n++;
-    XtSetArg(args[n], XtNscaleValue, value);                 n++;
+    XtSetArg(args[n], XtNsliderValue, value);                 n++;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
     XtSetArg(args[n], XtNshowValue, True);                   n++;
     XtSetArg(args[n], XtNwidth, scale_w);                    n++;
@@ -108,7 +108,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     XtSetArg(args[n], XtNresizable, True);                   n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
-    *out_scale = XtCreateManagedWidget("scale", scaleWidgetClass,
+    *out_scale = XtCreateManagedWidget("slider", sliderWidgetClass,
                                        form, args, n);
     return *out_scale;
 }
@@ -163,8 +163,8 @@ static Widget keyboard_create(Widget parent, XtAppContext app)
 static int keyboard_has_changes(void)
 {
     if (!scale_repeat_delay) { return 0; }
-    return IswScaleGetValue(scale_repeat_delay) != saved_repeat_delay ||
-           IswScaleGetValue(scale_repeat_interval) != saved_repeat_interval;
+    return IswSliderGetValue(scale_repeat_delay) != saved_repeat_delay ||
+           IswSliderGetValue(scale_repeat_interval) != saved_repeat_interval;
 }
 
 static void keyboard_destroy(void)

@@ -16,7 +16,7 @@
 #include <ISW/Label.h>
 #include <ISW/Form.h>
 #include <ISW/Box.h>
-#include <ISW/Scale.h>
+#include <ISW/Slider.h>
 #include <ISW/SpinBox.h>
 #include <ISW/FontChooser.h>
 #include <ISW/Tabs.h>

@@ -42,9 +42,9 @@ static void read_current_mouse(void)
 
 static void input_apply(void)
 {
-    int dclick = IswScaleGetValue(scale_dclick);
-    int accel  = IswScaleGetValue(scale_accel);
-    int thresh = IswScaleGetValue(scale_threshold);
+    int dclick = IswSliderGetValue(scale_dclick);
+    int accel  = IswSliderGetValue(scale_accel);
+    int thresh = IswSliderGetValue(scale_threshold);
 
     apply_mouse(accel, thresh);
 
@@ -68,9 +68,9 @@ static void input_apply(void)
 
 static void input_revert(void)
 {
-    IswScaleSetValue(scale_dclick, saved_dclick);
-    IswScaleSetValue(scale_accel, saved_accel_num);
-    IswScaleSetValue(scale_threshold, saved_threshold);
+    IswSliderSetValue(scale_dclick, saved_dclick);
+    IswSliderSetValue(scale_accel, saved_accel_num);
+    IswSliderSetValue(scale_threshold, saved_threshold);
     apply_mouse(saved_accel_num, saved_threshold);
 }
 
@@ -99,7 +99,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
     XtSetArg(args[n], XtNminimumValue, min);                 n++;
     XtSetArg(args[n], XtNmaximumValue, max);                 n++;
-    XtSetArg(args[n], XtNscaleValue, value);                 n++;
+    XtSetArg(args[n], XtNsliderValue, value);                 n++;
     XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
     XtSetArg(args[n], XtNshowValue, True);                   n++;
     XtSetArg(args[n], XtNwidth, scale_w);                    n++;
@@ -107,7 +107,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     XtSetArg(args[n], XtNresizable, True);                   n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
     XtSetArg(args[n], XtNright, XtChainRight);               n++;
-    *out_scale = XtCreateManagedWidget("scale", scaleWidgetClass,
+    *out_scale = XtCreateManagedWidget("slider", sliderWidgetClass,
                                        form, args, n);
     return *out_scale;
 }
@@ -165,9 +165,9 @@ static Widget input_create(Widget parent, XtAppContext app)
 static int input_has_changes(void)
 {
     if (!scale_dclick) { return 0; }
-    return IswScaleGetValue(scale_dclick) != saved_dclick ||
-           IswScaleGetValue(scale_accel) != saved_accel_num ||
-           IswScaleGetValue(scale_threshold) != saved_threshold;
+    return IswSliderGetValue(scale_dclick) != saved_dclick ||
+           IswSliderGetValue(scale_accel) != saved_accel_num ||
+           IswSliderGetValue(scale_threshold) != saved_threshold;
 }
 
 static void input_destroy(void)

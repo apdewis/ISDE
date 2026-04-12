@@ -6,7 +6,7 @@
  */
 #include "settings.h"
 #include <ISW/List.h>
-#include <ISW/Scale.h>
+#include <ISW/Slider.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -215,7 +215,7 @@ static void display_revert(void)
 {
     current_scale = saved_scale;
     Arg a[1];
-    XtSetArg(a[0], XtNscaleValue, saved_scale);
+    XtSetArg(a[0], XtNsliderValue, saved_scale);
     XtSetValues(scale_slider, a, 1);
 }
 
@@ -330,7 +330,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     n = 0;
     XtSetArg(args[n], XtNminimumValue, 100);          n++;
     XtSetArg(args[n], XtNmaximumValue, 300);           n++;
-    XtSetArg(args[n], XtNscaleValue, current_scale);   n++;
+    XtSetArg(args[n], XtNsliderValue, current_scale);   n++;
     XtSetArg(args[n], XtNshowValue, True);              n++;
     XtSetArg(args[n], XtNtickInterval, 25);             n++;
     XtSetArg(args[n], XtNborderWidth, 0);                n++;
@@ -340,7 +340,7 @@ static Widget display_create(Widget parent, XtAppContext app)
     XtSetArg(args[n], XtNresizable, True);               n++;
     XtSetArg(args[n], XtNleft, XtChainLeft);             n++;
     XtSetArg(args[n], XtNright, XtChainRight);           n++;
-    scale_slider = XtCreateManagedWidget("scaleSlider", scaleWidgetClass,
+    scale_slider = XtCreateManagedWidget("scaleSlider", sliderWidgetClass,
                                           form, args, n);
     XtAddCallback(scale_slider, XtNvalueChanged, scale_changed_cb, NULL);
     prev = scale_slider;
