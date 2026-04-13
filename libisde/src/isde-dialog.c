@@ -489,18 +489,24 @@ struct IsdeProgress {
     Widget       shell;
     Widget       bar;
     Widget       label;
+    Widget       file_bar;
+    Widget       file_label;
     XtIntervalId show_timer;
     XtAppContext app;
     Widget       parent;
     const char  *title;
     XtCallbackProc cancel_cb;
     void        *cancel_data;
+    int          last_pct;
+    int          last_file_pct;
+    char         last_msg[128];
+    char         last_file_msg[128];
 };
 
 static void progress_create_dialog(IsdeProgress *p)
 {
     p->shell = isde_dialog_create_shell(p->parent, "progressShell",
-                                        p->title, 350, 120);
+                                        p->title, 350, 190);
 
     Arg args[20];
     Cardinal n = 0;
@@ -509,11 +515,12 @@ static void progress_create_dialog(IsdeProgress *p)
     Widget vbox = XtCreateManagedWidget("progressBox", flexBoxWidgetClass,
                                          p->shell, args, n);
 
-    /* Label */
+    /* Label — disable resize so text changes don't trigger relayout */
     n = 0;
     XtSetArg(args[n], XtNlabel, "");                       n++;
     XtSetArg(args[n], XtNborderWidth, 0);                  n++;
     XtSetArg(args[n], XtNjustify, XtJustifyLeft);          n++;
+    XtSetArg(args[n], XtNresize, False);                   n++;
     p->label = XtCreateManagedWidget("progressLabel", labelWidgetClass,
                                       vbox, args, n);
 
@@ -524,6 +531,23 @@ static void progress_create_dialog(IsdeProgress *p)
     XtSetArg(args[n], XtNflexGrow, 1);                     n++;
     p->bar = XtCreateManagedWidget("progressBar", progressBarWidgetClass,
                                     vbox, args, n);
+
+    /* Per-file label — disable resize so text changes don't trigger relayout */
+    n = 0;
+    XtSetArg(args[n], XtNlabel, "");                       n++;
+    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
+    XtSetArg(args[n], XtNjustify, XtJustifyLeft);          n++;
+    XtSetArg(args[n], XtNresize, False);                   n++;
+    p->file_label = XtCreateManagedWidget("fileLabel", labelWidgetClass,
+                                           vbox, args, n);
+
+    /* Per-file progress bar */
+    n = 0;
+    XtSetArg(args[n], XtNvalue, 0);                        n++;
+    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
+    XtSetArg(args[n], XtNflexGrow, 1);                     n++;
+    p->file_bar = XtCreateManagedWidget("fileBar", progressBarWidgetClass,
+                                         vbox, args, n);
 
     /* Cancel button — right-aligned */
     n = 0;
@@ -571,15 +595,40 @@ void isde_progress_update(IsdeProgress *p, int percent, const char *message)
     if (percent < 0) percent = 0;
     if (percent > 100) percent = 100;
 
-    if (p->bar) {
+    if (p->bar && percent != p->last_pct) {
         Arg a;
         XtSetArg(a, XtNvalue, percent);
         XtSetValues(p->bar, &a, 1);
+        p->last_pct = percent;
     }
-    if (p->label && message) {
+    if (p->label && message && strcmp(message, p->last_msg) != 0) {
         Arg a;
         XtSetArg(a, XtNlabel, message);
         XtSetValues(p->label, &a, 1);
+        snprintf(p->last_msg, sizeof(p->last_msg), "%s", message);
+    }
+}
+
+void isde_progress_update_file(IsdeProgress *p, int percent,
+                               const char *message)
+{
+    if (!p || !p->shell) return;
+
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    if (p->file_bar && percent != p->last_file_pct) {
+        Arg a;
+        XtSetArg(a, XtNvalue, percent);
+        XtSetValues(p->file_bar, &a, 1);
+        p->last_file_pct = percent;
+    }
+    if (p->file_label && message &&
+        strcmp(message, p->last_file_msg) != 0) {
+        Arg a;
+        XtSetArg(a, XtNlabel, message);
+        XtSetValues(p->file_label, &a, 1);
+        snprintf(p->last_file_msg, sizeof(p->last_file_msg), "%s", message);
     }
 }
 
@@ -596,6 +645,8 @@ void isde_progress_destroy(IsdeProgress *p)
         p->shell = NULL;
         p->bar = NULL;
         p->label = NULL;
+        p->file_bar = NULL;
+        p->file_label = NULL;
     }
     free(p);
 }

@@ -101,6 +101,8 @@ typedef struct FmJob {
     char           *dst_dir;       /* NULL for delete/trash/empty_trash */
     atomic_int      files_done;
     atomic_int      files_total;
+    atomic_llong    cur_bytes_done;   /* bytes copied in current file */
+    atomic_llong    cur_bytes_total;  /* size of current file */
     atomic_int      cancelled;
     atomic_int      finished;
     int             error;         /* errno of first failure */
@@ -340,7 +342,8 @@ char *fileops_trash_path(void);
 
 int   fileops_count_files(const char *path);
 int   fileops_copy_progress(const char *src, const char *dst,
-                            atomic_int *done, atomic_int *cancelled);
+                            atomic_int *done, atomic_int *cancelled,
+                            atomic_llong *cur_done, atomic_llong *cur_total);
 int   fileops_delete_progress(const char *path,
                               atomic_int *done, atomic_int *cancelled);
 

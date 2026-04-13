@@ -127,6 +127,8 @@ IsdeProgress *isde_progress_create(Widget parent, const char *title,
                                    XtAppContext app,
                                    XtCallbackProc cancel_cb, void *data);
 void isde_progress_update(IsdeProgress *p, int percent, const char *message);
+void isde_progress_update_file(IsdeProgress *p, int percent,
+                               const char *message);
 void isde_progress_destroy(IsdeProgress *p);
 
 #ifdef __cplusplus

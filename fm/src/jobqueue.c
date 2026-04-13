@@ -124,7 +124,9 @@ static void exec_copy(FmJob *job)
         snprintf(dest, dlen, "%s/%s", job->dst_dir, base);
 
         int ret = fileops_copy_progress(src, dest,
-                                        &job->files_done, &job->cancelled);
+                                        &job->files_done, &job->cancelled,
+                                        &job->cur_bytes_done,
+                                        &job->cur_bytes_total);
         free(dest);
         if (ret != 0 && job->error == 0) {
             job->error = errno;
@@ -168,7 +170,9 @@ static void exec_move(FmJob *job)
         } else if (errno == EXDEV) {
             /* Cross-device: progress-aware copy then delete */
             ret = fileops_copy_progress(src, dest,
-                                        &job->files_done, &job->cancelled);
+                                        &job->files_done, &job->cancelled,
+                                        &job->cur_bytes_done,
+                                        &job->cur_bytes_total);
             if (ret == 0) {
                 fileops_delete(NULL, src);
             }

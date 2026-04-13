@@ -55,10 +55,32 @@ static void poll_timer_cb(XtPointer closure, XtIntervalId *id)
     if (pct > 100) pct = 100;
 
     char buf[128];
-    snprintf(buf, sizeof(buf), "%s %d of %d...",
-             job_type_verb(job->type), done, total);
+    int cur = done + 1;
+    if (cur > total) cur = total;
+    snprintf(buf, sizeof(buf), "%s file %d of %d...",
+             job_type_verb(job->type), cur, total);
 
     isde_progress_update(job->progress, pct, buf);
+
+    /* Per-file byte progress (only meaningful for copy/move) */
+    if (job->type == FM_JOB_COPY || job->type == FM_JOB_MOVE) {
+        long long cb = atomic_load(&job->cur_bytes_done);
+        long long ct = atomic_load(&job->cur_bytes_total);
+        int fpct = (ct > 0) ? (int)(cb * 100 / ct) : 0;
+        if (fpct > 100) fpct = 100;
+
+        char fbuf[128];
+        if (ct >= 1024LL * 1024) {
+            snprintf(fbuf, sizeof(fbuf), "%.1f / %.1f MB",
+                     cb / (1024.0 * 1024.0), ct / (1024.0 * 1024.0));
+        } else if (ct >= 1024) {
+            snprintf(fbuf, sizeof(fbuf), "%.1f / %.1f KB",
+                     cb / 1024.0, ct / 1024.0);
+        } else {
+            snprintf(fbuf, sizeof(fbuf), "%lld / %lld bytes", cb, ct);
+        }
+        isde_progress_update_file(job->progress, fpct, fbuf);
+    }
 
     /* Re-arm timer */
     Fm *win = job->origin_win;
