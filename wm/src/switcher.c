@@ -34,7 +34,6 @@ static void build_order(Wm *wm)
 {
     int count = 0;
     for (WmClient *c = wm->clients; c; c = c->next) {
-        if (c->minimized) continue;
         if (c->transient_for) continue;
         if (c->desktop != wm->current_desktop &&
             c->desktop != 0xFFFFFFFF) continue;
@@ -55,7 +54,6 @@ static void build_order(Wm *wm)
 
     int i = 0;
     for (WmClient *c = wm->clients; c; c = c->next) {
-        if (c->minimized) continue;
         if (c->transient_for) continue;
         if (c->desktop != wm->current_desktop &&
             c->desktop != 0xFFFFFFFF) continue;
@@ -281,8 +279,11 @@ void wm_switcher_commit(Wm *wm)
     destroy_osd(wm);
     wm->switcher_active = 0;
 
-    if (target)
+    if (target) {
+        if (target->minimized)
+            wm_restore_client(wm, target);
         wm_focus_client(wm, target);
+    }
 }
 
 void wm_switcher_cancel(Wm *wm)

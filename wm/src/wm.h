@@ -163,6 +163,7 @@ void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);
 void      wm_minimize_client(Wm *wm, WmClient *c);
+void      wm_restore_client(Wm *wm, WmClient *c);
 
 /* ---------- wm.c — work area ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);

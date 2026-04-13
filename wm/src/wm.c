@@ -642,6 +642,17 @@ void wm_minimize_client(Wm *wm, WmClient *c)
     }
 }
 
+void wm_restore_client(Wm *wm, WmClient *c)
+{
+    if (!c->minimized) return;
+    c->minimized = 0;
+    xcb_map_window(wm->conn, c->client);
+    if (c->shell) {
+        IswPopup(c->shell, IswGrabNone);
+    }
+    xcb_flush(wm->conn);
+}
+
 /* ---------- WM event handlers (non-widget events) ---------- */
 
 /* Check _MOTIF_WM_HINTS to see if a client requests no decorations.
@@ -956,12 +967,14 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
                 wm_maximize_client(wm, c);
             }
         }
-        /* Check if either atom requests minimize */
+        /* Check if either atom requests minimize/restore */
         if (a1 == ewmh->_NET_WM_STATE_HIDDEN ||
             a2 == ewmh->_NET_WM_STATE_HIDDEN) {
             int want = (action == 1) || (action == 2 && !c->minimized);
             if (want && !c->minimized) {
                 wm_minimize_client(wm, c);
+            } else if (!want && c->minimized) {
+                wm_restore_client(wm, c);
             }
         }
         return 1;
