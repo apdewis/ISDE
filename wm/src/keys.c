@@ -69,52 +69,10 @@ void wm_keys_setup(Wm *wm)
     xcb_flush(wm->conn);
 }
 
-static void cycle_focus(Wm *wm)
-{
-    if (!wm->clients) {
-        return;
-    }
-
-    if (!wm->focused) {
-        wm_focus_client(wm, wm->clients);
-        return;
-    }
-
-    /* Move to next client, wrapping around */
-    WmClient *next = wm->focused->next;
-    if (!next) {
-        next = wm->clients;
-    }
-    wm_focus_client(wm, next);
-}
-
-static void cycle_focus_reverse(Wm *wm)
-{
-    if (!wm->clients) {
-        return;
-    }
-
-    if (!wm->focused) {
-        wm_focus_client(wm, wm->clients);
-        return;
-    }
-
-    /* Find the previous client in the singly-linked list */
-    WmClient *prev = NULL;
-    for (WmClient *c = wm->clients; c; c = c->next) {
-        if (c->next == wm->focused) {
-            prev = c;
-            break;
-        }
-    }
-
-    /* If focused is the head, wrap to the tail */
-    if (!prev) {
-        for (prev = wm->clients; prev->next; prev = prev->next)
-            ;
-    }
-    wm_focus_client(wm, prev);
-}
+/* Keysym for Alt_L / Alt_R to detect modifier release */
+#define XK_Alt_L   0xffe9
+#define XK_Alt_R   0xffea
+#define XK_Escape  0xff1b
 
 void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
 {
@@ -124,6 +82,12 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
     uint16_t mod = ev->state & (XCB_MOD_MASK_1 | XCB_MOD_MASK_SHIFT |
                                 XCB_MOD_MASK_CONTROL | MOD_SUPER);
 
+    /* Escape cancels the window switcher */
+    if (sym == XK_Escape && wm->switcher_active) {
+        wm_switcher_cancel(wm);
+        return;
+    }
+
     if (sym == XK_F4 && (mod & XCB_MOD_MASK_1)) {
         if (wm->focused) {
             wm_close_client(wm, wm->focused);
@@ -132,10 +96,16 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
     }
 
     if (sym == XK_Tab && (mod & XCB_MOD_MASK_1)) {
-        if (mod & XCB_MOD_MASK_SHIFT) {
-            cycle_focus_reverse(wm);
+        if (wm->switcher_active) {
+            if (mod & XCB_MOD_MASK_SHIFT)
+                wm_switcher_prev(wm);
+            else
+                wm_switcher_next(wm);
         } else {
-            cycle_focus(wm);
+            if (mod & XCB_MOD_MASK_SHIFT)
+                wm_switcher_show(wm);  /* show starts at index 1 anyway */
+            else
+                wm_switcher_show(wm);
         }
         return;
     }
@@ -153,5 +123,17 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
         if (sym == XK_Right) { wm_desktops_move(wm,  1,  0); return; }
         if (sym == XK_Up)    { wm_desktops_move(wm,  0, -1); return; }
         if (sym == XK_Down)  { wm_desktops_move(wm,  0,  1); return; }
+    }
+}
+
+void wm_keys_handle_release(Wm *wm, xcb_key_release_event_t *ev)
+{
+    if (!wm->switcher_active) return;
+
+    xcb_keysym_t sym = xcb_key_symbols_get_keysym(wm->keysyms,
+                                                   ev->detail, 0);
+    /* Commit the selection when Alt is released */
+    if (sym == XK_Alt_L || sym == XK_Alt_R) {
+        wm_switcher_commit(wm);
     }
 }

@@ -6,6 +6,7 @@ add_executable(isde-wm
     src/placement.c
     src/desktops.c
     src/keys.c
+    src/switcher.c
 )
 
 target_compile_definitions(isde-wm PRIVATE _POSIX_C_SOURCE=200809L)

@@ -302,6 +302,10 @@ void wm_remove_client(Wm *wm, WmClient *c)
         wm->drag_mode = DRAG_NONE;
     }
 
+    /* Cancel the window switcher if active — its client array is now stale */
+    if (wm->switcher_active)
+        wm_switcher_cancel(wm);
+
     frame_destroy(wm, c);
     wm_ewmh_update_client_list(wm);
     wm_ewmh_update_active(wm);
@@ -1096,6 +1100,9 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         break;
     case XCB_KEY_PRESS:
         wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
+        break;
+    case XCB_KEY_RELEASE:
+        wm_keys_handle_release(wm, (xcb_key_release_event_t *)ev);
         break;
     default:
         IswDispatchEvent(ev, wm->conn);

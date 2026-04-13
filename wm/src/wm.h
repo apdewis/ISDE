@@ -106,6 +106,15 @@ typedef struct Wm {
     Widget                 desk_osd;       /* OSD popup shell */
     IswIntervalId           desk_osd_timer; /* auto-hide timer */
 
+    /* Window switcher (Alt+Tab) */
+    Widget                 switcher_shell;   /* OSD popup shell */
+    WmClient             **switcher_order;   /* MRU-sorted client array */
+    String                *switcher_labels;  /* title strings for list */
+    int                    switcher_count;   /* number of entries */
+    int                    switcher_visible; /* number of visible label rows */
+    int                    switcher_sel;     /* currently highlighted index */
+    int                    switcher_active;  /* 1 while Alt is held */
+
     /* Drag state */
     enum { DRAG_NONE, DRAG_MOVE, DRAG_RESIZE } drag_mode;
     int                    resize_edge;
@@ -202,5 +211,13 @@ void  wm_desktops_show_osd(Wm *wm);
 /* ---------- keys.c — key binding handling ---------- */
 void  wm_keys_setup(Wm *wm);
 void  wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev);
+void  wm_keys_handle_release(Wm *wm, xcb_key_release_event_t *ev);
+
+/* ---------- switcher.c — Alt+Tab window switcher OSD ---------- */
+void  wm_switcher_show(Wm *wm);
+void  wm_switcher_next(Wm *wm);
+void  wm_switcher_prev(Wm *wm);
+void  wm_switcher_commit(Wm *wm);
+void  wm_switcher_cancel(Wm *wm);
 
 #endif /* ISDE_WM_H */
