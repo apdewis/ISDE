@@ -188,7 +188,7 @@ static void restart_ui_children(Session *s)
     /* SIGTERM the WM and panel — child_reap will respawn them */
     for (Child *c = s->children; c; c = c->next) {
         if (c->is_wm || c->is_panel) {
-            kill(c->pid, SIGTERM);
+            kill(-c->pid, SIGTERM);
         }
     }
 }

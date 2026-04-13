@@ -21,6 +21,9 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
     }
 
     if (pid == 0) {
+        /* New process group so we can kill the entire tree on shutdown */
+        setpgid(0, 0);
+
         /* Die when session manager dies */
         prctl(PR_SET_PDEATHSIG, SIGTERM);
 
@@ -96,10 +99,10 @@ void child_reap(Session *s)
 
 void child_kill_all(Session *s)
 {
-    /* Send SIGTERM to all children */
+    /* Send SIGTERM to all process groups */
     for (Child *c = s->children; c; c = c->next) {
         c->respawn = 0; /* Don't respawn during shutdown */
-        kill(c->pid, SIGTERM);
+        kill(-c->pid, SIGTERM);
     }
 
     /* Wait briefly for clean exit */
@@ -107,7 +110,7 @@ void child_kill_all(Session *s)
 
     /* Force kill any remaining */
     for (Child *c = s->children; c; c = c->next) {
-        kill(c->pid, SIGKILL);
+        kill(-c->pid, SIGKILL);
     }
 
     /* Reap all */
