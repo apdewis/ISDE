@@ -890,7 +890,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*panelForm.clockDate.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelForm.clockDate.foreground", s->taskbar.fg);
 
-    /* WM title bar (unfocused defaults — focused set via XtSetValues) */
+    /* WM title bar (unfocused defaults — focused set via IswSetValues) */
     res[i++] = fmt_color("*titleBar.background", s->titlebar.bg);
     res[i++] = fmt_color("*titleBar.foreground", s->titlebar.fg);
     res[i++] = fmt_color("*frame.minimizeBtn.background", s->titlebar_button.bg);

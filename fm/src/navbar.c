@@ -9,14 +9,14 @@
 
 /* ---------- view mode callbacks ---------- */
 
-static void icon_view_cb(Widget w, XtPointer cd, XtPointer call)
+static void icon_view_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
     fileview_set_mode(fm, FM_VIEW_ICON);
 }
 
-static void list_view_cb(Widget w, XtPointer cd, XtPointer call)
+static void list_view_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
@@ -33,7 +33,7 @@ static void navigate_history(Fm *fm, int pos)
     fm_refresh(fm);
 }
 
-static void back_cb(Widget w, XtPointer cd, XtPointer call)
+static void back_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
@@ -42,7 +42,7 @@ static void back_cb(Widget w, XtPointer cd, XtPointer call)
     }
 }
 
-static void fwd_cb(Widget w, XtPointer cd, XtPointer call)
+static void fwd_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
@@ -51,7 +51,7 @@ static void fwd_cb(Widget w, XtPointer cd, XtPointer call)
     }
 }
 
-static void up_cb(Widget w, XtPointer cd, XtPointer call)
+static void up_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
@@ -71,28 +71,28 @@ static void up_cb(Widget w, XtPointer cd, XtPointer call)
 static Widget make_nav_button(Fm *fm, const char *name,
                               const char *icon_name,
                               const char *fallback_label,
-                              XtCallbackProc cb)
+                              IswCallbackProc cb)
 {
     Arg args[20];
     Cardinal n = 0;
 
     char *icon_path = isde_icon_find("actions", icon_name);
     if (icon_path) {
-        XtSetArg(args[n], XtNimage, icon_path);        n++;
-        XtSetArg(args[n], XtNlabel, "");            n++;
+        IswSetArg(args[n], IswNimage, icon_path);        n++;
+        IswSetArg(args[n], IswNlabel, "");            n++;
     } else {
-        XtSetArg(args[n], XtNlabel, fallback_label); n++;
+        IswSetArg(args[n], IswNlabel, fallback_label); n++;
     }
-    XtSetArg(args[n], XtNwidth, 32);     n++;
-    XtSetArg(args[n], XtNheight, 32);  n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);        n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);       n++;
+    IswSetArg(args[n], IswNwidth, 32);     n++;
+    IswSetArg(args[n], IswNheight, 32);  n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);        n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);       n++;
 
-    Widget btn = XtCreateManagedWidget(name, commandWidgetClass,
+    Widget btn = IswCreateManagedWidget(name, commandWidgetClass,
                                        fm->nav_box, args, n);
-    XtAddCallback(btn, XtNcallback, cb, fm);
+    IswAddCallback(btn, IswNcallback, cb, fm);
 
-    /* icon_path intentionally not freed — XtNimage may hold the pointer */
+    /* icon_path intentionally not freed — IswNimage may hold the pointer */
     return btn;
 }
 
@@ -102,11 +102,11 @@ void navbar_init(Fm *fm)
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNborderWidth, 1);                   n++;
-    XtSetArg(args[n], XtNhSpace, 4);              n++;
-    XtSetArg(args[n], XtNvSpace, 2);             n++;
-    XtSetArg(args[n], XtNheight, 36);            n++;
-    fm->nav_box = XtCreateManagedWidget("navBar", toolbarWidgetClass,
+    IswSetArg(args[n], IswNborderWidth, 1);                   n++;
+    IswSetArg(args[n], IswNhSpace, 4);              n++;
+    IswSetArg(args[n], IswNvSpace, 2);             n++;
+    IswSetArg(args[n], IswNheight, 36);            n++;
+    fm->nav_box = IswCreateManagedWidget("navBar", toolbarWidgetClass,
                                         fm->vbox, args, n);
 
     fm->back_btn = make_nav_button(fm, "backBtn", "go-back", "<", back_cb);
@@ -114,14 +114,14 @@ void navbar_init(Fm *fm)
     fm->up_btn   = make_nav_button(fm, "upBtn", "go-up", "Up", up_cb);
 
     n = 0;
-    XtSetArg(args[n], XtNlabel, "/");              n++;
-    XtSetArg(args[n], XtNborderWidth, 0);           n++;
-    fm->path_label = XtCreateManagedWidget("pathLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "/");              n++;
+    IswSetArg(args[n], IswNborderWidth, 0);           n++;
+    fm->path_label = IswCreateManagedWidget("pathLabel", labelWidgetClass,
                                            fm->nav_box, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNtoolbarAlignment, XtToolbarAlignCenter); n++;
-    XtSetValues(fm->path_label, args, n);
+    IswSetArg(args[n], IswNtoolbarAlignment, IswToolbarAlignCenter); n++;
+    IswSetValues(fm->path_label, args, n);
 
     /* View mode toggle buttons — right-aligned */
     fm->icon_view_btn = make_nav_button(fm, "iconViewBtn", "view-grid",
@@ -130,25 +130,25 @@ void navbar_init(Fm *fm)
                                         "List", list_view_cb);
 
     n = 0;
-    XtSetArg(args[n], XtNtoolbarAlignment, XtToolbarAlignRight); n++;
-    XtSetValues(fm->icon_view_btn, args, n);
-    XtSetValues(fm->list_view_btn, args, n);
+    IswSetArg(args[n], IswNtoolbarAlignment, IswToolbarAlignRight); n++;
+    IswSetValues(fm->icon_view_btn, args, n);
+    IswSetValues(fm->list_view_btn, args, n);
 }
 
 void navbar_update(Fm *fm)
 {
     Arg args[20];
 
-    XtSetArg(args[0], XtNlabel, fm->cwd ? fm->cwd : "/");
-    XtSetValues(fm->path_label, args, 1);
+    IswSetArg(args[0], IswNlabel, fm->cwd ? fm->cwd : "/");
+    IswSetValues(fm->path_label, args, 1);
 
-    XtSetArg(args[0], XtNsensitive, fm->hist_pos > 0);
-    XtSetValues(fm->back_btn, args, 1);
+    IswSetArg(args[0], IswNsensitive, fm->hist_pos > 0);
+    IswSetValues(fm->back_btn, args, 1);
 
-    XtSetArg(args[0], XtNsensitive, fm->hist_pos < fm->hist_count - 1);
-    XtSetValues(fm->fwd_btn, args, 1);
+    IswSetArg(args[0], IswNsensitive, fm->hist_pos < fm->hist_count - 1);
+    IswSetValues(fm->fwd_btn, args, 1);
 
-    XtSetArg(args[0], XtNsensitive,
+    IswSetArg(args[0], IswNsensitive,
              fm->cwd && strcmp(fm->cwd, "/") != 0);
-    XtSetValues(fm->up_btn, args, 1);
+    IswSetValues(fm->up_btn, args, 1);
 }

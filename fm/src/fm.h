@@ -4,10 +4,10 @@
 #ifndef ISDE_FM_H
 #define ISDE_FM_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/MainWindow.h>
 #include <ISW/Command.h>
 #include <ISW/Label.h>
@@ -109,7 +109,7 @@ typedef struct FmJob {
     struct Fm      *origin_win;    /* window that started this op */
     /* Progress UI (managed by progress.c, main thread only) */
     struct IsdeProgress *progress;
-    XtIntervalId    progress_timer;    /* polls atomic counters */
+    IswIntervalId    progress_timer;    /* polls atomic counters */
     struct FmJob   *next;
 } FmJob;
 
@@ -122,8 +122,8 @@ typedef struct FmPlacesData FmPlacesData;
 
 /* ---------- App-wide shared state ---------- */
 typedef struct FmApp {
-    XtAppContext   app;
-    Widget         first_toplevel;  /* from XtAppInitialize */
+    IswAppContext   app;
+    Widget         first_toplevel;  /* from IswAppInitialize */
 
     /* Desktop entry cache (shared across windows) */
     IsdeDesktopEntry **desktop_entries;
@@ -159,7 +159,7 @@ typedef struct FmApp {
     pthread_t       worker_thread;
     int             worker_running;
     int             notify_pipe[2]; /* worker writes, main loop reads */
-    XtInputId       notify_input_id;
+    IswInputId       notify_input_id;
 
     char          *initial_path;  /* from argv, used by fm_app_init */
     int            running;
@@ -268,7 +268,7 @@ extern XContext fm_window_context;  /* initialized once in fm_init */
 /* Store Fm* on a shell widget's window */
 static inline void fm_set_context(Widget shell, Fm *fm)
 {
-    IswSaveContext(XtDisplay(shell), XtWindow(shell),
+    IswSaveContext(IswDisplay(shell), IswWindow(shell),
                    fm_window_context, (void *)fm);
 }
 
@@ -279,13 +279,13 @@ static inline Fm *fm_from_widget(Widget w)
      * a stored Fm context.  Transient/override shells (dialogs,
      * context menus) won't have one, but their parent toplevel will. */
     while (w) {
-        if (XtIsShell(w) && XtIsRealized(w)) {
+        if (IswIsShell(w) && IswIsRealized(w)) {
             void *data = NULL;
-            if (IswFindContext(XtDisplay(w), XtWindow(w),
+            if (IswFindContext(IswDisplay(w), IswWindow(w),
                                fm_window_context, &data) == 0 && data)
                 return (Fm *)data;
         }
-        w = XtParent(w);
+        w = IswParent(w);
     }
     return NULL;
 }

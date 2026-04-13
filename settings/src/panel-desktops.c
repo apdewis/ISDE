@@ -51,36 +51,36 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     Cardinal n;
 
     n = 0;
-    XtSetArg(args[n], XtNlabel, label_text);               n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNwidth, lbl_w);                     n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);                n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);               n++;
-    if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
-    Widget lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, label_text);               n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    IswSetArg(args[n], IswNwidth, lbl_w);                     n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);                n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);               n++;
+    if (above) { IswSetArg(args[n], IswNfromVert, above); n++; }
+    Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
                                        form, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNfromHoriz, lbl);                   n++;
-    if (above) { XtSetArg(args[n], XtNfromVert, above); n++; }
-    XtSetArg(args[n], XtNminimumValue, min);                 n++;
-    XtSetArg(args[n], XtNmaximumValue, max);                 n++;
-    XtSetArg(args[n], XtNsliderValue, value);                 n++;
-    XtSetArg(args[n], XtNorientation, XtorientHorizontal);   n++;
-    XtSetArg(args[n], XtNshowValue, True);                   n++;
-    XtSetArg(args[n], XtNtickInterval, 1);                   n++;
-    XtSetArg(args[n], XtNwidth, scale_w);                    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
-    XtSetArg(args[n], XtNresizable, True);                   n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);                 n++;
-    XtSetArg(args[n], XtNright, XtChainRight);               n++;
-    *out_scale = XtCreateManagedWidget("slider", sliderWidgetClass,
+    IswSetArg(args[n], IswNfromHoriz, lbl);                   n++;
+    if (above) { IswSetArg(args[n], IswNfromVert, above); n++; }
+    IswSetArg(args[n], IswNminimumValue, min);                 n++;
+    IswSetArg(args[n], IswNmaximumValue, max);                 n++;
+    IswSetArg(args[n], IswNsliderValue, value);                 n++;
+    IswSetArg(args[n], IswNorientation, XtorientHorizontal);   n++;
+    IswSetArg(args[n], IswNshowValue, True);                   n++;
+    IswSetArg(args[n], IswNtickInterval, 1);                   n++;
+    IswSetArg(args[n], IswNwidth, scale_w);                    n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
+    IswSetArg(args[n], IswNresizable, True);                   n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);                 n++;
+    IswSetArg(args[n], IswNright, IswChainRight);               n++;
+    *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
                                        form, args, n);
     return *out_scale;
 }
 
-static Widget desktops_create(Widget parent, XtAppContext app)
+static Widget desktops_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
@@ -104,8 +104,8 @@ static Widget desktops_create(Widget parent, XtAppContext app)
 
     Dimension pw;
     Arg qa[20];
-    XtSetArg(qa[0], XtNwidth, &pw);
-    XtGetValues(parent, qa, 1);
+    IswSetArg(qa[0], IswNwidth, &pw);
+    IswGetValues(parent, qa, 1);
 
     lbl_w = 180;
     scale_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
@@ -113,9 +113,9 @@ static Widget desktops_create(Widget parent, XtAppContext app)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateWidget("desktopsPanel", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    Widget form = IswCreateWidget("desktopsPanel", formWidgetClass,
                                  parent, args, n);
 
     Widget row;

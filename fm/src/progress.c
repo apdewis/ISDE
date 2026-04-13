@@ -31,7 +31,7 @@ static const char *job_type_verb(FmJobType type)
 
 /* ---------- cancel button ---------- */
 
-static void cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     FmJob *job = (FmJob *)cd;
@@ -40,7 +40,7 @@ static void cancel_cb(Widget w, XtPointer cd, XtPointer call)
 
 /* ---------- progress poll timer ---------- */
 
-static void poll_timer_cb(XtPointer closure, XtIntervalId *id)
+static void poll_timer_cb(IswPointer closure, IswIntervalId *id)
 {
     (void)id;
     FmJob *job = (FmJob *)closure;
@@ -85,7 +85,7 @@ static void poll_timer_cb(XtPointer closure, XtIntervalId *id)
     /* Re-arm timer */
     Fm *win = job->origin_win;
     if (win) {
-        job->progress_timer = XtAppAddTimeOut(
+        job->progress_timer = IswAppAddTimeOut(
             win->app_state->app, POLL_INTERVAL_MS, poll_timer_cb, job);
     }
 }
@@ -103,14 +103,14 @@ void progress_start(FmApp *app, FmJob *job)
 
     /* Start polling after the show delay — the timer fires regardless
      * of whether the dialog is visible yet. */
-    job->progress_timer = XtAppAddTimeOut(
+    job->progress_timer = IswAppAddTimeOut(
         app->app, POLL_INTERVAL_MS, poll_timer_cb, job);
 }
 
 void progress_stop(FmJob *job)
 {
     if (job->progress_timer) {
-        XtRemoveTimeOut(job->progress_timer);
+        IswRemoveTimeOut(job->progress_timer);
         job->progress_timer = 0;
     }
     isde_progress_destroy(job->progress);

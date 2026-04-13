@@ -113,7 +113,7 @@ void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
 
 /* Build an Xt fallback resource list from the current colour scheme.
  * Returns a NULL-terminated array of strings suitable for
- * XtAppInitialize()'s fallback_resources parameter.
+ * IswAppInitialize()'s fallback_resources parameter.
  * Caller must free with isde_theme_free_resources(). */
 char **isde_theme_build_resources(void);
 void   isde_theme_free_resources(char **resources);

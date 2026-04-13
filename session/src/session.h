@@ -12,7 +12,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <xcb/xcb.h>
-#include <X11/Intrinsic.h>
+#include <ISW/Intrinsic.h>
 #include <dbus/dbus.h>
 
 /* ---------- Child process ---------- */
@@ -45,10 +45,10 @@ typedef struct Session {
     IsdeIpc          *ipc;
 
     /* Xt */
-    XtAppContext      app;
+    IswAppContext      app;
     Widget            toplevel;
-    XtSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
-    XtIntervalId      check_timer;    /* periodic appearance check */
+    IswSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
+    IswIntervalId      check_timer;    /* periodic appearance check */
 
     /* Confirmation overlay process */
     pid_t             confirm_pid;    /* isde-confirm child, or 0 */

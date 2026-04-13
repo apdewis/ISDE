@@ -4,10 +4,10 @@
 #ifndef ISDE_PANEL_H
 #define ISDE_PANEL_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/Box.h>
 #include <ISW/Form.h>
 #include <ISW/Label.h>
@@ -84,7 +84,7 @@ typedef struct StartMenuCategory {
 
 /* ---------- Panel state ---------- */
 typedef struct Panel {
-    XtAppContext       app;
+    IswAppContext       app;
     Widget             toplevel;
     Widget             shell;       /* OverrideShell — the panel bar */
     Widget             form;        /* Form layout container */
@@ -156,7 +156,7 @@ typedef struct Panel {
     xcb_atom_t         atom_xembed;
     xcb_atom_t         atom_xembed_info;
 
-    XtIntervalId       clock_timer;
+    IswIntervalId       clock_timer;
 
     /* D-Bus */
     IsdeDBus          *dbus;

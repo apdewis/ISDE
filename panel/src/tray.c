@@ -43,7 +43,7 @@ static void send_xembed_notify(Panel *p, xcb_window_t icon)
     ev.data.data32[0] = XCB_CURRENT_TIME;
     ev.data.data32[1] = XEMBED_EMBEDDED_NOTIFY;
     ev.data.data32[2] = 0; /* version */
-    ev.data.data32[3] = XtWindow(p->tray_box);
+    ev.data.data32[3] = IswWindow(p->tray_box);
     xcb_send_event(p->conn, 0, icon,
                    XCB_EVENT_MASK_NO_EVENT, (const char *)&ev);
 }
@@ -67,7 +67,7 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     int icon_size = p->shell->core.height - 4;
 
     /* Reparent the icon window into the tray box's X window */
-    xcb_reparent_window(p->conn, icon, XtWindow(p->tray_box),
+    xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box),
                         (p->ntray - 1) * (icon_size + 2), 2);
 
     /* Resize the icon to fit */
@@ -91,8 +91,8 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     int tray_w = p->ntray * (icon_size + 2) + 2;
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, tray_w); n++;
-    XtSetValues(p->tray_box, args, n);
+    IswSetArg(args[n], IswNwidth, tray_w); n++;
+    IswSetValues(p->tray_box, args, n);
 
     xcb_flush(p->conn);
 
@@ -129,8 +129,8 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
     int tray_w = p->ntray > 0 ? p->ntray * (icon_size + 2) + 2 : 1;
     Arg args[20];
     Cardinal na = 0;
-    XtSetArg(args[na], XtNwidth, tray_w); na++;
-    XtSetValues(p->tray_box, args, na);
+    IswSetArg(args[na], IswNwidth, tray_w); na++;
+    IswSetValues(p->tray_box, args, na);
 
     xcb_flush(p->conn);
 
@@ -152,32 +152,32 @@ void tray_init_widgets(Panel *p)
     /* Create tray box widget — between taskbar and clock in the form */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNhSpace, 0);                        n++;
-    XtSetArg(args[n], XtNvSpace, 0);                        n++;
-    XtSetArg(args[n], XtNwidth, 1);                         n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);             n++;
-    XtSetArg(args[n], XtNfromHoriz, p->box);                n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                  n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);            n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);               n++;
-    XtSetArg(args[n], XtNright, XtChainRight);              n++;
-    p->tray_box = XtCreateManagedWidget("trayBox", boxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    IswSetArg(args[n], IswNhSpace, 0);                        n++;
+    IswSetArg(args[n], IswNvSpace, 0);                        n++;
+    IswSetArg(args[n], IswNwidth, 1);                         n++;
+    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
+    IswSetArg(args[n], IswNfromHoriz, p->box);                n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                  n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);            n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);               n++;
+    IswSetArg(args[n], IswNright, IswChainRight);              n++;
+    p->tray_box = IswCreateManagedWidget("trayBox", boxWidgetClass,
                                         p->form, args, n);
 }
 
 void tray_init_selection(Panel *p)
 {
     /* Claim the system tray selection */
-    xcb_set_selection_owner(p->conn, XtWindow(p->shell),
+    xcb_set_selection_owner(p->conn, IswWindow(p->shell),
                             p->atom_tray_sel, XCB_CURRENT_TIME);
 
     /* Verify we got it */
     xcb_get_selection_owner_reply_t *owner =
         xcb_get_selection_owner_reply(p->conn,
             xcb_get_selection_owner(p->conn, p->atom_tray_sel), NULL);
-    if (!owner || owner->owner != XtWindow(p->shell)) {
+    if (!owner || owner->owner != IswWindow(p->shell)) {
         fprintf(stderr, "isde-panel: tray: failed to claim selection\n");
         free(owner);
         return;
@@ -193,7 +193,7 @@ void tray_init_selection(Panel *p)
     ev.format = 32;
     ev.data.data32[0] = XCB_CURRENT_TIME;
     ev.data.data32[1] = p->atom_tray_sel;
-    ev.data.data32[2] = XtWindow(p->shell);
+    ev.data.data32[2] = IswWindow(p->shell);
     xcb_send_event(p->conn, 0, p->root,
                    XCB_EVENT_MASK_STRUCTURE_NOTIFY, (const char *)&ev);
     xcb_flush(p->conn);

@@ -17,9 +17,9 @@
 
 #include "isde/isde-theme.h"
 
-#include <X11/Shell.h>
-#include <X11/StringDefs.h>
-#include <X11/IntrinsicP.h>
+#include <ISW/Shell.h>
+#include <ISW/StringDefs.h>
+#include <ISW/IntrinsicP.h>
 
 /* ---------- DM D-Bus helper ---------- */
 
@@ -195,14 +195,14 @@ static void restart_ui_children(Session *s)
 
 /* ---------- SIGCHLD ---------- */
 
-static XtAppContext sigchld_app;
-static XtSignalId   sigchld_xt_id;
+static IswAppContext sigchld_app;
+static IswSignalId   sigchld_xt_id;
 
 static void sigchld_handler(int sig)
 {
     (void)sig;
     if (sigchld_app) {
-        XtNoticeSignal(sigchld_xt_id);
+        IswNoticeSignal(sigchld_xt_id);
     }
 }
 
@@ -239,7 +239,7 @@ static void confirm_reap(Session *s)
     s->confirm_action[0] = '\0';
 }
 
-static void sigchld_xt_cb(XtPointer client_data, XtSignalId *id)
+static void sigchld_xt_cb(IswPointer client_data, IswSignalId *id)
 {
     (void)id;
     Session *s = (Session *)client_data;
@@ -338,7 +338,7 @@ static void init_system_bus(Session *s)
 
 /* ---------- Xt input callbacks ---------- */
 
-static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
     Session *s = (Session *)client_data;
@@ -347,7 +347,7 @@ static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     }
 }
 
-static void system_bus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void system_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
     Session *s = (Session *)client_data;
@@ -360,7 +360,7 @@ static void system_bus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
     }
 }
 
-static void xcb_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void xcb_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
     Session *s = (Session *)client_data;
@@ -392,7 +392,7 @@ static void xcb_input_cb(XtPointer client_data, int *fd, XtInputId *id)
 
 /* ---------- Periodic check timer ---------- */
 
-static void check_timer_cb(XtPointer client_data, XtIntervalId *id)
+static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Session *s = (Session *)client_data;
@@ -405,7 +405,7 @@ static void check_timer_cb(XtPointer client_data, XtIntervalId *id)
     }
 
     /* Re-arm the timer */
-    s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
+    s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
 }
 
 /* ---------- public API ---------- */
@@ -461,22 +461,22 @@ int session_init(Session *s)
     char **fallbacks = isde_theme_build_resources();
     int argc = 1;
     char *argv[] = { "isde-session", NULL };
-    s->toplevel = XtAppInitialize(&s->app, "ISDE-Session",
+    s->toplevel = IswAppInitialize(&s->app, "ISDE-Session",
                                   NULL, 0, &argc, argv,
                                   fallbacks, NULL, 0);
 
     /* Realize but don't map — needed as parent for popup shells */
     Arg tl_args[20];
     Cardinal tl_n = 0;
-    XtSetArg(tl_args[tl_n], XtNmappedWhenManaged, False); tl_n++;
-    XtSetArg(tl_args[tl_n], XtNwidth, 1);                 tl_n++;
-    XtSetArg(tl_args[tl_n], XtNheight, 1);                tl_n++;
-    XtSetValues(s->toplevel, tl_args, tl_n);
-    XtRealizeWidget(s->toplevel);
+    IswSetArg(tl_args[tl_n], IswNmappedWhenManaged, False); tl_n++;
+    IswSetArg(tl_args[tl_n], IswNwidth, 1);                 tl_n++;
+    IswSetArg(tl_args[tl_n], IswNheight, 1);                tl_n++;
+    IswSetValues(s->toplevel, tl_args, tl_n);
+    IswRealizeWidget(s->toplevel);
 
     /* Install SIGCHLD handler via Xt signal mechanism */
     sigchld_app = s->app;
-    sigchld_xt_id = XtAppAddSignal(s->app, sigchld_xt_cb, s);
+    sigchld_xt_id = IswAppAddSignal(s->app, sigchld_xt_cb, s);
     s->sigchld_id = sigchld_xt_id;
 
     struct sigaction sa;
@@ -556,7 +556,7 @@ void session_run(Session *s)
     int xcb_fd  = s->conn ? xcb_get_file_descriptor(s->conn) : -1;
 
     if (dbus_fd >= 0) {
-        XtAppAddInput(s->app, dbus_fd, (XtPointer)XtInputReadMask,
+        IswAppAddInput(s->app, dbus_fd, (IswPointer)IswInputReadMask,
                       dbus_input_cb, s);
     }
 
@@ -564,24 +564,24 @@ void session_run(Session *s)
     if (s->system_bus) {
         dbus_connection_get_unix_fd(s->system_bus, &sys_fd);
         if (sys_fd >= 0) {
-            XtAppAddInput(s->app, sys_fd, (XtPointer)XtInputReadMask,
+            IswAppAddInput(s->app, sys_fd, (IswPointer)IswInputReadMask,
                           system_bus_input_cb, s);
         }
     }
 
     if (xcb_fd >= 0) {
-        XtAppAddInput(s->app, xcb_fd, (XtPointer)XtInputReadMask,
+        IswAppAddInput(s->app, xcb_fd, (IswPointer)IswInputReadMask,
                       xcb_input_cb, s);
     }
 
     /* Periodic timer for WM-alive check and appearance reload */
-    s->check_timer = XtAppAddTimeOut(s->app, 500, check_timer_cb, s);
+    s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
 
     /* Xt event loop */
     while (s->running) {
-        XtAppProcessEvent(s->app, XtIMAll);
+        IswAppProcessEvent(s->app, IswIMAll);
 
-        if (XtAppGetExitFlag(s->app)) {
+        if (IswAppGetExitFlag(s->app)) {
             break;
         }
     }
@@ -610,7 +610,7 @@ void session_cleanup(Session *s)
         dbus_connection_unref(s->system_bus);
     }
     if (s->toplevel) {
-        XtDestroyWidget(s->toplevel);
+        IswDestroyWidget(s->toplevel);
     }
     free(s->wm_command);
     free(s->panel_command);

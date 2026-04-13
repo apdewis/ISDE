@@ -4,9 +4,9 @@
 #ifndef ISDE_SETTINGS_H
 #define ISDE_SETTINGS_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
 #include <ISW/MainWindow.h>
 #include <ISW/MenuBar.h>
 #include <ISW/MenuButton.h>
@@ -31,7 +31,7 @@
 #define MAX_PANELS 32
 
 typedef struct Settings {
-    XtAppContext   app;
+    IswAppContext   app;
     Widget         toplevel;
     Widget         main_window;
     Widget         panel_bar;     /* Top row: panel selector buttons */

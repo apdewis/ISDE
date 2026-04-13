@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-static void update_clock(XtPointer client_data, XtIntervalId *id)
+static void update_clock(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Greeter *g = (Greeter *)client_data;
@@ -21,15 +21,15 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
     strftime(dbuf, sizeof(dbuf), g->clock_date_fmt, tm);
 
     Arg args[20];
-    XtSetArg(args[0], XtNlabel, tbuf);
-    XtSetValues(g->clock_time, args, 1);
+    IswSetArg(args[0], IswNlabel, tbuf);
+    IswSetValues(g->clock_time, args, 1);
 
-    XtSetArg(args[0], XtNlabel, dbuf);
-    XtSetValues(g->clock_date, args, 1);
+    IswSetArg(args[0], IswNlabel, dbuf);
+    IswSetValues(g->clock_date, args, 1);
 
     /* Reschedule at the next minute boundary */
     unsigned long ms = (60 - tm->tm_sec) * 1000;
-    g->clock_timer = XtAppAddTimeOut(g->app, ms, update_clock, g);
+    g->clock_timer = IswAppAddTimeOut(g->app, ms, update_clock, g);
 }
 
 void greeter_clock_init(Greeter *g)
@@ -45,47 +45,47 @@ void greeter_clock_init(Greeter *g)
     int clock_y = eighth;  /* top of 2nd eighth */
 
     /* Time label */
-    g->clock_time = XtVaCreateManagedWidget("clockTime", labelWidgetClass,
+    g->clock_time = IswVaCreateManagedWidget("clockTime", labelWidgetClass,
         g->form,
-        XtNlabel,         "00:00",
-        XtNwidth,         g->logical_w,
-        XtNheight,        eighth,
-        XtNborderWidth,   0,
-        XtNjustify,       XtJustifyCenter,
-        XtNhorizDistance,  0,
-        XtNvertDistance,   clock_y,
-        XtNtop,           XtChainTop,
-        XtNbottom,        XtChainTop,
-        XtNleft,          XtChainLeft,
-        XtNright,         XtChainLeft,
-        XtVaTypedArg, XtNfont, XtRString, time_font, strlen(time_font) + 1,
+        IswNlabel,         "00:00",
+        IswNwidth,         g->logical_w,
+        IswNheight,        eighth,
+        IswNborderWidth,   0,
+        IswNjustify,       IswJustifyCenter,
+        IswNhorizDistance,  0,
+        IswNvertDistance,   clock_y,
+        IswNtop,           IswChainTop,
+        IswNbottom,        IswChainTop,
+        IswNleft,          IswChainLeft,
+        IswNright,         IswChainLeft,
+        IswVaTypedArg, IswNfont, IswRString, time_font, strlen(time_font) + 1,
         NULL);
 
     /* Date label */
-    g->clock_date = XtVaCreateManagedWidget("clockDate", labelWidgetClass,
+    g->clock_date = IswVaCreateManagedWidget("clockDate", labelWidgetClass,
         g->form,
-        XtNlabel,         "0000-00-00",
-        XtNwidth,         g->logical_w,
-        XtNborderWidth,   0,
-        XtNjustify,       XtJustifyCenter,
-        XtNhorizDistance,  0,
-        XtNfromVert,      g->clock_time,
-        XtNvertDistance,   4,
-        XtNtop,           XtChainTop,
-        XtNbottom,        XtChainTop,
-        XtNleft,          XtChainLeft,
-        XtNright,         XtChainLeft,
-        XtVaTypedArg, XtNfont, XtRString, date_font, strlen(date_font) + 1,
+        IswNlabel,         "0000-00-00",
+        IswNwidth,         g->logical_w,
+        IswNborderWidth,   0,
+        IswNjustify,       IswJustifyCenter,
+        IswNhorizDistance,  0,
+        IswNfromVert,      g->clock_time,
+        IswNvertDistance,   4,
+        IswNtop,           IswChainTop,
+        IswNbottom,        IswChainTop,
+        IswNleft,          IswChainLeft,
+        IswNright,         IswChainLeft,
+        IswVaTypedArg, IswNfont, IswRString, date_font, strlen(date_font) + 1,
         NULL);
 
     /* Start the timer immediately */
-    g->clock_timer = XtAppAddTimeOut(g->app, 0, update_clock, g);
+    g->clock_timer = IswAppAddTimeOut(g->app, 0, update_clock, g);
 }
 
 void greeter_clock_cleanup(Greeter *g)
 {
     if (g->clock_timer) {
-        XtRemoveTimeOut(g->clock_timer);
+        IswRemoveTimeOut(g->clock_timer);
         g->clock_timer = 0;
     }
 }

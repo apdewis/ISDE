@@ -39,10 +39,10 @@ static void free_drag_paths(Fm *fm)
 /* ---------- drag source: convert callback ---------- */
 
 static Boolean drag_convert(Widget w, xcb_atom_t target_type,
-                            XtPointer *data_return,
+                            IswPointer *data_return,
                             unsigned long *length_return,
                             int *format_return,
-                            XtPointer client_data)
+                            IswPointer client_data)
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
@@ -62,13 +62,13 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
         total += 7 + strlen(fm->dnd_drag_paths[i]) + 2;
     }
 
-    char *buf = XtMalloc(total + 1);
+    char *buf = IswMalloc(total + 1);
     char *p = buf;
     for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
         p += sprintf(p, "file://%s\r\n", fm->dnd_drag_paths[i]);
     }
 
-    *data_return = (XtPointer)buf;
+    *data_return = (IswPointer)buf;
     *length_return = p - buf;
     *format_return = 8;
     return True;
@@ -77,7 +77,7 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
 /* ---------- drag source: finished callback ---------- */
 
 static void drag_finished(Widget w, IswDndAction action,
-                          Boolean accepted, XtPointer client_data)
+                          Boolean accepted, IswPointer client_data)
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
@@ -225,14 +225,14 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
     start_drag(fm);
 }
 
-static XtActionsRec dnd_actions[] = {
+static IswActionsRec dnd_actions[] = {
     {"fm-dnd-press", act_dnd_press},
     {"fm-dnd-check", act_dnd_check},
 };
 
 /* ---------- drop target callback ---------- */
 
-static void drop_cb(Widget w, XtPointer cd, XtPointer call)
+static void drop_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Fm *fm = (Fm *)cd;
@@ -306,11 +306,11 @@ void dnd_init(Fm *fm)
     /* Register drag actions and override translations on both views
      * to chain our press/motion handlers before the view's own actions.
      * IconView uses SelectItem(); ListView uses SelectRow(). */
-    XtAppAddActions(fm->app_state->app, dnd_actions, XtNumber(dnd_actions));
-    XtOverrideTranslations(fm->iconview, XtParseTranslationTable(
+    IswAppAddActions(fm->app_state->app, dnd_actions, IswNumber(dnd_actions));
+    IswOverrideTranslations(fm->iconview, IswParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectItem()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"));
-    XtOverrideTranslations(fm->listview, XtParseTranslationTable(
+    IswOverrideTranslations(fm->listview, IswParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectRow()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"
         "<Btn1Up>:     BandFinish()\n"));

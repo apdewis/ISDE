@@ -73,13 +73,13 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
 
         if (c->desktop == old && c->desktop != desktop) {
             /* Hide: unmap the frame */
-            if (c->shell && XtIsRealized(c->shell)) {
-                xcb_unmap_window(wm->conn, XtWindow(c->shell));
+            if (c->shell && IswIsRealized(c->shell)) {
+                xcb_unmap_window(wm->conn, IswWindow(c->shell));
             }
         } else if (c->desktop == desktop && c->desktop != old) {
             /* Show: map the frame */
-            if (c->shell && XtIsRealized(c->shell)) {
-                xcb_map_window(wm->conn, XtWindow(c->shell));
+            if (c->shell && IswIsRealized(c->shell)) {
+                xcb_map_window(wm->conn, IswWindow(c->shell));
             }
         }
     }
@@ -127,12 +127,12 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
 #define OSD_PAD    8
 #define OSD_TIMEOUT 800  /* ms */
 
-static void osd_hide_cb(XtPointer client_data, XtIntervalId *id)
+static void osd_hide_cb(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Wm *wm = (Wm *)client_data;
-    if (wm->desk_osd && XtIsRealized(wm->desk_osd)) {
-        XtPopdown(wm->desk_osd);
+    if (wm->desk_osd && IswIsRealized(wm->desk_osd)) {
+        IswPopdown(wm->desk_osd);
     }
     wm->desk_osd_timer = 0;
 }
@@ -156,22 +156,22 @@ void wm_desktops_show_osd(Wm *wm)
     /* Destroy and recreate each time for simplicity */
     if (wm->desk_osd) {
         if (wm->desk_osd_timer) {
-            XtRemoveTimeOut(wm->desk_osd_timer);
+            IswRemoveTimeOut(wm->desk_osd_timer);
             wm->desk_osd_timer = 0;
         }
-        XtDestroyWidget(wm->desk_osd);
+        IswDestroyWidget(wm->desk_osd);
         wm->desk_osd = NULL;
     }
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, sx);                    n++;
-    XtSetArg(args[n], XtNy, sy);                    n++;
-    XtSetArg(args[n], XtNwidth, w);                  n++;
-    XtSetArg(args[n], XtNheight, h);                 n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
-    XtSetArg(args[n], XtNborderWidth, 1);            n++;
-    wm->desk_osd = XtCreatePopupShell("desktopOSD",
+    IswSetArg(args[n], IswNx, sx);                    n++;
+    IswSetArg(args[n], IswNy, sy);                    n++;
+    IswSetArg(args[n], IswNwidth, w);                  n++;
+    IswSetArg(args[n], IswNheight, h);                 n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
+    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    wm->desk_osd = IswCreatePopupShell("desktopOSD",
                                        overrideShellWidgetClass,
                                        wm->toplevel, args, n);
 
@@ -186,19 +186,19 @@ void wm_desktops_show_osd(Wm *wm)
             snprintf(name, sizeof(name), "%d", idx + 1);
 
             n = 0;
-            XtSetArg(args[n], XtNlabel, name);    n++;
-            XtSetArg(args[n], XtNwidth, OSD_CELL);  n++;
-            XtSetArg(args[n], XtNheight, OSD_CELL); n++;
-            XtSetArg(args[n], XtNborderWidth, 1);   n++;
+            IswSetArg(args[n], IswNlabel, name);    n++;
+            IswSetArg(args[n], IswNwidth, OSD_CELL);  n++;
+            IswSetArg(args[n], IswNheight, OSD_CELL); n++;
+            IswSetArg(args[n], IswNborderWidth, 1);   n++;
 
             if (scheme && is_active) {
-                XtSetArg(args[n], XtNbackground,
+                IswSetArg(args[n], IswNbackground,
                     (Pixel)scheme->active); n++;
-                XtSetArg(args[n], XtNforeground,
+                IswSetArg(args[n], IswNforeground,
                     (Pixel)scheme->fg_light); n++;
             }
 
-            Widget cell = XtCreateManagedWidget("deskCell",
+            Widget cell = IswCreateManagedWidget("deskCell",
                 labelWidgetClass, wm->desk_osd, args, n);
 
             /* Position manually after realize */
@@ -206,7 +206,7 @@ void wm_desktops_show_osd(Wm *wm)
         }
     }
 
-    XtRealizeWidget(wm->desk_osd);
+    IswRealizeWidget(wm->desk_osd);
 
     /* Position each cell */
     int child_idx = 0;
@@ -216,16 +216,16 @@ void wm_desktops_show_osd(Wm *wm)
             if (child_idx < (int)cw->composite.num_children) {
                 int cx = OSD_PAD + c * (OSD_CELL + OSD_GAP);
                 int cy = OSD_PAD + r * (OSD_CELL + OSD_GAP);
-                XtConfigureWidget(cw->composite.children[child_idx],
+                IswConfigureWidget(cw->composite.children[child_idx],
                                   cx, cy, OSD_CELL, OSD_CELL, 1);
             }
             child_idx++;
         }
     }
 
-    XtPopup(wm->desk_osd, XtGrabNone);
+    IswPopup(wm->desk_osd, IswGrabNone);
 
     /* Auto-hide after timeout */
-    wm->desk_osd_timer = XtAppAddTimeOut(wm->app, OSD_TIMEOUT,
+    wm->desk_osd_timer = IswAppAddTimeOut(wm->app, OSD_TIMEOUT,
                                           osd_hide_cb, wm);
 }

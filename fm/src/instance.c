@@ -29,7 +29,7 @@ static xcb_atom_t intern_atom(xcb_connection_t *conn, const char *name)
 
 /* ---------- owning instance: handle incoming open-path request ---------- */
 
-static void instance_event_handler(Widget w, XtPointer closure,
+static void instance_event_handler(Widget w, IswPointer closure,
                                    xcb_generic_event_t *ev, Boolean *cont)
 {
     (void)cont;
@@ -46,9 +46,9 @@ static void instance_event_handler(Widget w, XtPointer closure,
     }
 
     /* Read the path from the _ISDE_FM_OPEN_PATH property on our window */
-    xcb_connection_t *conn = XtDisplay(w);
+    xcb_connection_t *conn = IswDisplay(w);
     xcb_get_property_cookie_t cookie =
-        xcb_get_property(conn, True, XtWindow(w),
+        xcb_get_property(conn, True, IswWindow(w),
                          atom_open_path, XCB_ATOM_STRING, 0, 4096);
     xcb_get_property_reply_t *reply = xcb_get_property_reply(conn, cookie, NULL);
     if (!reply) {
@@ -69,16 +69,16 @@ static void instance_event_handler(Widget w, XtPointer closure,
 /* ---------- selection convert (we are the owner) ---------- */
 
 static Boolean instance_convert(Widget w, Atom *selection, Atom *target,
-                                Atom *type_return, XtPointer *value_return,
+                                Atom *type_return, IswPointer *value_return,
                                 unsigned long *length_return, int *format_return)
 {
     (void)selection;
     /* Return our window ID so the sender knows where to set the property */
     if (*target == atom_instance) {
         static xcb_window_t win_id;
-        win_id = XtWindow(w);
+        win_id = IswWindow(w);
         *type_return = XCB_ATOM_CARDINAL;
-        *value_return = (XtPointer)&win_id;
+        *value_return = (IswPointer)&win_id;
         *length_return = 1;
         *format_return = 32;
         return True;
@@ -101,7 +101,7 @@ static void instance_lose(Widget w, Atom *selection)
  */
 int instance_try_primary(FmApp *app, const char *path)
 {
-    xcb_connection_t *conn = XtDisplay(app->first_toplevel);
+    xcb_connection_t *conn = IswDisplay(app->first_toplevel);
     Widget shell = app->first_toplevel;
 
     atom_instance  = intern_atom(conn, "_ISDE_FM_INSTANCE");
@@ -111,12 +111,12 @@ int instance_try_primary(FmApp *app, const char *path)
     }
 
     /* The shell must be realized so it has a window */
-    if (!XtIsRealized(shell)) {
-        XtRealizeWidget(shell);
+    if (!IswIsRealized(shell)) {
+        IswRealizeWidget(shell);
     }
 
     /* Try to own the selection */
-    xcb_set_selection_owner(conn, XtWindow(shell), atom_instance,
+    xcb_set_selection_owner(conn, IswWindow(shell), atom_instance,
                             XCB_CURRENT_TIME);
     xcb_flush(conn);
 
@@ -132,14 +132,14 @@ int instance_try_primary(FmApp *app, const char *path)
     xcb_window_t owner = owner_reply->owner;
     free(owner_reply);
 
-    if (owner == XtWindow(shell)) {
+    if (owner == IswWindow(shell)) {
         /* We are the primary instance — listen for open-path messages */
-        XtAddEventHandler(shell, (EventMask)0, True,
+        IswAddEventHandler(shell, (EventMask)0, True,
                           instance_event_handler, app);
-        /* Also register the Xt selection convert so XtOwnSelection works
+        /* Also register the Xt selection convert so IswOwnSelection works
          * for future queries (not strictly needed for our protocol but
          * keeps things clean). */
-        XtOwnSelection(shell, atom_instance, XCB_CURRENT_TIME,
+        IswOwnSelection(shell, atom_instance, XCB_CURRENT_TIME,
                         instance_convert, instance_lose, NULL);
         return 1;
     }
@@ -157,7 +157,7 @@ int instance_try_primary(FmApp *app, const char *path)
     cm.window = owner;
     cm.type = atom_open_path;
     cm.format = 32;
-    cm.data.data32[0] = XtWindow(shell);
+    cm.data.data32[0] = IswWindow(shell);
 
     xcb_send_event(conn, False, owner, 0, (const char *)&cm);
     xcb_flush(conn);

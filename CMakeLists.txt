@@ -29,7 +29,7 @@ if(ISW_LOCAL_DIR)
     set_property(TARGET PkgConfig::ISW PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES "${ISW_LOCAL_DIR}/include")
     set_property(TARGET PkgConfig::ISW PROPERTY
-        INTERFACE_LINK_DIRECTORIES "${ISW_LOCAL_DIR}/src/.libs")
+        INTERFACE_LINK_LIBRARIES "${ISW_LOCAL_DIR}/build/libISW.so")
 endif()
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb)
 pkg_check_modules(XCB_EWMH REQUIRED IMPORTED_TARGET xcb-ewmh)

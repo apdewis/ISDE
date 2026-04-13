@@ -8,7 +8,7 @@
 #ifndef ISDE_FILECHOOSER_H
 #define ISDE_FILECHOOSER_H
 
-#include <X11/Intrinsic.h>
+#include <ISW/Intrinsic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +38,7 @@ typedef void (*IsdeFileChooserCB)(const char *path, void *data);
  * data:        user data for callback
  *
  * Returns the popup shell widget (for tracking/dismissal).
- * The dialog is modal (XtGrabExclusive).
+ * The dialog is modal (IswGrabExclusive).
  */
 Widget isde_filechooser_show(Widget parent, const char *title,
                              IsdeFileChooserMode mode,

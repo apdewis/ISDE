@@ -269,7 +269,7 @@ static void build_sections(FmPlacesData *pd)
 
 /* ---------- Sidebar UI ---------- */
 
-static void place_list_cb(Widget w, XtPointer cd, XtPointer call)
+static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Fm *fm = (Fm *)cd;
@@ -312,20 +312,20 @@ void places_init(Fm *fm)
     /* Create sidebar viewport */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNallowVert, True);              n++;
-    XtSetArg(args[n], XtNallowHoriz, False);             n++;
-    XtSetArg(args[n], XtNuseRight, False);                n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                 n++;
-    XtSetArg(args[n], XtNflexGrow, 0);                    n++;
-    fm->places_vp = XtCreateManagedWidget("placesVp", viewportWidgetClass,
+    IswSetArg(args[n], IswNallowVert, True);              n++;
+    IswSetArg(args[n], IswNallowHoriz, False);             n++;
+    IswSetArg(args[n], IswNuseRight, False);                n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                 n++;
+    IswSetArg(args[n], IswNflexGrow, 0);                    n++;
+    fm->places_vp = IswCreateManagedWidget("placesVp", viewportWidgetClass,
                                            fm->hbox, args, n);
 
     /* Vertical FlexBox inside viewport */
     n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    XtSetArg(args[n], XtNspacing, 0);                     n++;
-    fm->places_box = XtCreateManagedWidget("placesBox", flexBoxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswSetArg(args[n], IswNspacing, 0);                     n++;
+    fm->places_box = IswCreateManagedWidget("placesBox", flexBoxWidgetClass,
                                             fm->places_vp, args, n);
 
     /* Create header + list for each section */
@@ -337,29 +337,29 @@ void places_init(Fm *fm)
         /* Section header label */
         n = 0;
         snprintf(wname, sizeof(wname), "placeHdr%d", i);
-        XtSetArg(args[n], XtNlabel, pd->places[hdr_idx].label); n++;
-        XtSetArg(args[n], XtNborderWidth, 0);                n++;
-        XtSetArg(args[n], XtNinternalWidth, 6);  n++;
-        XtSetArg(args[n], XtNinternalHeight, 2); n++;
-        XtSetArg(args[n], XtNjustify, XtJustifyLeft);        n++;
-        s->header = XtCreateManagedWidget(wname, labelWidgetClass,
+        IswSetArg(args[n], IswNlabel, pd->places[hdr_idx].label); n++;
+        IswSetArg(args[n], IswNborderWidth, 0);                n++;
+        IswSetArg(args[n], IswNinternalWidth, 6);  n++;
+        IswSetArg(args[n], IswNinternalHeight, 2); n++;
+        IswSetArg(args[n], IswNjustify, IswJustifyLeft);        n++;
+        s->header = IswCreateManagedWidget(wname, labelWidgetClass,
                                            fm->places_box, args, n);
 
         /* List widget for this section's items */
         if (s->nitems > 0) {
             n = 0;
             snprintf(wname, sizeof(wname), "placeList%d", i);
-            XtSetArg(args[n], XtNlist, s->labels);                n++;
-            XtSetArg(args[n], XtNnumberStrings, s->nitems);       n++;
-            XtSetArg(args[n], XtNdefaultColumns, 1);              n++;
-            XtSetArg(args[n], XtNforceColumns, True);             n++;
-            XtSetArg(args[n], XtNverticalList, True);             n++;
-            XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-            XtSetArg(args[n], XtNinternalWidth, 4);   n++;
-            XtSetArg(args[n], XtNinternalHeight, 2);  n++;
-            s->list = XtCreateManagedWidget(wname, listWidgetClass,
+            IswSetArg(args[n], IswNlist, s->labels);                n++;
+            IswSetArg(args[n], IswNnumberStrings, s->nitems);       n++;
+            IswSetArg(args[n], IswNdefaultColumns, 1);              n++;
+            IswSetArg(args[n], IswNforceColumns, True);             n++;
+            IswSetArg(args[n], IswNverticalList, True);             n++;
+            IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+            IswSetArg(args[n], IswNinternalWidth, 4);   n++;
+            IswSetArg(args[n], IswNinternalHeight, 2);  n++;
+            s->list = IswCreateManagedWidget(wname, listWidgetClass,
                                              fm->places_box, args, n);
-            XtAddCallback(s->list, XtNcallback, place_list_cb, fm);
+            IswAddCallback(s->list, IswNcallback, place_list_cb, fm);
         }
     }
 }

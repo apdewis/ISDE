@@ -16,8 +16,8 @@
 #include <limits.h>
 
 #include <xcb/xcb.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/Form.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
@@ -151,8 +151,8 @@ static void update_lists(FcState *fc)
     /* Update path text */
     if (fc->path_text) {
         Arg a;
-        XtSetArg(a, XtNstring, fc->cwd);
-        XtSetValues(fc->path_text, &a, 1);
+        IswSetArg(a, IswNstring, fc->cwd);
+        IswSetValues(fc->path_text, &a, 1);
     }
 }
 
@@ -211,7 +211,7 @@ static void fc_accept(FcState *fc, const char *filename)
 }
 
 /* Directory list: single click navigates */
-static void dir_select_cb(Widget w, XtPointer cd, XtPointer call)
+static void dir_select_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     FcState *fc = (FcState *)cd;
@@ -224,7 +224,7 @@ static void dir_select_cb(Widget w, XtPointer cd, XtPointer call)
 }
 
 /* File list: single click selects (fills name field in SAVE mode) */
-static void file_select_cb(Widget w, XtPointer cd, XtPointer call)
+static void file_select_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     FcState *fc = (FcState *)cd;
@@ -233,15 +233,15 @@ static void file_select_cb(Widget w, XtPointer cd, XtPointer call)
 
     if (fc->mode == ISDE_FILE_SAVE && fc->name_text) {
         Arg a;
-        XtSetArg(a, XtNstring, ret->string);
-        XtSetValues(fc->name_text, &a, 1);
+        IswSetArg(a, IswNstring, ret->string);
+        IswSetValues(fc->name_text, &a, 1);
     } else if (fc->mode == ISDE_FILE_OPEN) {
         fc_accept(fc, ret->string);
     }
 }
 
 /* OK/Open/Save button */
-static void action_cb(Widget w, XtPointer cd, XtPointer call)
+static void action_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     FcState *fc = (FcState *)cd;
@@ -250,8 +250,8 @@ static void action_cb(Widget w, XtPointer cd, XtPointer call)
         /* Get filename from text field */
         String val = NULL;
         Arg a;
-        XtSetArg(a, XtNstring, &val);
-        XtGetValues(fc->name_text, &a, 1);
+        IswSetArg(a, IswNstring, &val);
+        IswGetValues(fc->name_text, &a, 1);
         if (val && val[0]) {
             fc_accept(fc, val);
             return;
@@ -267,7 +267,7 @@ static void action_cb(Widget w, XtPointer cd, XtPointer call)
 }
 
 /* Cancel button */
-static void cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     FcState *fc = (FcState *)cd;
@@ -286,8 +286,8 @@ static void path_action(Widget w, xcb_generic_event_t *ev,
 
     String val = NULL;
     Arg a;
-    XtSetArg(a, XtNstring, &val);
-    XtGetValues(w, &a, 1);
+    IswSetArg(a, IswNstring, &val);
+    IswGetValues(w, &a, 1);
     if (val && val[0])
         navigate_to(fc, val);
 }
@@ -302,8 +302,8 @@ static void filter_action(Widget w, xcb_generic_event_t *ev,
 
     String val = NULL;
     Arg a;
-    XtSetArg(a, XtNstring, &val);
-    XtGetValues(w, &a, 1);
+    IswSetArg(a, IswNstring, &val);
+    IswGetValues(w, &a, 1);
 
     free(fc->filter);
     fc->filter = (val && val[0]) ? strdup(val) : NULL;
@@ -314,7 +314,7 @@ static void filter_action(Widget w, xcb_generic_event_t *ev,
  * Action registration
  * ================================================================ */
 
-static XtActionsRec fc_actions[] = {
+static IswActionsRec fc_actions[] = {
     {"isde-fc-path-go",   path_action},
     {"isde-fc-filter-go", filter_action},
 };
@@ -323,8 +323,8 @@ static void ensure_fc_actions(Widget w)
 {
     static int registered;
     if (!registered) {
-        XtAppAddActions(XtWidgetToApplicationContext(w),
-                        fc_actions, XtNumber(fc_actions));
+        IswAppAddActions(IswWidgetToApplicationContext(w),
+                        fc_actions, IswNumber(fc_actions));
         registered = 1;
     }
 }
@@ -371,34 +371,34 @@ Widget isde_filechooser_show(Widget parent, const char *title,
 
     /* Main form */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    Widget form = XtCreateManagedWidget("fcMainForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    Widget form = IswCreateManagedWidget("fcMainForm", formWidgetClass,
                                         fc->shell, args, n);
 
     /* --- Row 1: Location label + path text --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Location:");             n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    Widget loc_label = XtCreateManagedWidget("locLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Location:");             n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    Widget loc_label = IswCreateManagedWidget("locLabel", labelWidgetClass,
                                               form, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNstring, fc->cwd);                 n++;
-    XtSetArg(args[n], XtNfromHoriz, loc_label);            n++;
-    XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
-    XtSetArg(args[n], XtNtype, IswAsciiString);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainRight);             n++;
-    fc->path_text = XtCreateManagedWidget("pathText", asciiTextWidgetClass,
+    IswSetArg(args[n], IswNstring, fc->cwd);                 n++;
+    IswSetArg(args[n], IswNfromHoriz, loc_label);            n++;
+    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
+    IswSetArg(args[n], IswNtype, IswAsciiString);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    fc->path_text = IswCreateManagedWidget("pathText", asciiTextWidgetClass,
                                            form, args, n);
-    XtOverrideTranslations(fc->path_text, XtParseTranslationTable(
+    IswOverrideTranslations(fc->path_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-path-go()\n"));
 
     /* --- Row 2: Directory + File panes --- */
@@ -411,65 +411,65 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     int dir_w  = 160;
 
     n = 0;
-    XtSetArg(args[n], XtNfromVert, loc_label);             n++;
-    XtSetArg(args[n], XtNallowVert, True);                 n++;
-    XtSetArg(args[n], XtNuseRight, True);                  n++;
-    XtSetArg(args[n], XtNforceBars, True);                 n++;
-    XtSetArg(args[n], XtNwidth, dir_w);                    n++;
-    XtSetArg(args[n], XtNheight, pane_h);                  n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
+    IswSetArg(args[n], IswNfromVert, loc_label);             n++;
+    IswSetArg(args[n], IswNallowVert, True);                 n++;
+    IswSetArg(args[n], IswNuseRight, True);                  n++;
+    IswSetArg(args[n], IswNforceBars, True);                 n++;
+    IswSetArg(args[n], IswNwidth, dir_w);                    n++;
+    IswSetArg(args[n], IswNheight, pane_h);                  n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
     if (scheme) {
-        XtSetArg(args[n], XtNbackground, scheme->bg);      n++;
+        IswSetArg(args[n], IswNbackground, scheme->bg);      n++;
     }
-    Widget dir_vp = XtCreateManagedWidget("dirViewport", viewportWidgetClass,
+    Widget dir_vp = IswCreateManagedWidget("dirViewport", viewportWidgetClass,
                                            form, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNverticalList, True);              n++;
-    XtSetArg(args[n], XtNforceColumns, True);              n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);               n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNverticalList, True);              n++;
+    IswSetArg(args[n], IswNforceColumns, True);              n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
     if (scheme) {
-        XtSetArg(args[n], XtNbackground, scheme->bg);      n++;
-        XtSetArg(args[n], XtNforeground, scheme->fg);      n++;
+        IswSetArg(args[n], IswNbackground, scheme->bg);      n++;
+        IswSetArg(args[n], IswNforeground, scheme->fg);      n++;
     }
-    fc->dir_list = XtCreateManagedWidget("dirList", listWidgetClass,
+    fc->dir_list = IswCreateManagedWidget("dirList", listWidgetClass,
                                           dir_vp, args, n);
-    XtAddCallback(fc->dir_list, XtNcallback, dir_select_cb, fc);
+    IswAddCallback(fc->dir_list, IswNcallback, dir_select_cb, fc);
 
     /* File list viewport (right pane) */
     n = 0;
-    XtSetArg(args[n], XtNfromVert, loc_label);             n++;
-    XtSetArg(args[n], XtNfromHoriz, dir_vp);               n++;
-    XtSetArg(args[n], XtNallowVert, True);                 n++;
-    XtSetArg(args[n], XtNuseRight, True);                  n++;
-    XtSetArg(args[n], XtNforceBars, True);                 n++;
-    XtSetArg(args[n], XtNheight, pane_h);                  n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainRight);             n++;
+    IswSetArg(args[n], IswNfromVert, loc_label);             n++;
+    IswSetArg(args[n], IswNfromHoriz, dir_vp);               n++;
+    IswSetArg(args[n], IswNallowVert, True);                 n++;
+    IswSetArg(args[n], IswNuseRight, True);                  n++;
+    IswSetArg(args[n], IswNforceBars, True);                 n++;
+    IswSetArg(args[n], IswNheight, pane_h);                  n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainRight);             n++;
     if (scheme) {
-        XtSetArg(args[n], XtNbackground, scheme->bg_light); n++;
+        IswSetArg(args[n], IswNbackground, scheme->bg_light); n++;
     }
-    Widget file_vp = XtCreateManagedWidget("fileViewport", viewportWidgetClass,
+    Widget file_vp = IswCreateManagedWidget("fileViewport", viewportWidgetClass,
                                             form, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNverticalList, True);              n++;
-    XtSetArg(args[n], XtNforceColumns, True);              n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);               n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNverticalList, True);              n++;
+    IswSetArg(args[n], IswNforceColumns, True);              n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
     if (scheme) {
-        XtSetArg(args[n], XtNbackground, scheme->bg_light); n++;
-        XtSetArg(args[n], XtNforeground, scheme->fg);       n++;
+        IswSetArg(args[n], IswNbackground, scheme->bg_light); n++;
+        IswSetArg(args[n], IswNforeground, scheme->fg);       n++;
     }
-    fc->file_list = XtCreateManagedWidget("fileList", listWidgetClass,
+    fc->file_list = IswCreateManagedWidget("fileList", listWidgetClass,
                                            file_vp, args, n);
-    XtAddCallback(fc->file_list, XtNcallback, file_select_cb, fc);
+    IswAddCallback(fc->file_list, IswNcallback, file_select_cb, fc);
 
     /* Track the last widget above the bottom rows */
     Widget bottom_anchor = dir_vp;
@@ -477,28 +477,28 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     /* --- Row 3 (SAVE mode only): Filename --- */
     if (mode == ISDE_FILE_SAVE) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "Name:");             n++;
-        XtSetArg(args[n], XtNborderWidth, 0);              n++;
-        XtSetArg(args[n], XtNfromVert, dir_vp);            n++;
-        XtSetArg(args[n], XtNtop, XtChainBottom);          n++;
-        XtSetArg(args[n], XtNbottom, XtChainBottom);       n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);           n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);          n++;
-        Widget name_label = XtCreateManagedWidget("nameLabel",
+        IswSetArg(args[n], IswNlabel, "Name:");             n++;
+        IswSetArg(args[n], IswNborderWidth, 0);              n++;
+        IswSetArg(args[n], IswNfromVert, dir_vp);            n++;
+        IswSetArg(args[n], IswNtop, IswChainBottom);          n++;
+        IswSetArg(args[n], IswNbottom, IswChainBottom);       n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        Widget name_label = IswCreateManagedWidget("nameLabel",
                                                    labelWidgetClass,
                                                    form, args, n);
 
         n = 0;
-        XtSetArg(args[n], XtNstring, "");                  n++;
-        XtSetArg(args[n], XtNfromVert, dir_vp);            n++;
-        XtSetArg(args[n], XtNfromHoriz, name_label);       n++;
-        XtSetArg(args[n], XtNeditType, IswtextEdit);       n++;
-        XtSetArg(args[n], XtNtype, IswAsciiString);        n++;
-        XtSetArg(args[n], XtNtop, XtChainBottom);          n++;
-        XtSetArg(args[n], XtNbottom, XtChainBottom);       n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);           n++;
-        XtSetArg(args[n], XtNright, XtChainRight);         n++;
-        fc->name_text = XtCreateManagedWidget("nameText",
+        IswSetArg(args[n], IswNstring, "");                  n++;
+        IswSetArg(args[n], IswNfromVert, dir_vp);            n++;
+        IswSetArg(args[n], IswNfromHoriz, name_label);       n++;
+        IswSetArg(args[n], IswNeditType, IswtextEdit);       n++;
+        IswSetArg(args[n], IswNtype, IswAsciiString);        n++;
+        IswSetArg(args[n], IswNtop, IswChainBottom);          n++;
+        IswSetArg(args[n], IswNbottom, IswChainBottom);       n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
+        IswSetArg(args[n], IswNright, IswChainRight);         n++;
+        fc->name_text = IswCreateManagedWidget("nameText",
                                                asciiTextWidgetClass,
                                                form, args, n);
         bottom_anchor = name_label;
@@ -506,31 +506,31 @@ Widget isde_filechooser_show(Widget parent, const char *title,
 
     /* --- Row 4: Filter --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Filter:");                n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNfromVert, bottom_anchor);         n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);              n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    Widget filter_label = XtCreateManagedWidget("filterLabel",
+    IswSetArg(args[n], IswNlabel, "Filter:");                n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNfromVert, bottom_anchor);         n++;
+    IswSetArg(args[n], IswNtop, IswChainBottom);              n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    Widget filter_label = IswCreateManagedWidget("filterLabel",
                                                  labelWidgetClass,
                                                  form, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNstring, filter ? filter : "");    n++;
-    XtSetArg(args[n], XtNfromVert, bottom_anchor);         n++;
-    XtSetArg(args[n], XtNfromHoriz, filter_label);         n++;
-    XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
-    XtSetArg(args[n], XtNtype, IswAsciiString);            n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);              n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainRight);             n++;
-    fc->filter_text = XtCreateManagedWidget("filterText",
+    IswSetArg(args[n], IswNstring, filter ? filter : "");    n++;
+    IswSetArg(args[n], IswNfromVert, bottom_anchor);         n++;
+    IswSetArg(args[n], IswNfromHoriz, filter_label);         n++;
+    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
+    IswSetArg(args[n], IswNtype, IswAsciiString);            n++;
+    IswSetArg(args[n], IswNtop, IswChainBottom);              n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    fc->filter_text = IswCreateManagedWidget("filterText",
                                              asciiTextWidgetClass,
                                              form, args, n);
-    XtOverrideTranslations(fc->filter_text, XtParseTranslationTable(
+    IswOverrideTranslations(fc->filter_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-filter-go()\n"));
 
     /* --- Row 5: Buttons --- */
@@ -550,6 +550,6 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     if (fc->nfile > 0)
         IswListChange(fc->file_list, fc->file_names, fc->nfile, 0, True);
 
-    isde_dialog_popup(fc->shell, XtGrabExclusive);
+    isde_dialog_popup(fc->shell, IswGrabExclusive);
     return fc->shell;
 }

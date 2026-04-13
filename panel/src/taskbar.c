@@ -123,8 +123,8 @@ static void launch_app(Panel *p, TaskGroup *g)
     }
 }
 
-static void window_menu_callback(Widget w, XtPointer client_data,
-                                 XtPointer call_data)
+static void window_menu_callback(Widget w, IswPointer client_data,
+                                 IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -136,8 +136,8 @@ static void window_menu_callback(Widget w, XtPointer client_data,
 static Panel     *wl_panel = NULL;
 static TaskGroup *wl_group = NULL;
 
-static void wl_select_callback(Widget w, XtPointer client_data,
-                                XtPointer call_data)
+static void wl_select_callback(Widget w, IswPointer client_data,
+                                IswPointer call_data)
 {
     (void)w;
     (void)client_data;
@@ -151,13 +151,13 @@ static void wl_select_callback(Widget w, XtPointer client_data,
     panel_dismiss_popup(wl_panel);
 }
 
-static void wl_motion_handler(Widget w, XtPointer client_data,
+static void wl_motion_handler(Widget w, IswPointer client_data,
                               xcb_generic_event_t *event, Boolean *cont)
 {
     (void)client_data;
     (void)cont;
     xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t *)event;
-    XtCallActionProc(w, "Set", event, NULL, 0);
+    IswCallActionProc(w, "Set", event, NULL, 0);
     (void)ev;
 }
 
@@ -186,25 +186,25 @@ static void create_window_menu(Panel *p, TaskGroup *g)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
-    XtSetArg(args[n], XtNborderWidth, 1);            n++;
-    XtSetArg(args[n], XtNallowShellResize, True);    n++;
-    XtSetArg(args[n], XtNborderColor, border_px);    n++;
-    g->menu = XtCreatePopupShell("winListMenu", overrideShellWidgetClass,
+    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
+    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    IswSetArg(args[n], IswNallowShellResize, True);    n++;
+    IswSetArg(args[n], IswNborderColor, border_px);    n++;
+    g->menu = IswCreatePopupShell("winListMenu", overrideShellWidgetClass,
                                  g->button, args, n);
 
     n = 0;
-    XtSetArg(args[n], XtNlist, placeholder);          n++;
-    XtSetArg(args[n], XtNnumberStrings, 1);           n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);          n++;
-    XtSetArg(args[n], XtNforceColumns, True);         n++;
-    XtSetArg(args[n], XtNverticalList, True);         n++;
-    XtSetArg(args[n], XtNallowShellResize, True);     n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNcursor, None);               n++;
-    g->menu_list = XtCreateManagedWidget("winList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, placeholder);          n++;
+    IswSetArg(args[n], IswNnumberStrings, 1);           n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);          n++;
+    IswSetArg(args[n], IswNforceColumns, True);         n++;
+    IswSetArg(args[n], IswNverticalList, True);         n++;
+    IswSetArg(args[n], IswNallowShellResize, True);     n++;
+    IswSetArg(args[n], IswNborderWidth, 0);             n++;
+    IswSetArg(args[n], IswNcursor, None);               n++;
+    g->menu_list = IswCreateManagedWidget("winList", listWidgetClass,
                                          g->menu, args, n);
-    XtAddCallback(g->menu_list, XtNcallback, wl_select_callback, NULL);
+    IswAddCallback(g->menu_list, IswNcallback, wl_select_callback, NULL);
 
     static char wlTranslations[] =
         "<EnterWindow>: Set()\n"
@@ -212,10 +212,10 @@ static void create_window_menu(Panel *p, TaskGroup *g)
         "<Btn1Motion>:  Set()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
-    XtOverrideTranslations(g->menu_list,
-                           XtParseTranslationTable(wlTranslations));
+    IswOverrideTranslations(g->menu_list,
+                           IswParseTranslationTable(wlTranslations));
 
-    XtAddEventHandler(g->menu_list, XCB_EVENT_MASK_POINTER_MOTION, False,
+    IswAddEventHandler(g->menu_list, XCB_EVENT_MASK_POINTER_MOTION, False,
                       wl_motion_handler, NULL);
 }
 
@@ -238,8 +238,8 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     IswListChange(g->menu_list, g->menu_titles, g->nwindows, 0, True);
 
     /* Realize if needed, then position */
-    if (!XtIsRealized(g->menu)) {
-        XtRealizeWidget(g->menu);
+    if (!IswIsRealized(g->menu)) {
+        IswRealizeWidget(g->menu);
     }
 
     Arg args[20];
@@ -247,22 +247,22 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 
     Dimension list_w, list_h;
     n = 0;
-    XtSetArg(args[n], XtNwidth, &list_w);   n++;
-    XtSetArg(args[n], XtNheight, &list_h);  n++;
-    XtGetValues(g->menu_list, args, n);
+    IswSetArg(args[n], IswNwidth, &list_w);   n++;
+    IswSetArg(args[n], IswNheight, &list_h);  n++;
+    IswGetValues(g->menu_list, args, n);
 
     Dimension bw;
     n = 0;
-    XtSetArg(args[n], XtNborderWidth, &bw); n++;
-    XtGetValues(g->menu, args, n);
+    IswSetArg(args[n], IswNborderWidth, &bw); n++;
+    IswGetValues(g->menu, args, n);
 
     Position bx, by;
-    XtTranslateCoords(g->button, 0, 0, &bx, &by);
-    XtMoveWidget(g->menu, bx, by - (Position)list_h - (Position)(2 * bw));
-    XtPopup(g->menu, XtGrabNone);
+    IswTranslateCoords(g->button, 0, 0, &bx, &by);
+    IswMoveWidget(g->menu, bx, by - (Position)list_h - (Position)(2 * bw));
+    IswPopup(g->menu, IswGrabNone);
 
     /* Force immediate redraw — the list content changed since last popup */
-    XtExposeProc expose = XtClass(g->menu_list)->core_class.expose;
+    IswExposeProc expose = IswClass(g->menu_list)->core_class.expose;
     if (expose) {
         expose(g->menu_list, NULL, 0);
     }
@@ -270,8 +270,8 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     panel_show_popup(p, g->menu);
 }
 
-static void taskbar_button_callback(Widget w, XtPointer client_data,
-                                    XtPointer call_data)
+static void taskbar_button_callback(Widget w, IswPointer client_data,
+                                    IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -291,7 +291,7 @@ static void taskbar_button_callback(Widget w, XtPointer client_data,
 /* Button-press handler for multi-window popup: showing the window list
  * on press (not release) lets the user drag into the list and release
  * to select, matching standard menu behaviour. */
-static void taskbar_press_handler(Widget w, XtPointer client_data,
+static void taskbar_press_handler(Widget w, IswPointer client_data,
                                   xcb_generic_event_t *event, Boolean *cont)
 {
     (void)w;
@@ -378,8 +378,8 @@ static void load_pinned_file(Panel *p)
     fclose(fp);
 }
 
-static void pin_callback(Widget w, XtPointer client_data,
-                         XtPointer call_data)
+static void pin_callback(Widget w, IswPointer client_data,
+                         IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -394,8 +394,8 @@ typedef struct {
     char       *exec;  /* expanded command (owned) */
 } ActionClosure;
 
-static void action_callback(Widget w, XtPointer client_data,
-                            XtPointer call_data)
+static void action_callback(Widget w, IswPointer client_data,
+                            IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -408,8 +408,8 @@ static void action_callback(Widget w, XtPointer client_data,
     }
 }
 
-static void close_all_callback(Widget w, XtPointer client_data,
-                               XtPointer call_data)
+static void close_all_callback(Widget w, IswPointer client_data,
+                               IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -425,16 +425,16 @@ static void close_all_callback(Widget w, XtPointer client_data,
 /* Create the persistent context menu for a group.
  * Desktop actions and "New instance" are static; "Close all" and pin/unpin
  * are toggled via manage/unmanage on show. */
-static void create_context_menu(Panel *p, TaskGroup *g, XtPointer closure)
+static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
 {
     const IsdeColorScheme *s = isde_theme_current();
     Pixel border_px = s ? taskbar_pixel(p, s->border)
                         : p->screen->white_pixel;
     Arg cargs[20];
     Cardinal cn = 0;
-    XtSetArg(cargs[cn], XtNborderWidth, 1);          cn++;
-    XtSetArg(cargs[cn], XtNborderColor, border_px);  cn++;
-    g->ctx_menu = XtCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
+    IswSetArg(cargs[cn], IswNborderWidth, 1);          cn++;
+    IswSetArg(cargs[cn], IswNborderColor, border_px);  cn++;
+    g->ctx_menu = IswCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                      g->button, cargs, cn);
 
     Arg args[20];
@@ -448,46 +448,46 @@ static void create_context_menu(Panel *p, TaskGroup *g, XtPointer closure)
             if (!a->name || !a->exec) {
                 continue;
             }
-            XtSetArg(args[0], XtNlabel, a->name);
-            Widget entry = XtCreateManagedWidget("action", smeBSBObjectClass,
+            IswSetArg(args[0], IswNlabel, a->name);
+            Widget entry = IswCreateManagedWidget("action", smeBSBObjectClass,
                                                   g->ctx_menu, args, 1);
             ActionClosure *ac = malloc(sizeof(*ac));
             ac->panel = p;
             ac->exec = strip_field_codes(a->exec);
-            XtAddCallback(entry, XtNcallback, action_callback, ac);
+            IswAddCallback(entry, IswNcallback, action_callback, ac);
         }
 
         if (nactions > 0) {
-            XtCreateManagedWidget("sep", smeLineObjectClass,
+            IswCreateManagedWidget("sep", smeLineObjectClass,
                                  g->ctx_menu, NULL, 0);
         }
     }
 
     /* New instance (static) */
     if (g->desktop_exec) {
-        XtSetArg(args[0], XtNlabel, "New instance");
-        Widget ni = XtCreateManagedWidget("newInst", smeBSBObjectClass,
+        IswSetArg(args[0], IswNlabel, "New instance");
+        Widget ni = IswCreateManagedWidget("newInst", smeBSBObjectClass,
                                            g->ctx_menu, args, 1);
         ActionClosure *ac = malloc(sizeof(*ac));
         ac->panel = p;
         ac->exec = g->desktop_exec;
-        XtAddCallback(ni, XtNcallback, action_callback, ac);
+        IswAddCallback(ni, IswNcallback, action_callback, ac);
     }
 
     /* Close all windows (dynamic — shown only when nwindows > 0) */
-    XtSetArg(args[0], XtNlabel, "Close all windows");
-    g->ctx_close_all = XtCreateManagedWidget("closeAll", smeBSBObjectClass,
+    IswSetArg(args[0], IswNlabel, "Close all windows");
+    g->ctx_close_all = IswCreateManagedWidget("closeAll", smeBSBObjectClass,
                                               g->ctx_menu, args, 1);
-    XtAddCallback(g->ctx_close_all, XtNcallback, close_all_callback, closure);
+    IswAddCallback(g->ctx_close_all, IswNcallback, close_all_callback, closure);
 
-    g->ctx_close_sep = XtCreateManagedWidget("sep2", smeLineObjectClass,
+    g->ctx_close_sep = IswCreateManagedWidget("sep2", smeLineObjectClass,
                                               g->ctx_menu, NULL, 0);
 
     /* Pin/unpin (dynamic label) */
-    XtSetArg(args[0], XtNlabel, "Pin to taskbar");
-    g->ctx_pin = XtCreateManagedWidget("pinToggle", smeBSBObjectClass,
+    IswSetArg(args[0], IswNlabel, "Pin to taskbar");
+    g->ctx_pin = IswCreateManagedWidget("pinToggle", smeBSBObjectClass,
                                         g->ctx_menu, args, 1);
-    XtAddCallback(g->ctx_pin, XtNcallback, pin_callback, closure);
+    IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
 }
 
 static void show_context_menu(Panel *p, TaskGroup *g)
@@ -496,41 +496,41 @@ static void show_context_menu(Panel *p, TaskGroup *g)
 
     /* Update dynamic entries */
     if (g->nwindows > 0) {
-        XtManageChild(g->ctx_close_all);
-        XtManageChild(g->ctx_close_sep);
+        IswManageChild(g->ctx_close_all);
+        IswManageChild(g->ctx_close_sep);
     } else {
-        XtUnmanageChild(g->ctx_close_all);
-        XtUnmanageChild(g->ctx_close_sep);
+        IswUnmanageChild(g->ctx_close_all);
+        IswUnmanageChild(g->ctx_close_sep);
     }
 
     const char *label = g->pinned ? "Unpin from taskbar"
                                   : "Pin to taskbar";
-    XtSetArg(args[0], XtNlabel, label);
-    XtSetValues(g->ctx_pin, args, 1);
+    IswSetArg(args[0], IswNlabel, label);
+    IswSetValues(g->ctx_pin, args, 1);
 
     /* Position above button, bottom flush with panel top */
     Position bx, by;
-    XtTranslateCoords(g->button, 0, 0, &bx, &by);
+    IswTranslateCoords(g->button, 0, 0, &bx, &by);
 
-    if (!XtIsRealized(g->ctx_menu)) {
-        XtRealizeWidget(g->ctx_menu);
+    if (!IswIsRealized(g->ctx_menu)) {
+        IswRealizeWidget(g->ctx_menu);
     }
 
     Dimension mh, bw;
     Cardinal qn = 0;
-    XtSetArg(args[qn], XtNheight, &mh);     qn++;
-    XtSetArg(args[qn], XtNborderWidth, &bw); qn++;
-    XtGetValues(g->ctx_menu, args, qn);
+    IswSetArg(args[qn], IswNheight, &mh);     qn++;
+    IswSetArg(args[qn], IswNborderWidth, &bw); qn++;
+    IswGetValues(g->ctx_menu, args, qn);
 
     Arg margs[2];
-    XtSetArg(margs[0], XtNx, bx);
-    XtSetArg(margs[1], XtNy, by - (Position)mh - (Position)(2 * bw));
-    XtSetValues(g->ctx_menu, margs, 2);
+    IswSetArg(margs[0], IswNx, bx);
+    IswSetArg(margs[1], IswNy, by - (Position)mh - (Position)(2 * bw));
+    IswSetValues(g->ctx_menu, margs, 2);
 
-    XtPopup(g->ctx_menu, XtGrabNone);
+    IswPopup(g->ctx_menu, IswGrabNone);
 
     /* Force immediate redraw — entries may have been managed/unmanaged */
-    XtExposeProc expose = XtClass(g->ctx_menu)->core_class.expose;
+    IswExposeProc expose = IswClass(g->ctx_menu)->core_class.expose;
     if (expose) {
         expose(g->ctx_menu, NULL, 0);
     }
@@ -538,7 +538,7 @@ static void show_context_menu(Panel *p, TaskGroup *g)
     panel_show_popup(p, g->ctx_menu);
 }
 
-static void context_menu_handler(Widget w, XtPointer client_data,
+static void context_menu_handler(Widget w, IswPointer client_data,
                                  xcb_generic_event_t *event, Boolean *cont)
 {
     (void)w;
@@ -666,29 +666,29 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     Cardinal n = 0;
     if (g->icon_path) {
         Dimension pad = 2;
-        XtSetArg(args[n], XtNimage, g->icon_path);            n++;
-        XtSetArg(args[n], XtNlabel, "");                 n++;
-        XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
-        XtSetArg(args[n], XtNinternalWidth, pad);        n++;
-        XtSetArg(args[n], XtNinternalHeight, pad);       n++;
+        IswSetArg(args[n], IswNimage, g->icon_path);            n++;
+        IswSetArg(args[n], IswNlabel, "");                 n++;
+        IswSetArg(args[n], IswNwidth, PANEL_HEIGHT);       n++;
+        IswSetArg(args[n], IswNinternalWidth, pad);        n++;
+        IswSetArg(args[n], IswNinternalHeight, pad);       n++;
     } else {
-        XtSetArg(args[n], XtNlabel, g->display_name);   n++;
+        IswSetArg(args[n], IswNlabel, g->display_name);   n++;
     }
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);              n++;
-    g->button = XtCreateManagedWidget("taskBtn", commandWidgetClass,
+    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);        n++;
+    IswSetArg(args[n], IswNborderWidth, 0);              n++;
+    g->button = IswCreateManagedWidget("taskBtn", commandWidgetClass,
                                       p->box, args, n);
 
     TaskClosure *tc = malloc(sizeof(*tc));
     tc->panel = p;
     tc->group = g;
-    XtAddCallback(g->button, XtNcallback, taskbar_button_callback, tc);
+    IswAddCallback(g->button, IswNcallback, taskbar_button_callback, tc);
 
     /* Button-press handler: left-click shows window list for multi-window
      * groups; right-click opens pin/unpin context menu */
-    XtAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
                       taskbar_press_handler, tc);
-    XtAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
                       context_menu_handler, tc);
 
     /* Create persistent popup menus (shown/hidden, not recreated) */
@@ -750,13 +750,13 @@ void taskbar_update(Panel *p)
             *pp = g->next;
             free_menu_titles(g);
             if (g->menu) {
-                XtDestroyWidget(g->menu);
+                IswDestroyWidget(g->menu);
             }
             if (g->ctx_menu) {
-                XtDestroyWidget(g->ctx_menu);
+                IswDestroyWidget(g->ctx_menu);
             }
             if (g->button) {
-                XtDestroyWidget(g->button);
+                IswDestroyWidget(g->button);
             }
             free(g->wm_class);
             free(g->display_name);
@@ -822,9 +822,9 @@ void taskbar_highlight_active(Panel *p)
 
         Arg args[20];
         Cardinal n = 0;
-        XtSetArg(args[n], XtNbackground, taskbar_pixel(p, ec->bg)); n++;
-        XtSetArg(args[n], XtNforeground, taskbar_pixel(p, ec->fg)); n++;
-        XtSetValues(g->button, args, n);
+        IswSetArg(args[n], IswNbackground, taskbar_pixel(p, ec->bg)); n++;
+        IswSetArg(args[n], IswNforeground, taskbar_pixel(p, ec->fg)); n++;
+        IswSetValues(g->button, args, n);
     }
 
     free(active_class);

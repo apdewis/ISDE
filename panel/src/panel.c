@@ -3,7 +3,7 @@
  * panel.c — panel initialization, dock window, event integration
  */
 #include "panel.h"
-#include <X11/ShellP.h>
+#include <ISW/ShellP.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,23 +189,23 @@ static void panel_reconfigure(Panel *p);
 
 /* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
-static void panel_dbus_input_cb(XtPointer, int *, XtInputId *);
+static void panel_dbus_input_cb(IswPointer, int *, IswInputId *);
 
 int panel_init(Panel *p, int *argc, char **argv)
 {
     memset(p, 0, sizeof(*p));
 
     char **fallbacks = isde_theme_build_resources();
-    p->toplevel = XtAppInitialize(&p->app, "ISDE-Panel",
+    p->toplevel = IswAppInitialize(&p->app, "ISDE-Panel",
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
 
-    p->conn = XtDisplay(p->toplevel);
+    p->conn = IswDisplay(p->toplevel);
     if (xcb_connection_has_error(p->conn)) {
         return -1;
     }
 
-    p->screen = XtScreen(p->toplevel);
+    p->screen = IswScreen(p->toplevel);
     p->root = p->screen->root;
 
     /* Find screen number */
@@ -240,28 +240,28 @@ int panel_init(Panel *p, int *argc, char **argv)
     int logical_mon_h = (int)(p->mon_h / sf + 0.5);
     int logical_mon_y = (int)(p->mon_y / sf + 0.5);
 
-    /* Physical panel height for EWMH strut and XtConfigureWidget
+    /* Physical panel height for EWMH strut and IswConfigureWidget
        (both operate in physical pixels). */
     p->phys_panel_h = (int)(PANEL_HEIGHT * sf + 0.5);
 
     /* Create panel shell — override-redirect dock at bottom of primary */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, logical_mon_x);                n++;
-    XtSetArg(args[n], XtNy, logical_mon_y + logical_mon_h
+    IswSetArg(args[n], IswNx, logical_mon_x);                n++;
+    IswSetArg(args[n], IswNy, logical_mon_y + logical_mon_h
                               - PANEL_HEIGHT);              n++;
-    XtSetArg(args[n], XtNwidth, logical_mon_w);             n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);            n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);          n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    p->shell = XtCreatePopupShell("panel", overrideShellWidgetClass,
+    IswSetArg(args[n], IswNwidth, logical_mon_w);             n++;
+    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);            n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);          n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    p->shell = IswCreatePopupShell("panel", overrideShellWidgetClass,
                                   p->toplevel, args, n);
 
     /* Form layout: start button | taskbar box | clock */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 0); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);     n++;
-    p->form = XtCreateManagedWidget("panelForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);     n++;
+    p->form = IswCreateManagedWidget("panelForm", formWidgetClass,
                                     p->shell, args, n);
 
     /* Initialize applets — they create widgets inside p->form */
@@ -269,32 +269,32 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* Taskbar box in the middle */
     n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNhSpace, 2);                        n++;
-    XtSetArg(args[n], XtNvSpace, 0);                        n++;
-    XtSetArg(args[n], XtNfromHoriz, p->start_btn);          n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                  n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);            n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);                n++;
-    XtSetArg(args[n], XtNright, XtChainRight);              n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);             n++;
-    p->box = XtCreateManagedWidget("panelBox", boxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    IswSetArg(args[n], IswNhSpace, 2);                        n++;
+    IswSetArg(args[n], IswNvSpace, 0);                        n++;
+    IswSetArg(args[n], IswNfromHoriz, p->start_btn);          n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                  n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);            n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);                n++;
+    IswSetArg(args[n], IswNright, IswChainRight);              n++;
+    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
+    p->box = IswCreateManagedWidget("panelBox", boxWidgetClass,
                                    p->form, args, n);
 
     taskbar_init(p);
     tray_init_widgets(p);
     clock_init(p);
 
-    XtRealizeWidget(p->shell);
-    XtPopup(p->shell, XtGrabNone);
+    IswRealizeWidget(p->shell);
+    IswPopup(p->shell, IswGrabNone);
 
     /* Claim system tray selection (needs realized window) */
     tray_init_selection(p);
 
     /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
-    xcb_window_t panel_win = XtWindow(p->shell);
+    xcb_window_t panel_win = IswWindow(p->shell);
 
     xcb_atom_t dock_type = ewmh->_NET_WM_WINDOW_TYPE_DOCK;
     xcb_ewmh_set_wm_window_type(ewmh, panel_win, 1, &dock_type);
@@ -324,8 +324,8 @@ int panel_init(Panel *p, int *argc, char **argv)
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
         int dbus_fd = isde_dbus_get_fd(p->dbus);
         if (dbus_fd >= 0) {
-            XtAppAddInput(p->app, dbus_fd,
-                          (XtPointer)XtInputReadMask,
+            IswAppAddInput(p->app, dbus_fd,
+                          (IswPointer)IswInputReadMask,
                           panel_dbus_input_cb, p->dbus);
         }
     }
@@ -347,21 +347,21 @@ static void panel_reconfigure(Panel *p)
         return;
     }
 
-    /* All XtConfigureWidget values must be logical — ISW scales internally */
+    /* All IswConfigureWidget values must be logical — ISW scales internally */
     double sf = ISWScaleFactor(p->toplevel);
     int log_x = (int)(p->mon_x / sf + 0.5);
     int log_w = (int)(p->mon_w / sf + 0.5);
     int log_y = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
 
-    XtConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
+    IswConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
 
     /* Reposition clock — core dimensions are already logical */
     int clock_w = p->clock_time->core.width;
     int half = PANEL_HEIGHT / 2;
     int clock_x = log_w - clock_w - 2;
-    XtConfigureWidget(p->clock_time, clock_x, 0,
+    IswConfigureWidget(p->clock_time, clock_x, 0,
                       clock_w, half, 0);
-    XtConfigureWidget(p->clock_date, clock_x, half,
+    IswConfigureWidget(p->clock_date, clock_x, half,
                       clock_w, half, 0);
 
     /* Update strut */
@@ -371,7 +371,7 @@ static void panel_reconfigure(Panel *p)
     strut.bottom = p->phys_panel_h;
     strut.bottom_start_x = p->mon_x;
     strut.bottom_end_x = p->mon_x + p->mon_w - 1;
-    xcb_ewmh_set_wm_strut_partial(ewmh, XtWindow(p->shell), strut);
+    xcb_ewmh_set_wm_strut_partial(ewmh, IswWindow(p->shell), strut);
     xcb_flush(p->conn);
 
     fprintf(stderr, "isde-panel: reconfigured for %dx%d+%d+%d\n",
@@ -398,7 +398,7 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
 }
 
 /* Theme colors are applied via Xresources (isde_theme_build_resources).
- * No manual XtSetValues needed — all widget names match resource specs. */
+ * No manual IswSetValues needed — all widget names match resource specs. */
 
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -415,7 +415,7 @@ static void on_panel_settings_changed(const char *section, const char *key,
     }
 }
 
-static void panel_dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void panel_dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd;
     (void)id;
@@ -428,7 +428,7 @@ static void panel_dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
  * would otherwise drop (PropertyNotify on root, no widget). */
 static xcb_window_t last_active = XCB_WINDOW_NONE;
 
-static void poll_clients(XtPointer client_data, XtIntervalId *id)
+static void poll_clients(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Panel *p = (Panel *)client_data;
@@ -459,7 +459,7 @@ static void poll_clients(XtPointer client_data, XtIntervalId *id)
         last_active = isde_ewmh_get_active_window(p->ewmh);
     }
 
-    XtAppAddTimeOut(p->app, 50, poll_clients, p);
+    IswAppAddTimeOut(p->app, 50, poll_clients, p);
 }
 
 void panel_show_popup(Panel *p, Widget popup)
@@ -483,15 +483,15 @@ void panel_dismiss_popup(Panel *p)
             Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
             Pixel bg = panel_color_pixel(p, s->taskbar_button.bg);
             Arg ia[2];
-            XtSetArg(ia[0], XtNforeground, fg);
-            XtSetArg(ia[1], XtNbackground, bg);
-            XtSetValues(p->start_btn, ia, 2);
+            IswSetArg(ia[0], IswNforeground, fg);
+            IswSetArg(ia[1], IswNbackground, bg);
+            IswSetValues(p->start_btn, ia, 2);
         }
     }
 
     ShellWidget sw = (ShellWidget)p->active_popup;
     if (sw->shell.popped_up) {
-        XtPopdown(p->active_popup);
+        IswPopdown(p->active_popup);
     }
 
     p->active_popup = NULL;
@@ -503,10 +503,10 @@ void panel_run(Panel *p)
     taskbar_update(p);
 
     /* Start periodic client list poll */
-    XtAppAddTimeOut(p->app, 50, poll_clients, p);
+    IswAppAddTimeOut(p->app, 50, poll_clients, p);
 
-    while (p->running && !XtAppGetExitFlag(p->app)) {
-        XtAppProcessEvent(p->app, XtIMAll);
+    while (p->running && !IswAppGetExitFlag(p->app)) {
+        IswAppProcessEvent(p->app, IswIMAll);
     }
 }
 
@@ -530,5 +530,5 @@ void panel_cleanup(Panel *p)
     isde_dbus_free(p->dbus);
     isde_ipc_free(p->ipc);
     isde_ewmh_free(p->ewmh);
-    XtDestroyApplicationContext(p->app);
+    IswDestroyApplicationContext(p->app);
 }
