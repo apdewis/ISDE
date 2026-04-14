@@ -119,11 +119,10 @@ int mountd_do_mount(MountDaemon *md, const char *dev_path,
                   strcmp(dev->fs_type, "exfat") == 0);
 
     if (is_fat) {
-        snprintf(opts, sizeof(opts),
-                 "nosuid,nodev,noexec,relatime,uid=%lu,gid=%lu",
+        snprintf(opts, sizeof(opts), "uid=%lu,gid=%lu",
                  caller_uid, (unsigned long)pw->pw_gid);
     } else {
-        snprintf(opts, sizeof(opts), "nosuid,nodev,relatime");
+        opts[0] = '\0';
     }
 
     /* Mount */
