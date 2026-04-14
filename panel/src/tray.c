@@ -82,17 +82,11 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     /* Send XEMBED_EMBEDDED_NOTIFY */
     send_xembed_notify(p, icon);
 
-    /* Listen for destruction */
-    uint32_t mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-    xcb_change_window_attributes(p->conn, icon,
-                                 XCB_CW_EVENT_MASK, &mask);
-
     /* Resize the tray box to fit all icons */
     int tray_w = p->ntray * (icon_size + 2) + 2;
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNwidth, tray_w); n++;
-    IswSetValues(p->tray_box, args, n);
+    IswConfigureWidget(p->tray_box, p->tray_box->core.x, p->tray_box->core.y,
+                       tray_w, p->tray_box->core.height,
+                       p->tray_box->core.border_width);
 
     xcb_flush(p->conn);
 
@@ -127,10 +121,9 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
 
     /* Resize tray box */
     int tray_w = p->ntray > 0 ? p->ntray * (icon_size + 2) + 2 : 1;
-    Arg args[20];
-    Cardinal na = 0;
-    IswSetArg(args[na], IswNwidth, tray_w); na++;
-    IswSetValues(p->tray_box, args, na);
+    IswConfigureWidget(p->tray_box, p->tray_box->core.x, p->tray_box->core.y,
+                       tray_w, p->tray_box->core.height,
+                       p->tray_box->core.border_width);
 
     xcb_flush(p->conn);
 
@@ -156,7 +149,7 @@ void tray_init_widgets(Panel *p)
     IswSetArg(args[n], IswNborderWidth, 0);                   n++;
     IswSetArg(args[n], IswNhSpace, 0);                        n++;
     IswSetArg(args[n], IswNvSpace, 0);                        n++;
-    IswSetArg(args[n], IswNwidth, 1);                         n++;
+    IswSetArg(args[n], IswNwidth, 64);                          n++;
     IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
     IswSetArg(args[n], IswNfromHoriz, p->box);                n++;
     IswSetArg(args[n], IswNtop, IswChainTop);                  n++;
@@ -167,9 +160,59 @@ void tray_init_widgets(Panel *p)
                                         p->form, args, n);
 }
 
-void tray_init_selection(Panel *p)
+static void tray_claim_selection(Panel *p);
+
+/* Xt event handler on the shell — catches ClientMessage (dock requests)
+ * and SelectionClear (loss of tray ownership).  Both are nonmaskable. */
+static void shell_event_handler(Widget w, IswPointer closure,
+                                xcb_generic_event_t *ev, Boolean *cont)
 {
-    /* Claim the system tray selection */
+    (void)w;
+    Panel *p = (Panel *)closure;
+    uint8_t type = ev->response_type & ~0x80;
+
+    if (type == XCB_CLIENT_MESSAGE) {
+        xcb_client_message_event_t *cm = (xcb_client_message_event_t *)ev;
+        if (cm->type == p->atom_tray_opcode &&
+            cm->data.data32[1] == SYSTEM_TRAY_REQUEST_DOCK) {
+            xcb_window_t icon = cm->data.data32[2];
+            tray_dock_icon(p, icon);
+        }
+    } else if (type == XCB_SELECTION_CLEAR) {
+        xcb_selection_clear_event_t *sc = (xcb_selection_clear_event_t *)ev;
+        if (sc->selection == p->atom_tray_sel) {
+            fprintf(stderr, "isde-panel: tray: lost selection, reclaiming\n");
+            tray_claim_selection(p);
+        }
+    }
+    *cont = True;
+}
+
+/* Xt event handler on the tray box — catches Destroy/Reparent from
+ * tray icon children via SubstructureNotify. */
+static void traybox_event_handler(Widget w, IswPointer closure,
+                                  xcb_generic_event_t *ev, Boolean *cont)
+{
+    (void)w;
+    Panel *p = (Panel *)closure;
+    uint8_t type = ev->response_type & ~0x80;
+
+    if (type == XCB_DESTROY_NOTIFY) {
+        xcb_destroy_notify_event_t *dn = (xcb_destroy_notify_event_t *)ev;
+        tray_undock_icon(p, dn->window);
+    } else if (type == XCB_REPARENT_NOTIFY) {
+        /* Client withdrew from tray — reparented away from our box */
+        xcb_reparent_notify_event_t *rn = (xcb_reparent_notify_event_t *)ev;
+        if (rn->parent != IswWindow(p->tray_box)) {
+            tray_undock_icon(p, rn->window);
+        }
+    }
+    *cont = True;
+}
+
+/* Claim (or reclaim) the tray selection and announce to clients */
+static void tray_claim_selection(Panel *p)
+{
     xcb_set_selection_owner(p->conn, IswWindow(p->shell),
                             p->atom_tray_sel, XCB_CURRENT_TIME);
 
@@ -204,25 +247,16 @@ void tray_init_selection(Panel *p)
     fprintf(stderr, "isde-panel: tray: manager active on %s\n", sel_name);
 }
 
-void tray_handle_event(Panel *p, xcb_generic_event_t *ev)
+void tray_init_selection(Panel *p)
 {
-    uint8_t type = ev->response_type & ~0x80;
+    tray_claim_selection(p);
 
-    if (type == XCB_CLIENT_MESSAGE) {
-        xcb_client_message_event_t *cm = (xcb_client_message_event_t *)ev;
-        if (cm->type == p->atom_tray_opcode &&
-            cm->data.data32[1] == SYSTEM_TRAY_REQUEST_DOCK) {
-            xcb_window_t icon = cm->data.data32[2];
-            tray_dock_icon(p, icon);
-        }
-    } else if (type == XCB_DESTROY_NOTIFY) {
-        xcb_destroy_notify_event_t *dn = (xcb_destroy_notify_event_t *)ev;
-        tray_undock_icon(p, dn->window);
-    } else if (type == XCB_UNMAP_NOTIFY) {
-        xcb_unmap_notify_event_t *un = (xcb_unmap_notify_event_t *)ev;
-        /* Some tray icons unmap instead of destroy when exiting */
-        tray_undock_icon(p, un->window);
-    }
+    /* Register Xt event handlers (once) for tray protocol events */
+    IswAddRawEventHandler(p->shell, 0, True,
+                          shell_event_handler, (IswPointer)p);
+    IswAddEventHandler(p->tray_box,
+                       XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, False,
+                       traybox_event_handler, (IswPointer)p);
 }
 
 void tray_cleanup(Panel *p)

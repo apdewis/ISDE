@@ -110,7 +110,7 @@ void clock_init(Panel *p)
         IswNwidth,       PANEL_CLOCK_WIDTH,
         IswNheight,      half,
         IswNfromVert,    p->clock_time,
-        IswNfromHoriz,   p->box,
+        IswNfromHoriz,   p->tray_box,
         IswNleft,        IswChainRight,
         IswNright,       IswChainRight,
         IswNtop,         IswChainTop,

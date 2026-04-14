@@ -191,7 +191,6 @@ void  startmenu_cleanup(Panel *p);
 /* ---------- tray.c ---------- */
 void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
 void  tray_init_selection(Panel *p); /* claim selection (after realize) */
-void  tray_handle_event(Panel *p, xcb_generic_event_t *ev);
 void  tray_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */

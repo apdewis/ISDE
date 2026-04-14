@@ -433,15 +433,6 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     (void)id;
     Panel *p = (Panel *)client_data;
 
-    /* Drain pending XCB events for tray handling */
-    {
-        xcb_generic_event_t *ev;
-        while ((ev = xcb_poll_for_event(p->conn)) != NULL) {
-            tray_handle_event(p, ev);
-            free(ev);
-        }
-    }
-
     /* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
