@@ -188,7 +188,7 @@ static void restart_ui_children(Session *s)
     /* SIGTERM the WM and panel — child_reap will respawn them */
     for (Child *c = s->children; c; c = c->next) {
         if (c->is_wm || c->is_panel) {
-            kill(-c->pid, SIGTERM);
+            kill(c->pid, SIGTERM);
         }
     }
 }
@@ -413,6 +413,7 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
 int session_init(Session *s)
 {
     memset(s, 0, sizeof(*s));
+    s->death_pipe[0] = s->death_pipe[1] = -1;
 
     /* Load isde.toml from XDG config dirs */
     char errbuf[256];
@@ -513,6 +514,12 @@ int session_init(Session *s)
         s->conn = NULL;
     }
 
+    /* Liveness pipe — children inherit the read end; EOF signals parent death */
+    if (pipe(s->death_pipe) < 0) {
+        perror("isde-session: pipe");
+        s->death_pipe[0] = s->death_pipe[1] = -1;
+    }
+
     s->running = 1;
     return 0;
 }
@@ -601,6 +608,8 @@ void session_cleanup(Session *s)
         s->confirm_pid = 0;
     }
     child_kill_all(s);
+    if (s->death_pipe[0] >= 0) { close(s->death_pipe[0]); }
+    if (s->death_pipe[1] >= 0) { close(s->death_pipe[1]); }
     autostart_free(s);
     isde_dbus_free(s->dbus);
     isde_ipc_free(s->ipc);

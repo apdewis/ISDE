@@ -5,6 +5,7 @@
 #include "session.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <signal.h>
 
 static Session session;
@@ -20,8 +21,11 @@ int main(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    signal(SIGINT, on_signal);
-    signal(SIGTERM, on_signal);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = on_signal;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 
     if (session_init(&session) != 0) {
         fprintf(stderr, "isde-session: failed to initialize\n");

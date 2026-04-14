@@ -8,8 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <signal.h>
-#include <sys/prctl.h>
+#include <time.h>
 #include <sys/wait.h>
 
 Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
@@ -21,11 +22,11 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
     }
 
     if (pid == 0) {
-        /* New process group so we can kill the entire tree on shutdown */
-        setpgid(0, 0);
-
-        /* Die when session manager dies */
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        /* Close the write end of the death pipe — only the parent holds it.
+         * The read end stays open; EOF signals parent death. */
+        if (s->death_pipe[1] >= 0) {
+            close(s->death_pipe[1]);
+        }
 
         /* Child process — exec via shell for command parsing */
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
@@ -85,11 +86,11 @@ void child_reap(Session *s)
         if (c->respawn && s->running) {
             fprintf(stderr, "isde-session: respawning '%s'\n", c->command);
             char *cmd = strdup(c->command);
-            int is_wm = c->is_wm;
-            int is_panel = c->is_panel;
+            int wm = c->is_wm;
+            int panel = c->is_panel;
             child_remove(s, c);
-            Child *nc = child_spawn(s, cmd, 1, is_wm);
-            if (nc) { nc->is_panel = is_panel; }
+            Child *nc = child_spawn(s, cmd, 1, wm);
+            if (nc) { nc->is_panel = panel; }
             free(cmd);
         } else {
             child_remove(s, c);
@@ -99,27 +100,36 @@ void child_reap(Session *s)
 
 void child_kill_all(Session *s)
 {
-    /* Send SIGTERM to all process groups */
+    struct timespec ts = { 0, 50000000 }; /* 50ms */
+
+    /* Disable respawning */
     for (Child *c = s->children; c; c = c->next) {
-        c->respawn = 0; /* Don't respawn during shutdown */
-        kill(-c->pid, SIGTERM);
+        c->respawn = 0;
     }
 
-    /* Wait briefly for clean exit */
-    usleep(500000);
+    /* Phase 1: SIGTERM everything in our process group */
+    kill(0, SIGTERM);
 
-    /* Force kill any remaining */
-    for (Child *c = s->children; c; c = c->next) {
-        kill(-c->pid, SIGKILL);
+    /* Phase 2: Poll for up to 2 seconds, reaping as children exit */
+    for (int i = 0; i < 40 && s->children; i++) {
+        int status;
+        pid_t pid;
+        while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            Child *c = child_find_pid(s, pid);
+            if (c) { child_remove(s, c); }
+        }
+        if (!s->children) { break; }
+        nanosleep(&ts, NULL);
     }
 
-    /* Reap all */
-    int status;
-    while (waitpid(-1, &status, WNOHANG) > 0) {
-        ;
+    /* Phase 3: SIGKILL everything in our process group, including us.
+     * Our job is done — the parent (display manager/init) reaps us. */
+    if (s->children) {
+        kill(0, SIGKILL);
+        /* unreachable */
     }
 
-    /* Free the list */
+    /* All children exited cleanly — free any remaining list entries */
     while (s->children) {
         Child *c = s->children;
         s->children = c->next;

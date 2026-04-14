@@ -53,6 +53,10 @@ typedef struct Session {
     /* Confirmation overlay process */
     pid_t             confirm_pid;    /* isde-confirm child, or 0 */
 
+    /* Liveness pipe: parent holds write end, children inherit read end.
+     * EOF on read end signals parent death. */
+    int               death_pipe[2];
+
     /* D-Bus */
     IsdeDBus         *dbus;
     DBusConnection   *system_bus;     /* system bus for DM signals */
