@@ -64,6 +64,7 @@ typedef struct TrayMount {
     IsdeDBus           *session_dbus;
 
     int                 running;
+    int                 restart;
 } TrayMount;
 
 /* ---------- tray-mount.c ---------- */

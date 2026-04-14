@@ -90,8 +90,8 @@ static void on_settings_changed(const char *section, const char *key,
     TrayMount *tm = (TrayMount *)user_data;
 
     if (strcmp(section, "appearance") == 0) {
-        isde_theme_reload();
-        load_tray_icon(tm);
+        tm->running = 0;
+        tm->restart = 1;
     }
 }
 
@@ -101,10 +101,11 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
 {
     memset(tm, 0, sizeof(*tm));
 
-    /* Initialize ISW/Xt */
+    /* Initialize ISW/Xt with theme resources */
+    char **fallbacks = isde_theme_build_resources();
     tm->toplevel = IswAppInitialize(&tm->app, "IsdeTraymount",
                                      NULL, 0, argc, argv,
-                                     NULL, NULL, 0);
+                                     fallbacks, NULL, 0);
     if (!tm->toplevel) {
         fprintf(stderr, "isde-tray-mount: IswAppInitialize failed\n");
         return -1;
@@ -121,9 +122,6 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
     IswSetValues(tm->toplevel, sa, sn);
 
     IswRealizeWidget(tm->toplevel);
-
-    /* Load theme */
-    isde_theme_reload();
 
     /* Create tray icon */
     tm->tray_icon = IswTrayIconCreate(tm->toplevel, NULL);

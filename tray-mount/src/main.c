@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <signal.h>
+#include <unistd.h>
 
 static TrayMount tm;
 
@@ -28,7 +29,15 @@ int main(int argc, char **argv)
     fprintf(stderr, "isde-tray-mount: running\n");
     tray_mount_run(&tm);
 
+    int restart = tm.restart;
     tray_mount_cleanup(&tm);
+
+    if (restart) {
+        fprintf(stderr, "isde-tray-mount: restarting for theme change\n");
+        execvp(argv[0], argv);
+        perror("isde-tray-mount: execvp");
+    }
+
     fprintf(stderr, "isde-tray-mount: exiting\n");
     return 0;
 }
