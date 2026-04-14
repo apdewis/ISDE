@@ -10,6 +10,7 @@
 #include <ISW/Shell.h>
 #include <ISW/Box.h>
 #include <ISW/Form.h>
+#include <ISW/FlexBox.h>
 #include <ISW/Label.h>
 #include <ISW/List.h>
 #include <ISW/Command.h>
@@ -87,7 +88,7 @@ typedef struct Panel {
     IswAppContext       app;
     Widget             toplevel;
     Widget             shell;       /* OverrideShell — the panel bar */
-    Widget             form;        /* Form layout container */
+    Widget             form;        /* FlexBox layout container */
     Widget             box;         /* Horizontal Box for taskbar buttons */
 
     /* Applets */
@@ -101,6 +102,7 @@ typedef struct Panel {
     Widget             shutdown_btn;/* Shut Down button in toolbar */
     Widget             reboot_btn;  /* Reboot button in toolbar */
     Widget             logout_btn;  /* Logout button in toolbar */
+    Widget             clock_box;   /* Clock — vertical container */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */
     char              *clock_time_fmt; /* strftime format for time */

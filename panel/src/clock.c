@@ -87,34 +87,41 @@ void clock_init(Panel *p)
     snprintf(time_font, sizeof(time_font), "Sans-%d", time_pt);
     snprintf(date_font, sizeof(date_font), "Sans-%d", date_pt);
 
-    /* Time label (top half) — child of form, right of taskbar box */
-    p->clock_time = IswVaCreateManagedWidget("clockTime", labelWidgetClass,
+    /* Form container in the FlexBox to stack time/date vertically */
+    p->clock_box = IswVaCreateManagedWidget("clockBox", formWidgetClass,
         p->form,
+        IswNborderWidth, 0,
+        IswNdefaultDistance, 0,
+        IswNwidth,       PANEL_CLOCK_WIDTH,
+        IswNheight,      PANEL_HEIGHT,
+        NULL);
+
+    /* Time label (top half) */
+    p->clock_time = IswVaCreateManagedWidget("clockTime", labelWidgetClass,
+        p->clock_box,
         IswNlabel,      "00:00",
         IswNborderWidth, 0,
         IswNwidth,       PANEL_CLOCK_WIDTH,
         IswNheight,      half,
-        IswNfromHoriz,   p->tray_box,
-        IswNleft,        IswChainRight,
-        IswNright,       IswChainRight,
         IswNtop,         IswChainTop,
         IswNbottom,      IswChainTop,
+        IswNleft,        IswChainLeft,
+        IswNright,       IswChainRight,
         IswVaTypedArg, IswNfont, IswRString, time_font, strlen(time_font) + 1,
         NULL);
 
     /* Date label (bottom half) — below time label */
     p->clock_date = IswVaCreateManagedWidget("clockDate", labelWidgetClass,
-        p->form,
+        p->clock_box,
         IswNlabel,      "0000-00-00",
         IswNborderWidth, 0,
         IswNwidth,       PANEL_CLOCK_WIDTH,
         IswNheight,      half,
         IswNfromVert,    p->clock_time,
-        IswNfromHoriz,   p->tray_box,
-        IswNleft,        IswChainRight,
-        IswNright,       IswChainRight,
         IswNtop,         IswChainTop,
         IswNbottom,      IswChainBottom,
+        IswNleft,        IswChainLeft,
+        IswNright,       IswChainRight,
         IswVaTypedArg, IswNfont, IswRString, date_font, strlen(date_font) + 1,
         NULL);
 

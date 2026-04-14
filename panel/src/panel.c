@@ -257,28 +257,25 @@ int panel_init(Panel *p, int *argc, char **argv)
     p->shell = IswCreatePopupShell("panel", overrideShellWidgetClass,
                                   p->toplevel, args, n);
 
-    /* Form layout: start button | taskbar box | clock */
+    /* FlexBox layout: start button | taskbar box | tray | clock */
     n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);     n++;
-    p->form = IswCreateManagedWidget("panelForm", formWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
+    IswSetArg(args[n], IswNspacing, 0);                       n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    p->form = IswCreateManagedWidget("panelFlex", flexBoxWidgetClass,
                                     p->shell, args, n);
 
     /* Initialize applets — they create widgets inside p->form */
     startmenu_init(p);
 
-    /* Taskbar box in the middle */
+    /* Taskbar box — flexGrow=1 fills remaining space */
     n = 0;
     IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
     IswSetArg(args[n], IswNborderWidth, 0);                   n++;
     IswSetArg(args[n], IswNhSpace, 2);                        n++;
     IswSetArg(args[n], IswNvSpace, 0);                        n++;
-    IswSetArg(args[n], IswNfromHoriz, p->start_btn);          n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                  n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);            n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);                n++;
-    IswSetArg(args[n], IswNright, IswChainRight);              n++;
     IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
+    IswSetArg(args[n], IswNflexGrow, 1);                      n++;
     p->box = IswCreateManagedWidget("panelBox", boxWidgetClass,
                                    p->form, args, n);
 
@@ -354,15 +351,6 @@ static void panel_reconfigure(Panel *p)
     int log_y = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
 
     IswConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
-
-    /* Reposition clock — core dimensions are already logical */
-    int clock_w = p->clock_time->core.width;
-    int half = PANEL_HEIGHT / 2;
-    int clock_x = log_w - clock_w - 2;
-    IswConfigureWidget(p->clock_time, clock_x, 0,
-                      clock_w, half, 0);
-    IswConfigureWidget(p->clock_date, clock_x, half,
-                      clock_w, half, 0);
 
     /* Update strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);

@@ -64,27 +64,33 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     }
     p->tray_icons[p->ntray++] = icon;
 
-    int icon_size = p->shell->core.height - 4;
+    int icon_size = PANEL_HEIGHT - 4;
+    int stride = icon_size + 2;
+    int tray_w = p->ntray * stride + 2;
 
-    /* Reparent the icon window into the tray box, right-aligned */
-    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
-        xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
-    int box_w = geo ? geo->width : p->tray_box->core.width;
-    free(geo);
-    int total_w = p->ntray * (icon_size + 2);
+    /* Tell the FlexBox our new size */
+    Arg a[20];
+    Cardinal na = 0;
+    IswSetArg(a[na], IswNflexBasis, tray_w); na++;
+    IswSetValues(p->tray_box, a, na);
+
+    /* Get physical dimensions after relayout */
+    double sf = ISWScaleFactor(p->toplevel);
+    int phys_icon = (int)(icon_size * sf + 0.5);
+    int phys_stride = (int)(stride * sf + 0.5);
+
+    /* Reparent new icon and position all icons left-to-right */
     xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box),
-                        box_w - (icon_size + 2), 2);
-
-    /* Reposition all icons from the right edge */
-    for (int i = 0; i < p->ntray; i++) {
-        uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
+                        (p->ntray - 1) * phys_stride, 2);
+    for (int i = 0; i < p->ntray - 1; i++) {
+        uint32_t xy[] = { i * phys_stride, 2 };
         xcb_configure_window(p->conn, p->tray_icons[i],
                              XCB_CONFIG_WINDOW_X |
                              XCB_CONFIG_WINDOW_Y, xy);
     }
 
     /* Resize the icon to fit */
-    uint32_t vals[] = { icon_size, icon_size };
+    uint32_t vals[] = { phys_icon, phys_icon };
     xcb_configure_window(p->conn, icon,
                          XCB_CONFIG_WINDOW_WIDTH |
                          XCB_CONFIG_WINDOW_HEIGHT, vals);
@@ -124,14 +130,20 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
         p->tray_icons[i] = p->tray_icons[i + 1];
     }
 
-    /* Reposition remaining icons right-aligned */
-    int icon_size = p->shell->core.height - 4;
-    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
-        xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
-    int box_w = geo ? geo->width : p->tray_box->core.width;
-    free(geo);
+    int icon_size = PANEL_HEIGHT - 4;
+    int stride = icon_size + 2;
+    int tray_w = p->ntray > 0 ? p->ntray * stride + 2 : 2;
+
+    Arg a[20];
+    Cardinal na = 0;
+    IswSetArg(a[na], IswNflexBasis, tray_w); na++;
+    IswSetValues(p->tray_box, a, na);
+
+    double sf = ISWScaleFactor(p->toplevel);
+    int phys_stride = (int)(stride * sf + 0.5);
+
     for (int i = 0; i < p->ntray; i++) {
-        uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
+        uint32_t xy[] = { i * phys_stride, 2 };
         xcb_configure_window(p->conn, p->tray_icons[i],
                              XCB_CONFIG_WINDOW_X |
                              XCB_CONFIG_WINDOW_Y, xy);
@@ -154,20 +166,15 @@ void tray_init_widgets(Panel *p)
     p->atom_xembed      = intern(p->conn, "_XEMBED");
     p->atom_xembed_info = intern(p->conn, "_XEMBED_INFO");
 
-    /* Create tray box widget — between taskbar and clock in the form */
+    /* Create tray box — FlexBox child, fixed size, grows via IswSetValues */
     Arg args[20];
     Cardinal n = 0;
     IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
     IswSetArg(args[n], IswNborderWidth, 0);                   n++;
     IswSetArg(args[n], IswNhSpace, 0);                        n++;
     IswSetArg(args[n], IswNvSpace, 0);                        n++;
-    IswSetArg(args[n], IswNwidth, 64);                          n++;
     IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
-    IswSetArg(args[n], IswNfromHoriz, p->box);                n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                  n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);            n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);               n++;
-    IswSetArg(args[n], IswNright, IswChainRight);              n++;
+    IswSetArg(args[n], IswNflexBasis, 2);                     n++;
     p->tray_box = IswCreateManagedWidget("trayBox", boxWidgetClass,
                                         p->form, args, n);
 }
@@ -296,13 +303,20 @@ void tray_check_icons(Panel *p)
         }
     }
     if (changed) {
-        int icon_size = p->shell->core.height - 4;
-        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
-            xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
-        int box_w = geo ? geo->width : p->tray_box->core.width;
-        free(geo);
+        int icon_size = PANEL_HEIGHT - 4;
+        int stride = icon_size + 2;
+        int tray_w = p->ntray > 0 ? p->ntray * stride + 2 : 2;
+
+        Arg a[20];
+        Cardinal na = 0;
+        IswSetArg(a[na], IswNflexBasis, tray_w); na++;
+        IswSetValues(p->tray_box, a, na);
+
+        double sf = ISWScaleFactor(p->toplevel);
+        int phys_stride = (int)(stride * sf + 0.5);
+
         for (int i = 0; i < p->ntray; i++) {
-            uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
+            uint32_t xy[] = { i * phys_stride, 2 };
             xcb_configure_window(p->conn, p->tray_icons[i],
                                  XCB_CONFIG_WINDOW_X |
                                  XCB_CONFIG_WINDOW_Y, xy);
