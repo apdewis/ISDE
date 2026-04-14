@@ -66,9 +66,22 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
 
     int icon_size = p->shell->core.height - 4;
 
-    /* Reparent the icon window into the tray box's X window */
+    /* Reparent the icon window into the tray box, right-aligned */
+    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
+        xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
+    int box_w = geo ? geo->width : p->tray_box->core.width;
+    free(geo);
+    int total_w = p->ntray * (icon_size + 2);
     xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box),
-                        (p->ntray - 1) * (icon_size + 2), 2);
+                        box_w - (icon_size + 2), 2);
+
+    /* Reposition all icons from the right edge */
+    for (int i = 0; i < p->ntray; i++) {
+        uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
+        xcb_configure_window(p->conn, p->tray_icons[i],
+                             XCB_CONFIG_WINDOW_X |
+                             XCB_CONFIG_WINDOW_Y, xy);
+    }
 
     /* Resize the icon to fit */
     uint32_t vals[] = { icon_size, icon_size };
@@ -76,17 +89,16 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
                          XCB_CONFIG_WINDOW_WIDTH |
                          XCB_CONFIG_WINDOW_HEIGHT, vals);
 
+    /* Register icon window into Xt dispatch so events reach our handler */
+    IswRegisterDrawable(p->conn, icon, p->tray_box);
+    uint32_t mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    xcb_change_window_attributes(p->conn, icon, XCB_CW_EVENT_MASK, &mask);
+
     /* Map the icon */
     xcb_map_window(p->conn, icon);
 
     /* Send XEMBED_EMBEDDED_NOTIFY */
     send_xembed_notify(p, icon);
-
-    /* Resize the tray box to fit all icons */
-    int tray_w = p->ntray * (icon_size + 2) + 2;
-    IswConfigureWidget(p->tray_box, p->tray_box->core.x, p->tray_box->core.y,
-                       tray_w, p->tray_box->core.height,
-                       p->tray_box->core.border_width);
 
     xcb_flush(p->conn);
 
@@ -104,26 +116,26 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
         return;
     }
 
+    IswUnregisterDrawable(p->conn, icon);
+
     /* Remove from array */
     p->ntray--;
     for (int i = found; i < p->ntray; i++) {
         p->tray_icons[i] = p->tray_icons[i + 1];
     }
 
-    /* Reposition remaining icons */
+    /* Reposition remaining icons right-aligned */
     int icon_size = p->shell->core.height - 4;
-    for (int i = found; i < p->ntray; i++) {
-        uint32_t xy[] = { i * (icon_size + 2), 2 };
+    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
+        xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
+    int box_w = geo ? geo->width : p->tray_box->core.width;
+    free(geo);
+    for (int i = 0; i < p->ntray; i++) {
+        uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
         xcb_configure_window(p->conn, p->tray_icons[i],
                              XCB_CONFIG_WINDOW_X |
                              XCB_CONFIG_WINDOW_Y, xy);
     }
-
-    /* Resize tray box */
-    int tray_w = p->ntray > 0 ? p->ntray * (icon_size + 2) + 2 : 1;
-    IswConfigureWidget(p->tray_box, p->tray_box->core.x, p->tray_box->core.y,
-                       tray_w, p->tray_box->core.height,
-                       p->tray_box->core.border_width);
 
     xcb_flush(p->conn);
 
@@ -200,6 +212,9 @@ static void traybox_event_handler(Widget w, IswPointer closure,
     if (type == XCB_DESTROY_NOTIFY) {
         xcb_destroy_notify_event_t *dn = (xcb_destroy_notify_event_t *)ev;
         tray_undock_icon(p, dn->window);
+    } else if (type == XCB_UNMAP_NOTIFY) {
+        xcb_unmap_notify_event_t *un = (xcb_unmap_notify_event_t *)ev;
+        tray_undock_icon(p, un->window);
     } else if (type == XCB_REPARENT_NOTIFY) {
         /* Client withdrew from tray — reparented away from our box */
         xcb_reparent_notify_event_t *rn = (xcb_reparent_notify_event_t *)ev;
@@ -257,6 +272,43 @@ void tray_init_selection(Panel *p)
     IswAddEventHandler(p->tray_box,
                        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, False,
                        traybox_event_handler, (IswPointer)p);
+}
+
+void tray_check_icons(Panel *p)
+{
+    int changed = 0;
+    for (int i = p->ntray - 1; i >= 0; i--) {
+        xcb_get_window_attributes_cookie_t ck =
+            xcb_get_window_attributes(p->conn, p->tray_icons[i]);
+        xcb_get_window_attributes_reply_t *r =
+            xcb_get_window_attributes_reply(p->conn, ck, NULL);
+        if (!r) {
+            /* Window gone — remove from array */
+            IswUnregisterDrawable(p->conn, p->tray_icons[i]);
+            fprintf(stderr, "isde-panel: tray: icon 0x%x gone (%d remaining)\n",
+                    p->tray_icons[i], p->ntray - 1);
+            p->ntray--;
+            for (int j = i; j < p->ntray; j++)
+                p->tray_icons[j] = p->tray_icons[j + 1];
+            changed = 1;
+        } else {
+            free(r);
+        }
+    }
+    if (changed) {
+        int icon_size = p->shell->core.height - 4;
+        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(p->conn,
+            xcb_get_geometry(p->conn, IswWindow(p->tray_box)), NULL);
+        int box_w = geo ? geo->width : p->tray_box->core.width;
+        free(geo);
+        for (int i = 0; i < p->ntray; i++) {
+            uint32_t xy[] = { box_w - (p->ntray - i) * (icon_size + 2), 2 };
+            xcb_configure_window(p->conn, p->tray_icons[i],
+                                 XCB_CONFIG_WINDOW_X |
+                                 XCB_CONFIG_WINDOW_Y, xy);
+        }
+        xcb_flush(p->conn);
+    }
 }
 
 void tray_cleanup(Panel *p)

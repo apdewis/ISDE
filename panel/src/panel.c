@@ -436,6 +436,7 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     /* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
+    tray_check_icons(p);
     taskbar_update(p);
     taskbar_highlight_active(p);
 

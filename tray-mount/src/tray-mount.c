@@ -180,10 +180,22 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
     return 0;
 }
 
+static void check_running(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    TrayMount *tm = (TrayMount *)client_data;
+    if (!tm->running) {
+        return;  /* timer won't be re-added, app loop will drain and exit */
+    }
+    IswAppAddTimeOut(tm->app, 200, check_running, tm);
+}
+
 void tray_mount_run(TrayMount *tm)
 {
-    (void)tm;
-    IswAppMainLoop(tm->app);
+    IswAppAddTimeOut(tm->app, 200, check_running, tm);
+    while (tm->running) {
+        IswAppProcessEvent(tm->app, IswIMAll);
+    }
 }
 
 void tray_mount_cleanup(TrayMount *tm)
