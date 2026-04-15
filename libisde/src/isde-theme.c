@@ -856,7 +856,10 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*StatusBar.foreground", s->fg);
 
     /* Panel / Taskbar */
+    res[i++] = fmt_color("*panelFlex.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelBox.background", s->taskbar.bg);
+    res[i++] = fmt_color("*trayBox.background", s->taskbar.bg);
+    res[i++] = fmt_color("*clockBox.background", s->taskbar.bg);
     res[i++] = fmt_color("*startBtn.background", s->taskbar_button.bg);
     res[i++] = fmt_color("*startBtn.foreground", s->taskbar_button.fg);
     res[i++] = fmt_color("*startBtn.borderColor", s->taskbar_button.border);
@@ -884,11 +887,11 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*ctxList.background", s->menu.bg);
     res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
 
-    /* Panel clock (scoped to panelForm so greeter clock is unaffected) */
-    res[i++] = fmt_color("*panelForm.clockTime.background", s->taskbar.bg);
-    res[i++] = fmt_color("*panelForm.clockTime.foreground", s->taskbar.fg);
-    res[i++] = fmt_color("*panelForm.clockDate.background", s->taskbar.bg);
-    res[i++] = fmt_color("*panelForm.clockDate.foreground", s->taskbar.fg);
+    /* Panel clock (scoped to clockBox so greeter clock is unaffected) */
+    res[i++] = fmt_color("*clockBox.clockTime.background", s->taskbar.bg);
+    res[i++] = fmt_color("*clockBox.clockTime.foreground", s->taskbar.fg);
+    res[i++] = fmt_color("*clockBox.clockDate.background", s->taskbar.bg);
+    res[i++] = fmt_color("*clockBox.clockDate.foreground", s->taskbar.fg);
 
     /* WM title bar (unfocused defaults — focused set via IswSetValues) */
     res[i++] = fmt_color("*titleBar.background", s->titlebar.bg);

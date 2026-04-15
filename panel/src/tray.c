@@ -233,6 +233,46 @@ static void traybox_event_handler(Widget w, IswPointer closure,
 }
 
 /* Claim (or reclaim) the tray selection and announce to clients */
+/* Expand 8-bit channel to 16-bit (0xFF -> 0xFFFF) */
+static uint32_t expand8to16(unsigned int c8)
+{
+    return (c8 << 8) | c8;
+}
+
+static void tray_set_colors(Panel *p)
+{
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s)
+        return;
+
+    xcb_atom_t atom = intern(p->conn, "_NET_SYSTEM_TRAY_COLORS");
+    if (atom == XCB_ATOM_NONE)
+        return;
+
+    /* 12 CARDINALs: fg R/G/B, error R/G/B, warning R/G/B, success R/G/B */
+    uint32_t colors[12];
+    /* foreground */
+    colors[0]  = expand8to16((s->taskbar.fg >> 16) & 0xFF);
+    colors[1]  = expand8to16((s->taskbar.fg >>  8) & 0xFF);
+    colors[2]  = expand8to16( s->taskbar.fg        & 0xFF);
+    /* error */
+    colors[3]  = expand8to16((s->error >> 16) & 0xFF);
+    colors[4]  = expand8to16((s->error >>  8) & 0xFF);
+    colors[5]  = expand8to16( s->error        & 0xFF);
+    /* warning */
+    colors[6]  = expand8to16((s->warning >> 16) & 0xFF);
+    colors[7]  = expand8to16((s->warning >>  8) & 0xFF);
+    colors[8]  = expand8to16( s->warning        & 0xFF);
+    /* success */
+    colors[9]  = expand8to16((s->success >> 16) & 0xFF);
+    colors[10] = expand8to16((s->success >>  8) & 0xFF);
+    colors[11] = expand8to16( s->success        & 0xFF);
+
+    xcb_change_property(p->conn, XCB_PROP_MODE_REPLACE,
+                        IswWindow(p->shell), atom, XCB_ATOM_CARDINAL,
+                        32, 12, colors);
+}
+
 static void tray_claim_selection(Panel *p)
 {
     xcb_set_selection_owner(p->conn, IswWindow(p->shell),
@@ -248,6 +288,9 @@ static void tray_claim_selection(Panel *p)
         return;
     }
     free(owner);
+
+    /* Set _NET_SYSTEM_TRAY_COLORS so clients use our theme colors */
+    tray_set_colors(p);
 
     /* Announce to clients via MANAGER ClientMessage on root */
     xcb_client_message_event_t ev;

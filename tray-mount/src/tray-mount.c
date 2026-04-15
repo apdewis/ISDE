@@ -19,13 +19,22 @@
 
 static void load_tray_icon(TrayMount *tm)
 {
+    /* Resolve currentColor to the taskbar foreground from the theme */
+    const char *fg_hex = NULL;
+    char hex_buf[8];
+    const IsdeColorScheme *scheme = isde_theme_current();
+    if (scheme) {
+        snprintf(hex_buf, sizeof(hex_buf), "#%06X", scheme->taskbar.fg & 0xFFFFFF);
+        fg_hex = hex_buf;
+    }
+
     ISWSVGImage *svg = ISWSVGLoadFile(
-        "drive-removable-media.svg", "px", 96.0, NULL);
+        "drive-removable-media.svg", "px", 96.0, fg_hex);
     if (!svg) {
         /* Try absolute path as fallback */
         svg = ISWSVGLoadFile(
             "/usr/share/icons/isde-standard/devices/drive-removable-media.svg",
-            "px", 96.0, NULL);
+            "px", 96.0, fg_hex);
     }
     if (!svg) {
         fprintf(stderr, "isde-tray-mount: cannot load icon\n");
