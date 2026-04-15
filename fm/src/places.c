@@ -103,7 +103,7 @@ static void add_xdg_dir(FmPlacesData *pd, const char *xdg_name,
     }
 }
 
-static void build_places_list(FmPlacesData *pd)
+static void build_places_list(FmPlacesData *pd, FmApp *app)
 {
     places_free_entries(pd);
 
@@ -131,40 +131,49 @@ static void build_places_list(FmPlacesData *pd)
     places_add(pd, "Devices", NULL, NULL, 1);
     places_add(pd, "File System", "/", "drive-harddisk", 0);
 
-    /* Scan mounts for removable/user media */
+    /* Populate removable devices from mountd if available,
+     * otherwise fall back to scanning /proc/mounts. */
+    if (app->has_mountd) {
+        for (int i = 0; i < app->mountd_ndevices; i++) {
+            FmDeviceInfo *d = &app->mountd_devices[i];
+            const char *name = d->label[0] ? d->label : d->dev_path;
+            const char *path = d->is_mounted ? d->mount_point : NULL;
+            places_add(pd, name, path, "drive-removable-media", 0);
+        }
+    } else {
 #ifdef __FreeBSD__
-    {
-        struct statfs *mounts;
-        int n = getmntinfo(&mounts, MNT_NOWAIT);
-        for (int i = 0; i < n; i++) {
-            const char *dir = mounts[i].f_mntonname;
-            if (strncmp(dir, "/media/", 7) == 0 ||
-                (strncmp(dir, "/mnt/", 5) == 0 &&
-                 strlen(dir) > 5)) {
-                const char *name = strrchr(dir, '/');
-                name = name ? name + 1 : dir;
-                places_add(pd, name, dir, "drive-removable-media", 0);
+        {
+            struct statfs *mounts;
+            int n = getmntinfo(&mounts, MNT_NOWAIT);
+            for (int i = 0; i < n; i++) {
+                const char *dir = mounts[i].f_mntonname;
+                if (strncmp(dir, "/media/", 7) == 0 ||
+                    (strncmp(dir, "/mnt/", 5) == 0 &&
+                     strlen(dir) > 5)) {
+                    const char *name = strrchr(dir, '/');
+                    name = name ? name + 1 : dir;
+                    places_add(pd, name, dir, "drive-removable-media", 0);
+                }
             }
         }
-    }
 #else
-    FILE *fp_mnt = setmntent("/proc/mounts", "r");
-    if (fp_mnt) {
-        struct mntent *me;
-        while ((me = getmntent(fp_mnt))) {
-            /* Show /media and /mnt mounts, skip virtual filesystems */
-            if (strncmp(me->mnt_dir, "/media/", 7) == 0 ||
-                (strncmp(me->mnt_dir, "/mnt/", 5) == 0 &&
-                 strlen(me->mnt_dir) > 5)) {
-                /* Use last path component as label */
-                const char *name = strrchr(me->mnt_dir, '/');
-                name = name ? name + 1 : me->mnt_dir;
-                places_add(pd, name, me->mnt_dir, "drive-removable-media", 0);
+        FILE *fp_mnt = setmntent("/proc/mounts", "r");
+        if (fp_mnt) {
+            struct mntent *me;
+            while ((me = getmntent(fp_mnt))) {
+                if (strncmp(me->mnt_dir, "/media/", 7) == 0 ||
+                    (strncmp(me->mnt_dir, "/mnt/", 5) == 0 &&
+                     strlen(me->mnt_dir) > 5)) {
+                    const char *name = strrchr(me->mnt_dir, '/');
+                    name = name ? name + 1 : me->mnt_dir;
+                    places_add(pd, name, me->mnt_dir,
+                               "drive-removable-media", 0);
+                }
             }
+            endmntent(fp_mnt);
         }
-        endmntent(fp_mnt);
-    }
 #endif
+    }
 
     /* --- Bookmarks section --- */
     FILE *fp;
@@ -312,7 +321,7 @@ void places_init(Fm *fm)
     FmPlacesData *pd = calloc(1, sizeof(FmPlacesData));
     fm->places_data = pd;
 
-    build_places_list(pd);
+    build_places_list(pd, fm->app_state);
     build_sections(pd);
 
     /* Create sidebar viewport */
@@ -402,90 +411,73 @@ static void devices_update_list(PlaceSection *s, FmPlacesData *pd)
     }
 }
 
-void places_device_added(Fm *fm, const char *name, const char *path)
+void places_refresh_devices(Fm *fm)
 {
     FmPlacesData *pd = fm->places_data;
-    if (!pd) {
+    if (!pd)
         return;
-    }
     PlaceSection *s = devices_section(pd);
-    if (!s) {
+    if (!s)
         return;
+
+    /* Remove all existing device entries (keep "File System" at index 0) */
+    int keep = 1;  /* "File System" */
+    for (int i = keep; i < s->nitems; i++) {
+        int idx = s->start_idx + i;
+        free(pd->places[idx].label);
+        free(pd->places[idx].path);
+        free(pd->places[idx].icon_name);
+    }
+    int removed = s->nitems - keep;
+    if (removed > 0) {
+        int after = s->start_idx + s->nitems;
+        memmove(&pd->places[s->start_idx + keep],
+                &pd->places[after],
+                (pd->nplaces - after) * sizeof(PlaceEntry));
+        pd->nplaces -= removed;
+        s->nitems = keep;
+        for (int i = 2; i < pd->nsections; i++)
+            pd->sections[i].start_idx -= removed;
     }
 
-    /* Check for duplicate */
-    for (int i = 0; i < s->nitems; i++) {
-        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
-            return;
+    /* Re-add devices from mountd */
+    FmApp *app = fm->app_state;
+    for (int i = 0; i < app->mountd_ndevices; i++) {
+        FmDeviceInfo *d = &app->mountd_devices[i];
+        const char *name = d->label[0] ? d->label : d->dev_path;
+        const char *path = d->is_mounted ? d->mount_point : NULL;
+
+        int ins = s->start_idx + s->nitems;
+        if (pd->nplaces >= pd->places_cap) {
+            pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
+            pd->places = realloc(pd->places,
+                                 pd->places_cap * sizeof(PlaceEntry));
         }
-    }
+        memmove(&pd->places[ins + 1], &pd->places[ins],
+                (pd->nplaces - ins) * sizeof(PlaceEntry));
+        pd->nplaces++;
 
-    /* Insert new entry at end of Devices section */
-    int ins = s->start_idx + s->nitems;
-    if (pd->nplaces >= pd->places_cap) {
-        pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
-        pd->places = realloc(pd->places, pd->places_cap * sizeof(PlaceEntry));
-    }
-    /* Shift everything after insertion point */
-    memmove(&pd->places[ins + 1], &pd->places[ins],
-            (pd->nplaces - ins) * sizeof(PlaceEntry));
-    pd->nplaces++;
+        PlaceEntry *p = &pd->places[ins];
+        p->label = strdup(name);
+        p->path = path ? strdup(path) : NULL;
+        p->icon_name = strdup("drive-removable-media");
+        p->is_header = 0;
 
-    PlaceEntry *p = &pd->places[ins];
-    p->label = strdup(name);
-    p->path = strdup(path);
-    p->icon_name = strdup("drive-removable-media");
-    p->is_header = 0;
-
-    s->nitems++;
-    /* Bump start_idx for sections after Devices */
-    for (int i = 2; i < pd->nsections; i++) {
-        pd->sections[i].start_idx++;
+        s->nitems++;
+        for (int j = 2; j < pd->nsections; j++)
+            pd->sections[j].start_idx++;
     }
 
     devices_update_list(s, pd);
+
+    /* Re-register right-click handler (list widget may have been recreated) */
+    if (s->list) {
+        IswAddRawEventHandler(s->list, XCB_EVENT_MASK_BUTTON_PRESS, False,
+                              dev_list_ctx_handler, fm);
+    }
 }
 
-void places_device_removed(Fm *fm, const char *name)
-{
-    FmPlacesData *pd = fm->places_data;
-    if (!pd) {
-        return;
-    }
-    PlaceSection *s = devices_section(pd);
-    if (!s) {
-        return;
-    }
-
-    /* Find the entry */
-    int found = -1;
-    for (int i = 0; i < s->nitems; i++) {
-        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
-            found = s->start_idx + i;
-            break;
-        }
-    }
-    if (found < 0) {
-        return;
-    }
-
-    /* Free and remove */
-    free(pd->places[found].label);
-    free(pd->places[found].path);
-    free(pd->places[found].icon_name);
-    memmove(&pd->places[found], &pd->places[found + 1],
-            (pd->nplaces - found - 1) * sizeof(PlaceEntry));
-    pd->nplaces--;
-
-    s->nitems--;
-    for (int i = 2; i < pd->nsections; i++) {
-        pd->sections[i].start_idx--;
-    }
-
-    devices_update_list(s, pd);
-}
-
-/* ---------- device context menu (SimpleMenu) ---------- */
+/* ---------- device context menu ---------- */
 
 /* Client data for device context menu */
 #define DEV_CTX_MAX_ITEMS 8
@@ -536,29 +528,149 @@ static void dev_ctx_select_cb(Widget w, IswPointer cd, IswPointer call)
         if (dev_ctx_data.mount_point[0])
             fm_window_new(fm->app_state, dev_ctx_data.mount_point);
         break;
-    case DEV_ACT_MOUNT:
-        if (fm_mountd_mount(fm->app_state, dev_ctx_data.dev_path,
-                            result, sizeof(result)) == 0)
+    case DEV_ACT_MOUNT: {
+        FmApp *app = fm->app_state;
+        if (fm_mountd_mount(app, dev_ctx_data.dev_path,
+                            result, sizeof(result)) == 0) {
             fprintf(stderr, "isde-fm: mounted %s at %s\n",
                     dev_ctx_data.dev_path, result);
-        else
+            /* Update device array immediately */
+            FmDeviceInfo *d = fm_mountd_find_by_label(app,
+                                  dev_ctx_data.dev_path);
+            if (!d) {
+                for (int i = 0; i < app->mountd_ndevices; i++) {
+                    if (strcmp(app->mountd_devices[i].dev_path,
+                              dev_ctx_data.dev_path) == 0) {
+                        d = &app->mountd_devices[i];
+                        break;
+                    }
+                }
+            }
+            if (d) {
+                d->is_mounted = 1;
+                snprintf(d->mount_point, sizeof(d->mount_point),
+                         "%s", result);
+            }
+            for (int i = 0; i < app->nwindows; i++)
+                places_refresh_devices(app->windows[i]);
+        } else {
             fprintf(stderr, "isde-fm: mount failed: %s\n", result);
-        break;
-    case DEV_ACT_UNMOUNT:
-        if (fm_mountd_unmount(fm->app_state, dev_ctx_data.dev_path,
-                              result, sizeof(result)) == 0)
-            fprintf(stderr, "isde-fm: unmounted %s\n", dev_ctx_data.dev_path);
-        else
-            fprintf(stderr, "isde-fm: unmount failed: %s\n", result);
-        break;
-    case DEV_ACT_EJECT:
-        if (fm_mountd_eject(fm->app_state, dev_ctx_data.dev_path,
-                            result, sizeof(result)) == 0)
-            fprintf(stderr, "isde-fm: ejected %s\n", dev_ctx_data.dev_path);
-        else
-            fprintf(stderr, "isde-fm: eject failed: %s\n", result);
+        }
         break;
     }
+    case DEV_ACT_UNMOUNT: {
+        FmApp *app = fm->app_state;
+        if (fm_mountd_unmount(app, dev_ctx_data.dev_path,
+                              result, sizeof(result)) == 0) {
+            fprintf(stderr, "isde-fm: unmounted %s\n", dev_ctx_data.dev_path);
+            for (int i = 0; i < app->mountd_ndevices; i++) {
+                if (strcmp(app->mountd_devices[i].dev_path,
+                           dev_ctx_data.dev_path) == 0) {
+                    app->mountd_devices[i].is_mounted = 0;
+                    app->mountd_devices[i].mount_point[0] = '\0';
+                    break;
+                }
+            }
+            for (int i = 0; i < app->nwindows; i++)
+                places_refresh_devices(app->windows[i]);
+        } else {
+            fprintf(stderr, "isde-fm: unmount failed: %s\n", result);
+        }
+        break;
+    }
+    case DEV_ACT_EJECT: {
+        FmApp *app = fm->app_state;
+        if (fm_mountd_eject(app, dev_ctx_data.dev_path,
+                            result, sizeof(result)) == 0) {
+            fprintf(stderr, "isde-fm: ejected %s\n", dev_ctx_data.dev_path);
+            for (int i = 0; i < app->mountd_ndevices; i++) {
+                if (strcmp(app->mountd_devices[i].dev_path,
+                           dev_ctx_data.dev_path) == 0) {
+                    app->mountd_devices[i].is_mounted = 0;
+                    app->mountd_devices[i].mount_point[0] = '\0';
+                    break;
+                }
+            }
+            for (int i = 0; i < app->nwindows; i++)
+                places_refresh_devices(app->windows[i]);
+        } else {
+            fprintf(stderr, "isde-fm: eject failed: %s\n", result);
+        }
+        break;
+    }
+    }
+}
+
+/* ---------- inotify fallback: add/remove individual devices ---------- */
+
+void places_device_added(Fm *fm, const char *name, const char *path)
+{
+    FmPlacesData *pd = fm->places_data;
+    if (!pd)
+        return;
+    PlaceSection *s = devices_section(pd);
+    if (!s)
+        return;
+
+    /* Check for duplicate */
+    for (int i = 0; i < s->nitems; i++) {
+        if (strcmp(pd->places[s->start_idx + i].label, name) == 0)
+            return;
+    }
+
+    int ins = s->start_idx + s->nitems;
+    if (pd->nplaces >= pd->places_cap) {
+        pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
+        pd->places = realloc(pd->places, pd->places_cap * sizeof(PlaceEntry));
+    }
+    memmove(&pd->places[ins + 1], &pd->places[ins],
+            (pd->nplaces - ins) * sizeof(PlaceEntry));
+    pd->nplaces++;
+
+    PlaceEntry *p = &pd->places[ins];
+    p->label = strdup(name);
+    p->path = path ? strdup(path) : NULL;
+    p->icon_name = strdup("drive-removable-media");
+    p->is_header = 0;
+
+    s->nitems++;
+    for (int i = 2; i < pd->nsections; i++)
+        pd->sections[i].start_idx++;
+
+    devices_update_list(s, pd);
+}
+
+void places_device_removed(Fm *fm, const char *name)
+{
+    FmPlacesData *pd = fm->places_data;
+    if (!pd)
+        return;
+    PlaceSection *s = devices_section(pd);
+    if (!s)
+        return;
+
+    int found = -1;
+    for (int i = 0; i < s->nitems; i++) {
+        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
+            found = s->start_idx + i;
+            break;
+        }
+    }
+    if (found < 0)
+        return;
+
+    free(pd->places[found].label);
+    free(pd->places[found].path);
+    free(pd->places[found].icon_name);
+    memmove(&pd->places[found], &pd->places[found + 1],
+            (pd->nplaces - found - 1) * sizeof(PlaceEntry));
+    pd->nplaces--;
+
+    s->nitems--;
+    for (int i = 2; i < pd->nsections; i++)
+        pd->sections[i].start_idx--;
+
+    devices_update_list(s, pd);
 }
 
 /* ---------- build and show device context menu ---------- */

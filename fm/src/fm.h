@@ -339,6 +339,7 @@ void  navbar_update(Fm *fm);
 
 /* ---------- places.c ---------- */
 void  places_init(Fm *fm);
+void  places_refresh_devices(Fm *fm);
 void  places_device_added(Fm *fm, const char *name, const char *path);
 void  places_device_removed(Fm *fm, const char *name);
 void  places_cleanup(Fm *fm);

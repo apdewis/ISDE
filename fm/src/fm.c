@@ -1025,6 +1025,10 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
+    /* Connect to mountd before creating windows so the sidebar
+     * can show all devices (mounted and unmounted). */
+    fm_mountd_init(app);
+
     /* Open initial window */
     Fm *first = fm_window_new(app, app->initial_path);
     if (!first) {
@@ -1049,11 +1053,11 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     }
 
 #ifdef __linux__
-    mount_monitor_init(app);
+    /* Only use inotify mount monitor when mountd is not available —
+     * mountd signals handle device changes when it's running. */
+    if (!app->has_mountd)
+        mount_monitor_init(app);
 #endif
-
-    /* Try connecting to mountd; not fatal if unavailable */
-    fm_mountd_init(app);
 
     app->running = 1;
     return 0;

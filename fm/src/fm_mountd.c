@@ -45,10 +45,8 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                 snprintf(d->label, sizeof(d->label), "%s", label);
                 snprintf(d->fs_type, sizeof(d->fs_type), "%s", fs_type);
             }
-            /* Update all windows' sidebars */
-            for (int i = 0; i < app->nwindows; i++) {
-                places_device_added(app->windows[i], label, "");
-            }
+            for (int i = 0; i < app->nwindows; i++)
+                places_refresh_devices(app->windows[i]);
             fprintf(stderr, "isde-fm: mountd: device added: %s (%s)\n",
                     dev_path, label);
         }
@@ -57,19 +55,27 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
         if (dbus_message_get_args(msg, NULL,
                                    DBUS_TYPE_STRING, &dev_path,
                                    DBUS_TYPE_INVALID)) {
-            /* Find and remove from our device array */
-            const char *removed_label = NULL;
+            /* Save mount point before removing, for navigate-away check */
+            char old_mount[FM_MOUNT_POINT_LEN] = {0};
             for (int i = 0; i < app->mountd_ndevices; i++) {
                 if (strcmp(app->mountd_devices[i].dev_path, dev_path) == 0) {
-                    removed_label = app->mountd_devices[i].label;
-                    /* Update sidebars before removing */
-                    for (int w = 0; w < app->nwindows; w++) {
-                        places_device_removed(app->windows[w], removed_label);
-                    }
+                    if (app->mountd_devices[i].is_mounted)
+                        snprintf(old_mount, sizeof(old_mount), "%s",
+                                 app->mountd_devices[i].mount_point);
                     app->mountd_ndevices--;
                     if (i < app->mountd_ndevices)
                         app->mountd_devices[i] = app->mountd_devices[app->mountd_ndevices];
                     break;
+                }
+            }
+            for (int i = 0; i < app->nwindows; i++) {
+                Fm *fm = app->windows[i];
+                places_refresh_devices(fm);
+                /* Navigate away if viewing the removed mount */
+                if (old_mount[0] &&
+                    strncmp(fm->cwd, old_mount, strlen(old_mount)) == 0) {
+                    const char *home = getenv("HOME");
+                    fm_navigate(fm, home ? home : "/");
                 }
             }
             fprintf(stderr, "isde-fm: mountd: device removed: %s\n", dev_path);
@@ -89,17 +95,31 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     break;
                 }
             }
+            for (int i = 0; i < app->nwindows; i++)
+                places_refresh_devices(app->windows[i]);
         }
     } else if (strcmp(member, "DeviceUnmounted") == 0) {
         const char *dev_path = NULL;
         if (dbus_message_get_args(msg, NULL,
                                    DBUS_TYPE_STRING, &dev_path,
                                    DBUS_TYPE_INVALID)) {
+            char old_mount[FM_MOUNT_POINT_LEN] = {0};
             for (int i = 0; i < app->mountd_ndevices; i++) {
                 if (strcmp(app->mountd_devices[i].dev_path, dev_path) == 0) {
+                    snprintf(old_mount, sizeof(old_mount), "%s",
+                             app->mountd_devices[i].mount_point);
                     app->mountd_devices[i].is_mounted = 0;
                     app->mountd_devices[i].mount_point[0] = '\0';
                     break;
+                }
+            }
+            for (int i = 0; i < app->nwindows; i++) {
+                Fm *fm = app->windows[i];
+                places_refresh_devices(fm);
+                if (old_mount[0] &&
+                    strncmp(fm->cwd, old_mount, strlen(old_mount)) == 0) {
+                    const char *home = getenv("HOME");
+                    fm_navigate(fm, home ? home : "/");
                 }
             }
         }
@@ -115,7 +135,11 @@ static void mountd_dbus_cb(IswPointer client_data, int *fd, IswInputId *id)
     (void)fd; (void)id;
     FmApp *app = (FmApp *)client_data;
     if (app->mountd_bus) {
-        dbus_connection_read_write_dispatch(app->mountd_bus, 0);
+        dbus_connection_read_write(app->mountd_bus, 0);
+        while (dbus_connection_dispatch(app->mountd_bus) ==
+               DBUS_DISPATCH_DATA_REMAINS) {
+            /* drain all queued messages */
+        }
     }
 }
 
