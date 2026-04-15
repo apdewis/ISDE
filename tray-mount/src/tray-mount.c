@@ -172,10 +172,6 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
     /* Initialize popup menu */
     tm_menu_init(tm);
 
-    /* Attach menu to tray icon (shown on right-click by IswTrayIcon) */
-    if (tm->tray_icon) {
-        IswTrayIconSetMenu(tm->tray_icon, tm->menu_shell);
-    }
 
     /* Initialize D-Bus */
     if (tm_dbus_init(tm) != 0) {
