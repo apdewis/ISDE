@@ -7,6 +7,8 @@
  */
 #include "tray-mount.h"
 
+#include <ISW/ISWRender.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +32,19 @@ static void load_tray_icon(TrayMount *tm)
         return;
     }
 
+    /* Rasterize at the icon window's physical size for crisp rendering */
+    xcb_window_t win = IswTrayIconGetWindow(tm->tray_icon);
+    xcb_connection_t *conn = IswDisplay(tm->toplevel);
     unsigned int size = 22;
+
+    xcb_get_geometry_cookie_t gc = xcb_get_geometry(conn, win);
+    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(conn, gc, NULL);
+    if (geo) {
+        if (geo->width > 0)
+            size = geo->width;
+        free(geo);
+    }
+
     unsigned char *rgba = ISWSVGRasterize(svg, size, size);
     if (rgba) {
         IswTrayIconSetRGBA(tm->tray_icon, rgba, size, size);
@@ -38,6 +52,13 @@ static void load_tray_icon(TrayMount *tm)
     }
 
     ISWSVGDestroy(svg);
+}
+
+static void deferred_icon_load(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    TrayMount *tm = (TrayMount *)client_data;
+    load_tray_icon(tm);
 }
 
 /* ---------- click callback ---------- */
@@ -131,10 +152,12 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
          * without a visible icon — D-Bus signals will still work */
     }
 
-    /* Set the icon image */
+    /* Load icon after a short delay so the panel has time to dock
+     * and resize the icon window — we need the final physical size
+     * to rasterize the SVG crisply. */
     if (tm->tray_icon) {
-        load_tray_icon(tm);
         IswTrayIconAddClickCallback(tm->tray_icon, on_icon_click, tm);
+        IswAppAddTimeOut(tm->app, 100, deferred_icon_load, tm);
     }
 
     /* Initialize popup menu */
