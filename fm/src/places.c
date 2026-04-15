@@ -364,6 +364,114 @@ void places_init(Fm *fm)
     }
 }
 
+/* Find the Devices section (index 1) */
+static PlaceSection *devices_section(FmPlacesData *pd)
+{
+    return (pd->nsections > 1) ? &pd->sections[1] : NULL;
+}
+
+static void devices_update_list(PlaceSection *s, FmPlacesData *pd)
+{
+    free(s->labels);
+    s->labels = calloc(s->nitems, sizeof(String));
+    for (int j = 0; j < s->nitems; j++) {
+        s->labels[j] = pd->places[s->start_idx + j].label;
+    }
+    fprintf(stderr, "isde-fm: devices_update_list nitems=%d list=%p\n",
+            s->nitems, (void *)s->list);
+    for (int k = 0; k < s->nitems; k++) {
+        fprintf(stderr, "  [%d] %s\n", k, s->labels[k]);
+    }
+    if (s->list) {
+        IswUnmanageChild(s->list);
+        IswListChange(s->list, s->labels, s->nitems, 0, True);
+        IswManageChild(s->list);
+    }
+}
+
+void places_device_added(Fm *fm, const char *name, const char *path)
+{
+    FmPlacesData *pd = fm->places_data;
+    if (!pd) {
+        return;
+    }
+    PlaceSection *s = devices_section(pd);
+    if (!s) {
+        return;
+    }
+
+    /* Check for duplicate */
+    for (int i = 0; i < s->nitems; i++) {
+        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
+            return;
+        }
+    }
+
+    /* Insert new entry at end of Devices section */
+    int ins = s->start_idx + s->nitems;
+    if (pd->nplaces >= pd->places_cap) {
+        pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
+        pd->places = realloc(pd->places, pd->places_cap * sizeof(PlaceEntry));
+    }
+    /* Shift everything after insertion point */
+    memmove(&pd->places[ins + 1], &pd->places[ins],
+            (pd->nplaces - ins) * sizeof(PlaceEntry));
+    pd->nplaces++;
+
+    PlaceEntry *p = &pd->places[ins];
+    p->label = strdup(name);
+    p->path = strdup(path);
+    p->icon_name = strdup("drive-removable-media");
+    p->is_header = 0;
+
+    s->nitems++;
+    /* Bump start_idx for sections after Devices */
+    for (int i = 2; i < pd->nsections; i++) {
+        pd->sections[i].start_idx++;
+    }
+
+    devices_update_list(s, pd);
+}
+
+void places_device_removed(Fm *fm, const char *name)
+{
+    FmPlacesData *pd = fm->places_data;
+    if (!pd) {
+        return;
+    }
+    PlaceSection *s = devices_section(pd);
+    if (!s) {
+        return;
+    }
+
+    /* Find the entry */
+    int found = -1;
+    for (int i = 0; i < s->nitems; i++) {
+        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
+            found = s->start_idx + i;
+            break;
+        }
+    }
+    if (found < 0) {
+        return;
+    }
+
+    /* Free and remove */
+    free(pd->places[found].label);
+    free(pd->places[found].path);
+    free(pd->places[found].icon_name);
+    memmove(&pd->places[found], &pd->places[found + 1],
+            (pd->nplaces - found - 1) * sizeof(PlaceEntry));
+    pd->nplaces--;
+
+    s->nitems--;
+    for (int i = 2; i < pd->nsections; i++) {
+        pd->sections[i].start_idx--;
+    }
+
+    devices_update_list(s, pd);
+}
+
 void places_cleanup(Fm *fm)
 {
     FmPlacesData *pd = fm->places_data;

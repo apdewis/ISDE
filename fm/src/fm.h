@@ -162,6 +162,12 @@ typedef struct FmApp {
     IswInputId       notify_input_id;
 
     char          *initial_path;  /* from argv, used by fm_app_init */
+
+    /* Mount monitor (inotify on /proc/mounts) */
+    int            mount_inotify_fd;
+    int            mount_wd;
+    IswInputId      mount_input_id;
+
     int            running;
 } FmApp;
 
@@ -322,6 +328,8 @@ void  navbar_update(Fm *fm);
 
 /* ---------- places.c ---------- */
 void  places_init(Fm *fm);
+void  places_device_added(Fm *fm, const char *name, const char *path);
+void  places_device_removed(Fm *fm, const char *name);
 void  places_cleanup(Fm *fm);
 
 /* ---------- icons.c ---------- */
