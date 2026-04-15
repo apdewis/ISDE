@@ -149,6 +149,7 @@ typedef struct Panel {
     xcb_atom_t         atom_wm_name;
 
     /* System tray */
+    Widget             tray_area;      /* Vertical FlexBox: spacer + tray_box + spacer */
     Widget             tray_box;       /* Box widget for tray icons */
     xcb_window_t      *tray_icons;     /* Embedded icon windows */
     int                ntray;

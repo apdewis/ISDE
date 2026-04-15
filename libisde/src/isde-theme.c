@@ -858,7 +858,10 @@ char **isde_theme_build_resources(void)
     /* Panel / Taskbar */
     res[i++] = fmt_color("*panelFlex.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelBox.background", s->taskbar.bg);
+    res[i++] = fmt_color("*trayArea.background", s->taskbar.bg);
+    res[i++] = fmt_color("*traySpcTop.background", s->taskbar.bg);
     res[i++] = fmt_color("*trayBox.background", s->taskbar.bg);
+    res[i++] = fmt_color("*traySpcBot.background", s->taskbar.bg);
     res[i++] = fmt_color("*clockBox.background", s->taskbar.bg);
     res[i++] = fmt_color("*startBtn.background", s->taskbar_button.bg);
     res[i++] = fmt_color("*startBtn.foreground", s->taskbar_button.fg);
