@@ -40,6 +40,9 @@
 #include "isde/isde-desktop.h"
 #include "isde/isde-mime.h"
 
+#include <dbus/dbus.h>
+#include "fm_mountd.h"
+
 /* ---------- Constants ---------- */
 #define FM_ICON_SIZE     48
 #define FM_HISTORY_MAX   64
@@ -168,6 +171,13 @@ typedef struct FmApp {
     int            mount_wd;
     IswInputId      mount_input_id;
 
+    /* mountd D-Bus client (system bus) */
+    DBusConnection *mountd_bus;
+    IswInputId      mountd_input_id;
+    FmDeviceInfo    mountd_devices[FM_MAX_DEVICES];
+    int             mountd_ndevices;
+    int             has_mountd;
+
     int            running;
 } FmApp;
 
@@ -192,6 +202,7 @@ typedef struct Fm {
     Widget         places_vp;
     Widget         places_box;
     FmPlacesData  *places_data;
+    Widget         dev_ctx_shell;   /* device context menu (SimpleMenu) */
 
     /* Main content */
     Widget         vbox;         /* outer FlexBox (vertical) */
@@ -331,6 +342,7 @@ void  places_init(Fm *fm);
 void  places_device_added(Fm *fm, const char *name, const char *path);
 void  places_device_removed(Fm *fm, const char *name);
 void  places_cleanup(Fm *fm);
+void  places_dismiss_device_menu(Fm *fm);
 
 /* ---------- icons.c ---------- */
 void        icons_init(FmApp *app);

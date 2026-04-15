@@ -6,6 +6,8 @@
  * places.c — sidebar with XDG user dirs, filesystem locations, bookmarks
  */
 #include "fm.h"
+#include "fm_mountd.h"
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,6 +303,10 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
     }
 }
 
+/* Forward declaration */
+static void dev_list_ctx_handler(Widget w, IswPointer client_data,
+                                 xcb_generic_event_t *event, Boolean *cont);
+
 void places_init(Fm *fm)
 {
     FmPlacesData *pd = calloc(1, sizeof(FmPlacesData));
@@ -361,6 +367,13 @@ void places_init(Fm *fm)
                                              fm->places_box, args, n);
             IswAddCallback(s->list, IswNcallback, place_list_cb, fm);
         }
+    }
+
+    /* Right-click handler on the Devices section list */
+    PlaceSection *devs = (pd->nsections > 1) ? &pd->sections[1] : NULL;
+    if (devs && devs->list) {
+        IswAddRawEventHandler(devs->list, XCB_EVENT_MASK_BUTTON_PRESS, False,
+                              dev_list_ctx_handler, fm);
     }
 }
 
@@ -472,8 +485,219 @@ void places_device_removed(Fm *fm, const char *name)
     devices_update_list(s, pd);
 }
 
+/* ---------- device context menu (SimpleMenu) ---------- */
+
+/* Client data for device context menu */
+#define DEV_CTX_MAX_ITEMS 8
+typedef struct {
+    Fm     *fm;
+    char    dev_path[FM_DEV_PATH_LEN];
+    char    mount_point[FM_MOUNT_POINT_LEN];
+    String  labels[DEV_CTX_MAX_ITEMS];
+    int     actions[DEV_CTX_MAX_ITEMS];
+    int     nlabels;
+} DevCtxData;
+
+static DevCtxData dev_ctx_data;
+
+void places_dismiss_device_menu(Fm *fm)
+{
+    if (fm->dev_ctx_shell) {
+        IswPopdown(fm->dev_ctx_shell);
+        IswDestroyWidget(fm->dev_ctx_shell);
+        fm->dev_ctx_shell = NULL;
+    }
+}
+
+/* ---------- menu selection callback ---------- */
+
+enum {
+    DEV_ACT_OPEN_NEW_WINDOW,
+    DEV_ACT_MOUNT,
+    DEV_ACT_UNMOUNT,
+    DEV_ACT_EJECT,
+};
+
+static void dev_ctx_select_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    if (ret->list_index == XAW_LIST_NONE)
+        return;
+
+    int action = dev_ctx_data.actions[ret->list_index];
+    Fm *fm = dev_ctx_data.fm;
+    char result[256];
+
+    places_dismiss_device_menu(fm);
+
+    switch (action) {
+    case DEV_ACT_OPEN_NEW_WINDOW:
+        if (dev_ctx_data.mount_point[0])
+            fm_window_new(fm->app_state, dev_ctx_data.mount_point);
+        break;
+    case DEV_ACT_MOUNT:
+        if (fm_mountd_mount(fm->app_state, dev_ctx_data.dev_path,
+                            result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-fm: mounted %s at %s\n",
+                    dev_ctx_data.dev_path, result);
+        else
+            fprintf(stderr, "isde-fm: mount failed: %s\n", result);
+        break;
+    case DEV_ACT_UNMOUNT:
+        if (fm_mountd_unmount(fm->app_state, dev_ctx_data.dev_path,
+                              result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-fm: unmounted %s\n", dev_ctx_data.dev_path);
+        else
+            fprintf(stderr, "isde-fm: unmount failed: %s\n", result);
+        break;
+    case DEV_ACT_EJECT:
+        if (fm_mountd_eject(fm->app_state, dev_ctx_data.dev_path,
+                            result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-fm: ejected %s\n", dev_ctx_data.dev_path);
+        else
+            fprintf(stderr, "isde-fm: eject failed: %s\n", result);
+        break;
+    }
+}
+
+/* ---------- build and show device context menu ---------- */
+
+static void dev_ctx_show(Fm *fm, int places_idx,
+                         Position root_x, Position root_y)
+{
+    places_dismiss_device_menu(fm);
+
+    FmPlacesData *pd = fm->places_data;
+    if (!pd || places_idx < 0 || places_idx >= pd->nplaces)
+        return;
+
+    const char *label = pd->places[places_idx].label;
+    const char *path = pd->places[places_idx].path;
+    if (strcmp(label, "File System") == 0)
+        return;
+
+    FmApp *app = fm->app_state;
+    FmDeviceInfo *dev = NULL;
+    if (app->has_mountd) {
+        if (path)
+            dev = fm_mountd_find_by_mount_point(app, path);
+        if (!dev)
+            dev = fm_mountd_find_by_label(app, label);
+    }
+
+    /* Store context */
+    dev_ctx_data.fm = fm;
+    dev_ctx_data.nlabels = 0;
+    if (dev) {
+        snprintf(dev_ctx_data.dev_path, sizeof(dev_ctx_data.dev_path),
+                 "%s", dev->dev_path);
+        snprintf(dev_ctx_data.mount_point, sizeof(dev_ctx_data.mount_point),
+                 "%s", dev->mount_point);
+    } else {
+        dev_ctx_data.dev_path[0] = '\0';
+        snprintf(dev_ctx_data.mount_point, sizeof(dev_ctx_data.mount_point),
+                 "%s", path ? path : "");
+    }
+
+    int is_mounted = dev ? dev->is_mounted : (path && path[0]);
+    int pos = 0;
+
+    if (is_mounted) {
+        dev_ctx_data.labels[pos] = "Open in New Window";
+        dev_ctx_data.actions[pos] = DEV_ACT_OPEN_NEW_WINDOW;
+        pos++;
+    }
+
+    if (dev) {
+        if (is_mounted) {
+            dev_ctx_data.labels[pos] = "---";
+            dev_ctx_data.actions[pos] = -1;
+            pos++;
+            dev_ctx_data.labels[pos] = "Unmount";
+            dev_ctx_data.actions[pos] = DEV_ACT_UNMOUNT;
+            pos++;
+        } else {
+            dev_ctx_data.labels[pos] = "Mount";
+            dev_ctx_data.actions[pos] = DEV_ACT_MOUNT;
+            pos++;
+        }
+        if (dev->is_ejectable) {
+            dev_ctx_data.labels[pos] = "Eject";
+            dev_ctx_data.actions[pos] = DEV_ACT_EJECT;
+            pos++;
+        }
+    }
+
+    if (pos == 0)
+        return;
+
+    dev_ctx_data.nlabels = pos;
+
+    Arg args[20];
+    Cardinal n = 0;
+    IswSetArg(args[n], IswNx, root_x);                 n++;
+    IswSetArg(args[n], IswNy, root_y);                  n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);     n++;
+    IswSetArg(args[n], IswNborderWidth, 1);             n++;
+    fm->dev_ctx_shell = IswCreatePopupShell("devCtxMenu",
+                            overrideShellWidgetClass, fm->toplevel, args, n);
+
+    n = 0;
+    IswSetArg(args[n], IswNlist, dev_ctx_data.labels);  n++;
+    IswSetArg(args[n], IswNnumberStrings, pos);         n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);          n++;
+    IswSetArg(args[n], IswNforceColumns, True);         n++;
+    IswSetArg(args[n], IswNverticalList, True);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);             n++;
+    IswSetArg(args[n], IswNcursor, None);               n++;
+    Widget list = IswCreateManagedWidget("devCtxList", listWidgetClass,
+                                         fm->dev_ctx_shell, args, n);
+    IswAddCallback(list, IswNcallback, dev_ctx_select_cb, NULL);
+
+    static char translations[] =
+        "<EnterWindow>: Set()\n"
+        "<LeaveWindow>: Unset()\n"
+        "<Motion>:      Set()\n"
+        "<BtnDown>:     Set() Notify()\n"
+        "<BtnUp>:       Notify()";
+    IswOverrideTranslations(list, IswParseTranslationTable(translations));
+
+    IswPopup(fm->dev_ctx_shell, IswGrabNone);
+}
+
+/* ---------- right-click handler for device list ---------- */
+
+static void dev_list_ctx_handler(Widget w, IswPointer client_data,
+                                 xcb_generic_event_t *event, Boolean *cont)
+{
+    (void)cont;
+    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+        return;
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    if (ev->detail != 3)
+        return;
+
+    Fm *fm = (Fm *)client_data;
+    FmPlacesData *pd = fm->places_data;
+    if (!pd)
+        return;
+
+    PlaceSection *s = devices_section(pd);
+    if (!s || s->list != w || s->nitems <= 0)
+        return;
+
+    int row = ev->event_y * s->nitems / (int)w->core.height;
+    if (row < 0) row = 0;
+    if (row >= s->nitems) row = s->nitems - 1;
+
+    int idx = s->start_idx + row;
+    dev_ctx_show(fm, idx, ev->root_x, ev->root_y);
+}
+
 void places_cleanup(Fm *fm)
 {
+    places_dismiss_device_menu(fm);
     FmPlacesData *pd = fm->places_data;
     if (!pd) {
         return;

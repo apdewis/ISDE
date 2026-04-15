@@ -255,6 +255,7 @@ void fm_dismiss_context(Fm *fm)
         fm->ctx_list = NULL;
     }
     ctx_free_dynamic(fm);
+    places_dismiss_device_menu(fm);
 }
 
 static void ctx_select_cb(Widget w, IswPointer client_data,
@@ -1051,6 +1052,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     mount_monitor_init(app);
 #endif
 
+    /* Try connecting to mountd; not fatal if unavailable */
+    fm_mountd_init(app);
+
     app->running = 1;
     return 0;
 }
@@ -1182,6 +1186,7 @@ void fm_app_cleanup(FmApp *app)
     }
     free(app->windows);
 
+    fm_mountd_cleanup(app);
 #ifdef __linux__
     mount_monitor_cleanup(app);
 #endif
