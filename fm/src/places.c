@@ -521,7 +521,10 @@ static void dev_ctx_select_cb(Widget w, IswPointer cd, IswPointer call)
     Fm *fm = dev_ctx_data.fm;
     char result[256];
 
-    places_dismiss_device_menu(fm);
+    /* Popdown only — don't destroy the shell while inside its callback.
+     * fm_dismiss_context will destroy it on next interaction. */
+    if (fm->dev_ctx_shell)
+        IswPopdown(fm->dev_ctx_shell);
 
     switch (action) {
     case DEV_ACT_OPEN_NEW_WINDOW:
