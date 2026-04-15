@@ -73,6 +73,10 @@ Required system libraries:
 - **Config reload**: settings manager writes XDG config files; other components re-read on `SIGHUP` or via inotify.
 - **Session autostart**: `@`-prefixed entries in the autostart file are respawned on crash (matching LXDE's lxsession convention).
 
+## ISW Layout Guide
+
+See [ISW_LAYOUT.md](ISW_LAYOUT.md) for layout container selection (Box vs Form vs FlexBox), constraint resources, dynamic resizing rules, and critical gotchas. Follow it when creating or modifying any widget layout.
+
 ## ISW Coding Rules
 
 - **Arg arrays**: Always declare `Arg args[20]` or larger. Never size Arg arrays to the exact count — resources get added over time and undersized arrays cause stack smashing. 20 is a safe default.
