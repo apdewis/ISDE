@@ -164,10 +164,13 @@ void tm_menu_show(TrayMount *tm)
         for (int i = 0; i < tm->ndevices; i++) {
             DeviceInfo *d = &tm->devices[i];
 
-            /* Device header label: "LABEL (dev)" */
+            /* Device header: prefer label, then vendor/model, then dev_path */
             char label[384];
             if (d->label[0]) {
                 snprintf(label, sizeof(label), "%s (%s)", d->label,
+                         d->dev_path);
+            } else if (d->vendor[0]) {
+                snprintf(label, sizeof(label), "%s (%s)", d->vendor,
                          d->dev_path);
             } else {
                 snprintf(label, sizeof(label), "%s", d->dev_path);

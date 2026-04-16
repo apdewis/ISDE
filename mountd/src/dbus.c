@@ -24,7 +24,7 @@ static const char *introspect_xml =
     "<node>\n"
     "  <interface name=\"" MOUNTD_DBUS_INTERFACE "\">\n"
     "    <method name=\"ListDevices\">\n"
-    "      <arg name=\"devices\" type=\"a(ssssbb)\" direction=\"out\"/>\n"
+    "      <arg name=\"devices\" type=\"a(sssssbb)\" direction=\"out\"/>\n"
     "    </method>\n"
     "    <method name=\"Mount\">\n"
     "      <arg name=\"device_path\" type=\"s\" direction=\"in\"/>\n"
@@ -87,7 +87,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
     DBusMessageIter iter, array;
 
     dbus_message_iter_init_append(reply, &iter);
-    dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(ssssbb)",
+    dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(sssssbb)",
                                      &array);
 
     for (int i = 0; i < md->ndevices; i++) {
@@ -97,6 +97,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
 
         const char *dev_path = d->dev_path;
         const char *label    = d->label;
+        const char *vendor   = d->vendor;
         const char *fs_type  = d->fs_type;
         const char *mp       = d->mount_point;
         dbus_bool_t mounted  = d->is_mounted;
@@ -104,6 +105,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
 
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &dev_path);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &label);
+        dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &vendor);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &fs_type);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &mp);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_BOOLEAN, &mounted);

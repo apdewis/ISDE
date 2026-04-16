@@ -30,6 +30,7 @@
 
 #define DEV_PATH_LEN    256
 #define LABEL_LEN       256
+#define VENDOR_LEN      256
 #define FS_TYPE_LEN     64
 #define MOUNT_POINT_LEN 512
 #define MAX_DEVICES     64
@@ -37,6 +38,7 @@
 typedef struct DeviceInfo {
     char    dev_path[DEV_PATH_LEN];
     char    label[LABEL_LEN];
+    char    vendor[VENDOR_LEN];
     char    fs_type[FS_TYPE_LEN];
     char    mount_point[MOUNT_POINT_LEN];
     int     is_mounted;

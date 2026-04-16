@@ -18,8 +18,8 @@ Device *mountd_find_device(MountDaemon *md, const char *dev_path)
 }
 
 Device *mountd_add_device(MountDaemon *md, const char *dev_path,
-                          const char *label, const char *fs_type,
-                          int ejectable)
+                          const char *label, const char *vendor,
+                          const char *fs_type, int ejectable)
 {
     if (mountd_find_device(md, dev_path)) {
         return NULL;  /* already tracked */
@@ -33,7 +33,9 @@ Device *mountd_add_device(MountDaemon *md, const char *dev_path,
     memset(d, 0, sizeof(*d));
     snprintf(d->dev_path, sizeof(d->dev_path), "%s", dev_path);
     snprintf(d->label, sizeof(d->label), "%s",
-             (label && label[0]) ? label : dev_path);
+             (label && label[0]) ? label : "");
+    snprintf(d->vendor, sizeof(d->vendor), "%s",
+             (vendor && vendor[0]) ? vendor : "");
     snprintf(d->fs_type, sizeof(d->fs_type), "%s",
              fs_type ? fs_type : "");
     d->is_ejectable = ejectable;

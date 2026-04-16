@@ -21,6 +21,7 @@
 #define MAX_DEVICES     64
 #define DEV_PATH_LEN    256
 #define LABEL_LEN       256
+#define VENDOR_LEN      256
 #define FS_TYPE_LEN     64
 #define MOUNT_POINT_LEN 512
 
@@ -36,6 +37,7 @@ static const char *const allowed_fs_types[] = {
 typedef struct Device {
     char    dev_path[DEV_PATH_LEN];
     char    label[LABEL_LEN];
+    char    vendor[VENDOR_LEN];
     char    fs_type[FS_TYPE_LEN];
     char    mount_point[MOUNT_POINT_LEN];
     int     is_mounted;
@@ -87,8 +89,8 @@ void mountd_dbus_emit_device_unmounted(MountDaemon *md, const char *dev_path);
 /* ---------- devices.c ---------- */
 Device *mountd_find_device(MountDaemon *md, const char *dev_path);
 Device *mountd_add_device(MountDaemon *md, const char *dev_path,
-                          const char *label, const char *fs_type,
-                          int ejectable);
+                          const char *label, const char *vendor,
+                          const char *fs_type, int ejectable);
 void    mountd_remove_device(MountDaemon *md, const char *dev_path);
 void    mountd_refresh_mount_state(MountDaemon *md);
 

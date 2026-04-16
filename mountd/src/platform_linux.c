@@ -74,6 +74,27 @@ static const char *get_fs_type(struct udev_device *dev)
     return udev_device_get_property_value(dev, "ID_FS_TYPE");
 }
 
+static void get_vendor_model(struct udev_device *dev, char *buf, size_t len)
+{
+    const char *vendor = udev_device_get_property_value(dev, "ID_VENDOR");
+    const char *model  = udev_device_get_property_value(dev, "ID_MODEL");
+
+    if (vendor && vendor[0] && model && model[0]) {
+        snprintf(buf, len, "%s %s", vendor, model);
+    } else if (vendor && vendor[0]) {
+        snprintf(buf, len, "%s", vendor);
+    } else if (model && model[0]) {
+        snprintf(buf, len, "%s", model);
+    } else {
+        buf[0] = '\0';
+    }
+
+    /* udev encodes spaces as underscores in these fields */
+    for (char *p = buf; *p; p++) {
+        if (*p == '_') *p = ' ';
+    }
+}
+
 /* ---------- enumeration ---------- */
 
 static void linux_enumerate_devices(MountDaemon *md)
@@ -102,10 +123,12 @@ static void linux_enumerate_devices(MountDaemon *md)
             const char *devnode = udev_device_get_devnode(dev);
             const char *label   = get_label(dev);
             const char *fs_type = get_fs_type(dev);
+            char vendor[VENDOR_LEN];
+            get_vendor_model(dev, vendor, sizeof(vendor));
 
             if (devnode) {
                 Device *d = mountd_add_device(md, devnode,
-                                              label, fs_type,
+                                              label, vendor, fs_type,
                                               is_ejectable(dev));
                 /* If fs_type was unknown from udev, it stays empty */
                 (void)d;
@@ -181,9 +204,11 @@ static void linux_monitor_dispatch(MountDaemon *md)
         if (is_removable(dev)) {
             const char *label   = get_label(dev);
             const char *fs_type = get_fs_type(dev);
+            char vendor[VENDOR_LEN];
+            get_vendor_model(dev, vendor, sizeof(vendor));
 
-            Device *d = mountd_add_device(md, devnode, label, fs_type,
-                                          is_ejectable(dev));
+            Device *d = mountd_add_device(md, devnode, label, vendor,
+                                          fs_type, is_ejectable(dev));
             if (d) {
                 mountd_dbus_emit_device_added(md, d);
 
@@ -212,8 +237,10 @@ static void linux_monitor_dispatch(MountDaemon *md)
             if (!d) {
                 const char *label   = get_label(dev);
                 const char *fs_type = get_fs_type(dev);
-                d = mountd_add_device(md, devnode, label, fs_type,
-                                      is_ejectable(dev));
+                char vendor[VENDOR_LEN];
+                get_vendor_model(dev, vendor, sizeof(vendor));
+                d = mountd_add_device(md, devnode, label, vendor,
+                                      fs_type, is_ejectable(dev));
                 if (d) {
                     mountd_dbus_emit_device_added(md, d);
                 }
