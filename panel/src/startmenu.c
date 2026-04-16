@@ -453,6 +453,9 @@ void startmenu_init(Panel *p)
     IswSetArg(args[n], IswNlabel, "");                 n++;
     IswSetArg(args[n], IswNwidth, PANEL_HEIGHT);       n++;
     IswSetArg(args[n], IswNheight, PANEL_HEIGHT);      n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);          n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);         n++;
+    IswSetArg(args[n], IswNflexBasis, PANEL_HEIGHT);   n++;
     IswSetArg(args[n], IswNborderWidth, 0);            n++;
     p->start_btn = IswCreateManagedWidget("startBtn", commandWidgetClass,
                                          p->form, args, n);
