@@ -17,6 +17,7 @@ target_link_libraries(isde-tray-audio
     PkgConfig::XCB
     PkgConfig::XCB_UTIL
     PkgConfig::PIPEWIRE
+    m
 )
 
 install(TARGETS isde-tray-audio RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

@@ -25,6 +25,7 @@
 #include <pipewire/pipewire.h>
 #include <pipewire/extensions/metadata.h>
 #include <spa/param/props.h>
+#include <spa/param/route.h>
 #include <spa/pod/builder.h>
 #include <spa/pod/parser.h>
 #include <spa/pod/iter.h>
@@ -39,8 +40,16 @@
 #define MAX_SINKS    32
 #define MAX_STREAMS  64
 #define MAX_CHANNELS 16
+#define MAX_DEVICES  16
 
 /* ---------- audio state ---------- */
+
+typedef struct DeviceInfo {
+    uint32_t         id;                    /* PipeWire device global ID */
+    struct pw_proxy *proxy;
+    struct spa_hook  listener;
+    void            *ta;                    /* TrayAudio back-pointer */
+} DeviceInfo;
 
 typedef struct SinkInfo {
     uint32_t    id;                         /* PipeWire node ID */
@@ -51,6 +60,9 @@ typedef struct SinkInfo {
     float       volume;                     /* 0.0–1.0 average */
     int         muted;
     int         is_default;
+    uint32_t    device_id;                  /* PW device global ID (from device.id prop) */
+    int         card_profile_device;        /* device-internal index (from card.profile.device) */
+    int         route_index;                /* active route index for this sink */
     struct pw_proxy *proxy;
     struct spa_hook  listener;
 } SinkInfo;
@@ -94,6 +106,9 @@ typedef struct TrayAudio {
     StreamInfo           streams[MAX_STREAMS];
     int                  nstreams;
 
+    DeviceInfo           devices[MAX_DEVICES];
+    int                  ndevices;
+
     /* PipeWire */
     struct pw_main_loop *pw_main_loop;
     struct pw_loop      *pw_loop;       /* from pw_main_loop_get_loop */
@@ -131,6 +146,7 @@ void ta_pw_set_default_sink(TrayAudio *ta, uint32_t node_id);
 SinkInfo   *ta_find_sink(TrayAudio *ta, uint32_t id);
 StreamInfo *ta_find_stream(TrayAudio *ta, uint32_t id);
 SinkInfo   *ta_default_sink(TrayAudio *ta);
+DeviceInfo *ta_find_device(TrayAudio *ta, uint32_t id);
 
 /* ---------- popup.c ---------- */
 void ta_popup_init(TrayAudio *ta);
