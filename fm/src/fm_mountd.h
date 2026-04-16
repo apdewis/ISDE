@@ -20,6 +20,7 @@ struct FmApp;
 /* Device info from ListDevices */
 #define FM_DEV_PATH_LEN    256
 #define FM_LABEL_LEN       256
+#define FM_VENDOR_LEN      256
 #define FM_FS_TYPE_LEN     64
 #define FM_MOUNT_POINT_LEN 512
 #define FM_MAX_DEVICES     64
@@ -27,6 +28,7 @@ struct FmApp;
 typedef struct FmDeviceInfo {
     char    dev_path[FM_DEV_PATH_LEN];
     char    label[FM_LABEL_LEN];
+    char    vendor[FM_VENDOR_LEN];
     char    fs_type[FM_FS_TYPE_LEN];
     char    mount_point[FM_MOUNT_POINT_LEN];
     int     is_mounted;

@@ -212,6 +212,10 @@ int fm_mountd_init(FmApp *app)
             dbus_message_iter_next(&st);
 
             dbus_message_iter_get_basic(&st, &s);
+            snprintf(d->vendor, sizeof(d->vendor), "%s", s);
+            dbus_message_iter_next(&st);
+
+            dbus_message_iter_get_basic(&st, &s);
             snprintf(d->fs_type, sizeof(d->fs_type), "%s", s);
             dbus_message_iter_next(&st);
 

@@ -88,6 +88,15 @@ static void sections_free(FmPlacesData *pd)
     pd->nsections = 0;
 }
 
+/* ---------- Device display name: label > vendor > dev_path ---------- */
+
+static const char *device_display_name(const FmDeviceInfo *d)
+{
+    if (d->label[0])  return d->label;
+    if (d->vendor[0]) return d->vendor;
+    return d->dev_path;
+}
+
 /* ---------- Build place list ---------- */
 
 static void add_xdg_dir(FmPlacesData *pd, const char *xdg_name,
@@ -136,7 +145,7 @@ static void build_places_list(FmPlacesData *pd, FmApp *app)
     if (app->has_mountd) {
         for (int i = 0; i < app->mountd_ndevices; i++) {
             FmDeviceInfo *d = &app->mountd_devices[i];
-            const char *name = d->label[0] ? d->label : d->dev_path;
+            const char *name = device_display_name(d);
             const char *path = d->is_mounted ? d->mount_point : NULL;
             places_add(pd, name, path, "drive-removable-media", 0);
         }
@@ -444,7 +453,7 @@ void places_refresh_devices(Fm *fm)
     FmApp *app = fm->app_state;
     for (int i = 0; i < app->mountd_ndevices; i++) {
         FmDeviceInfo *d = &app->mountd_devices[i];
-        const char *name = d->label[0] ? d->label : d->dev_path;
+        const char *name = device_display_name(d);
         const char *path = d->is_mounted ? d->mount_point : NULL;
 
         int ins = s->start_idx + s->nitems;
