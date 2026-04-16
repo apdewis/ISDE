@@ -86,55 +86,57 @@ static Widget build_volume_row(TrayAudio *ta, Widget parent,
     Cardinal n;
     VolumeRow *row = alloc_row(ta, node_id);
 
-    /* Label */
+    /* Sink name label (spans full width above the slider row) */
     n = 0;
     IswSetArg(args[n], IswNlabel, label_text); n++;
     IswSetArg(args[n], IswNborderWidth, 0); n++;
     IswSetArg(args[n], IswNfromVert, above); n++;
     IswSetArg(args[n], IswNleft, IswChainLeft); n++;
-    IswSetArg(args[n], IswNright, IswChainLeft); n++;
-    IswSetArg(args[n], IswNwidth, 120); n++;
+    IswSetArg(args[n], IswNright, IswChainRight); n++;
     IswSetArg(args[n], IswNjustify, IswJustifyLeft); n++;
     IswSetArg(args[n], IswNhorizDistance, 8); n++;
     IswSetArg(args[n], IswNvertDistance, 4); n++;
     Widget lbl = IswCreateManagedWidget("volLabel", labelWidgetClass,
                                         parent, args, n);
 
-    /* Slider */
+    /* Slider (below the label) */
     n = 0;
-    IswSetArg(args[n], IswNfromVert, above); n++;
-    IswSetArg(args[n], IswNfromHoriz, lbl); n++;
+    IswSetArg(args[n], IswNfromVert, lbl); n++;
     IswSetArg(args[n], IswNleft, IswChainLeft); n++;
     IswSetArg(args[n], IswNright, IswChainRight); n++;
     IswSetArg(args[n], IswNminimumValue, 0); n++;
     IswSetArg(args[n], IswNmaximumValue, 100); n++;
     IswSetArg(args[n], IswNsliderValue, (int)(volume * 100.0f + 0.5f)); n++;
     IswSetArg(args[n], IswNshowValue, False); n++;
-    IswSetArg(args[n], IswNwidth, 120); n++;
-    IswSetArg(args[n], IswNhorizDistance, 4); n++;
-    IswSetArg(args[n], IswNvertDistance, 4); n++;
+    IswSetArg(args[n], IswNhorizDistance, 8); n++;
+    IswSetArg(args[n], IswNvertDistance, 2); n++;
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
                                        parent, args, n);
     IswAddCallback(sl, IswNvalueChanged, on_slider_changed, row);
     row->slider = sl;
 
-    /* Mute toggle */
+    /* Mute toggle (right of slider, same row) */
+    char *mute_icon = isde_icon_find("status", "audio-volume-muted");
     n = 0;
-    IswSetArg(args[n], IswNlabel, "M"); n++;
-    IswSetArg(args[n], IswNfromVert, above); n++;
+    IswSetArg(args[n], IswNlabel, ""); n++;
+    if (mute_icon)
+        { IswSetArg(args[n], IswNimage, mute_icon); n++; }
+    IswSetArg(args[n], IswNfromVert, lbl); n++;
     IswSetArg(args[n], IswNfromHoriz, sl); n++;
     IswSetArg(args[n], IswNleft, IswChainRight); n++;
     IswSetArg(args[n], IswNright, IswChainRight); n++;
     IswSetArg(args[n], IswNstate, muted ? True : False); n++;
     IswSetArg(args[n], IswNwidth, 24); n++;
+    IswSetArg(args[n], IswNheight, 24); n++;
     IswSetArg(args[n], IswNhorizDistance, 4); n++;
-    IswSetArg(args[n], IswNvertDistance, 4); n++;
+    IswSetArg(args[n], IswNvertDistance, 2); n++;
     Widget mb = IswCreateManagedWidget("volMute", toggleWidgetClass,
                                        parent, args, n);
+    free(mute_icon);
     IswAddCallback(mb, IswNcallback, on_mute_toggled, row);
     row->mute_btn = mb;
 
-    return lbl;  /* Return first widget of this row for fromVert chaining */
+    return sl;  /* Return bottom widget of this row for fromVert chaining */
 }
 
 /* ---------- destroy all children of a Form ---------- */
