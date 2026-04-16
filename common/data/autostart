@@ -2,3 +2,4 @@
 # Lines starting with @ are respawned if they exit
 # Lines starting with # are comments
 @isde-tray-mount
+@isde-tray-audio
