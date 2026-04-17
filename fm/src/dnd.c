@@ -16,6 +16,7 @@
  */
 #include "fm.h"
 
+#include <ISW/ISWRender.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -306,6 +307,81 @@ static int collect_paths(const char *const *uris, int num_uris,
     return npaths;
 }
 
+/* ---------- drop highlight helpers ---------- */
+
+/*
+ * Translate viewport-relative coordinates to the active view widget
+ * and return the item index under the pointer, or -1.
+ */
+static int hit_test_view(Fm *fm, int vp_x, int vp_y)
+{
+    Widget view;
+    if (fm->view_mode == FM_VIEW_LIST)
+        view = fm->listview;
+    else
+        view = fm->iconview;
+
+    /* The viewport coords include the scrollbar offset and the clip
+     * position.  Translate directly between X windows to get view-
+     * relative coordinates regardless of widget nesting.
+     * xcb_translate_coordinates works in physical pixels, so scale
+     * the logical input coords and scale the result back. */
+    double sf = ISWScaleFactor(fm->viewport);
+    xcb_connection_t *conn = IswDisplay(fm->viewport);
+    xcb_translate_coordinates_cookie_t tc =
+        xcb_translate_coordinates(conn,
+            IswWindow(fm->viewport), IswWindow(view),
+            (int16_t)(vp_x * sf), (int16_t)(vp_y * sf));
+    xcb_translate_coordinates_reply_t *tr =
+        xcb_translate_coordinates_reply(conn, tc, NULL);
+    if (!tr)
+        return -1;
+    int vx = (int)(tr->dst_x / sf + 0.5);
+    int vy = (int)(tr->dst_y / sf + 0.5);
+    free(tr);
+
+    if (fm->view_mode == FM_VIEW_LIST)
+        return IswListViewHitTest(view, vx, vy);
+    else
+        return IswIconViewHitTest(view, vx, vy);
+}
+
+static void set_drop_highlight(Fm *fm, int index)
+{
+    if (index == fm->dnd_drop_highlight)
+        return;
+    fm->dnd_drop_highlight = index;
+
+    if (fm->view_mode == FM_VIEW_LIST)
+        IswListViewSetDropHighlight(fm->listview, index);
+    else
+        IswIconViewSetDropHighlight(fm->iconview, index);
+}
+
+/* ---------- drag-over callbacks ---------- */
+
+static void drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w;
+    Fm *fm = (Fm *)cd;
+    IswDragOverCallbackData *d = (IswDragOverCallbackData *)call;
+
+    int index = hit_test_view(fm, d->x, d->y);
+
+    /* Only highlight directories — you can't drop into a regular file */
+    if (index >= 0 && index < fm->nentries && fm->entries[index].is_dir)
+        set_drop_highlight(fm, index);
+    else
+        set_drop_highlight(fm, -1);
+}
+
+static void drag_leave_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    set_drop_highlight(fm, -1);
+}
+
 /* ---------- content area drop callback ---------- */
 
 static void drop_cb(Widget w, IswPointer cd, IswPointer call)
@@ -320,7 +396,13 @@ static void drop_cb(Widget w, IswPointer cd, IswPointer call)
     if (num_uris <= 0)
         return;
 
+    /* If a directory is highlighted, drop into it; otherwise use cwd */
     const char *target_dir = fm->cwd;
+    int hi = fm->dnd_drop_highlight;
+    if (hi >= 0 && hi < fm->nentries && fm->entries[hi].is_dir)
+        target_dir = fm->entries[hi].full_path;
+
+    set_drop_highlight(fm, -1);
 
     char **paths = malloc(num_uris * sizeof(char *));
     fm->dnd_drop_was_noop = True;
@@ -341,6 +423,7 @@ void dnd_init(Fm *fm)
     fm->dnd_drop_was_noop = False;
     fm->dnd_drag_paths = NULL;
     fm->dnd_ndrag_paths = 0;
+    fm->dnd_drop_highlight = -1;
 
     /* Register the content viewport as drop target. The places viewport
      * is registered separately in places_init(). FindDropTarget walks
@@ -348,6 +431,8 @@ void dnd_init(Fm *fm)
     xcb_atom_t uri_type = ISWXdndInternType(fm->viewport, "text/uri-list");
     ISWXdndWidgetAcceptDrops(fm->viewport);
     ISWXdndSetDropCallback(fm->viewport, drop_cb, fm);
+    ISWXdndSetDragMotionCallback(fm->viewport, drag_motion_cb, fm);
+    ISWXdndSetDragLeaveCallback(fm->viewport, drag_leave_cb, fm);
     ISWXdndSetAcceptedTypes(fm->viewport, &uri_type, 1);
     ISWXdndSetAcceptedActions(fm->viewport,
                               ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);

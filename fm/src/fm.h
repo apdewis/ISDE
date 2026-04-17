@@ -277,6 +277,7 @@ typedef struct Fm {
     char         **dnd_drag_paths;
     int            dnd_ndrag_paths;
     Boolean        dnd_drop_was_noop;
+    int            dnd_drop_highlight; /* entry index highlighted as drop target, -1 = none */
 } Fm;
 
 /* ---------- Context for storing Fm* on shell windows ---------- */
