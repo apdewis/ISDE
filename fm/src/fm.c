@@ -481,11 +481,6 @@ void fm_navigate(Fm *fm, const char *path)
 
     char *new_path = strdup(path);
 
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
-        IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
-        IswListViewSetData(fm->listview, NULL, 0, 0);
-
     if (browser_read_dir(fm, new_path) != 0) {
         free(new_path);
         return;
@@ -510,12 +505,6 @@ void fm_navigate(Fm *fm, const char *path)
 void fm_refresh(Fm *fm)
 {
     fm_dismiss_context(fm);
-
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
-        IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
-        IswListViewSetData(fm->listview, NULL, 0, 0);
-
     browser_read_dir(fm, fm->cwd);
     fileview_populate(fm);
     navbar_update(fm);
