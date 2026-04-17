@@ -344,6 +344,7 @@ void  places_device_added(Fm *fm, const char *name, const char *path);
 void  places_device_removed(Fm *fm, const char *name);
 void  places_cleanup(Fm *fm);
 void  places_dismiss_device_menu(Fm *fm);
+void  places_register_drop_targets(Fm *fm);
 
 /* ---------- icons.c ---------- */
 void        icons_init(FmApp *app);

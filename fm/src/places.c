@@ -7,6 +7,7 @@
  */
 #include "fm.h"
 #include "fm_mountd.h"
+#include <ISW/ISWRender.h>
 
 
 #include <stdio.h>
@@ -321,6 +322,118 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
     }
 }
 
+/* ---------- places sidebar drop ---------- */
+
+static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w;
+    Fm *fm = (Fm *)cd;
+    FmPlacesData *pd = fm->places_data;
+    IswDropCallbackData *d = (IswDropCallbackData *)call;
+
+    if (!pd)
+        return;
+
+    /* d->x/y from XDND are unreliable (broken coordinate translation).
+     * Query the pointer directly against each list widget's window. */
+    xcb_connection_t *conn = IswDisplay(fm->toplevel);
+    const char *target_dir = NULL;
+
+    for (int i = 0; i < pd->nsections; i++) {
+        PlaceSection *s = &pd->sections[i];
+        if (!s->list || s->nitems <= 0 || !IswIsRealized(s->list))
+            continue;
+
+        xcb_query_pointer_cookie_t qpc =
+            xcb_query_pointer(conn, IswWindow(s->list));
+        xcb_query_pointer_reply_t *qpr =
+            xcb_query_pointer_reply(conn, qpc, NULL);
+        if (!qpr)
+            continue;
+
+        int wx = qpr->win_x;
+        int wy = qpr->win_y;
+        free(qpr);
+
+        /* Convert physical pixels to logical */
+        double sf = ISWScaleFactor(fm->toplevel);
+        wx = (int)(wx / sf + 0.5);
+        wy = (int)(wy / sf + 0.5);
+
+        if (wx < 0 || wy < 0 ||
+            wx >= (int)s->list->core.width ||
+            wy >= (int)s->list->core.height)
+            continue;
+
+        int row = wy * s->nitems / (int)s->list->core.height;
+        if (row < 0) row = 0;
+        if (row >= s->nitems) row = s->nitems - 1;
+
+        int idx = s->start_idx + row;
+        if (idx < pd->nplaces && pd->places[idx].path)
+            target_dir = pd->places[idx].path;
+        break;
+    }
+
+    if (!target_dir)
+        return;
+
+    /* Create the directory if needed (XDG user dirs) */
+    struct stat st;
+    if (stat(target_dir, &st) != 0)
+        mkdir(target_dir, 0755);
+
+    /* Extract URIs — fallback for intra-process drops where the
+     * selection type doesn't match text/uri-list */
+    char **local_uris = NULL;
+    int num_uris = d->num_uris;
+    char **uris = d->uris;
+
+    if (num_uris <= 0 && d->data && d->data_length > 0) {
+        const char *p = (const char *)d->data;
+        const char *end = p + d->data_length;
+        int cap = 0;
+        while (p < end) {
+            const char *nl = memchr(p, '\n', end - p);
+            if (!nl) nl = end;
+            size_t len = nl - p;
+            if (len > 0 && p[len - 1] == '\r') len--;
+            if (len > 0 && p[0] != '#') {
+                if (num_uris >= cap) {
+                    cap = cap ? cap * 2 : 8;
+                    local_uris = realloc(local_uris, cap * sizeof(char *));
+                }
+                local_uris[num_uris++] = strndup(p, len);
+            }
+            p = nl + 1;
+        }
+        uris = local_uris;
+    }
+
+    if (num_uris <= 0)
+        return;
+
+    char **paths = malloc(num_uris * sizeof(char *));
+    int npaths = 0;
+    for (int i = 0; i < num_uris; i++) {
+        const char *path = uris[i];
+        if (strncmp(path, "file://", 7) == 0)
+            path += 7;
+        if (path[0] == '/')
+            paths[npaths++] = (char *)path;
+    }
+
+    if (npaths > 0)
+        jobqueue_submit_copy(fm->app_state, fm, paths, npaths, target_dir);
+
+    free(paths);
+    if (local_uris) {
+        for (int i = 0; i < num_uris; i++)
+            free(local_uris[i]);
+        free(local_uris);
+    }
+}
+
 /* Forward declaration */
 static void dev_list_ctx_handler(Widget w, IswPointer client_data,
                                  xcb_generic_event_t *event, Boolean *cont);
@@ -393,6 +506,16 @@ void places_init(Fm *fm)
         IswAddRawEventHandler(devs->list, XCB_EVENT_MASK_BUTTON_PRESS, False,
                               dev_list_ctx_handler, fm);
     }
+}
+
+void places_register_drop_targets(Fm *fm)
+{
+    xcb_atom_t uri_type = ISWXdndInternType(fm->places_vp, "text/uri-list");
+    ISWXdndWidgetAcceptDrops(fm->places_vp);
+    ISWXdndSetDropCallback(fm->places_vp, places_vp_drop_cb, fm);
+    ISWXdndSetAcceptedTypes(fm->places_vp, &uri_type, 1);
+    ISWXdndSetAcceptedActions(fm->places_vp,
+        ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 }
 
 /* Find the Devices section (index 1) */

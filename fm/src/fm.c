@@ -1157,6 +1157,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
     /* XDND init must be after realize — re-apply keyboard shortcuts
      * afterward since DnD translation overrides can clobber them. */
     dnd_init(fm);
+    places_register_drop_targets(fm);
     fm_install_shortcuts(fm->iconview);
     fm_install_shortcuts(fm->listview);
 
