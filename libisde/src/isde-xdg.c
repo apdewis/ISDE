@@ -216,72 +216,81 @@ char *isde_icon_find(const char *category, const char *name)
 
 char *isde_xdg_user_dir(const char *name)
 {
-    /* Build path to user-dirs.dirs */
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+
+    char *result = NULL;
+
+    /* Try to read from user-dirs.dirs */
     char path[512];
     snprintf(path, sizeof(path), "%s/user-dirs.dirs", isde_xdg_config_home());
 
     FILE *fp = fopen(path, "r");
-    if (!fp) {
-        return NULL;
-    }
+    if (fp) {
+        char key[64];
+        snprintf(key, sizeof(key), "XDG_%s_DIR", name);
+        size_t klen = strlen(key);
 
-    /* Build the key we're looking for: XDG_xxx_DIR */
-    char key[64];
-    snprintf(key, sizeof(key), "XDG_%s_DIR", name);
-    size_t klen = strlen(key);
+        char line[1024];
+        while (fgets(line, sizeof(line), fp)) {
+            char *p = line;
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p == '#' || *p == '\n' || *p == '\0')
+                continue;
+            if (strncmp(p, key, klen) != 0 || p[klen] != '=')
+                continue;
 
-    char line[1024];
-    char *result = NULL;
-    const char *home = getenv("HOME");
-    if (!home) home = "/tmp";
+            p += klen + 1;
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p != '"')
+                continue;
+            p++;
 
-    while (fgets(line, sizeof(line), fp)) {
-        /* Skip comments and blank lines */
-        char *p = line;
-        while (*p == ' ' || *p == '\t') p++;
-        if (*p == '#' || *p == '\n' || *p == '\0') {
-            continue;
-        }
+            char *end = strchr(p, '"');
+            if (!end)
+                continue;
+            *end = '\0';
 
-        /* Match key= */
-        if (strncmp(p, key, klen) != 0 || p[klen] != '=') {
-            continue;
-        }
-
-        p += klen + 1;
-        /* Skip whitespace after = */
-        while (*p == ' ' || *p == '\t') p++;
-
-        /* Value is quoted: "..." */
-        if (*p != '"') {
-            continue;
-        }
-        p++;
-
-        /* Find closing quote */
-        char *end = strchr(p, '"');
-        if (!end) {
-            continue;
-        }
-        *end = '\0';
-
-        /* Expand $HOME */
-        if (strncmp(p, "$HOME/", 6) == 0) {
-            size_t total = strlen(home) + strlen(p + 5) + 1;
-            result = malloc(total);
-            if (result) {
-                snprintf(result, total, "%s%s", home, p + 5);
+            if (strncmp(p, "$HOME/", 6) == 0) {
+                size_t total = strlen(home) + strlen(p + 5) + 1;
+                result = malloc(total);
+                if (result)
+                    snprintf(result, total, "%s%s", home, p + 5);
+            } else if (strcmp(p, "$HOME") == 0) {
+                /* Set to $HOME means "not configured" per spec */
+                result = NULL;
+            } else if (p[0] == '/') {
+                result = strdup(p);
             }
-        } else if (strcmp(p, "$HOME") == 0) {
-            /* Set to $HOME means "not configured" per spec */
-            result = NULL;
-        } else if (p[0] == '/') {
-            result = strdup(p);
+            break;
         }
-        break;
+        fclose(fp);
     }
 
-    fclose(fp);
+    /* Fall back to XDG default paths when user-dirs.dirs is missing or
+     * doesn't contain the requested key. */
+    if (!result) {
+        static const struct { const char *key; const char *suffix; } defaults[] = {
+            { "DESKTOP",     "/Desktop" },
+            { "DOCUMENTS",   "/Documents" },
+            { "DOWNLOAD",    "/Downloads" },
+            { "MUSIC",       "/Music" },
+            { "PICTURES",    "/Pictures" },
+            { "VIDEOS",      "/Videos" },
+            { "PUBLICSHARE", "/Public" },
+            { "TEMPLATES",   "/Templates" },
+        };
+        for (size_t i = 0; i < sizeof(defaults)/sizeof(defaults[0]); i++) {
+            if (strcmp(name, defaults[i].key) == 0) {
+                size_t total = strlen(home) + strlen(defaults[i].suffix) + 1;
+                result = malloc(total);
+                if (result)
+                    snprintf(result, total, "%s%s", home, defaults[i].suffix);
+                break;
+            }
+        }
+    }
+
     return result;
 }
 

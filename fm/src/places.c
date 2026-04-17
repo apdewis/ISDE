@@ -104,10 +104,7 @@ static void add_xdg_dir(FmPlacesData *pd, const char *xdg_name,
 {
     char *path = isde_xdg_user_dir(xdg_name);
     if (path) {
-        struct stat st;
-        if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
-            places_add(pd, label, path, icon_name, 0);
-        }
+        places_add(pd, label, path, icon_name, 0);
         free(path);
     }
 }
@@ -308,6 +305,9 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
 
         int idx = pd->sections[i].start_idx + ret->list_index;
         if (idx < pd->nplaces && pd->places[idx].path) {
+            struct stat st;
+            if (stat(pd->places[idx].path, &st) != 0)
+                mkdir(pd->places[idx].path, 0755);
             fm_navigate(fm, pd->places[idx].path);
         }
 
