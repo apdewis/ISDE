@@ -135,10 +135,16 @@ static void iconview_callback(Widget w, IswPointer client_data,
 
     /* Check if triggered by keyboard (Enter/Return) — always open */
     xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
-    if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
-               (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
-        browser_open_entry(fm, d->index);
-        return;
+    if (ev) {
+        uint8_t type = ev->response_type & ~0x80;
+        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+            browser_open_entry(fm, d->index);
+            return;
+        }
+        /* Ignore callbacks fired from ButtonRelease (BandFinish deselect);
+         * only ButtonPress should count for double-click detection */
+        if (type == XCB_BUTTON_RELEASE)
+            return;
     }
 
     if (fm->double_click) {
@@ -163,10 +169,14 @@ static void listview_callback(Widget w, IswPointer client_data,
         return;
 
     xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
-    if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
-               (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
-        browser_open_entry(fm, d->row);
-        return;
+    if (ev) {
+        uint8_t type = ev->response_type & ~0x80;
+        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+            browser_open_entry(fm, d->row);
+            return;
+        }
+        if (type == XCB_BUTTON_RELEASE)
+            return;
     }
 
     if (fm->double_click) {
