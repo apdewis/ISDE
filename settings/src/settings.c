@@ -151,35 +151,37 @@ void settings_switch_panel(Settings *s, int index)
 
     /* Create panel widget if needed */
     if (!s->panel_widgets[index]) {
-        /* Query the viewport clip width so panels fit without overflow.
-         * The Viewport expands its child to its own width, but the
-         * vertical scrollbar eats into the visible area. */
+        /* Query viewport size for initial panel dimensions. */
         Dimension vpw, vph;
         Arg qa[20];
         IswSetArg(qa[0], IswNwidth, &vpw);
         IswSetArg(qa[1], IswNheight, &vph);
         IswGetValues(s->content_vp, qa, 2);
 
-        /* Scrollbar width — use 14 as the standard ISW scrollbar size */
-        Dimension usable_w = (vpw > 20) ? vpw - 20 : vpw;
-
-        /* Set content_area to usable width so panels query it correctly */
-        Arg ca[20];
-        Cardinal cn = 0;
-        if (usable_w > 0) { IswSetArg(ca[cn], IswNwidth, usable_w); cn++; }
-        if (cn > 0) {
+        /* Set content_area so panels can query parent dimensions */
+        if (vpw > 0 || vph > 0) {
+            Arg ca[20];
+            Cardinal cn = 0;
+            if (vpw > 0) { IswSetArg(ca[cn], IswNwidth, vpw); cn++; }
+            if (vph > 0) { IswSetArg(ca[cn], IswNheight, vph); cn++; }
             IswSetValues(s->content_area, ca, cn);
         }
 
         s->panel_widgets[index] =
             s->panels[index]->create(s->content_area, s->app);
 
-        /* Size the panel to fill the usable area */
-        Arg sa[20];
-        Cardinal sn = 0;
-        if (usable_w > 0) { IswSetArg(sa[sn], IswNwidth, usable_w); sn++; }
-        if (vph > 0) { IswSetArg(sa[sn], IswNheight, vph); sn++; }
-        if (sn > 0) {
+        /* Anchor panel top-left so rubber constraints don't scale it
+         * when the viewport resizes content_area.  Size it to the
+         * current viewport so it realises with nonzero geometry. */
+        {
+            Arg sa[20];
+            Cardinal sn = 0;
+            if (vpw > 0) { IswSetArg(sa[sn], IswNwidth, vpw); sn++; }
+            if (vph > 0) { IswSetArg(sa[sn], IswNheight, vph); sn++; }
+            IswSetArg(sa[sn], IswNtop, IswChainTop);       sn++;
+            IswSetArg(sa[sn], IswNbottom, IswChainTop);    sn++;
+            IswSetArg(sa[sn], IswNleft, IswChainLeft);     sn++;
+            IswSetArg(sa[sn], IswNright, IswChainLeft);    sn++;
             IswSetValues(s->panel_widgets[index], sa, sn);
         }
     }
@@ -320,7 +322,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswSetArg(args[n], IswNdefaultDistance, 0);        n++;
     IswSetArg(args[n], IswNwidth, right_w);            n++;
     IswSetArg(args[n], IswNheight, right_h);           n++;
-    IswSetArg(args[n], IswNresizable, True);           n++;
+    IswSetArg(args[n], IswNresizable, False);           n++;
     IswSetArg(args[n], IswNtop, IswChainTop);           n++;
     IswSetArg(args[n], IswNbottom, IswChainBottom);     n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
@@ -331,11 +333,12 @@ int settings_init(Settings *s, int *argc, char **argv)
     /* Scrollable viewport for panel content */
     n = 0;
     IswSetArg(args[n], IswNallowVert, True);          n++;
+    IswSetArg(args[n], IswNallowHoriz, True);         n++;
+    IswSetArg(args[n], IswNuseBottom, True);         n++;
     IswSetArg(args[n], IswNuseRight, True);            n++;
     IswSetArg(args[n], IswNborderWidth, 0);            n++;
     IswSetArg(args[n], IswNwidth, right_w);            n++;
     IswSetArg(args[n], IswNheight, right_h - btn_h - btn_pad); n++;
-    IswSetArg(args[n], IswNresizable, True);           n++;
     IswSetArg(args[n], IswNtop, IswChainTop);           n++;
     IswSetArg(args[n], IswNbottom, IswChainBottom);     n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
@@ -347,6 +350,8 @@ int settings_init(Settings *s, int *argc, char **argv)
     n = 0;
     IswSetArg(args[n], IswNdefaultDistance, 0); n++;
     IswSetArg(args[n], IswNborderWidth, 0);            n++;
+    IswSetArg(args[n], IswNwidth, right_w);            n++;
+    IswSetArg(args[n], IswNheight, right_h - btn_h - btn_pad); n++;
     s->content_area = IswCreateManagedWidget("content", formWidgetClass,
                                             s->content_vp, args, n);
 
@@ -411,30 +416,6 @@ int settings_init(Settings *s, int *argc, char **argv)
     /* Show first panel by default */
     if (s->npanels > 0) {
         settings_switch_panel(s, 0);
-    }
-
-    /* Debug: post-realize dimensions */
-    {
-        Dimension tw, th, plw, plh, cfw, cfh, vpw, vph, caw, cah;
-        Arg da[20];
-        IswSetArg(da[0], IswNwidth, &tw); IswSetArg(da[1], IswNheight, &th);
-        IswGetValues(s->toplevel, da, 2);
-        IswSetArg(da[0], IswNwidth, &plw); IswSetArg(da[1], IswNheight, &plh);
-        IswGetValues(s->panel_bar, da, 2);
-        IswSetArg(da[0], IswNwidth, &cfw); IswSetArg(da[1], IswNheight, &cfh);
-        IswGetValues(s->content_form, da, 2);
-        IswSetArg(da[0], IswNwidth, &vpw); IswSetArg(da[1], IswNheight, &vph);
-        IswGetValues(s->content_vp, da, 2);
-        IswSetArg(da[0], IswNwidth, &caw); IswSetArg(da[1], IswNheight, &cah);
-        IswGetValues(s->content_area, da, 2);
-        fprintf(stderr, "POST-REALIZE: toplevel=%dx%d panel_bar=%dx%d content_form=%dx%d viewport=%dx%d content_area=%dx%d\n",
-                tw, th, plw, plh, cfw, cfh, vpw, vph, caw, cah);
-        if (s->panel_widgets[0]) {
-            Dimension pw, pph;
-            IswSetArg(da[0], IswNwidth, &pw); IswSetArg(da[1], IswNheight, &pph);
-            IswGetValues(s->panel_widgets[0], da, 2);
-            fprintf(stderr, "POST-REALIZE: panel[0]=%dx%d\n", pw, pph);
-        }
     }
 
     s->running = 1;

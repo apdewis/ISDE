@@ -21,6 +21,11 @@
 /* ---------- font slot definitions ---------- */
 
 #define NUM_FONTS 6
+#define SELECTED_W 300
+#define LABEL_W 250
+#define SLIDER_W 300
+#define BUTTON_W 60
+
 
 static const char *font_labels[NUM_FONTS] = {
     "General:",
@@ -156,11 +161,6 @@ static Widget fonts_create(Widget parent, IswAppContext app)
     IswSetArg(qa[0], IswNwidth, &pw);
     IswGetValues(parent, qa, 1);
 
-    int cat_w = 100;
-    int btn_w = 60;
-    int desc_w = (pw > 0 ? (int)pw - cat_w - btn_w - 8 * 4 : 180);
-    if (desc_w < 80) { desc_w = 80; }
-
     n = 0;
     IswSetArg(args[n], IswNdefaultDistance, 8); n++;
     IswSetArg(args[n], IswNborderWidth, 0);    n++;
@@ -207,7 +207,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         n = 0;
         IswSetArg(args[n], IswNlabel, font_labels[i]);  n++;
         IswSetArg(args[n], IswNborderWidth, 0);          n++;
-        IswSetArg(args[n], IswNwidth, 100);              n++;
+        IswSetArg(args[n], IswNwidth, LABEL_W);              n++;
         IswSetArg(args[n], IswNjustify, IswJustifyRight); n++;
         IswSetArg(args[n], IswNleft, IswChainLeft);       n++;
         IswSetArg(args[n], IswNright, IswChainLeft);      n++;
@@ -222,7 +222,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         n = 0;
         IswSetArg(args[n], IswNlabel, desc);             n++;
         IswSetArg(args[n], IswNborderWidth, 0);           n++;
-        IswSetArg(args[n], IswNwidth, desc_w);              n++;
+        IswSetArg(args[n], IswNwidth, SELECTED_W);         n++;
         IswSetArg(args[n], IswNjustify, IswJustifyLeft);   n++;
         IswSetArg(args[n], IswNfromHoriz, lbl);           n++;
         IswSetArg(args[n], IswNresizable, True);          n++;
@@ -236,10 +236,9 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         n = 0;
         IswSetArg(args[n], IswNlabel, "Edit...");          n++;
         IswSetArg(args[n], IswNborderWidth, 0);             n++;
+        IswSetArg(args[n], IswNwidth, BUTTON_W);         n++;
         IswSetArg(args[n], IswNfromHoriz, desc_labels[i]);  n++;
-        IswSetArg(args[n], IswNresizable, True);            n++;
-        IswSetArg(args[n], IswNleft, IswChainRight);         n++;
-        IswSetArg(args[n], IswNright, IswChainRight);        n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
         if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
         Widget btn = IswCreateManagedWidget("fontEditBtn", commandWidgetClass,
                                             form, args, n);

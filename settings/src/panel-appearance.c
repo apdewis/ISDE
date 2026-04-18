@@ -112,6 +112,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     n = 0;
     IswSetArg(args[n], IswNdefaultDistance, 8); n++;
     IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    IswSetArg(args[n], IswNresizable, True);              n++;
+    
     Widget form = IswCreateWidget("appearForm", formWidgetClass,
                                  parent, args, n);
 
@@ -137,9 +139,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     Widget prev = NULL;
     int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
 
-    int lbl_w = 100;
-    int list_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
-    if (list_w < 100) { list_w = 100; }
+    int lbl_w = 150;
+    int list_w = 150;
 
     /* --- Colour Scheme --- */
     n = 0;
@@ -173,9 +174,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswSetArg(args[n], IswNwidth, list_w);                 n++;
     IswSetArg(args[n], IswNborderWidth, 0);               n++;
     IswSetArg(args[n], IswNfromHoriz, scheme_lbl);        n++;
-    IswSetArg(args[n], IswNresizable, True);              n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
-    IswSetArg(args[n], IswNright, IswChainRight);          n++;
+
     if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
     scheme_list = IswCreateManagedWidget("schemeList", listWidgetClass,
                                         form, args, n);
@@ -215,9 +215,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswSetArg(args[n], IswNborderWidth, 0);               n++;
     IswSetArg(args[n], IswNfromHoriz, cursor_lbl);        n++;
     IswSetArg(args[n], IswNfromVert, prev);                n++;
-    IswSetArg(args[n], IswNresizable, True);              n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
-    IswSetArg(args[n], IswNright, IswChainRight);          n++;
+
     cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
                                         form, args, n);
     IswListHighlight(cursor_list, saved_cursor_idx);
@@ -256,9 +255,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswSetArg(args[n], IswNborderWidth, 0);               n++;
     IswSetArg(args[n], IswNfromHoriz, icon_lbl);          n++;
     IswSetArg(args[n], IswNfromVert, prev);                n++;
-    IswSetArg(args[n], IswNresizable, True);              n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
-    IswSetArg(args[n], IswNright, IswChainRight);          n++;
     icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
                                       form, args, n);
     IswListHighlight(icon_list, saved_icon_idx);

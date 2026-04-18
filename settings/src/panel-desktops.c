@@ -15,6 +15,9 @@ static int saved_cols;
 
 static IsdeDBus *panel_dbus;
 
+#define SLIDER_W 300
+#define LABEL_W 250
+
 static void desktops_apply(void)
 {
     int rows = IswSliderGetValue(scale_rows);
@@ -42,7 +45,6 @@ static void desktops_revert(void)
 }
 
 static int lbl_w;
-static int scale_w;
 
 static Widget make_scale_row(Widget form, Widget above, const char *label_text,
                              int min, int max, int value, Widget *out_scale)
@@ -53,7 +55,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     n = 0;
     IswSetArg(args[n], IswNlabel, label_text);               n++;
     IswSetArg(args[n], IswNborderWidth, 0);                   n++;
-    IswSetArg(args[n], IswNwidth, lbl_w);                     n++;
+    IswSetArg(args[n], IswNwidth, LABEL_W);                     n++;
     IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);                n++;
     IswSetArg(args[n], IswNright, IswChainLeft);               n++;
@@ -70,11 +72,9 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     IswSetArg(args[n], IswNorientation, XtorientHorizontal);   n++;
     IswSetArg(args[n], IswNshowValue, True);                   n++;
     IswSetArg(args[n], IswNtickInterval, 1);                   n++;
-    IswSetArg(args[n], IswNwidth, scale_w);                    n++;
+    IswSetArg(args[n], IswNwidth, SLIDER_W);                    n++;
     IswSetArg(args[n], IswNborderWidth, 0);                    n++;
-    IswSetArg(args[n], IswNresizable, True);                   n++;
     IswSetArg(args[n], IswNleft, IswChainLeft);                 n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
                                        form, args, n);
     return *out_scale;
@@ -106,10 +106,6 @@ static Widget desktops_create(Widget parent, IswAppContext app)
     Arg qa[20];
     IswSetArg(qa[0], IswNwidth, &pw);
     IswGetValues(parent, qa, 1);
-
-    lbl_w = 180;
-    scale_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
-    if (scale_w < 100) { scale_w = 100; }
 
     Arg args[20];
     Cardinal n = 0;
