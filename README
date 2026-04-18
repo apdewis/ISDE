@@ -11,6 +11,12 @@ components as desired.
 - It works but it's ugly
 - Almost entirely produced by Claude code and a lot of sarcasm directed at said.
 
+## Installation instructions
+
+cmake -B build .
+cd build
+make && sudo make install
+
 ## TODO
 
 ### General
