@@ -18,7 +18,7 @@
 #include <ISW/Viewport.h>
 #include <ISW/Dialog.h>
 
-#define PANEL_LIST_WIDTH 140
+#define PANEL_LIST_WIDTH 180
 
 /* ---------- panel management ---------- */
 
@@ -248,7 +248,7 @@ int settings_init(Settings *s, int *argc, char **argv)
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
 
-    int init_w = 600;
+    int init_w = 960;
     int init_h = 450;
     isde_clamp_to_workarea(IswDisplay(s->toplevel), 0, &init_w, &init_h);
 
