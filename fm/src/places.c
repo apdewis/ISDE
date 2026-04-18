@@ -322,22 +322,20 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
     }
 }
 
-/* ---------- places sidebar drop ---------- */
+/* ---------- places sidebar hit-test ---------- */
 
-static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
+/* Hit-test the places sidebar by querying the pointer against each section's
+ * list widget. Returns the target directory path, or NULL if no valid place
+ * is under the cursor. If sect_out/row_out are non-NULL, they receive the
+ * section pointer and row index for highlight purposes. */
+static const char *
+places_hit_test(Fm *fm, PlaceSection **sect_out, int *row_out)
 {
-    (void)w;
-    Fm *fm = (Fm *)cd;
     FmPlacesData *pd = fm->places_data;
-    IswDropCallbackData *d = (IswDropCallbackData *)call;
-
     if (!pd)
-        return;
+        return NULL;
 
-    /* d->x/y from XDND are unreliable (broken coordinate translation).
-     * Query the pointer directly against each list widget's window. */
     xcb_connection_t *conn = IswDisplay(fm->toplevel);
-    const char *target_dir = NULL;
 
     for (int i = 0; i < pd->nsections; i++) {
         PlaceSection *s = &pd->sections[i];
@@ -355,7 +353,6 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
         int wy = qpr->win_y;
         free(qpr);
 
-        /* Convert physical pixels to logical */
         double sf = ISWScaleFactor(fm->toplevel);
         wx = (int)(wx / sf + 0.5);
         wy = (int)(wy / sf + 0.5);
@@ -370,11 +367,64 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
         if (row >= s->nitems) row = s->nitems - 1;
 
         int idx = s->start_idx + row;
-        if (idx < pd->nplaces && pd->places[idx].path)
-            target_dir = pd->places[idx].path;
+        if (idx < pd->nplaces && pd->places[idx].path) {
+            if (sect_out) *sect_out = s;
+            if (row_out)  *row_out = row;
+            return pd->places[idx].path;
+        }
         break;
     }
 
+    return NULL;
+}
+
+/* Clear any drop highlight on the places sidebar */
+static void places_clear_drop_highlight(Fm *fm)
+{
+    FmPlacesData *pd = fm->places_data;
+    if (!pd)
+        return;
+    for (int i = 0; i < pd->nsections; i++) {
+        PlaceSection *s = &pd->sections[i];
+        if (s->list)
+            IswListUnhighlight(s->list);
+    }
+}
+
+/* ---------- places sidebar drag-over callbacks ---------- */
+
+static void places_drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w;
+    Fm *fm = (Fm *)cd;
+    (void)call;
+
+    PlaceSection *sect = NULL;
+    int row = -1;
+    const char *target = places_hit_test(fm, &sect, &row);
+
+    places_clear_drop_highlight(fm);
+    if (target && sect)
+        IswListHighlight(sect->list, row);
+}
+
+static void places_drag_leave_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    places_clear_drop_highlight((Fm *)cd);
+}
+
+/* ---------- places sidebar drop ---------- */
+
+static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w;
+    Fm *fm = (Fm *)cd;
+    IswDropCallbackData *d = (IswDropCallbackData *)call;
+
+    places_clear_drop_highlight(fm);
+
+    const char *target_dir = places_hit_test(fm, NULL, NULL);
     if (!target_dir)
         return;
 
@@ -513,6 +563,8 @@ void places_register_drop_targets(Fm *fm)
     xcb_atom_t uri_type = ISWXdndInternType(fm->places_vp, "text/uri-list");
     ISWXdndWidgetAcceptDrops(fm->places_vp);
     ISWXdndSetDropCallback(fm->places_vp, places_vp_drop_cb, fm);
+    ISWXdndSetDragMotionCallback(fm->places_vp, places_drag_motion_cb, fm);
+    ISWXdndSetDragLeaveCallback(fm->places_vp, places_drag_leave_cb, fm);
     ISWXdndSetAcceptedTypes(fm->places_vp, &uri_type, 1);
     ISWXdndSetAcceptedActions(fm->places_vp,
         ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
