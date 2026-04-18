@@ -10,8 +10,8 @@
 #include <string.h>
 
 #include <xcb/xcb.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/Command.h>
 #include <ISW/Label.h>
 #include <ISW/Form.h>
@@ -29,12 +29,12 @@ static void act_isde_dialog_dismiss(Widget w, xcb_generic_event_t *ev,
 {
     (void)ev; (void)params; (void)nparams;
     /* Walk up to the shell */
-    while (w && !XtIsShell(w))
-        w = XtParent(w);
+    while (w && !IswIsShell(w))
+        w = IswParent(w);
     isde_dialog_dismiss(w);
 }
 
-static XtActionsRec dialog_actions[] = {
+static IswActionsRec dialog_actions[] = {
     {"isde-dialog-dismiss", act_isde_dialog_dismiss},
 };
 
@@ -42,8 +42,8 @@ static void ensure_actions_registered(Widget any_widget)
 {
     static int registered;
     if (!registered) {
-        XtAppAddActions(XtWidgetToApplicationContext(any_widget),
-                        dialog_actions, XtNumber(dialog_actions));
+        IswAppAddActions(IswWidgetToApplicationContext(any_widget),
+                        dialog_actions, IswNumber(dialog_actions));
         registered = 1;
     }
 }
@@ -51,8 +51,8 @@ static void ensure_actions_registered(Widget any_widget)
 /* Find nearest Shell ancestor (or w itself if it is a shell) */
 static Widget find_shell_ancestor(Widget w)
 {
-    while (w && !XtIsShell(w))
-        w = XtParent(w);
+    while (w && !IswIsShell(w))
+        w = IswParent(w);
     return w;
 }
 
@@ -71,35 +71,35 @@ Widget isde_dialog_create_shell(Widget parent, const char *name,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNwidth, width);   n++;
-    XtSetArg(args[n], XtNheight, height);  n++;
-    XtSetArg(args[n], XtNborderWidth, 1);              n++;
+    IswSetArg(args[n], IswNwidth, width);   n++;
+    IswSetArg(args[n], IswNheight, height);  n++;
+    IswSetArg(args[n], IswNborderWidth, 1);              n++;
     if (title) {
-        XtSetArg(args[n], XtNtitle, title);            n++;
+        IswSetArg(args[n], IswNtitle, title);            n++;
     }
-    Widget shell = XtCreatePopupShell((String)name, transientShellWidgetClass,
+    Widget shell = IswCreatePopupShell((String)name, transientShellWidgetClass,
                                       shell_parent, args, n);
 
     /* Escape and WM close button both dismiss */
-    XtOverrideTranslations(shell, XtParseTranslationTable(
+    IswOverrideTranslations(shell, IswParseTranslationTable(
         "<Message>WM_PROTOCOLS: isde-dialog-dismiss()\n"
         "<Key>Escape: isde-dialog-dismiss()\n"));
 
     return shell;
 }
 
-void isde_dialog_popup(Widget shell, XtGrabKind grab)
+void isde_dialog_popup(Widget shell, IswGrabKind grab)
 {
     if (shell)
-        XtPopup(shell, grab);
+        IswPopup(shell, grab);
 }
 
 void isde_dialog_dismiss(Widget shell)
 {
     if (!shell)
         return;
-    XtPopdown(shell);
-    XtDestroyWidget(shell);
+    IswPopdown(shell);
+    IswDestroyWidget(shell);
 }
 
 Widget isde_dialog_add_buttons(Widget form, Widget above_widget,
@@ -124,26 +124,26 @@ Widget isde_dialog_add_buttons(Widget form, Widget above_widget,
     for (int i = 0; i < nbuttons; i++) {
         Arg args[20];
         Cardinal n = 0;
-        XtSetArg(args[n], XtNlabel, buttons[i].label);      n++;
-        XtSetArg(args[n], XtNwidth, btn_w);                  n++;
-        XtSetArg(args[n], XtNinternalWidth, btn_pad);        n++;
-        XtSetArg(args[n], XtNinternalHeight, btn_pad);       n++;
+        IswSetArg(args[n], IswNlabel, buttons[i].label);      n++;
+        IswSetArg(args[n], IswNwidth, btn_w);                  n++;
+        IswSetArg(args[n], IswNinternalWidth, btn_pad);        n++;
+        IswSetArg(args[n], IswNinternalHeight, btn_pad);       n++;
         if (above_widget) {
-            XtSetArg(args[n], XtNfromVert, above_widget);    n++;
+            IswSetArg(args[n], IswNfromVert, above_widget);    n++;
         }
         if (i == 0) {
-            XtSetArg(args[n], XtNhorizDistance, first_horiz); n++;
+            IswSetArg(args[n], IswNhorizDistance, first_horiz); n++;
         } else {
-            XtSetArg(args[n], XtNfromHoriz, prev);           n++;
-            XtSetArg(args[n], XtNhorizDistance, btn_pad);    n++;
+            IswSetArg(args[n], IswNfromHoriz, prev);           n++;
+            IswSetArg(args[n], IswNhorizDistance, btn_pad);    n++;
         }
-        XtSetArg(args[n], XtNleft, XtChainRight);            n++;
-        XtSetArg(args[n], XtNright, XtChainRight);           n++;
-        XtSetArg(args[n], XtNbottom, XtChainBottom);         n++;
-        XtSetArg(args[n], XtNtop, XtChainBottom);            n++;
-        Widget btn = XtCreateManagedWidget("btn", commandWidgetClass,
+        IswSetArg(args[n], IswNleft, IswChainRight);            n++;
+        IswSetArg(args[n], IswNright, IswChainRight);           n++;
+        IswSetArg(args[n], IswNbottom, IswChainBottom);         n++;
+        IswSetArg(args[n], IswNtop, IswChainBottom);            n++;
+        Widget btn = IswCreateManagedWidget("btn", commandWidgetClass,
                                            form, args, n);
-        XtAddCallback(btn, XtNcallback, buttons[i].callback,
+        IswAddCallback(btn, IswNcallback, buttons[i].callback,
                       buttons[i].client_data);
         if (i == 0) first = btn;
         prev = btn;
@@ -185,7 +185,7 @@ static void ctx_dismiss_and_free(DialogCtx *ctx)
  * Confirm dialog
  * ================================================================ */
 
-static void confirm_action_cb(Widget w, XtPointer cd, XtPointer call)
+static void confirm_action_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -194,7 +194,7 @@ static void confirm_action_cb(Widget w, XtPointer cd, XtPointer call)
     ctx_dismiss_and_free(ctx);
 }
 
-static void confirm_cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void confirm_cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -216,11 +216,11 @@ Widget isde_dialog_confirm(Widget parent, const char *title,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, message); n++;
-    Widget dialog = XtCreateManagedWidget("confirmDialog", dialogWidgetClass,
+    IswSetArg(args[n], IswNlabel, message); n++;
+    Widget dialog = IswCreateManagedWidget("confirmDialog", dialogWidgetClass,
                                           ctx->shell, args, n);
 
-    Widget anchor = XtNameToWidget(dialog, "label");
+    Widget anchor = IswNameToWidget(dialog, "label");
 
     IsdeDialogButton btns[2] = {
         { action_label, confirm_action_cb, ctx },
@@ -228,7 +228,7 @@ Widget isde_dialog_confirm(Widget parent, const char *title,
     };
     isde_dialog_add_buttons(dialog, anchor, 300, btns, 2);
 
-    isde_dialog_popup(ctx->shell, XtGrabExclusive);
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
     return ctx->shell;
 }
 
@@ -236,7 +236,7 @@ Widget isde_dialog_confirm(Widget parent, const char *title,
  * Message dialog
  * ================================================================ */
 
-static void message_ok_cb(Widget w, XtPointer cd, XtPointer call)
+static void message_ok_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -258,18 +258,18 @@ Widget isde_dialog_message(Widget parent, const char *title,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, message); n++;
-    Widget dialog = XtCreateManagedWidget("messageDialog", dialogWidgetClass,
+    IswSetArg(args[n], IswNlabel, message); n++;
+    Widget dialog = IswCreateManagedWidget("messageDialog", dialogWidgetClass,
                                           ctx->shell, args, n);
 
-    Widget anchor = XtNameToWidget(dialog, "label");
+    Widget anchor = IswNameToWidget(dialog, "label");
 
     IsdeDialogButton btns[1] = {
         { "OK", message_ok_cb, ctx },
     };
     isde_dialog_add_buttons(dialog, anchor, 300, btns, 1);
 
-    isde_dialog_popup(ctx->shell, XtGrabExclusive);
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
     return ctx->shell;
 }
 
@@ -277,7 +277,7 @@ Widget isde_dialog_message(Widget parent, const char *title,
  * Input dialog
  * ================================================================ */
 
-static void input_ok_cb(Widget w, XtPointer cd, XtPointer call)
+static void input_ok_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -289,7 +289,7 @@ static void input_ok_cb(Widget w, XtPointer cd, XtPointer call)
     ctx_dismiss_and_free(ctx);
 }
 
-static void input_cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void input_cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -311,17 +311,17 @@ Widget isde_dialog_input(Widget parent, const char *title,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNlabel, prompt);                    n++;
+    IswSetArg(args[n], IswNlabel, prompt);                    n++;
     if (initial_value) {
-        XtSetArg(args[n], XtNvalue, initial_value);         n++;
+        IswSetArg(args[n], IswNvalue, initial_value);         n++;
     }
-    ctx->dialog_widget = XtCreateManagedWidget("inputDialog",
+    ctx->dialog_widget = IswCreateManagedWidget("inputDialog",
                                                dialogWidgetClass,
                                                ctx->shell, args, n);
 
-    Widget value_w = XtNameToWidget(ctx->dialog_widget, "value");
+    Widget value_w = IswNameToWidget(ctx->dialog_widget, "value");
     Widget anchor = value_w ? value_w :
-                    XtNameToWidget(ctx->dialog_widget, "label");
+                    IswNameToWidget(ctx->dialog_widget, "label");
 
     IsdeDialogButton btns[2] = {
         { "OK",     input_ok_cb,     ctx },
@@ -330,7 +330,7 @@ Widget isde_dialog_input(Widget parent, const char *title,
     isde_dialog_add_buttons(ctx->dialog_widget, anchor,
                             300, btns, 2);
 
-    isde_dialog_popup(ctx->shell, XtGrabExclusive);
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
     return ctx->shell;
 }
 
@@ -338,7 +338,7 @@ Widget isde_dialog_input(Widget parent, const char *title,
  * Font chooser dialog
  * ================================================================ */
 
-static void font_ok_cb(Widget w, XtPointer cd, XtPointer call)
+static void font_ok_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -353,7 +353,7 @@ static void font_ok_cb(Widget w, XtPointer cd, XtPointer call)
     ctx_dismiss_and_free(ctx);
 }
 
-static void font_cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void font_cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -375,25 +375,25 @@ Widget isde_dialog_font(Widget parent, const char *title,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    Widget form = XtCreateManagedWidget("fcForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    Widget form = IswCreateManagedWidget("fcForm", formWidgetClass,
                                         ctx->shell, args, n);
 
     /* FontChooser widget */
     n = 0;
     if (initial_family) {
-        XtSetArg(args[n], XtNfontFamily, initial_family); n++;
+        IswSetArg(args[n], IswNfontFamily, initial_family); n++;
     }
-    XtSetArg(args[n], XtNfontSize, initial_size);          n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);           n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainRight);             n++;
-    XtSetArg(args[n], XtNwidth, 390);          n++;
-    XtSetArg(args[n], XtNheight, 290);         n++;
-    ctx->chooser_widget = XtCreateManagedWidget("fontChooser",
+    IswSetArg(args[n], IswNfontSize, initial_size);          n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    IswSetArg(args[n], IswNwidth, 390);          n++;
+    IswSetArg(args[n], IswNheight, 290);         n++;
+    ctx->chooser_widget = IswCreateManagedWidget("fontChooser",
                                                  fontChooserWidgetClass,
                                                  form, args, n);
 
@@ -404,7 +404,7 @@ Widget isde_dialog_font(Widget parent, const char *title,
     isde_dialog_add_buttons(form, ctx->chooser_widget,
                             400 - 8 * 2, btns, 2);
 
-    isde_dialog_popup(ctx->shell, XtGrabExclusive);
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
     return ctx->shell;
 }
 
@@ -412,7 +412,7 @@ Widget isde_dialog_font(Widget parent, const char *title,
  * About dialog
  * ================================================================ */
 
-static void about_close_cb(Widget w, XtPointer cd, XtPointer call)
+static void about_close_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
@@ -430,9 +430,9 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    Widget form = XtCreateManagedWidget("aboutForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    Widget form = IswCreateManagedWidget("aboutForm", formWidgetClass,
                                         ctx->shell, args, n);
 
     Widget prev = NULL;
@@ -440,10 +440,10 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
     /* Icon (optional) */
     if (icon_path) {
         n = 0;
-        XtSetArg(args[n], XtNimage, icon_path);        n++;
-        XtSetArg(args[n], XtNlabel, "");               n++;
-        XtSetArg(args[n], XtNborderWidth, 0);          n++;
-        prev = XtCreateManagedWidget("aboutIcon", labelWidgetClass,
+        IswSetArg(args[n], IswNimage, icon_path);        n++;
+        IswSetArg(args[n], IswNlabel, "");               n++;
+        IswSetArg(args[n], IswNborderWidth, 0);          n++;
+        prev = IswCreateManagedWidget("aboutIcon", labelWidgetClass,
                                       form, args, n);
     }
 
@@ -452,19 +452,19 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
     snprintf(title_buf, sizeof(title_buf), "%s %s",
              app_name ? app_name : "", version ? version : "");
     n = 0;
-    XtSetArg(args[n], XtNlabel, title_buf);        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);          n++;
-    if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-    prev = XtCreateManagedWidget("aboutTitle", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, title_buf);        n++;
+    IswSetArg(args[n], IswNborderWidth, 0);          n++;
+    if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+    prev = IswCreateManagedWidget("aboutTitle", labelWidgetClass,
                                   form, args, n);
 
     /* Description */
     if (description) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, description);     n++;
-        XtSetArg(args[n], XtNborderWidth, 0);          n++;
-        XtSetArg(args[n], XtNfromVert, prev);          n++;
-        prev = XtCreateManagedWidget("aboutDesc", labelWidgetClass,
+        IswSetArg(args[n], IswNlabel, description);     n++;
+        IswSetArg(args[n], IswNborderWidth, 0);          n++;
+        IswSetArg(args[n], IswNfromVert, prev);          n++;
+        prev = IswCreateManagedWidget("aboutDesc", labelWidgetClass,
                                       form, args, n);
     }
 
@@ -475,7 +475,7 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
     isde_dialog_add_buttons(form, prev, 300 - 8 * 2,
                             btns, 1);
 
-    isde_dialog_popup(ctx->shell, XtGrabExclusive);
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
     return ctx->shell;
 }
 
@@ -491,11 +491,11 @@ struct IsdeProgress {
     Widget       label;
     Widget       file_bar;
     Widget       file_label;
-    XtIntervalId show_timer;
-    XtAppContext app;
+    IswIntervalId show_timer;
+    IswAppContext app;
     Widget       parent;
     const char  *title;
-    XtCallbackProc cancel_cb;
+    IswCallbackProc cancel_cb;
     void        *cancel_data;
     int          last_pct;
     int          last_file_pct;
@@ -510,61 +510,61 @@ static void progress_create_dialog(IsdeProgress *p)
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    Widget vbox = XtCreateManagedWidget("progressBox", flexBoxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    Widget vbox = IswCreateManagedWidget("progressBox", flexBoxWidgetClass,
                                          p->shell, args, n);
 
     /* Label — disable resize so text changes don't trigger relayout */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                       n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyLeft);          n++;
-    XtSetArg(args[n], XtNresize, False);                   n++;
-    p->label = XtCreateManagedWidget("progressLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "");                       n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyLeft);          n++;
+    IswSetArg(args[n], IswNresize, False);                   n++;
+    p->label = IswCreateManagedWidget("progressLabel", labelWidgetClass,
                                       vbox, args, n);
 
     /* Progress bar */
     n = 0;
-    XtSetArg(args[n], XtNvalue, 0);                        n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
-    XtSetArg(args[n], XtNflexGrow, 1);                     n++;
-    p->bar = XtCreateManagedWidget("progressBar", progressBarWidgetClass,
+    IswSetArg(args[n], IswNvalue, 0);                        n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
+    IswSetArg(args[n], IswNflexGrow, 1);                     n++;
+    p->bar = IswCreateManagedWidget("progressBar", progressBarWidgetClass,
                                     vbox, args, n);
 
     /* Per-file label — disable resize so text changes don't trigger relayout */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                       n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyLeft);          n++;
-    XtSetArg(args[n], XtNresize, False);                   n++;
-    p->file_label = XtCreateManagedWidget("fileLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "");                       n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyLeft);          n++;
+    IswSetArg(args[n], IswNresize, False);                   n++;
+    p->file_label = IswCreateManagedWidget("fileLabel", labelWidgetClass,
                                            vbox, args, n);
 
     /* Per-file progress bar */
     n = 0;
-    XtSetArg(args[n], XtNvalue, 0);                        n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
-    XtSetArg(args[n], XtNflexGrow, 1);                     n++;
-    p->file_bar = XtCreateManagedWidget("fileBar", progressBarWidgetClass,
+    IswSetArg(args[n], IswNvalue, 0);                        n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
+    IswSetArg(args[n], IswNflexGrow, 1);                     n++;
+    p->file_bar = IswCreateManagedWidget("fileBar", progressBarWidgetClass,
                                          vbox, args, n);
 
     /* Cancel button — right-aligned */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");                 n++;
-    XtSetArg(args[n], XtNwidth, 80);           n++;
-    XtSetArg(args[n], XtNinternalWidth, 8);    n++;
-    XtSetArg(args[n], XtNinternalHeight, 8);   n++;
-    XtSetArg(args[n], XtNflexAlign, XtflexAlignEnd);       n++;
-    Widget cancel = XtCreateManagedWidget("cancelBtn", commandWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Cancel");                 n++;
+    IswSetArg(args[n], IswNwidth, 80);           n++;
+    IswSetArg(args[n], IswNinternalWidth, 8);    n++;
+    IswSetArg(args[n], IswNinternalHeight, 8);   n++;
+    IswSetArg(args[n], IswNflexAlign, XtflexAlignEnd);       n++;
+    Widget cancel = IswCreateManagedWidget("cancelBtn", commandWidgetClass,
                                            vbox, args, n);
     if (p->cancel_cb)
-        XtAddCallback(cancel, XtNcallback, p->cancel_cb, p->cancel_data);
+        IswAddCallback(cancel, IswNcallback, p->cancel_cb, p->cancel_data);
 
-    isde_dialog_popup(p->shell, XtGrabNone);
+    isde_dialog_popup(p->shell, IswGrabNone);
 }
 
-static void progress_show_delay_cb(XtPointer closure, XtIntervalId *id)
+static void progress_show_delay_cb(IswPointer closure, IswIntervalId *id)
 {
     (void)id;
     IsdeProgress *p = (IsdeProgress *)closure;
@@ -573,8 +573,8 @@ static void progress_show_delay_cb(XtPointer closure, XtIntervalId *id)
 }
 
 IsdeProgress *isde_progress_create(Widget parent, const char *title,
-                                   XtAppContext app,
-                                   XtCallbackProc cancel_cb, void *data)
+                                   IswAppContext app,
+                                   IswCallbackProc cancel_cb, void *data)
 {
     IsdeProgress *p = calloc(1, sizeof(*p));
     p->parent = parent;
@@ -583,7 +583,7 @@ IsdeProgress *isde_progress_create(Widget parent, const char *title,
     p->cancel_cb = cancel_cb;
     p->cancel_data = data;
 
-    p->show_timer = XtAppAddTimeOut(app, PROGRESS_SHOW_DELAY_MS,
+    p->show_timer = IswAppAddTimeOut(app, PROGRESS_SHOW_DELAY_MS,
                                     progress_show_delay_cb, p);
     return p;
 }
@@ -597,14 +597,14 @@ void isde_progress_update(IsdeProgress *p, int percent, const char *message)
 
     if (p->bar && percent != p->last_pct) {
         Arg a;
-        XtSetArg(a, XtNvalue, percent);
-        XtSetValues(p->bar, &a, 1);
+        IswSetArg(a, IswNvalue, percent);
+        IswSetValues(p->bar, &a, 1);
         p->last_pct = percent;
     }
     if (p->label && message && strcmp(message, p->last_msg) != 0) {
         Arg a;
-        XtSetArg(a, XtNlabel, message);
-        XtSetValues(p->label, &a, 1);
+        IswSetArg(a, IswNlabel, message);
+        IswSetValues(p->label, &a, 1);
         snprintf(p->last_msg, sizeof(p->last_msg), "%s", message);
     }
 }
@@ -619,15 +619,15 @@ void isde_progress_update_file(IsdeProgress *p, int percent,
 
     if (p->file_bar && percent != p->last_file_pct) {
         Arg a;
-        XtSetArg(a, XtNvalue, percent);
-        XtSetValues(p->file_bar, &a, 1);
+        IswSetArg(a, IswNvalue, percent);
+        IswSetValues(p->file_bar, &a, 1);
         p->last_file_pct = percent;
     }
     if (p->file_label && message &&
         strcmp(message, p->last_file_msg) != 0) {
         Arg a;
-        XtSetArg(a, XtNlabel, message);
-        XtSetValues(p->file_label, &a, 1);
+        IswSetArg(a, IswNlabel, message);
+        IswSetValues(p->file_label, &a, 1);
         snprintf(p->last_file_msg, sizeof(p->last_file_msg), "%s", message);
     }
 }
@@ -637,7 +637,7 @@ void isde_progress_destroy(IsdeProgress *p)
     if (!p) return;
 
     if (p->show_timer) {
-        XtRemoveTimeOut(p->show_timer);
+        IswRemoveTimeOut(p->show_timer);
         p->show_timer = 0;
     }
     if (p->shell) {

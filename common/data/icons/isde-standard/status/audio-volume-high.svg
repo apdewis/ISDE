@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<!-- speaker body -->
+<polygon points="6,18 14,18 24,8 24,40 14,30 6,30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+<!-- sound waves -->
+<path d="M30,18 Q34,24 30,30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+<path d="M34,13 Q40,24 34,35" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+<path d="M38,8 Q46,24 38,40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>

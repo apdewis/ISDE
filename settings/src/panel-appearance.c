@@ -97,7 +97,7 @@ static int find_index(String *arr, int count, const char *name)
 
 /* ---------- create ---------- */
 
-static Widget appearance_create(Widget parent, XtAppContext app)
+static Widget appearance_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
@@ -105,14 +105,16 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     Cardinal n;
     Dimension pw, ph;
     Arg qargs[20];
-    XtSetArg(qargs[0], XtNwidth, &pw);
-    XtSetArg(qargs[1], XtNheight, &ph);
-    XtGetValues(parent, qargs, 2);
+    IswSetArg(qargs[0], IswNwidth, &pw);
+    IswSetArg(qargs[1], IswNheight, &ph);
+    IswGetValues(parent, qargs, 2);
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateWidget("appearForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    IswSetArg(args[n], IswNresizable, True);              n++;
+    
+    Widget form = IswCreateWidget("appearForm", formWidgetClass,
                                  parent, args, n);
 
     /* Load current config */
@@ -137,20 +139,19 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     Widget prev = NULL;
     int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
 
-    int lbl_w = 100;
-    int list_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
-    if (list_w < 100) { list_w = 100; }
+    int lbl_w = 150;
+    int list_w = 150;
 
     /* --- Colour Scheme --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Colour Scheme:");    n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNwidth, lbl_w);                  n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);       n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);             n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);            n++;
-    if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-    Widget scheme_lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Colour Scheme:");    n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNwidth, lbl_w);                  n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);       n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);             n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);            n++;
+    if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+    Widget scheme_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
                                               form, args, n);
 
     char **raw_schemes = NULL;
@@ -164,34 +165,33 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     saved_scheme_idx = find_index(scheme_names_arr, scheme_count, cur_scheme);
 
     n = 0;
-    XtSetArg(args[n], XtNlist, scheme_names_arr);      n++;
-    XtSetArg(args[n], XtNnumberStrings, scheme_count);  n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);            n++;
-    XtSetArg(args[n], XtNforceColumns, True);           n++;
-    XtSetArg(args[n], XtNverticalList, True);           n++;
-    XtSetArg(args[n], XtNheight, list_height);          n++;
-    XtSetArg(args[n], XtNwidth, list_w);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNfromHoriz, scheme_lbl);        n++;
-    XtSetArg(args[n], XtNresizable, True);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);          n++;
-    if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-    scheme_list = XtCreateManagedWidget("schemeList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, scheme_names_arr);      n++;
+    IswSetArg(args[n], IswNnumberStrings, scheme_count);  n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);            n++;
+    IswSetArg(args[n], IswNforceColumns, True);           n++;
+    IswSetArg(args[n], IswNverticalList, True);           n++;
+    IswSetArg(args[n], IswNheight, list_height);          n++;
+    IswSetArg(args[n], IswNwidth, list_w);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNfromHoriz, scheme_lbl);        n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
+
+    if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+    scheme_list = IswCreateManagedWidget("schemeList", listWidgetClass,
                                         form, args, n);
     IswListHighlight(scheme_list, saved_scheme_idx);
     prev = scheme_list;
 
     /* --- Cursor Theme --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Cursor Theme:");     n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNwidth, lbl_w);                  n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);       n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);             n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);            n++;
-    XtSetArg(args[n], XtNfromVert, prev);                 n++;
-    Widget cursor_lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Cursor Theme:");     n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNwidth, lbl_w);                  n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);       n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);             n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);            n++;
+    IswSetArg(args[n], IswNfromVert, prev);                 n++;
+    Widget cursor_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
                                               form, args, n);
 
     char **raw_cursors = NULL;
@@ -205,34 +205,33 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     saved_cursor_idx = find_index(cursor_names_arr, cursor_count, cur_cursor);
 
     n = 0;
-    XtSetArg(args[n], XtNlist, cursor_names_arr);      n++;
-    XtSetArg(args[n], XtNnumberStrings, cursor_count);  n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);            n++;
-    XtSetArg(args[n], XtNforceColumns, True);           n++;
-    XtSetArg(args[n], XtNverticalList, True);           n++;
-    XtSetArg(args[n], XtNheight, list_height);          n++;
-    XtSetArg(args[n], XtNwidth, list_w);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNfromHoriz, cursor_lbl);        n++;
-    XtSetArg(args[n], XtNfromVert, prev);                n++;
-    XtSetArg(args[n], XtNresizable, True);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);          n++;
-    cursor_list = XtCreateManagedWidget("cursorList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, cursor_names_arr);      n++;
+    IswSetArg(args[n], IswNnumberStrings, cursor_count);  n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);            n++;
+    IswSetArg(args[n], IswNforceColumns, True);           n++;
+    IswSetArg(args[n], IswNverticalList, True);           n++;
+    IswSetArg(args[n], IswNheight, list_height);          n++;
+    IswSetArg(args[n], IswNwidth, list_w);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNfromHoriz, cursor_lbl);        n++;
+    IswSetArg(args[n], IswNfromVert, prev);                n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
+
+    cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
                                         form, args, n);
     IswListHighlight(cursor_list, saved_cursor_idx);
     prev = cursor_list;
 
     /* --- Icon Theme --- */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Icon Theme:");        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNwidth, lbl_w);                  n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);       n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);             n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);            n++;
-    XtSetArg(args[n], XtNfromVert, prev);                 n++;
-    Widget icon_lbl = XtCreateManagedWidget("lbl", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Icon Theme:");        n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNwidth, lbl_w);                  n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);       n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);             n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);            n++;
+    IswSetArg(args[n], IswNfromVert, prev);                 n++;
+    Widget icon_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
                                             form, args, n);
 
     char **raw_icons = NULL;
@@ -246,20 +245,18 @@ static Widget appearance_create(Widget parent, XtAppContext app)
     saved_icon_idx = find_index(icon_names_arr, icon_count, cur_icon);
 
     n = 0;
-    XtSetArg(args[n], XtNlist, icon_names_arr);        n++;
-    XtSetArg(args[n], XtNnumberStrings, icon_count);    n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);            n++;
-    XtSetArg(args[n], XtNforceColumns, True);           n++;
-    XtSetArg(args[n], XtNverticalList, True);           n++;
-    XtSetArg(args[n], XtNheight, list_height);          n++;
-    XtSetArg(args[n], XtNwidth, list_w);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 0);               n++;
-    XtSetArg(args[n], XtNfromHoriz, icon_lbl);          n++;
-    XtSetArg(args[n], XtNfromVert, prev);                n++;
-    XtSetArg(args[n], XtNresizable, True);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);            n++;
-    XtSetArg(args[n], XtNright, XtChainRight);          n++;
-    icon_list = XtCreateManagedWidget("iconList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, icon_names_arr);        n++;
+    IswSetArg(args[n], IswNnumberStrings, icon_count);    n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);            n++;
+    IswSetArg(args[n], IswNforceColumns, True);           n++;
+    IswSetArg(args[n], IswNverticalList, True);           n++;
+    IswSetArg(args[n], IswNheight, list_height);          n++;
+    IswSetArg(args[n], IswNwidth, list_w);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 0);               n++;
+    IswSetArg(args[n], IswNfromHoriz, icon_lbl);          n++;
+    IswSetArg(args[n], IswNfromVert, prev);                n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
+    icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
                                       form, args, n);
     IswListHighlight(icon_list, saved_icon_idx);
     prev = icon_list;

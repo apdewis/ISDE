@@ -4,10 +4,10 @@
 #ifndef ISDE_GREETER_H
 #define ISDE_GREETER_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/Form.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
@@ -29,7 +29,7 @@ typedef struct {
 /* ---------- Greeter state ---------- */
 typedef struct Greeter {
     /* Xt core */
-    XtAppContext    app;
+    IswAppContext    app;
     Widget          toplevel;
     Widget          shell;         /* OverrideShell (fullscreen) */
     Widget          form;          /* main Form layout */
@@ -39,7 +39,7 @@ typedef struct Greeter {
     Widget          clock_date;
     char           *clock_time_fmt;
     char           *clock_date_fmt;
-    XtIntervalId    clock_timer;
+    IswIntervalId    clock_timer;
 
     /* Login form widgets */
     Widget          user_label;
@@ -64,7 +64,7 @@ typedef struct Greeter {
 
     /* IPC */
     int             ipc_fd;          /* socket to daemon */
-    XtInputId       ipc_input;       /* Xt input handler */
+    IswInputId       ipc_input;       /* Xt input handler */
     char            ipc_buf[4096];
     int             ipc_buf_len;
 

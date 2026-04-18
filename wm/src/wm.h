@@ -4,10 +4,10 @@
 #ifndef ISDE_WM_H
 #define ISDE_WM_H
 
-#include <X11/Intrinsic.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
-#include <X11/IntrinsicP.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
+#include <ISW/IntrinsicP.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
 
@@ -24,8 +24,8 @@
 
 /* ---------- Frame geometry (all in logical pixels) ---------- */
 /* All client geometry (WmClient.x/y/width/height) and frame metrics are
- * stored in logical (unscaled) pixels.  Xt functions (XtConfigureWidget,
- * XtMoveWidget) accept logical values and scale internally.  Raw XCB
+ * stored in logical (unscaled) pixels.  Xt functions (IswConfigureWidget,
+ * IswMoveWidget) accept logical values and scale internally.  Raw XCB
  * calls that talk to the X server must multiply by wm->scale_factor. */
 #define WM_TITLE_HEIGHT    isde_font_height("title", 10)
 #define WM_BORDER_WIDTH     0
@@ -65,7 +65,7 @@ typedef struct WmClient {
 /* ---------- WM state ---------- */
 typedef struct Wm {
     /* Xt */
-    XtAppContext           app;
+    IswAppContext           app;
     Widget                 toplevel;
 
     /* XCB (obtained from Xt's display) */
@@ -104,7 +104,16 @@ typedef struct Wm {
     int                    num_desktops;
     uint32_t               current_desktop;
     Widget                 desk_osd;       /* OSD popup shell */
-    XtIntervalId           desk_osd_timer; /* auto-hide timer */
+    IswIntervalId           desk_osd_timer; /* auto-hide timer */
+
+    /* Window switcher (Alt+Tab) */
+    Widget                 switcher_shell;   /* OSD popup shell */
+    WmClient             **switcher_order;   /* MRU-sorted client array */
+    String                *switcher_labels;  /* title strings for list */
+    int                    switcher_count;   /* number of entries */
+    int                    switcher_visible; /* number of visible label rows */
+    int                    switcher_sel;     /* currently highlighted index */
+    int                    switcher_active;  /* 1 while Alt is held */
 
     /* Drag state */
     enum { DRAG_NONE, DRAG_MOVE, DRAG_RESIZE } drag_mode;
@@ -154,6 +163,7 @@ void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);
 void      wm_minimize_client(Wm *wm, WmClient *c);
+void      wm_restore_client(Wm *wm, WmClient *c);
 
 /* ---------- wm.c — work area ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
@@ -202,5 +212,13 @@ void  wm_desktops_show_osd(Wm *wm);
 /* ---------- keys.c — key binding handling ---------- */
 void  wm_keys_setup(Wm *wm);
 void  wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev);
+void  wm_keys_handle_release(Wm *wm, xcb_key_release_event_t *ev);
+
+/* ---------- switcher.c — Alt+Tab window switcher OSD ---------- */
+void  wm_switcher_show(Wm *wm);
+void  wm_switcher_next(Wm *wm);
+void  wm_switcher_prev(Wm *wm);
+void  wm_switcher_commit(Wm *wm);
+void  wm_switcher_cancel(Wm *wm);
 
 #endif /* ISDE_WM_H */

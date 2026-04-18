@@ -16,6 +16,7 @@
  */
 #include "fm.h"
 
+#include <ISW/ISWRender.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -39,10 +40,10 @@ static void free_drag_paths(Fm *fm)
 /* ---------- drag source: convert callback ---------- */
 
 static Boolean drag_convert(Widget w, xcb_atom_t target_type,
-                            XtPointer *data_return,
+                            IswPointer *data_return,
                             unsigned long *length_return,
                             int *format_return,
-                            XtPointer client_data)
+                            IswPointer client_data)
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
@@ -62,13 +63,13 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
         total += 7 + strlen(fm->dnd_drag_paths[i]) + 2;
     }
 
-    char *buf = XtMalloc(total + 1);
+    char *buf = IswMalloc(total + 1);
     char *p = buf;
     for (int i = 0; i < fm->dnd_ndrag_paths; i++) {
         p += sprintf(p, "file://%s\r\n", fm->dnd_drag_paths[i]);
     }
 
-    *data_return = (XtPointer)buf;
+    *data_return = (IswPointer)buf;
     *length_return = p - buf;
     *format_return = 8;
     return True;
@@ -77,7 +78,7 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
 /* ---------- drag source: finished callback ---------- */
 
 static void drag_finished(Widget w, IswDndAction action,
-                          Boolean accepted, XtPointer client_data)
+                          Boolean accepted, IswPointer client_data)
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
@@ -225,62 +226,211 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
     start_drag(fm);
 }
 
-static XtActionsRec dnd_actions[] = {
+static IswActionsRec dnd_actions[] = {
     {"fm-dnd-press", act_dnd_press},
     {"fm-dnd-check", act_dnd_check},
 };
 
-/* ---------- drop target callback ---------- */
+/* ---------- URI extraction helper ---------- */
 
-static void drop_cb(Widget w, XtPointer cd, XtPointer call)
+/* Extract file paths from drop callback data.  ISW populates d->uris
+ * when the selection type matches text/uri-list.  For intra-process
+ * drops the reported type may differ, so fall back to parsing d->data. */
+static int extract_uris(IswDropCallbackData *d,
+                        char ***local_out, const char *const **uris_out)
+{
+    *local_out = NULL;
+
+    if (d->num_uris > 0 && d->uris) {
+        *uris_out = (const char *const *)d->uris;
+        return d->num_uris;
+    }
+
+    if (!d->data || d->data_length == 0)
+        return 0;
+
+    char **local = NULL;
+    int n = 0, cap = 0;
+    const char *p = (const char *)d->data;
+    const char *end = p + d->data_length;
+    while (p < end) {
+        const char *nl = memchr(p, '\n', end - p);
+        if (!nl) nl = end;
+        size_t len = nl - p;
+        if (len > 0 && p[len - 1] == '\r') len--;
+        if (len > 0 && p[0] != '#') {
+            if (n >= cap) {
+                cap = cap ? cap * 2 : 8;
+                local = realloc(local, cap * sizeof(char *));
+            }
+            local[n++] = strndup(p, len);
+        }
+        p = nl + 1;
+    }
+    *local_out = local;
+    *uris_out = (const char *const *)local;
+    return n;
+}
+
+static void free_local_uris(char **local, int n)
+{
+    for (int i = 0; i < n; i++)
+        free(local[i]);
+    free(local);
+}
+
+/* ---------- collect file paths from URIs ---------- */
+
+static int collect_paths(const char *const *uris, int num_uris,
+                         const char *target_dir, IswDndAction action,
+                         char **paths_out)
+{
+    int npaths = 0;
+    for (int i = 0; i < num_uris; i++) {
+        const char *path = uris[i];
+        if (strncmp(path, "file://", 7) == 0)
+            path += 7;
+        if (path[0] != '/')
+            continue;
+
+        const char *src_slash = strrchr(path, '/');
+        if (!src_slash)
+            continue;
+        size_t src_dir_len = src_slash - path;
+        int same_dir = (strlen(target_dir) == src_dir_len &&
+                        strncmp(target_dir, path, src_dir_len) == 0);
+        if (same_dir && action == ISW_DND_ACTION_MOVE)
+            continue;
+
+        paths_out[npaths++] = (char *)path;
+    }
+    return npaths;
+}
+
+/* ---------- drop highlight helpers ---------- */
+
+/*
+ * Translate viewport-relative coordinates to the active view widget
+ * and return the item index under the pointer, or -1.
+ */
+static int hit_test_view(Fm *fm, int vp_x, int vp_y)
+{
+    Widget view;
+    if (fm->view_mode == FM_VIEW_LIST)
+        view = fm->listview;
+    else
+        view = fm->iconview;
+
+    /* The viewport coords include the scrollbar offset and the clip
+     * position.  Translate directly between X windows to get view-
+     * relative coordinates regardless of widget nesting.
+     * xcb_translate_coordinates works in physical pixels, so scale
+     * the logical input coords and scale the result back. */
+    double sf = ISWScaleFactor(fm->viewport);
+    xcb_connection_t *conn = IswDisplay(fm->viewport);
+    xcb_translate_coordinates_cookie_t tc =
+        xcb_translate_coordinates(conn,
+            IswWindow(fm->viewport), IswWindow(view),
+            (int16_t)(vp_x * sf), (int16_t)(vp_y * sf));
+    xcb_translate_coordinates_reply_t *tr =
+        xcb_translate_coordinates_reply(conn, tc, NULL);
+    if (!tr)
+        return -1;
+    int vx = (int)(tr->dst_x / sf + 0.5);
+    int vy = (int)(tr->dst_y / sf + 0.5);
+    free(tr);
+
+    if (fm->view_mode == FM_VIEW_LIST)
+        return IswListViewHitTest(view, vx, vy);
+    else
+        return IswIconViewHitTest(view, vx, vy);
+}
+
+static void set_drop_highlight(Fm *fm, int index)
+{
+    if (index == fm->dnd_drop_highlight)
+        return;
+    fm->dnd_drop_highlight = index;
+
+    if (fm->view_mode == FM_VIEW_LIST)
+        IswListViewSetDropHighlight(fm->listview, index);
+    else
+        IswIconViewSetDropHighlight(fm->iconview, index);
+}
+
+/* ---------- drag-over callbacks ---------- */
+
+static void drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w;
+    Fm *fm = (Fm *)cd;
+    IswDragOverCallbackData *d = (IswDragOverCallbackData *)call;
+
+    int index = hit_test_view(fm, d->x, d->y);
+
+    /* Reject drops onto regular files */
+    if (index >= 0 && index < fm->nentries && !fm->entries[index].is_dir) {
+        set_drop_highlight(fm, -1);
+        return;
+    }
+
+    /* Highlight directories; background drops go into cwd */
+    if (index >= 0 && index < fm->nentries)
+        set_drop_highlight(fm, index);
+    else
+        set_drop_highlight(fm, -1);
+
+    /* Accept the proposed action so modifier keys (Ctrl=copy, Shift=move)
+     * are honored instead of falling through to NegotiateType which always
+     * picks copy. Constrain to actions we actually support. */
+    IswDndAction dominated = ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE;
+    IswDndAction action = d->proposed_action & dominated;
+    if (action == ISW_DND_ACTION_NONE)
+        action = ISW_DND_ACTION_COPY;
+
+    Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
+    d->accepted_type   = ISWXdndInternType(dnd_w, "text/uri-list");
+    d->accepted_action = action;
+}
+
+static void drag_leave_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    Fm *fm = (Fm *)cd;
+    set_drop_highlight(fm, -1);
+}
+
+/* ---------- content area drop callback ---------- */
+
+static void drop_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Fm *fm = (Fm *)cd;
     IswDropCallbackData *d = (IswDropCallbackData *)call;
 
-    if (d->num_uris <= 0 || !d->uris) {
+    char **local = NULL;
+    const char *const *uris;
+    int num_uris = extract_uris(d, &local, &uris);
+    if (num_uris <= 0)
         return;
-    }
 
+    /* If a directory is highlighted, drop into it; otherwise use cwd */
     const char *target_dir = fm->cwd;
+    int hi = fm->dnd_drop_highlight;
+    if (hi >= 0 && hi < fm->nentries && fm->entries[hi].is_dir)
+        target_dir = fm->entries[hi].full_path;
 
-    /* Collect valid file paths */
-    int cap = d->num_uris;
-    char **paths = malloc(cap * sizeof(char *));
-    int npaths = 0;
+    set_drop_highlight(fm, -1);
 
+    char **paths = malloc(num_uris * sizeof(char *));
     fm->dnd_drop_was_noop = True;
-
-    for (int i = 0; i < d->num_uris; i++) {
-        const char *uri = d->uris[i];
-        const char *path = uri;
-        if (strncmp(path, "file://", 7) == 0) {
-            path += 7;
-        }
-        if (path[0] != '/') {
-            continue;
-        }
-
-        const char *src_slash = strrchr(path, '/');
-        if (!src_slash) {
-            continue;
-        }
-        size_t src_dir_len = src_slash - path;
-        int same_dir = (strlen(target_dir) == src_dir_len &&
-                        strncmp(target_dir, path, src_dir_len) == 0);
-
-        if (same_dir && d->action == ISW_DND_ACTION_MOVE) {
-            continue;
-        }
-
-        paths[npaths++] = (char *)path;
-        fm->dnd_drop_was_noop = False;
-    }
-
+    int npaths = collect_paths(uris, num_uris, target_dir, d->action, paths);
     if (npaths > 0) {
+        fm->dnd_drop_was_noop = False;
         jobqueue_submit_copy(fm->app_state, fm, paths, npaths, target_dir);
     }
     free(paths);
+    if (local) free_local_uris(local, num_uris);
 }
 
 /* ---------- public API ---------- */
@@ -291,26 +441,28 @@ void dnd_init(Fm *fm)
     fm->dnd_drop_was_noop = False;
     fm->dnd_drag_paths = NULL;
     fm->dnd_ndrag_paths = 0;
+    fm->dnd_drop_highlight = -1;
 
-    /* Register the shell as drop target.  The Viewport's clip window
-     * is not a Composite, so FindDropChild can't traverse past it
-     * to reach the iconview.  Registering on the shell works because
-     * FindDropTarget checks it first via DropConfig. */
-    xcb_atom_t uri_type = ISWXdndInternType(fm->toplevel, "text/uri-list");
-    ISWXdndWidgetAcceptDrops(fm->toplevel);
-    ISWXdndSetDropCallback(fm->toplevel, drop_cb, fm);
-    ISWXdndSetAcceptedTypes(fm->toplevel, &uri_type, 1);
-    ISWXdndSetAcceptedActions(fm->toplevel,
+    /* Register the content viewport as drop target. The places viewport
+     * is registered separately in places_init(). FindDropTarget walks
+     * the widget tree and finds the correct target by position. */
+    xcb_atom_t uri_type = ISWXdndInternType(fm->viewport, "text/uri-list");
+    ISWXdndWidgetAcceptDrops(fm->viewport);
+    ISWXdndSetDropCallback(fm->viewport, drop_cb, fm);
+    ISWXdndSetDragMotionCallback(fm->viewport, drag_motion_cb, fm);
+    ISWXdndSetDragLeaveCallback(fm->viewport, drag_leave_cb, fm);
+    ISWXdndSetAcceptedTypes(fm->viewport, &uri_type, 1);
+    ISWXdndSetAcceptedActions(fm->viewport,
                               ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 
     /* Register drag actions and override translations on both views
      * to chain our press/motion handlers before the view's own actions.
      * IconView uses SelectItem(); ListView uses SelectRow(). */
-    XtAppAddActions(fm->app_state->app, dnd_actions, XtNumber(dnd_actions));
-    XtOverrideTranslations(fm->iconview, XtParseTranslationTable(
+    IswAppAddActions(fm->app_state->app, dnd_actions, IswNumber(dnd_actions));
+    IswOverrideTranslations(fm->iconview, IswParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectItem()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"));
-    XtOverrideTranslations(fm->listview, XtParseTranslationTable(
+    IswOverrideTranslations(fm->listview, IswParseTranslationTable(
         "<Btn1Down>:   fm-dnd-press() SelectRow()\n"
         "<Btn1Motion>: fm-dnd-check() BandDrag()\n"
         "<Btn1Up>:     BandFinish()\n"));

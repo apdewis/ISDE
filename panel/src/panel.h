@@ -4,12 +4,13 @@
 #ifndef ISDE_PANEL_H
 #define ISDE_PANEL_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/Box.h>
 #include <ISW/Form.h>
+#include <ISW/FlexBox.h>
 #include <ISW/Label.h>
 #include <ISW/List.h>
 #include <ISW/Command.h>
@@ -84,10 +85,10 @@ typedef struct StartMenuCategory {
 
 /* ---------- Panel state ---------- */
 typedef struct Panel {
-    XtAppContext       app;
+    IswAppContext       app;
     Widget             toplevel;
     Widget             shell;       /* OverrideShell — the panel bar */
-    Widget             form;        /* Form layout container */
+    Widget             form;        /* FlexBox layout container */
     Widget             box;         /* Horizontal Box for taskbar buttons */
 
     /* Applets */
@@ -101,6 +102,7 @@ typedef struct Panel {
     Widget             shutdown_btn;/* Shut Down button in toolbar */
     Widget             reboot_btn;  /* Reboot button in toolbar */
     Widget             logout_btn;  /* Logout button in toolbar */
+    Widget             clock_box;   /* Clock — vertical container */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */
     char              *clock_time_fmt; /* strftime format for time */
@@ -147,6 +149,7 @@ typedef struct Panel {
     xcb_atom_t         atom_wm_name;
 
     /* System tray */
+    Widget             tray_area;      /* Vertical FlexBox: spacer + tray_box + spacer */
     Widget             tray_box;       /* Box widget for tray icons */
     xcb_window_t      *tray_icons;     /* Embedded icon windows */
     int                ntray;
@@ -156,7 +159,7 @@ typedef struct Panel {
     xcb_atom_t         atom_xembed;
     xcb_atom_t         atom_xembed_info;
 
-    XtIntervalId       clock_timer;
+    IswIntervalId       clock_timer;
 
     /* D-Bus */
     IsdeDBus          *dbus;
@@ -191,7 +194,7 @@ void  startmenu_cleanup(Panel *p);
 /* ---------- tray.c ---------- */
 void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
 void  tray_init_selection(Panel *p); /* claim selection (after realize) */
-void  tray_handle_event(Panel *p, xcb_generic_event_t *ev);
+void  tray_check_icons(Panel *p);
 void  tray_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */

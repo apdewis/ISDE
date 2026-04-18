@@ -28,7 +28,7 @@ IsdeDBus *isde_dbus_init(void);
 void      isde_dbus_free(IsdeDBus *bus);
 
 /* Get the file descriptor for event loop integration.
- * Use with XtAppAddInput or poll().  Returns -1 if not connected. */
+ * Use with IswAppAddInput or poll().  Returns -1 if not connected. */
 int       isde_dbus_get_fd(IsdeDBus *bus);
 
 /* Process pending D-Bus messages.  Call when the fd is readable. */

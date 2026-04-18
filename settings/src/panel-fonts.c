@@ -21,6 +21,11 @@
 /* ---------- font slot definitions ---------- */
 
 #define NUM_FONTS 6
+#define SELECTED_W 300
+#define LABEL_W 250
+#define SLIDER_W 300
+#define BUTTON_W 60
+
 
 static const char *font_labels[NUM_FONTS] = {
     "General:",
@@ -90,8 +95,8 @@ static void update_desc_label(int idx)
     char buf[160];
     format_font_desc(buf, sizeof(buf), current[idx].family, current[idx].size);
     Arg args[20];
-    XtSetArg(args[0], XtNlabel, buf);
-    XtSetValues(desc_labels[idx], args, 1);
+    IswSetArg(args[0], IswNlabel, buf);
+    IswSetValues(desc_labels[idx], args, 1);
 }
 
 /* ---------- font chooser dialog ---------- */
@@ -129,7 +134,7 @@ static void show_chooser(int slot)
 
 /* ---------- edit button callbacks ---------- */
 
-static void edit_cb(Widget w, XtPointer cd, XtPointer call)
+static void edit_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     int slot = (int)(intptr_t)cd;
@@ -138,14 +143,14 @@ static void edit_cb(Widget w, XtPointer cd, XtPointer call)
 
 /* ---------- panel lifecycle ---------- */
 
-static Widget fonts_create(Widget parent, XtAppContext app)
+static Widget fonts_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
     /* Find toplevel for popup shells */
     toplevel_cache = parent;
-    while (toplevel_cache && !XtIsShell(toplevel_cache)) {
-        toplevel_cache = XtParent(toplevel_cache);
+    while (toplevel_cache && !IswIsShell(toplevel_cache)) {
+        toplevel_cache = IswParent(toplevel_cache);
     }
 
     Arg args[20];
@@ -153,18 +158,13 @@ static Widget fonts_create(Widget parent, XtAppContext app)
 
     Dimension pw;
     Arg qa[20];
-    XtSetArg(qa[0], XtNwidth, &pw);
-    XtGetValues(parent, qa, 1);
-
-    int cat_w = 100;
-    int btn_w = 60;
-    int desc_w = (pw > 0 ? (int)pw - cat_w - btn_w - 8 * 4 : 180);
-    if (desc_w < 80) { desc_w = 80; }
+    IswSetArg(qa[0], IswNwidth, &pw);
+    IswGetValues(parent, qa, 1);
 
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);    n++;
-    Widget form = XtCreateWidget("fontsForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    Widget form = IswCreateWidget("fontsForm", formWidgetClass,
                                  parent, args, n);
 
     /* Load current config */
@@ -205,14 +205,14 @@ static Widget fonts_create(Widget parent, XtAppContext app)
     for (int i = 0; i < NUM_FONTS; i++) {
         /* Category label */
         n = 0;
-        XtSetArg(args[n], XtNlabel, font_labels[i]);  n++;
-        XtSetArg(args[n], XtNborderWidth, 0);          n++;
-        XtSetArg(args[n], XtNwidth, 100);              n++;
-        XtSetArg(args[n], XtNjustify, XtJustifyRight); n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);       n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);      n++;
-        if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-        Widget lbl = XtCreateManagedWidget("fontCatLbl", labelWidgetClass,
+        IswSetArg(args[n], IswNlabel, font_labels[i]);  n++;
+        IswSetArg(args[n], IswNborderWidth, 0);          n++;
+        IswSetArg(args[n], IswNwidth, LABEL_W);              n++;
+        IswSetArg(args[n], IswNjustify, IswJustifyRight); n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);       n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);      n++;
+        if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+        Widget lbl = IswCreateManagedWidget("fontCatLbl", labelWidgetClass,
                                             form, args, n);
 
         /* Font description label */
@@ -220,30 +220,29 @@ static Widget fonts_create(Widget parent, XtAppContext app)
         format_font_desc(desc, sizeof(desc),
                          current[i].family, current[i].size);
         n = 0;
-        XtSetArg(args[n], XtNlabel, desc);             n++;
-        XtSetArg(args[n], XtNborderWidth, 0);           n++;
-        XtSetArg(args[n], XtNwidth, desc_w);              n++;
-        XtSetArg(args[n], XtNjustify, XtJustifyLeft);   n++;
-        XtSetArg(args[n], XtNfromHoriz, lbl);           n++;
-        XtSetArg(args[n], XtNresizable, True);          n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);        n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);       n++;
-        if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-        desc_labels[i] = XtCreateManagedWidget("fontDescLbl", labelWidgetClass,
+        IswSetArg(args[n], IswNlabel, desc);             n++;
+        IswSetArg(args[n], IswNborderWidth, 0);           n++;
+        IswSetArg(args[n], IswNwidth, SELECTED_W);         n++;
+        IswSetArg(args[n], IswNjustify, IswJustifyLeft);   n++;
+        IswSetArg(args[n], IswNfromHoriz, lbl);           n++;
+        IswSetArg(args[n], IswNresizable, True);          n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);        n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);       n++;
+        if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+        desc_labels[i] = IswCreateManagedWidget("fontDescLbl", labelWidgetClass,
                                                 form, args, n);
 
         /* Edit button */
         n = 0;
-        XtSetArg(args[n], XtNlabel, "Edit...");          n++;
-        XtSetArg(args[n], XtNborderWidth, 0);             n++;
-        XtSetArg(args[n], XtNfromHoriz, desc_labels[i]);  n++;
-        XtSetArg(args[n], XtNresizable, True);            n++;
-        XtSetArg(args[n], XtNleft, XtChainRight);         n++;
-        XtSetArg(args[n], XtNright, XtChainRight);        n++;
-        if (prev) { XtSetArg(args[n], XtNfromVert, prev); n++; }
-        Widget btn = XtCreateManagedWidget("fontEditBtn", commandWidgetClass,
+        IswSetArg(args[n], IswNlabel, "Edit...");          n++;
+        IswSetArg(args[n], IswNborderWidth, 0);             n++;
+        IswSetArg(args[n], IswNwidth, BUTTON_W);         n++;
+        IswSetArg(args[n], IswNfromHoriz, desc_labels[i]);  n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
+        if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+        Widget btn = IswCreateManagedWidget("fontEditBtn", commandWidgetClass,
                                             form, args, n);
-        XtAddCallback(btn, XtNcallback, edit_cb, (XtPointer)(intptr_t)i);
+        IswAddCallback(btn, IswNcallback, edit_cb, (IswPointer)(intptr_t)i);
 
         prev = lbl;
     }

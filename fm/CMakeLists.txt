@@ -12,6 +12,7 @@ add_executable(isde-fm
     src/jobqueue.c
     src/progress.c
     src/places.c
+    src/fm_mountd.c
 )
 
 target_compile_definitions(isde-fm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
@@ -26,6 +27,7 @@ target_link_libraries(isde-fm
     PkgConfig::XCB_ICCCM
     PkgConfig::XCB_UTIL
     Threads::Threads
+    PkgConfig::DBUS
 )
 
 install(TARGETS isde-fm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

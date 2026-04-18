@@ -7,7 +7,7 @@
  *   Right: app names for selected category — click to launch
  */
 #include "panel.h"
-#include <X11/ShellP.h>
+#include <ISW/ShellP.h>
 #include <ISW/List.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +24,8 @@ static char *logout_icon_path;
 
 static Pixel start_color_pixel(Panel *p, unsigned int rgb)
 {
-    xcb_connection_t *conn = XtDisplay(p->start_btn);
-    xcb_screen_t *screen = XtScreen(p->start_btn);
+    xcb_connection_t *conn = IswDisplay(p->start_btn);
+    xcb_screen_t *screen = IswScreen(p->start_btn);
     xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
         conn,
         xcb_alloc_color(conn, screen->default_colormap,
@@ -50,17 +50,17 @@ static void set_start_btn_active(Panel *p, int active)
     }
     Arg args[2];
     if (active) {
-        XtSetArg(args[0], XtNforeground,
+        IswSetArg(args[0], IswNforeground,
                  start_color_pixel(p, s->taskbar_button.hover_fg));
-        XtSetArg(args[1], XtNbackground,
+        IswSetArg(args[1], IswNbackground,
                  start_color_pixel(p, s->active));
     } else {
-        XtSetArg(args[0], XtNforeground,
+        IswSetArg(args[0], IswNforeground,
                  start_color_pixel(p, s->taskbar_button.fg));
-        XtSetArg(args[1], XtNbackground,
+        IswSetArg(args[1], IswNbackground,
                  start_color_pixel(p, s->taskbar_button.bg));
     }
-    XtSetValues(p->start_btn, args, 2);
+    IswSetValues(p->start_btn, args, 2);
 }
 
 #define MENU_WIDTH       400
@@ -180,7 +180,7 @@ static void show_category(Panel *p, int index)
 
     IswListChange(p->app_box, names, c->napps, 0, True);
     IswViewportSetLocation(p->app_viewport, 0.0, 0.0);
-    XtMapWidget(p->app_viewport);
+    IswMapWidget(p->app_viewport);
     /* Don't free names — the List widget holds the pointer.
      * Previous array leaks, but it's small and infrequent. */
 }
@@ -211,8 +211,8 @@ static void launch_app(Panel *p, int index)
 
 /* ---------- callbacks ---------- */
 
-static void category_selected(Widget w, XtPointer client_data,
-                              XtPointer call_data)
+static void category_selected(Widget w, IswPointer client_data,
+                              IswPointer call_data)
 {
     (void)w;
     Panel *p = (Panel *)client_data;
@@ -223,8 +223,8 @@ static void category_selected(Widget w, XtPointer client_data,
     show_category(p, ret->list_index);
 }
 
-static void app_selected(Widget w, XtPointer client_data,
-                         XtPointer call_data)
+static void app_selected(Widget w, IswPointer client_data,
+                         IswPointer call_data)
 {
     (void)w;
     Panel *p = (Panel *)client_data;
@@ -239,7 +239,7 @@ static void app_selected(Widget w, XtPointer client_data,
 
 static xcb_key_symbols_t *key_syms;
 
-static void menu_key_handler(Widget w, XtPointer client_data,
+static void menu_key_handler(Widget w, IswPointer client_data,
                              xcb_generic_event_t *xev, Boolean *cont)
 {
     (void)w; (void)cont;
@@ -342,7 +342,7 @@ static void menu_key_handler(Widget w, XtPointer client_data,
     }
 }
 
-static void shutdown_cb(Widget w, XtPointer client_data, XtPointer call_data)
+static void shutdown_cb(Widget w, IswPointer client_data, IswPointer call_data)
 {
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
@@ -350,7 +350,7 @@ static void shutdown_cb(Widget w, XtPointer client_data, XtPointer call_data)
     isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
 }
 
-static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
+static void reboot_cb(Widget w, IswPointer client_data, IswPointer call_data)
 {
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
@@ -358,7 +358,7 @@ static void reboot_cb(Widget w, XtPointer client_data, XtPointer call_data)
     isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
 }
 
-static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
+static void logout_cb(Widget w, IswPointer client_data, IswPointer call_data)
 {
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
@@ -368,8 +368,8 @@ static void logout_cb(Widget w, XtPointer client_data, XtPointer call_data)
 
 /* ---------- toggle ---------- */
 
-static void toggle_start_menu(Widget w, XtPointer client_data,
-                              XtPointer call_data)
+static void toggle_start_menu(Widget w, IswPointer client_data,
+                              IswPointer call_data)
 {
     (void)w;
     (void)call_data;
@@ -388,19 +388,19 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     int log_panel_top = (int)((p->mon_y + p->mon_h) / sf + 0.5)
                         - PANEL_HEIGHT;
 
-    if (!XtIsRealized(p->start_shell)) {
-        XtRealizeWidget(p->start_shell);
+    if (!IswIsRealized(p->start_shell)) {
+        IswRealizeWidget(p->start_shell);
     }
     int menu_w = p->start_shell->core.width;
     int menu_h = p->start_shell->core.height;
     int menu_y = log_panel_top - menu_h;
-    XtConfigureWidget(p->start_shell, log_mon_x, menu_y,
+    IswConfigureWidget(p->start_shell, log_mon_x, menu_y,
                       menu_w, menu_h, 1);
-    XtPopup(p->start_shell, XtGrabNone);
+    IswPopup(p->start_shell, IswGrabNone);
 
     /* Force immediate redraw — the shell content may be stale from the
      * previous popdown, causing a blank menu on some redraws. */
-    XtExposeProc expose = XtClass(p->start_shell)->core_class.expose;
+    IswExposeProc expose = IswClass(p->start_shell)->core_class.expose;
     if (expose) {
         expose(p->start_shell, NULL, 0);
     }
@@ -410,12 +410,12 @@ static void toggle_start_menu(Widget w, XtPointer client_data,
     p->cat_highlight = 0;
     p->app_highlight = -1;
     p->menu_focus = 0;
-    XtUnmapWidget(p->app_viewport);
+    IswUnmapWidget(p->app_viewport);
 
     /* Highlight first category and grab keyboard */
     IswListHighlight(p->cat_box, 0);
     show_category(p, 0);
-    xcb_grab_keyboard(p->conn, 1, XtWindow(p->start_shell),
+    xcb_grab_keyboard(p->conn, 1, IswWindow(p->start_shell),
                       XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
                       XCB_GRAB_MODE_ASYNC);
     xcb_flush(p->conn);
@@ -448,58 +448,57 @@ void startmenu_init(Panel *p)
     Arg args[20];
     Cardinal n = 0;
     if (start_icon_path) {
-        XtSetArg(args[n], XtNimage, start_icon_path);       n++;
+        IswSetArg(args[n], IswNimage, start_icon_path);       n++;
     }
-    XtSetArg(args[n], XtNlabel, "");                 n++;
-    XtSetArg(args[n], XtNwidth, PANEL_HEIGHT);       n++;
-    XtSetArg(args[n], XtNheight, PANEL_HEIGHT);      n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);         n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);        n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);           n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);     n++;
-    p->start_btn = XtCreateManagedWidget("startBtn", commandWidgetClass,
+    IswSetArg(args[n], IswNlabel, "");                 n++;
+    IswSetArg(args[n], IswNwidth, PANEL_HEIGHT);       n++;
+    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);      n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);          n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);         n++;
+    IswSetArg(args[n], IswNflexBasis, PANEL_HEIGHT);   n++;
+    IswSetArg(args[n], IswNborderWidth, 0);            n++;
+    p->start_btn = IswCreateManagedWidget("startBtn", commandWidgetClass,
                                          p->form, args, n);
-    XtAddCallback(p->start_btn, XtNcallback, toggle_start_menu, p);
+    IswAddCallback(p->start_btn, IswNcallback, toggle_start_menu, p);
 
     /* Start menu shell */
     n = 0;
     const IsdeColorScheme *scheme_border = isde_theme_current();
     Pixel border_px = scheme_border
         ? start_color_pixel(p, scheme_border->border)
-        : XtScreen(p->start_btn)->white_pixel;
-    XtSetArg(args[n], XtNwidth, MENU_WIDTH);           n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT);         n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);      n++;
-    XtSetArg(args[n], XtNborderWidth, 1);              n++;
-    XtSetArg(args[n], XtNborderColor, border_px);      n++;
-    p->start_shell = XtCreatePopupShell("startMenu",
+        : IswScreen(p->start_btn)->white_pixel;
+    IswSetArg(args[n], IswNwidth, MENU_WIDTH);           n++;
+    IswSetArg(args[n], IswNheight, MENU_HEIGHT);         n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);      n++;
+    IswSetArg(args[n], IswNborderWidth, 1);              n++;
+    IswSetArg(args[n], IswNborderColor, border_px);      n++;
+    p->start_shell = IswCreatePopupShell("startMenu",
                                         overrideShellWidgetClass,
                                         p->start_btn, args, n);
 
     /* Form container — single child of the shell */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 0);  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);      n++;
-    Widget form = XtCreateManagedWidget("menuForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 0);  n++;
+    IswSetArg(args[n], IswNborderWidth, 0);      n++;
+    Widget form = IswCreateManagedWidget("menuForm", formWidgetClass,
                                         p->start_shell, args, n);
 
     /* Pane background tones from theme */
     const IsdeColorScheme *scheme = isde_theme_current();
     Pixel cat_bg  = scheme ? start_color_pixel(p, scheme->bg)
-                           : XtScreen(p->start_btn)->white_pixel;
+                           : IswScreen(p->start_btn)->white_pixel;
     Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
-                           : XtScreen(p->start_btn)->white_pixel;
+                           : IswScreen(p->start_btn)->white_pixel;
 
     /* Viewport for category list (left pane) — darker tone, vertical scroll */
     n = 0;
-    XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                     n++;
-    XtSetArg(args[n], XtNallowVert, True);                    n++;
-    XtSetArg(args[n], XtNallowHoriz, False);                  n++;
-    XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
-    p->cat_viewport = XtCreateManagedWidget("catViewport",
+    IswSetArg(args[n], IswNwidth, CAT_PANE_WIDTH);              n++;
+    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
+    IswSetArg(args[n], IswNallowVert, True);                    n++;
+    IswSetArg(args[n], IswNallowHoriz, False);                  n++;
+    IswSetArg(args[n], IswNbackground, cat_bg);                 n++;
+    p->cat_viewport = IswCreateManagedWidget("catViewport",
                                             viewportWidgetClass,
                                             form, args, n);
 
@@ -511,31 +510,31 @@ void startmenu_init(Panel *p)
     cat_names[p->ncategories] = NULL;
 
     n = 0;
-    XtSetArg(args[n], XtNlist, cat_names);                    n++;
-    XtSetArg(args[n], XtNnumberStrings, p->ncategories);     n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);                  n++;
-    XtSetArg(args[n], XtNforceColumns, True);                 n++;
-    XtSetArg(args[n], XtNverticalList, True);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                     n++;
-    XtSetArg(args[n], XtNwidth, CAT_PANE_WIDTH);              n++;
-    XtSetArg(args[n], XtNcursor, None);                       n++;
-    XtSetArg(args[n], XtNbackground, cat_bg);                 n++;
-    p->cat_box = XtCreateManagedWidget("catList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, cat_names);                    n++;
+    IswSetArg(args[n], IswNnumberStrings, p->ncategories);     n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);                  n++;
+    IswSetArg(args[n], IswNforceColumns, True);                 n++;
+    IswSetArg(args[n], IswNverticalList, True);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
+    IswSetArg(args[n], IswNwidth, CAT_PANE_WIDTH);              n++;
+    IswSetArg(args[n], IswNcursor, None);                       n++;
+    IswSetArg(args[n], IswNbackground, cat_bg);                 n++;
+    p->cat_box = IswCreateManagedWidget("catList", listWidgetClass,
                                        p->cat_viewport, args, n);
-    XtAddCallback(p->cat_box, XtNcallback, category_selected, p);
+    IswAddCallback(p->cat_box, IswNcallback, category_selected, p);
     /* Don't free cat_names — the List widget holds a pointer to it */
 
     /* Viewport for app list (right pane) — lighter tone, vertical scroll */
     n = 0;
-    XtSetArg(args[n], XtNfromHoriz, p->cat_viewport);              n++;
-    XtSetArg(args[n], XtNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                         n++;
-    XtSetArg(args[n], XtNallowVert, True);                        n++;
-    XtSetArg(args[n], XtNallowHoriz, False);                      n++;
-    XtSetArg(args[n], XtNuseRight, True);                          n++;
-    XtSetArg(args[n], XtNbackground, app_bg);                      n++;
-    p->app_viewport = XtCreateManagedWidget("appViewport",
+    IswSetArg(args[n], IswNfromHoriz, p->cat_viewport);              n++;
+    IswSetArg(args[n], IswNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
+    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                         n++;
+    IswSetArg(args[n], IswNallowVert, True);                        n++;
+    IswSetArg(args[n], IswNallowHoriz, False);                      n++;
+    IswSetArg(args[n], IswNuseRight, True);                          n++;
+    IswSetArg(args[n], IswNbackground, app_bg);                      n++;
+    p->app_viewport = IswCreateManagedWidget("appViewport",
                                             viewportWidgetClass,
                                             form, args, n);
 
@@ -543,18 +542,18 @@ void startmenu_init(Panel *p)
      * Must be static since the List widget holds the pointer. */
     static String initial[] = { "Select a category", NULL };
     n = 0;
-    XtSetArg(args[n], XtNlist, initial);                          n++;
-    XtSetArg(args[n], XtNnumberStrings, 1);                       n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);                      n++;
-    XtSetArg(args[n], XtNforceColumns, True);                     n++;
-    XtSetArg(args[n], XtNverticalList, True);                     n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                         n++;
-    XtSetArg(args[n], XtNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
-    XtSetArg(args[n], XtNcursor, None);                            n++;
-    XtSetArg(args[n], XtNbackground, app_bg);                      n++;
-    p->app_box = XtCreateManagedWidget("appList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, initial);                          n++;
+    IswSetArg(args[n], IswNnumberStrings, 1);                       n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);                      n++;
+    IswSetArg(args[n], IswNforceColumns, True);                     n++;
+    IswSetArg(args[n], IswNverticalList, True);                     n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                         n++;
+    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
+    IswSetArg(args[n], IswNcursor, None);                            n++;
+    IswSetArg(args[n], IswNbackground, app_bg);                      n++;
+    p->app_box = IswCreateManagedWidget("appList", listWidgetClass,
                                        p->app_viewport, args, n);
-    XtAddCallback(p->app_box, XtNcallback, app_selected, p);
+    IswAddCallback(p->app_box, IswNcallback, app_selected, p);
 
     /* Category list: hover highlights and switches category immediately */
     static char catTranslations[] =
@@ -563,8 +562,8 @@ void startmenu_init(Panel *p)
         "<Motion>:      Set() Notify()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
-    XtOverrideTranslations(p->cat_box,
-                           XtParseTranslationTable(catTranslations));
+    IswOverrideTranslations(p->cat_box,
+                           IswParseTranslationTable(catTranslations));
 
     /* App list: hover highlights, click launches */
     static char appTranslations[] =
@@ -573,24 +572,24 @@ void startmenu_init(Panel *p)
         "<Motion>:      Set()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
-    XtOverrideTranslations(p->app_box,
-                           XtParseTranslationTable(appTranslations));
+    IswOverrideTranslations(p->app_box,
+                           IswParseTranslationTable(appTranslations));
 
     /* Keyboard navigation via event handler on the shell */
-    XtAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
+    IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       menu_key_handler, p);
 
     /* Bottom toolbar — right-aligned action buttons.
      * No defaultDistance override: the Form's default 4px acts as bottom margin,
      * so the natural height = vertDistance + btn_size + 4 = TOOLBAR_HEIGHT. */
     n = 0;
-    XtSetArg(args[n], XtNfromVert, p->cat_viewport);         n++;
-    XtSetArg(args[n], XtNvertDistance, 0);                   n++;
-    XtSetArg(args[n], XtNwidth, MENU_WIDTH);                 n++;
-    XtSetArg(args[n], XtNheight, TOOLBAR_HEIGHT);            n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                    n++;
-    XtSetArg(args[n], XtNbackground, cat_bg);                n++;
-    p->menu_toolbar = XtCreateManagedWidget("menuToolbar", formWidgetClass,
+    IswSetArg(args[n], IswNfromVert, p->cat_viewport);         n++;
+    IswSetArg(args[n], IswNvertDistance, 0);                   n++;
+    IswSetArg(args[n], IswNwidth, MENU_WIDTH);                 n++;
+    IswSetArg(args[n], IswNheight, TOOLBAR_HEIGHT);            n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
+    IswSetArg(args[n], IswNbackground, cat_bg);                n++;
+    p->menu_toolbar = IswCreateManagedWidget("menuToolbar", formWidgetClass,
                                             form, args, n);
 
     /* btn_size = TOOLBAR_HEIGHT - top_margin(4) - bottom_margin(4) */
@@ -600,65 +599,65 @@ void startmenu_init(Panel *p)
 
     /* Logout button (rightmost) */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                         n++;
-    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
-    XtSetArg(args[n], XtNheight, btn_size);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
-    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
-    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    IswSetArg(args[n], IswNlabel, "");                         n++;
+    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
+    IswSetArg(args[n], IswNheight, btn_size);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
+    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
+    IswSetArg(args[n], IswNright, IswChainRight);               n++;
     if (logout_icon_path) {
-        XtSetArg(args[n], XtNimage, logout_icon_path);       n++;
+        IswSetArg(args[n], IswNimage, logout_icon_path);       n++;
     }
-    p->logout_btn = XtCreateManagedWidget("logoutBtn", commandWidgetClass,
+    p->logout_btn = IswCreateManagedWidget("logoutBtn", commandWidgetClass,
                                           p->menu_toolbar, args, n);
-    XtAddCallback(p->logout_btn, XtNcallback, logout_cb, p);
+    IswAddCallback(p->logout_btn, IswNcallback, logout_cb, p);
 
     /* Reboot button (left of logout) */
     btn_x -= btn_size + btn_margin;
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                         n++;
-    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
-    XtSetArg(args[n], XtNheight, btn_size);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
-    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
-    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    IswSetArg(args[n], IswNlabel, "");                         n++;
+    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
+    IswSetArg(args[n], IswNheight, btn_size);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
+    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
+    IswSetArg(args[n], IswNright, IswChainRight);               n++;
     if (reboot_icon_path) {
-        XtSetArg(args[n], XtNimage, reboot_icon_path);       n++;
+        IswSetArg(args[n], IswNimage, reboot_icon_path);       n++;
     }
-    p->reboot_btn = XtCreateManagedWidget("rebootBtn", commandWidgetClass,
+    p->reboot_btn = IswCreateManagedWidget("rebootBtn", commandWidgetClass,
                                           p->menu_toolbar, args, n);
-    XtAddCallback(p->reboot_btn, XtNcallback, reboot_cb, p);
+    IswAddCallback(p->reboot_btn, IswNcallback, reboot_cb, p);
 
     /* Shut Down button (left of reboot) */
     btn_x -= btn_size + btn_margin;
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                         n++;
-    XtSetArg(args[n], XtNwidth, btn_size);                   n++;
-    XtSetArg(args[n], XtNheight, btn_size);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_x);              n++;
-    XtSetArg(args[n], XtNvertDistance, btn_margin);          n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                    n++;
-    XtSetArg(args[n], XtNinternalWidth, 0);                  n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);                 n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);                n++;
-    XtSetArg(args[n], XtNright, XtChainRight);               n++;
+    IswSetArg(args[n], IswNlabel, "");                         n++;
+    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
+    IswSetArg(args[n], IswNheight, btn_size);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
+    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
+    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
+    IswSetArg(args[n], IswNright, IswChainRight);               n++;
     if (shutdown_icon_path) {
-        XtSetArg(args[n], XtNimage, shutdown_icon_path);     n++;
+        IswSetArg(args[n], IswNimage, shutdown_icon_path);     n++;
     }
-    p->shutdown_btn = XtCreateManagedWidget("shutdownBtn", commandWidgetClass,
+    p->shutdown_btn = IswCreateManagedWidget("shutdownBtn", commandWidgetClass,
                                             p->menu_toolbar, args, n);
-    XtAddCallback(p->shutdown_btn, XtNcallback, shutdown_cb, p);
+    IswAddCallback(p->shutdown_btn, IswNcallback, shutdown_cb, p);
 
     /* Hide app list until a category is hovered */
-    XtUnmapWidget(p->app_viewport);
+    IswUnmapWidget(p->app_viewport);
 }
 
 void startmenu_cleanup(Panel *p)

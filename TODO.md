@@ -332,6 +332,10 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 - **libisde:** New IPC command constants added to `isde-ipc.h`.
 - **common/data/isde.desktop:** `Type` changed to `XSession`.
 
+## Panel overflow handling
+
+Taskbar and system tray have no overflow handling. When too many task buttons or tray icons exist for the available space, buttons shrink indefinitely (taskbar) or icons overlap/clip (tray). Needs scroll arrows or an overflow menu for both areas, plus a minimum button width for the taskbar.
+
 ## Keybinding settings
 
 Add keybinding management to isde-settings and ensure apps accept user settings externally.

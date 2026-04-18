@@ -4,10 +4,10 @@
 #ifndef ISDE_FM_H
 #define ISDE_FM_H
 
-#include <X11/Intrinsic.h>
-#include <X11/IntrinsicP.h>
-#include <X11/StringDefs.h>
-#include <X11/Shell.h>
+#include <ISW/Intrinsic.h>
+#include <ISW/IntrinsicP.h>
+#include <ISW/StringDefs.h>
+#include <ISW/Shell.h>
 #include <ISW/MainWindow.h>
 #include <ISW/Command.h>
 #include <ISW/Label.h>
@@ -39,6 +39,9 @@
 #include "isde/isde-xdg.h"
 #include "isde/isde-desktop.h"
 #include "isde/isde-mime.h"
+
+#include <dbus/dbus.h>
+#include "fm_mountd.h"
 
 /* ---------- Constants ---------- */
 #define FM_ICON_SIZE     48
@@ -109,7 +112,7 @@ typedef struct FmJob {
     struct Fm      *origin_win;    /* window that started this op */
     /* Progress UI (managed by progress.c, main thread only) */
     struct IsdeProgress *progress;
-    XtIntervalId    progress_timer;    /* polls atomic counters */
+    IswIntervalId    progress_timer;    /* polls atomic counters */
     struct FmJob   *next;
 } FmJob;
 
@@ -122,8 +125,8 @@ typedef struct FmPlacesData FmPlacesData;
 
 /* ---------- App-wide shared state ---------- */
 typedef struct FmApp {
-    XtAppContext   app;
-    Widget         first_toplevel;  /* from XtAppInitialize */
+    IswAppContext   app;
+    Widget         first_toplevel;  /* from IswAppInitialize */
 
     /* Desktop entry cache (shared across windows) */
     IsdeDesktopEntry **desktop_entries;
@@ -159,9 +162,22 @@ typedef struct FmApp {
     pthread_t       worker_thread;
     int             worker_running;
     int             notify_pipe[2]; /* worker writes, main loop reads */
-    XtInputId       notify_input_id;
+    IswInputId       notify_input_id;
 
     char          *initial_path;  /* from argv, used by fm_app_init */
+
+    /* Mount monitor (inotify on /proc/mounts) */
+    int            mount_inotify_fd;
+    int            mount_wd;
+    IswInputId      mount_input_id;
+
+    /* mountd D-Bus client (system bus) */
+    DBusConnection *mountd_bus;
+    IswInputId      mountd_input_id;
+    FmDeviceInfo    mountd_devices[FM_MAX_DEVICES];
+    int             mountd_ndevices;
+    int             has_mountd;
+
     int            running;
 } FmApp;
 
@@ -186,6 +202,7 @@ typedef struct Fm {
     Widget         places_vp;
     Widget         places_box;
     FmPlacesData  *places_data;
+    Widget         dev_ctx_shell;   /* device context menu (SimpleMenu) */
 
     /* Main content */
     Widget         vbox;         /* outer FlexBox (vertical) */
@@ -260,6 +277,7 @@ typedef struct Fm {
     char         **dnd_drag_paths;
     int            dnd_ndrag_paths;
     Boolean        dnd_drop_was_noop;
+    int            dnd_drop_highlight; /* entry index highlighted as drop target, -1 = none */
 } Fm;
 
 /* ---------- Context for storing Fm* on shell windows ---------- */
@@ -268,7 +286,7 @@ extern XContext fm_window_context;  /* initialized once in fm_init */
 /* Store Fm* on a shell widget's window */
 static inline void fm_set_context(Widget shell, Fm *fm)
 {
-    IswSaveContext(XtDisplay(shell), XtWindow(shell),
+    IswSaveContext(IswDisplay(shell), IswWindow(shell),
                    fm_window_context, (void *)fm);
 }
 
@@ -279,13 +297,13 @@ static inline Fm *fm_from_widget(Widget w)
      * a stored Fm context.  Transient/override shells (dialogs,
      * context menus) won't have one, but their parent toplevel will. */
     while (w) {
-        if (XtIsShell(w) && XtIsRealized(w)) {
+        if (IswIsShell(w) && IswIsRealized(w)) {
             void *data = NULL;
-            if (IswFindContext(XtDisplay(w), XtWindow(w),
+            if (IswFindContext(IswDisplay(w), IswWindow(w),
                                fm_window_context, &data) == 0 && data)
                 return (Fm *)data;
         }
-        w = XtParent(w);
+        w = IswParent(w);
     }
     return NULL;
 }
@@ -322,7 +340,12 @@ void  navbar_update(Fm *fm);
 
 /* ---------- places.c ---------- */
 void  places_init(Fm *fm);
+void  places_refresh_devices(Fm *fm);
+void  places_device_added(Fm *fm, const char *name, const char *path);
+void  places_device_removed(Fm *fm, const char *name);
 void  places_cleanup(Fm *fm);
+void  places_dismiss_device_menu(Fm *fm);
+void  places_register_drop_targets(Fm *fm);
 
 /* ---------- icons.c ---------- */
 void        icons_init(FmApp *app);

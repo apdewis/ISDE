@@ -12,7 +12,7 @@
 #ifndef ISDE_SETTINGS_PLUGIN_H
 #define ISDE_SETTINGS_PLUGIN_H
 
-#include <X11/Intrinsic.h>
+#include <ISW/Intrinsic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +27,7 @@ typedef struct IsdeSettingsPanel {
      * Do NOT create viewports or Save/Revert buttons — the shell
      * provides a scrollable container and common buttons.
      * Returns the top-level container widget (typically a Form). */
-    Widget (*create)(Widget parent, XtAppContext app);
+    Widget (*create)(Widget parent, IswAppContext app);
 
     /* Save current settings to config and apply. */
     void (*apply)(void);

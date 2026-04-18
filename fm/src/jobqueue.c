@@ -257,7 +257,7 @@ static void *worker_func(void *arg)
 
 /* ---------- main-thread completion handler ---------- */
 
-static void notify_cb(XtPointer closure, int *fd, XtInputId *id)
+static void notify_cb(IswPointer closure, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
     FmApp *app = (FmApp *)closure;
@@ -310,8 +310,8 @@ void jobqueue_init(FmApp *app)
     app->worker_running = 1;
     done_head = NULL;
 
-    app->notify_input_id = XtAppAddInput(app->app, app->notify_pipe[0],
-                                          (XtPointer)XtInputReadMask,
+    app->notify_input_id = IswAppAddInput(app->app, app->notify_pipe[0],
+                                          (IswPointer)IswInputReadMask,
                                           notify_cb, app);
 
     pthread_create(&app->worker_thread, NULL, worker_func, app);
@@ -348,7 +348,7 @@ void jobqueue_shutdown(FmApp *app)
     done_head = NULL;
 
     if (app->notify_input_id) {
-        XtRemoveInput(app->notify_input_id);
+        IswRemoveInput(app->notify_input_id);
     }
     close(app->notify_pipe[0]);
     close(app->notify_pipe[1]);

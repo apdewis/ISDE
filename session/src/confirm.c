@@ -20,32 +20,32 @@
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 
-#include <X11/Shell.h>
-#include <X11/StringDefs.h>
-#include <X11/IntrinsicP.h>
+#include <ISW/Shell.h>
+#include <ISW/StringDefs.h>
+#include <ISW/IntrinsicP.h>
 #include <ISW/Form.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
 #include <ISW/ISWRender.h>
 
 static int result = 1;  /* default: cancelled */
-static XtAppContext app;
+static IswAppContext app;
 
-static void action_cb(Widget w, XtPointer cd, XtPointer call)
+static void action_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)cd; (void)call;
     result = 0;
-    XtAppSetExitFlag(app);
+    IswAppSetExitFlag(app);
 }
 
-static void cancel_cb(Widget w, XtPointer cd, XtPointer call)
+static void cancel_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)cd; (void)call;
     result = 1;
-    XtAppSetExitFlag(app);
+    IswAppSetExitFlag(app);
 }
 
-static void key_handler(Widget w, XtPointer cd,
+static void key_handler(Widget w, IswPointer cd,
                         xcb_generic_event_t *xev, Boolean *cont)
 {
     (void)w; (void)cd; (void)cont;
@@ -53,17 +53,17 @@ static void key_handler(Widget w, XtPointer cd,
         return;
     }
     xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-    xcb_connection_t *conn = XtDisplay(w);
+    xcb_connection_t *conn = IswDisplay(w);
     xcb_key_symbols_t *syms = xcb_key_symbols_alloc(conn);
     if (syms) {
         xcb_keysym_t sym = xcb_key_symbols_get_keysym(syms, kev->detail, 0);
         xcb_key_symbols_free(syms);
         if (sym == XK_Escape) {
             result = 1;
-            XtAppSetExitFlag(app);
+            IswAppSetExitFlag(app);
         } else if (sym == XK_Return || sym == XK_KP_Enter) {
             result = 0;
-            XtAppSetExitFlag(app);
+            IswAppSetExitFlag(app);
         }
     }
 }
@@ -72,7 +72,7 @@ static void on_signal(int sig)
 {
     (void)sig;
     result = 1;
-    XtAppSetExitFlag(app);
+    IswAppSetExitFlag(app);
 }
 
 int main(int argc, char **argv)
@@ -120,20 +120,20 @@ int main(int argc, char **argv)
 
     /* Initialize Xt with theme resources */
     char **fallbacks = isde_theme_build_resources();
-    Widget toplevel = XtAppInitialize(&app, "ISDE-Confirm",
+    Widget toplevel = IswAppInitialize(&app, "ISDE-Confirm",
                                       NULL, 0, &argc, argv,
                                       fallbacks, NULL, 0);
 
     /* Don't map the toplevel */
     Arg tl_args[20];
     Cardinal tl_n = 0;
-    XtSetArg(tl_args[tl_n], XtNmappedWhenManaged, False); tl_n++;
-    XtSetArg(tl_args[tl_n], XtNwidth, 1);                 tl_n++;
-    XtSetArg(tl_args[tl_n], XtNheight, 1);                tl_n++;
-    XtSetValues(toplevel, tl_args, tl_n);
-    XtRealizeWidget(toplevel);
+    IswSetArg(tl_args[tl_n], IswNmappedWhenManaged, False); tl_n++;
+    IswSetArg(tl_args[tl_n], IswNwidth, 1);                 tl_n++;
+    IswSetArg(tl_args[tl_n], IswNheight, 1);                tl_n++;
+    IswSetValues(toplevel, tl_args, tl_n);
+    IswRealizeWidget(toplevel);
 
-    xcb_screen_t *scr = XtScreen(toplevel);
+    xcb_screen_t *scr = IswScreen(toplevel);
     double sf = ISWScaleFactor(toplevel);
     if (sf < 1.0) { sf = 1.0; }
     int scr_w = (int)(scr->width_in_pixels / sf + 0.5);
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
-    xcb_connection_t *conn = XtDisplay(toplevel);
+    xcb_connection_t *conn = IswDisplay(toplevel);
     Pixel overlay_bg = scr->black_pixel;
     Pixel form_bg = scr->white_pixel;
     Pixel form_fg = scr->black_pixel;
@@ -173,23 +173,23 @@ int main(int argc, char **argv)
     /* Fullscreen override-redirect shell */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, 0);                      n++;
-    XtSetArg(args[n], XtNy, 0);                      n++;
-    XtSetArg(args[n], XtNwidth, scr_w);               n++;
-    XtSetArg(args[n], XtNheight, scr_h);              n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);     n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNbackground, overlay_bg);     n++;
-    Widget shell = XtCreatePopupShell("confirmOverlay",
+    IswSetArg(args[n], IswNx, 0);                      n++;
+    IswSetArg(args[n], IswNy, 0);                      n++;
+    IswSetArg(args[n], IswNwidth, scr_w);               n++;
+    IswSetArg(args[n], IswNheight, scr_h);              n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);     n++;
+    IswSetArg(args[n], IswNborderWidth, 0);             n++;
+    IswSetArg(args[n], IswNbackground, overlay_bg);     n++;
+    Widget shell = IswCreatePopupShell("confirmOverlay",
                                       overrideShellWidgetClass,
                                       toplevel, args, n);
 
     /* Overlay form */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 0);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNbackground, overlay_bg);     n++;
-    Widget overlay = XtCreateManagedWidget("overlay", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 0);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);             n++;
+    IswSetArg(args[n], IswNbackground, overlay_bg);     n++;
+    Widget overlay = IswCreateManagedWidget("overlay", formWidgetClass,
                                            shell, args, n);
 
     /* Centered dialog form */
@@ -197,25 +197,25 @@ int main(int argc, char **argv)
     int dlg_h = 150;
 
     n = 0;
-    XtSetArg(args[n], XtNwidth, dlg_w);               n++;
-    XtSetArg(args[n], XtNheight, dlg_h);              n++;
-    XtSetArg(args[n], XtNborderWidth, 1);             n++;
-    XtSetArg(args[n], XtNbackground, form_bg);        n++;
-    XtSetArg(args[n], XtNdefaultDistance, 8); n++;
-    Widget dialog = XtCreateManagedWidget("confirmDialog", formWidgetClass,
+    IswSetArg(args[n], IswNwidth, dlg_w);               n++;
+    IswSetArg(args[n], IswNheight, dlg_h);              n++;
+    IswSetArg(args[n], IswNborderWidth, 1);             n++;
+    IswSetArg(args[n], IswNbackground, form_bg);        n++;
+    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    Widget dialog = IswCreateManagedWidget("confirmDialog", formWidgetClass,
                                           overlay, args, n);
 
     /* Message label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, message);             n++;
-    XtSetArg(args[n], XtNborderWidth, 0);             n++;
-    XtSetArg(args[n], XtNbackground, form_bg);        n++;
-    XtSetArg(args[n], XtNforeground, form_fg);        n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);            n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);         n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);          n++;
-    XtSetArg(args[n], XtNright, XtChainRight);        n++;
-    Widget label = XtCreateManagedWidget("confirmLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, message);             n++;
+    IswSetArg(args[n], IswNborderWidth, 0);             n++;
+    IswSetArg(args[n], IswNbackground, form_bg);        n++;
+    IswSetArg(args[n], IswNforeground, form_fg);        n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);            n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);         n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);          n++;
+    IswSetArg(args[n], IswNright, IswChainRight);        n++;
+    Widget label = IswCreateManagedWidget("confirmLabel", labelWidgetClass,
                                           dialog, args, n);
 
     /* Button row — affirmative first, Cancel last (per HIG) */
@@ -225,47 +225,47 @@ int main(int argc, char **argv)
     int first_horiz = dlg_w - total_btn - btn_pad * 2;
 
     n = 0;
-    XtSetArg(args[n], XtNlabel, button_label);        n++;
-    XtSetArg(args[n], XtNwidth, btn_w);               n++;
-    XtSetArg(args[n], XtNfromVert, label);             n++;
-    XtSetArg(args[n], XtNhorizDistance, first_horiz);  n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);         n++;
-    XtSetArg(args[n], XtNright, XtChainRight);        n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);      n++;
-    Widget action_btn = XtCreateManagedWidget("confirmBtn",
+    IswSetArg(args[n], IswNlabel, button_label);        n++;
+    IswSetArg(args[n], IswNwidth, btn_w);               n++;
+    IswSetArg(args[n], IswNfromVert, label);             n++;
+    IswSetArg(args[n], IswNhorizDistance, first_horiz);  n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);         n++;
+    IswSetArg(args[n], IswNright, IswChainRight);        n++;
+    IswSetArg(args[n], IswNtop, IswChainBottom);         n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);      n++;
+    Widget action_btn = IswCreateManagedWidget("confirmBtn",
                                               commandWidgetClass,
                                               dialog, args, n);
-    XtAddCallback(action_btn, XtNcallback, action_cb, NULL);
+    IswAddCallback(action_btn, IswNcallback, action_cb, NULL);
 
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Cancel");            n++;
-    XtSetArg(args[n], XtNwidth, btn_w);               n++;
-    XtSetArg(args[n], XtNfromVert, label);             n++;
-    XtSetArg(args[n], XtNfromHoriz, action_btn);      n++;
-    XtSetArg(args[n], XtNhorizDistance, btn_pad);      n++;
-    XtSetArg(args[n], XtNleft, XtChainRight);         n++;
-    XtSetArg(args[n], XtNright, XtChainRight);        n++;
-    XtSetArg(args[n], XtNtop, XtChainBottom);         n++;
-    XtSetArg(args[n], XtNbottom, XtChainBottom);      n++;
-    Widget cancel_btn = XtCreateManagedWidget("cancelBtn",
+    IswSetArg(args[n], IswNlabel, "Cancel");            n++;
+    IswSetArg(args[n], IswNwidth, btn_w);               n++;
+    IswSetArg(args[n], IswNfromVert, label);             n++;
+    IswSetArg(args[n], IswNfromHoriz, action_btn);      n++;
+    IswSetArg(args[n], IswNhorizDistance, btn_pad);      n++;
+    IswSetArg(args[n], IswNleft, IswChainRight);         n++;
+    IswSetArg(args[n], IswNright, IswChainRight);        n++;
+    IswSetArg(args[n], IswNtop, IswChainBottom);         n++;
+    IswSetArg(args[n], IswNbottom, IswChainBottom);      n++;
+    Widget cancel_btn = IswCreateManagedWidget("cancelBtn",
                                               commandWidgetClass,
                                               dialog, args, n);
-    XtAddCallback(cancel_btn, XtNcallback, cancel_cb, NULL);
+    IswAddCallback(cancel_btn, IswNcallback, cancel_cb, NULL);
 
     /* Escape / Enter key handling */
-    XtAddEventHandler(shell, XCB_EVENT_MASK_KEY_PRESS, False,
+    IswAddEventHandler(shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       key_handler, NULL);
 
-    XtPopup(shell, XtGrabExclusive);
+    IswPopup(shell, IswGrabExclusive);
 
     /* Center dialog — all values logical; ISW scales to physical internally */
     int cx = (scr_w - dlg_w) / 2;
     int cy = (scr_h - dlg_h) / 2;
-    XtConfigureWidget(dialog, cx, cy, dlg_w, dlg_h, 1);
+    IswConfigureWidget(dialog, cx, cy, dlg_w, dlg_h, 1);
 
     /* Grab keyboard and pointer */
-    xcb_window_t grab_win = XtWindow(shell);
+    xcb_window_t grab_win = IswWindow(shell);
     for (int attempt = 0; attempt < 50; attempt++) {
         xcb_grab_keyboard_reply_t *kr = xcb_grab_keyboard_reply(conn,
             xcb_grab_keyboard(conn, 1, grab_win,
@@ -295,16 +295,16 @@ int main(int argc, char **argv)
     xcb_flush(conn);
 
     /* Event loop */
-    while (!XtAppGetExitFlag(app)) {
-        XtAppProcessEvent(app, XtIMAll);
+    while (!IswAppGetExitFlag(app)) {
+        IswAppProcessEvent(app, IswIMAll);
     }
 
     xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
     xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
     xcb_flush(conn);
 
-    XtDestroyWidget(shell);
-    XtDestroyWidget(toplevel);
+    IswDestroyWidget(shell);
+    IswDestroyWidget(toplevel);
 
     return result;
 }

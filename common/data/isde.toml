@@ -19,6 +19,10 @@ color_scheme = "default-light"
 # cursor_theme = "default"
 icon_theme = "isde-standard"
 
+[mount]
+mount_base = "/media"
+auto_mount = false
+
 [wm.desktops]
 rows = 1
 columns = 2

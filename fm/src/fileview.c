@@ -125,8 +125,8 @@ static char *format_size(off_t size)
 
 /* ---------- IconView callback ---------- */
 
-static void iconview_callback(Widget w, XtPointer client_data,
-                              XtPointer call_data)
+static void iconview_callback(Widget w, IswPointer client_data,
+                              IswPointer call_data)
 {
     Fm *fm = (Fm *)client_data;
     IswIconViewCallbackData *d = (IswIconViewCallbackData *)call_data;
@@ -134,11 +134,17 @@ static void iconview_callback(Widget w, XtPointer client_data,
     fm_dismiss_context(fm);
 
     /* Check if triggered by keyboard (Enter/Return) — always open */
-    xcb_generic_event_t *ev = XtLastEventProcessed(XtDisplay(w));
-    if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
-               (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
-        browser_open_entry(fm, d->index);
-        return;
+    xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
+    if (ev) {
+        uint8_t type = ev->response_type & ~0x80;
+        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+            browser_open_entry(fm, d->index);
+            return;
+        }
+        /* Ignore callbacks fired from ButtonRelease (BandFinish deselect);
+         * only ButtonPress should count for double-click detection */
+        if (type == XCB_BUTTON_RELEASE)
+            return;
     }
 
     if (fm->double_click) {
@@ -151,8 +157,8 @@ static void iconview_callback(Widget w, XtPointer client_data,
 
 /* ---------- ListView callbacks ---------- */
 
-static void listview_callback(Widget w, XtPointer client_data,
-                              XtPointer call_data)
+static void listview_callback(Widget w, IswPointer client_data,
+                              IswPointer call_data)
 {
     Fm *fm = (Fm *)client_data;
     IswListViewCallbackData *d = (IswListViewCallbackData *)call_data;
@@ -162,11 +168,15 @@ static void listview_callback(Widget w, XtPointer client_data,
     if (d->row < 0 || d->row >= fm->nentries)
         return;
 
-    xcb_generic_event_t *ev = XtLastEventProcessed(XtDisplay(w));
-    if (ev && ((ev->response_type & ~0x80) == XCB_KEY_PRESS ||
-               (ev->response_type & ~0x80) == XCB_KEY_RELEASE)) {
-        browser_open_entry(fm, d->row);
-        return;
+    xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
+    if (ev) {
+        uint8_t type = ev->response_type & ~0x80;
+        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+            browser_open_entry(fm, d->row);
+            return;
+        }
+        if (type == XCB_BUTTON_RELEASE)
+            return;
     }
 
     if (fm->double_click) {
@@ -177,8 +187,8 @@ static void listview_callback(Widget w, XtPointer client_data,
     }
 }
 
-static void reorder_callback(Widget w, XtPointer client_data,
-                             XtPointer call_data)
+static void reorder_callback(Widget w, IswPointer client_data,
+                             IswPointer call_data)
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
@@ -272,12 +282,12 @@ void fileview_init(Fm *fm)
     /* Viewport for scrolling — below the nav bar, right of places sidebar */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNallowVert, True);          n++;
-    XtSetArg(args[n], XtNallowHoriz, False);        n++;
-    XtSetArg(args[n], XtNuseRight, True);            n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNflexGrow, 1);               n++;
-    fm->viewport = XtCreateManagedWidget("viewport", viewportWidgetClass,
+    IswSetArg(args[n], IswNallowVert, True);          n++;
+    IswSetArg(args[n], IswNallowHoriz, False);        n++;
+    IswSetArg(args[n], IswNuseRight, True);            n++;
+    IswSetArg(args[n], IswNborderWidth, 0);            n++;
+    IswSetArg(args[n], IswNflexGrow, 1);               n++;
+    fm->viewport = IswCreateManagedWidget("viewport", viewportWidgetClass,
                                          fm->hbox, args, n);
 
     /* Default sort: name descending */
@@ -286,28 +296,28 @@ void fileview_init(Fm *fm)
 
     /* IconView inside viewport */
     n = 0;
-    XtSetArg(args[n], XtNborderWidth, 0);     n++;
-    XtSetArg(args[n], XtNiconSize, 64);        n++;
-    XtSetArg(args[n], XtNitemSpacing, 16);     n++;
-    XtSetArg(args[n], XtNmultiSelect, True);   n++;
-    XtSetArg(args[n], "labelLines", 3);         n++;
-    fm->iconview = XtCreateManagedWidget("iconView", iconViewWidgetClass,
+    IswSetArg(args[n], IswNborderWidth, 0);     n++;
+    IswSetArg(args[n], IswNiconSize, 64);        n++;
+    IswSetArg(args[n], IswNitemSpacing, 16);     n++;
+    IswSetArg(args[n], IswNmultiSelect, True);   n++;
+    IswSetArg(args[n], "labelLines", 3);         n++;
+    fm->iconview = IswCreateManagedWidget("iconView", iconViewWidgetClass,
                                          fm->viewport, args, n);
-    XtAddCallback(fm->iconview, XtNselectCallback, iconview_callback, fm);
+    IswAddCallback(fm->iconview, IswNselectCallback, iconview_callback, fm);
     fm_register_context_menu(fm, fm->iconview);
     fm_install_shortcuts(fm->iconview);
 
     /* ListView inside viewport (initially unmanaged) */
     n = 0;
-    XtSetArg(args[n], XtNborderWidth, 0);                     n++;
-    XtSetArg(args[n], XtNlistViewColumns, lv_columns);        n++;
-    XtSetArg(args[n], XtNnumColumns, LV_NCOLS);               n++;
-    XtSetArg(args[n], XtNmultiSelect, True);                   n++;
-    XtSetArg(args[n], XtNshowHeader, True);                    n++;
-    fm->listview = XtCreateWidget("listView", listViewWidgetClass,
+    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
+    IswSetArg(args[n], IswNlistViewColumns, lv_columns);        n++;
+    IswSetArg(args[n], IswNnumColumns, LV_NCOLS);               n++;
+    IswSetArg(args[n], IswNmultiSelect, True);                   n++;
+    IswSetArg(args[n], IswNshowHeader, True);                    n++;
+    fm->listview = IswCreateWidget("listView", listViewWidgetClass,
                                   fm->viewport, args, n);
-    XtAddCallback(fm->listview, XtNselectCallback, listview_callback, fm);
-    XtAddCallback(fm->listview, XtNreorderCallback, reorder_callback, fm);
+    IswAddCallback(fm->listview, IswNselectCallback, listview_callback, fm);
+    IswAddCallback(fm->listview, IswNreorderCallback, reorder_callback, fm);
     fm_register_context_menu(fm, fm->listview);
     fm_install_shortcuts(fm->listview);
 
@@ -318,10 +328,10 @@ void fileview_init(Fm *fm)
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
     if (statusbar) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "");           n++;
-        XtSetArg(args[n], XtNborderWidth, 0);      n++;
-        XtSetArg(args[n], XtNstatusStretch, True);  n++;
-        fm->status_label = XtCreateManagedWidget("status", labelWidgetClass,
+        IswSetArg(args[n], IswNlabel, "");           n++;
+        IswSetArg(args[n], IswNborderWidth, 0);      n++;
+        IswSetArg(args[n], IswNstatusStretch, True);  n++;
+        fm->status_label = IswCreateManagedWidget("status", labelWidgetClass,
                                                   statusbar, args, n);
     }
 }
@@ -334,11 +344,11 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
     fm->view_mode = mode;
 
     if (mode == FM_VIEW_ICON) {
-        XtUnmanageChild(fm->listview);
-        XtManageChild(fm->iconview);
+        IswUnmanageChild(fm->listview);
+        IswManageChild(fm->iconview);
     } else {
-        XtUnmanageChild(fm->iconview);
-        XtManageChild(fm->listview);
+        IswUnmanageChild(fm->iconview);
+        IswManageChild(fm->listview);
     }
 
     fileview_populate(fm);
@@ -384,8 +394,8 @@ void fileview_populate(Fm *fm)
         }
         snprintf(buf, sizeof(buf), "%d folders, %d files", ndirs, nfiles);
         Arg args[20];
-        XtSetArg(args[0], XtNlabel, buf);
-        XtSetValues(fm->status_label, args, 1);
+        IswSetArg(args[0], IswNlabel, buf);
+        IswSetValues(fm->status_label, args, 1);
     }
 }
 

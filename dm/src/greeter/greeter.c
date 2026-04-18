@@ -23,7 +23,7 @@
 
 /* ---------- Callbacks ---------- */
 
-static void login_cb(Widget w, XtPointer cd, XtPointer call)
+static void login_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Greeter *g = (Greeter *)cd;
@@ -33,11 +33,11 @@ static void login_cb(Widget w, XtPointer cd, XtPointer call)
     String username = NULL;
     String password = NULL;
 
-    XtSetArg(args[0], XtNstring, &username);
-    XtGetValues(g->user_text, args, 1);
+    IswSetArg(args[0], IswNstring, &username);
+    IswGetValues(g->user_text, args, 1);
 
-    XtSetArg(args[0], XtNstring, &password);
-    XtGetValues(g->pass_text, args, 1);
+    IswSetArg(args[0], IswNstring, &password);
+    IswGetValues(g->pass_text, args, 1);
 
     if (!username || !*username) {
         greeter_set_error(g, "Username is required");
@@ -63,28 +63,28 @@ static void login_cb(Widget w, XtPointer cd, XtPointer call)
     greeter_ipc_send(g, buf);
 }
 
-static void shutdown_cb(Widget w, XtPointer cd, XtPointer call)
+static void shutdown_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Greeter *g = (Greeter *)cd;
     greeter_ipc_send(g, "SHUTDOWN");
 }
 
-static void reboot_cb(Widget w, XtPointer cd, XtPointer call)
+static void reboot_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Greeter *g = (Greeter *)cd;
     greeter_ipc_send(g, "REBOOT");
 }
 
-static void suspend_cb(Widget w, XtPointer cd, XtPointer call)
+static void suspend_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Greeter *g = (Greeter *)cd;
     greeter_ipc_send(g, "SUSPEND");
 }
 
-static void session_dropdown_cb(Widget w, XtPointer cd, XtPointer call)
+static void session_dropdown_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Greeter *g = (Greeter *)cd;
@@ -103,18 +103,18 @@ static void pass_action(Widget w, xcb_generic_event_t *ev, String *params,
     /* Walk up to find the greeter — get the shell's parent data.
      * Simpler: use a static pointer since there's only one greeter. */
     Widget shell = w;
-    while (shell && !XtIsShell(shell)) {
-        shell = XtParent(shell);
+    while (shell && !IswIsShell(shell)) {
+        shell = IswParent(shell);
     }
     if (!shell) {
         return;
     }
 
     /* Trigger login callback via the login button */
-    XtCallCallbacks(XtNameToWidget(shell, "*loginBtn"), XtNcallback, NULL);
+    IswCallCallbacks(IswNameToWidget(shell, "*loginBtn"), IswNcallback, NULL);
 }
 
-static XtActionsRec greeter_actions[] = {
+static IswActionsRec greeter_actions[] = {
     { "greeter-login", pass_action },
 };
 
@@ -125,7 +125,7 @@ static char greeter_translations[] =
 
 static void handle_ipc_line(Greeter *g, const char *line);
 
-static void ipc_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void ipc_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
     Greeter *g = (Greeter *)client_data;
@@ -176,8 +176,8 @@ static void handle_ipc_line(Greeter *g, const char *line)
         greeter_set_error(g, line + 10);
         /* Clear password field */
         Arg args[20];
-        XtSetArg(args[0], XtNstring, "");
-        XtSetValues(g->pass_text, args, 1);
+        IswSetArg(args[0], IswNstring, "");
+        IswSetValues(g->pass_text, args, 1);
     } else if (strncmp(line, "MODE_LOCK ", 10) == 0) {
         greeter_enter_lock_mode(g, line + 10);
     } else if (strcmp(line, "MODE_LOGIN") == 0) {
@@ -243,22 +243,22 @@ static void build_ui(Greeter *g)
 
     /* Fullscreen OverrideShell */
     n = 0;
-    XtSetArg(args[n], XtNx, 0);                          n++;
-    XtSetArg(args[n], XtNy, 0);                          n++;
-    XtSetArg(args[n], XtNwidth, g->logical_w);             n++;
-    XtSetArg(args[n], XtNheight, g->logical_h);           n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    g->shell = XtCreatePopupShell("greeter", overrideShellWidgetClass,
+    IswSetArg(args[n], IswNx, 0);                          n++;
+    IswSetArg(args[n], IswNy, 0);                          n++;
+    IswSetArg(args[n], IswNwidth, g->logical_w);             n++;
+    IswSetArg(args[n], IswNheight, g->logical_h);           n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    g->shell = IswCreatePopupShell("greeter", overrideShellWidgetClass,
                                   g->toplevel, args, n);
 
     /* Main form — uses logical pixels; ISW scales internally */
     n = 0;
-    XtSetArg(args[n], XtNdefaultDistance, 0);     n++;
-    XtSetArg(args[n], XtNborderWidth, 0);         n++;
-    XtSetArg(args[n], XtNwidth, g->logical_w);    n++;
-    XtSetArg(args[n], XtNheight, g->logical_h);   n++;
-    g->form = XtCreateManagedWidget("greeterForm", formWidgetClass,
+    IswSetArg(args[n], IswNdefaultDistance, 0);     n++;
+    IswSetArg(args[n], IswNborderWidth, 0);         n++;
+    IswSetArg(args[n], IswNwidth, g->logical_w);    n++;
+    IswSetArg(args[n], IswNheight, g->logical_h);   n++;
+    g->form = IswCreateManagedWidget("greeterForm", formWidgetClass,
                                     g->shell, args, n);
 
     /* --- Clock area (centered at top) --- */
@@ -267,14 +267,14 @@ static void build_ui(Greeter *g)
     /* Measure font-derived row height and label width: create a temporary
      * label with the widest label text, read its natural size, destroy it. */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Username");              n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    Widget probe = XtCreateWidget("probe", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Username");              n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    Widget probe = IswCreateWidget("probe", labelWidgetClass,
                                   g->form, args, n);
     Dimension natural_h = 0, natural_lw = 0;
-    XtVaGetValues(probe, XtNheight, &natural_h,
-                         XtNwidth, &natural_lw, NULL);
-    XtDestroyWidget(probe);
+    IswVaGetValues(probe, IswNheight, &natural_h,
+                         IswNwidth, &natural_lw, NULL);
+    IswDestroyWidget(probe);
 
     int input_h = natural_h;
     int label_w = natural_lw;
@@ -290,85 +290,85 @@ static void build_ui(Greeter *g)
 
     /* Username label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Username");              n++;
-    XtSetArg(args[n], XtNwidth, label_w);                   n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, label_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row1_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->user_label = XtCreateManagedWidget("userLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Username");              n++;
+    IswSetArg(args[n], IswNwidth, label_w);                   n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row1_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->user_label = IswCreateManagedWidget("userLabel", labelWidgetClass,
                                           g->form, args, n);
 
     /* Username text input */
     n = 0;
-    XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, input_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row1_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->user_text = XtCreateManagedWidget("userText", asciiTextWidgetClass,
+    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row1_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->user_text = IswCreateManagedWidget("userText", asciiTextWidgetClass,
                                          g->form, args, n);
 
     /* Password label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Password");              n++;
-    XtSetArg(args[n], XtNwidth, label_w);                   n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, label_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row2_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->pass_label = XtCreateManagedWidget("passLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Password");              n++;
+    IswSetArg(args[n], IswNwidth, label_w);                   n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->pass_label = IswCreateManagedWidget("passLabel", labelWidgetClass,
                                           g->form, args, n);
 
     /* Password text input (echo off) */
     n = 0;
-    XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNeditType, IswtextEdit);           n++;
-    XtSetArg(args[n], XtNecho, False);                     n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, input_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row2_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->pass_text = XtCreateManagedWidget("passText", asciiTextWidgetClass,
+    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
+    IswSetArg(args[n], IswNecho, False);                     n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->pass_text = IswCreateManagedWidget("passText", asciiTextWidgetClass,
                                          g->form, args, n);
 
     /* Install Enter-to-login translation on password field */
-    XtOverrideTranslations(g->pass_text,
-                           XtParseTranslationTable(greeter_translations));
+    IswOverrideTranslations(g->pass_text,
+                           IswParseTranslationTable(greeter_translations));
 
     /* Session label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, "Session");                n++;
-    XtSetArg(args[n], XtNwidth, label_w);                   n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNjustify, XtJustifyRight);         n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, label_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row3_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->session_label = XtCreateManagedWidget("sessionLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, "Session");                n++;
+    IswSetArg(args[n], IswNwidth, label_w);                   n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row3_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->session_label = IswCreateManagedWidget("sessionLabel", labelWidgetClass,
                                              g->form, args, n);
 
     /* Session dropdown */
@@ -379,61 +379,61 @@ static void build_ui(Greeter *g)
     g->session_names[g->nsessions] = NULL;
 
     n = 0;
-    XtSetArg(args[n], XtNlist, g->session_names);          n++;
-    XtSetArg(args[n], XtNnumberStrings, g->nsessions);    n++;
-    XtSetArg(args[n], XtNdropdownMode, True);              n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);               n++;
-    XtSetArg(args[n], XtNforceColumns, True);              n++;
-    XtSetArg(args[n], XtNwidth, INPUT_W);                  n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 1);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, input_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row3_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->session_btn = XtCreateManagedWidget("sessionBtn", listWidgetClass,
+    IswSetArg(args[n], IswNlist, g->session_names);          n++;
+    IswSetArg(args[n], IswNnumberStrings, g->nsessions);    n++;
+    IswSetArg(args[n], IswNdropdownMode, True);              n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
+    IswSetArg(args[n], IswNforceColumns, True);              n++;
+    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row3_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->session_btn = IswCreateManagedWidget("sessionBtn", listWidgetClass,
                                            g->form, args, n);
-    XtAddCallback(g->session_btn, XtNcallback, session_dropdown_cb, g);
+    IswAddCallback(g->session_btn, IswNcallback, session_dropdown_cb, g);
     if (g->nsessions > 0) {
         IswListHighlight(g->session_btn, g->active_session);
     }
 
     /* Error label */
     n = 0;
-    XtSetArg(args[n], XtNlabel, " ");                     n++;
-    XtSetArg(args[n], XtNwidth, label_w + ROW_GAP + INPUT_W); n++;
-    XtSetArg(args[n], XtNheight, input_h);                 n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                  n++;
-    XtSetArg(args[n], XtNhorizDistance, label_x);          n++;
-    XtSetArg(args[n], XtNvertDistance, row4_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->error_label = XtCreateManagedWidget("errorLabel", labelWidgetClass,
+    IswSetArg(args[n], IswNlabel, " ");                     n++;
+    IswSetArg(args[n], IswNwidth, label_w + ROW_GAP + INPUT_W); n++;
+    IswSetArg(args[n], IswNheight, input_h);                 n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
+    IswSetArg(args[n], IswNvertDistance, row4_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->error_label = IswCreateManagedWidget("errorLabel", labelWidgetClass,
                                            g->form, args, n);
 
     /* Login button (inline right of password field) */
     char *login_icon = isde_icon_find("actions", "system-log-in");
     n = 0;
-    XtSetArg(args[n], XtNlabel, "");                       n++;
+    IswSetArg(args[n], IswNlabel, "");                       n++;
     if (login_icon) {
-        XtSetArg(args[n], XtNimage, login_icon);           n++;
+        IswSetArg(args[n], IswNimage, login_icon);           n++;
     }
-    XtSetArg(args[n], XtNheight, input_h);                  n++;
-    XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);       n++;
-    XtSetArg(args[n], XtNinternalHeight, 0);               n++;
-    XtSetArg(args[n], XtNhorizDistance, input_x + INPUT_W + ROW_GAP); n++;
-    XtSetArg(args[n], XtNvertDistance, row2_y);            n++;
-    XtSetArg(args[n], XtNtop, XtChainTop);                 n++;
-    XtSetArg(args[n], XtNbottom, XtChainTop);              n++;
-    XtSetArg(args[n], XtNleft, XtChainLeft);               n++;
-    XtSetArg(args[n], XtNright, XtChainLeft);              n++;
-    g->login_btn = XtCreateManagedWidget("loginBtn", commandWidgetClass,
+    IswSetArg(args[n], IswNheight, input_h);                  n++;
+    IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);       n++;
+    IswSetArg(args[n], IswNinternalHeight, 0);               n++;
+    IswSetArg(args[n], IswNhorizDistance, input_x + INPUT_W + ROW_GAP); n++;
+    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
+    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
+    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
+    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    g->login_btn = IswCreateManagedWidget("loginBtn", commandWidgetClass,
                                          g->form, args, n);
-    XtAddCallback(g->login_btn, XtNcallback, login_cb, g);
+    IswAddCallback(g->login_btn, IswNcallback, login_cb, g);
 
     /* --- Power buttons (horizontally centered at bottom) --- */
     int btn_h = 40;
@@ -448,67 +448,67 @@ static void build_ui(Greeter *g)
 
     if (g->allow_shutdown) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "");                   n++;
+        IswSetArg(args[n], IswNlabel, "");                   n++;
         if (shutdown_icon) {
-            XtSetArg(args[n], XtNimage, shutdown_icon);    n++;
+            IswSetArg(args[n], IswNimage, shutdown_icon);    n++;
         }
-        XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
-        XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
-        XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
-        XtSetArg(args[n], XtNhorizDistance, btn_x);        n++;
-        XtSetArg(args[n], XtNvertDistance, btn_y);         n++;
-        XtSetArg(args[n], XtNtop, XtChainTop);             n++;
-        XtSetArg(args[n], XtNbottom, XtChainTop);          n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);           n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);          n++;
-        g->shutdown_btn = XtCreateManagedWidget("shutdownBtn",
+        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
+        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
+        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
+        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
+        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
+        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
+        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        g->shutdown_btn = IswCreateManagedWidget("shutdownBtn",
                                                 commandWidgetClass,
                                                 g->form, args, n);
-        XtAddCallback(g->shutdown_btn, XtNcallback, shutdown_cb, g);
+        IswAddCallback(g->shutdown_btn, IswNcallback, shutdown_cb, g);
         btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_reboot) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "");                   n++;
+        IswSetArg(args[n], IswNlabel, "");                   n++;
         if (reboot_icon) {
-            XtSetArg(args[n], XtNimage, reboot_icon);     n++;
+            IswSetArg(args[n], IswNimage, reboot_icon);     n++;
         }
-        XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
-        XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
-        XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
-        XtSetArg(args[n], XtNhorizDistance, btn_x);        n++;
-        XtSetArg(args[n], XtNvertDistance, btn_y);         n++;
-        XtSetArg(args[n], XtNtop, XtChainTop);             n++;
-        XtSetArg(args[n], XtNbottom, XtChainTop);          n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);           n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);          n++;
-        g->reboot_btn = XtCreateManagedWidget("rebootBtn",
+        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
+        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
+        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
+        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
+        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
+        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
+        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        g->reboot_btn = IswCreateManagedWidget("rebootBtn",
                                               commandWidgetClass,
                                               g->form, args, n);
-        XtAddCallback(g->reboot_btn, XtNcallback, reboot_cb, g);
+        IswAddCallback(g->reboot_btn, IswNcallback, reboot_cb, g);
         btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_suspend) {
         n = 0;
-        XtSetArg(args[n], XtNlabel, "");                   n++;
+        IswSetArg(args[n], IswNlabel, "");                   n++;
         if (suspend_icon) {
-            XtSetArg(args[n], XtNimage, suspend_icon);    n++;
+            IswSetArg(args[n], IswNimage, suspend_icon);    n++;
         }
-        XtSetArg(args[n], XtNwidth, BUTTON_W);             n++;
-        XtSetArg(args[n], XtNinternalWidth, BUTTON_PAD);   n++;
-        XtSetArg(args[n], XtNinternalHeight, BUTTON_PAD);  n++;
-        XtSetArg(args[n], XtNhorizDistance, btn_x);        n++;
-        XtSetArg(args[n], XtNvertDistance, btn_y);         n++;
-        XtSetArg(args[n], XtNtop, XtChainTop);             n++;
-        XtSetArg(args[n], XtNbottom, XtChainTop);          n++;
-        XtSetArg(args[n], XtNleft, XtChainLeft);           n++;
-        XtSetArg(args[n], XtNright, XtChainLeft);          n++;
-        g->suspend_btn = XtCreateManagedWidget("suspendBtn",
+        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
+        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
+        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
+        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
+        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
+        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
+        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
+        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
+        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        g->suspend_btn = IswCreateManagedWidget("suspendBtn",
                                                commandWidgetClass,
                                                g->form, args, n);
-        XtAddCallback(g->suspend_btn, XtNcallback, suspend_cb, g);
+        IswAddCallback(g->suspend_btn, IswNcallback, suspend_cb, g);
     }
 
     free(shutdown_icon);
@@ -525,7 +525,7 @@ static void build_ui(Greeter *g)
  * If config_scale > 0, that value is used as an explicit override.
  */
 /*
- * Detect HiDPI and set ISW_SCALE_FACTOR *before* XtAppInitialize so the
+ * Detect HiDPI and set ISW_SCALE_FACTOR *before* IswAppInitialize so the
  * toolkit picks up the correct scale factor during display initialisation.
  * Opens its own temporary xcb connection for the randr query.
  */
@@ -719,17 +719,17 @@ int greeter_init(Greeter *g, int *argc, char **argv)
         fallbacks[count] = NULL;
     }
 
-    g->toplevel = XtAppInitialize(&g->app, "ISDE-Greeter",
+    g->toplevel = IswAppInitialize(&g->app, "ISDE-Greeter",
                                   NULL, 0, argc, argv,
                                   fallbacks, NULL, 0);
 
     /* Register custom actions */
-    XtAppAddActions(g->app, greeter_actions,
+    IswAppAddActions(g->app, greeter_actions,
                     sizeof(greeter_actions) / sizeof(greeter_actions[0]));
 
     /* Get screen size */
-    xcb_connection_t *conn = XtDisplay(g->toplevel);
-    xcb_screen_t *screen = XtScreen(g->toplevel);
+    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    xcb_screen_t *screen = IswScreen(g->toplevel);
     g->screen_w = screen->width_in_pixels;
     g->screen_h = screen->height_in_pixels;
 
@@ -747,17 +747,17 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     build_ui(g);
 
     /* Default focus to username field so the cursor is visible */
-    XtSetKeyboardFocus(g->form, g->user_text);
+    IswSetKeyboardFocus(g->form, g->user_text);
 
     /* Realize and show */
-    XtRealizeWidget(g->shell);
-    XtPopup(g->shell, XtGrabNone);
+    IswRealizeWidget(g->shell);
+    IswPopup(g->shell, IswGrabNone);
 
     /* Override-redirect windows don't receive X focus automatically.
        Focus the text widget's window directly so key events reach it. */
-    xcb_connection_t *xc = XtDisplay(g->shell);
+    xcb_connection_t *xc = IswDisplay(g->shell);
     xcb_set_input_focus(xc, XCB_INPUT_FOCUS_PARENT,
-                        XtWindow(g->user_text), XCB_CURRENT_TIME);
+                        IswWindow(g->user_text), XCB_CURRENT_TIME);
     xcb_flush(xc);
 
     /* Connect to daemon IPC */
@@ -767,8 +767,8 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     }
 
     /* Register IPC fd with Xt event loop */
-    g->ipc_input = XtAppAddInput(g->app, g->ipc_fd,
-                                 (XtPointer)XtInputReadMask,
+    g->ipc_input = IswAppAddInput(g->app, g->ipc_fd,
+                                 (IswPointer)IswInputReadMask,
                                  ipc_input_cb, g);
 
     g->running = 1;
@@ -778,9 +778,9 @@ int greeter_init(Greeter *g, int *argc, char **argv)
 void greeter_run(Greeter *g)
 {
     while (g->running) {
-        XtAppProcessEvent(g->app, XtIMAll);
+        IswAppProcessEvent(g->app, IswIMAll);
 
-        if (XtAppGetExitFlag(g->app)) {
+        if (IswAppGetExitFlag(g->app)) {
             break;
         }
     }
@@ -791,7 +791,7 @@ void greeter_cleanup(Greeter *g)
     greeter_clock_cleanup(g);
 
     if (g->ipc_input) {
-        XtRemoveInput(g->ipc_input);
+        IswRemoveInput(g->ipc_input);
     }
     greeter_ipc_cleanup(g);
     greeter_sessions_cleanup(g);
@@ -803,22 +803,22 @@ void greeter_cleanup(Greeter *g)
     free(g->lock_user);
 
     if (g->toplevel) {
-        XtDestroyWidget(g->toplevel);
+        IswDestroyWidget(g->toplevel);
     }
 }
 
 void greeter_set_error(Greeter *g, const char *msg)
 {
     Arg args[20];
-    XtSetArg(args[0], XtNlabel, msg);
-    XtSetValues(g->error_label, args, 1);
+    IswSetArg(args[0], IswNlabel, msg);
+    IswSetValues(g->error_label, args, 1);
 }
 
 void greeter_clear_error(Greeter *g)
 {
     Arg args[20];
-    XtSetArg(args[0], XtNlabel, " ");
-    XtSetValues(g->error_label, args, 1);
+    IswSetArg(args[0], IswNlabel, " ");
+    IswSetValues(g->error_label, args, 1);
 }
 
 /* ---------- Lock mode ---------- */
@@ -833,23 +833,23 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
     Arg args[20];
 
     /* Pre-fill username and make it read-only */
-    XtSetArg(args[0], XtNstring, username);
-    XtSetValues(g->user_text, args, 1);
-    XtSetSensitive(g->user_text, False);
+    IswSetArg(args[0], IswNstring, username);
+    IswSetValues(g->user_text, args, 1);
+    IswSetSensitive(g->user_text, False);
 
     /* Clear password and focus it */
-    XtSetArg(args[0], XtNstring, "");
-    XtSetValues(g->pass_text, args, 1);
-    XtSetKeyboardFocus(g->form, g->pass_text);
+    IswSetArg(args[0], IswNstring, "");
+    IswSetValues(g->pass_text, args, 1);
+    IswSetKeyboardFocus(g->form, g->pass_text);
 
     /* Hide session selector in lock mode */
-    XtUnmanageChild(g->session_label);
-    XtUnmanageChild(g->session_btn);
+    IswUnmanageChild(g->session_label);
+    IswUnmanageChild(g->session_btn);
 
     /* Hide power buttons in lock mode */
-    if (g->shutdown_btn) { XtUnmanageChild(g->shutdown_btn); }
-    if (g->reboot_btn)   { XtUnmanageChild(g->reboot_btn); }
-    if (g->suspend_btn)  { XtUnmanageChild(g->suspend_btn); }
+    if (g->shutdown_btn) { IswUnmanageChild(g->shutdown_btn); }
+    if (g->reboot_btn)   { IswUnmanageChild(g->reboot_btn); }
+    if (g->suspend_btn)  { IswUnmanageChild(g->suspend_btn); }
 
     greeter_clear_error(g);
 
@@ -857,9 +857,9 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
      * Grab keyboard on the password field so key events are delivered
      * directly to it — grabbing on the shell would intercept events
      * before Xt can dispatch them to the text widget. */
-    xcb_connection_t *conn = XtDisplay(g->toplevel);
-    xcb_window_t win = XtWindow(g->shell);
-    xcb_window_t pass_win = XtWindow(g->pass_text);
+    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    xcb_window_t win = IswWindow(g->shell);
+    xcb_window_t pass_win = IswWindow(g->pass_text);
 
     xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT,
                         pass_win, XCB_CURRENT_TIME);
@@ -883,27 +883,27 @@ void greeter_enter_login_mode(Greeter *g)
     Arg args[20];
 
     /* Clear and re-enable username field */
-    XtSetArg(args[0], XtNstring, "");
-    XtSetValues(g->user_text, args, 1);
-    XtSetSensitive(g->user_text, True);
+    IswSetArg(args[0], IswNstring, "");
+    IswSetValues(g->user_text, args, 1);
+    IswSetSensitive(g->user_text, True);
 
     /* Clear password */
-    XtSetArg(args[0], XtNstring, "");
-    XtSetValues(g->pass_text, args, 1);
+    IswSetArg(args[0], IswNstring, "");
+    IswSetValues(g->pass_text, args, 1);
 
     /* Show session selector */
-    XtManageChild(g->session_label);
-    XtManageChild(g->session_btn);
+    IswManageChild(g->session_label);
+    IswManageChild(g->session_btn);
 
     /* Show power buttons */
-    if (g->shutdown_btn) { XtManageChild(g->shutdown_btn); }
-    if (g->reboot_btn)   { XtManageChild(g->reboot_btn); }
-    if (g->suspend_btn)  { XtManageChild(g->suspend_btn); }
+    if (g->shutdown_btn) { IswManageChild(g->shutdown_btn); }
+    if (g->reboot_btn)   { IswManageChild(g->reboot_btn); }
+    if (g->suspend_btn)  { IswManageChild(g->suspend_btn); }
 
     greeter_clear_error(g);
 
     /* Release grabs */
-    xcb_connection_t *conn = XtDisplay(g->toplevel);
+    xcb_connection_t *conn = IswDisplay(g->toplevel);
     xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
     xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
     xcb_flush(conn);

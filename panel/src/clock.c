@@ -10,7 +10,7 @@
 #include <time.h>
 
 
-static void update_clock(XtPointer client_data, XtIntervalId *id)
+static void update_clock(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Panel *p = (Panel *)client_data;
@@ -23,14 +23,14 @@ static void update_clock(XtPointer client_data, XtIntervalId *id)
     strftime(dbuf, sizeof(dbuf), p->clock_date_fmt, tm);
 
     Arg args[20];
-    XtSetArg(args[0], XtNlabel, tbuf);
-    XtSetValues(p->clock_time, args, 1);
-    XtSetArg(args[0], XtNlabel, dbuf);
-    XtSetValues(p->clock_date, args, 1);
+    IswSetArg(args[0], IswNlabel, tbuf);
+    IswSetValues(p->clock_time, args, 1);
+    IswSetArg(args[0], IswNlabel, dbuf);
+    IswSetValues(p->clock_date, args, 1);
 
     /* Schedule next update — align to the next minute boundary */
     unsigned long ms = (60 - tm->tm_sec) * 1000;
-    p->clock_timer = XtAppAddTimeOut(p->app, ms, update_clock, p);
+    p->clock_timer = IswAppAddTimeOut(p->app, ms, update_clock, p);
 }
 
 void clock_init(Panel *p)
@@ -87,45 +87,52 @@ void clock_init(Panel *p)
     snprintf(time_font, sizeof(time_font), "Sans-%d", time_pt);
     snprintf(date_font, sizeof(date_font), "Sans-%d", date_pt);
 
-    /* Time label (top half) — child of form, right of taskbar box */
-    p->clock_time = XtVaCreateManagedWidget("clockTime", labelWidgetClass,
+    /* Form container in the FlexBox to stack time/date vertically */
+    p->clock_box = IswVaCreateManagedWidget("clockBox", formWidgetClass,
         p->form,
-        XtNlabel,      "00:00",
-        XtNborderWidth, 0,
-        XtNwidth,       PANEL_CLOCK_WIDTH,
-        XtNheight,      half,
-        XtNfromHoriz,   p->tray_box,
-        XtNleft,        XtChainRight,
-        XtNright,       XtChainRight,
-        XtNtop,         XtChainTop,
-        XtNbottom,      XtChainTop,
-        XtVaTypedArg, XtNfont, XtRString, time_font, strlen(time_font) + 1,
+        IswNborderWidth, 0,
+        IswNdefaultDistance, 0,
+        IswNwidth,       PANEL_CLOCK_WIDTH,
+        IswNheight,      PANEL_HEIGHT,
+        NULL);
+
+    /* Time label (top half) */
+    p->clock_time = IswVaCreateManagedWidget("clockTime", labelWidgetClass,
+        p->clock_box,
+        IswNlabel,      "00:00",
+        IswNborderWidth, 0,
+        IswNwidth,       PANEL_CLOCK_WIDTH,
+        IswNheight,      half,
+        IswNtop,         IswChainTop,
+        IswNbottom,      IswChainTop,
+        IswNleft,        IswChainLeft,
+        IswNright,       IswChainRight,
+        IswVaTypedArg, IswNfont, IswRString, time_font, strlen(time_font) + 1,
         NULL);
 
     /* Date label (bottom half) — below time label */
-    p->clock_date = XtVaCreateManagedWidget("clockDate", labelWidgetClass,
-        p->form,
-        XtNlabel,      "0000-00-00",
-        XtNborderWidth, 0,
-        XtNwidth,       PANEL_CLOCK_WIDTH,
-        XtNheight,      half,
-        XtNfromVert,    p->clock_time,
-        XtNfromHoriz,   p->box,
-        XtNleft,        XtChainRight,
-        XtNright,       XtChainRight,
-        XtNtop,         XtChainTop,
-        XtNbottom,      XtChainBottom,
-        XtVaTypedArg, XtNfont, XtRString, date_font, strlen(date_font) + 1,
+    p->clock_date = IswVaCreateManagedWidget("clockDate", labelWidgetClass,
+        p->clock_box,
+        IswNlabel,      "0000-00-00",
+        IswNborderWidth, 0,
+        IswNwidth,       PANEL_CLOCK_WIDTH,
+        IswNheight,      half,
+        IswNfromVert,    p->clock_time,
+        IswNtop,         IswChainTop,
+        IswNbottom,      IswChainBottom,
+        IswNleft,        IswChainLeft,
+        IswNright,       IswChainRight,
+        IswVaTypedArg, IswNfont, IswRString, date_font, strlen(date_font) + 1,
         NULL);
 
     /* Trigger first update immediately */
-    p->clock_timer = XtAppAddTimeOut(p->app, 0, update_clock, p);
+    p->clock_timer = IswAppAddTimeOut(p->app, 0, update_clock, p);
 }
 
 void clock_cleanup(Panel *p)
 {
     if (p->clock_timer) {
-        XtRemoveTimeOut(p->clock_timer);
+        IswRemoveTimeOut(p->clock_timer);
     }
     free(p->clock_time_fmt);
     free(p->clock_date_fmt);

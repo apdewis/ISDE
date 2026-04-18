@@ -52,13 +52,13 @@ int wm_init(Wm *wm, int *argc, char **argv)
 
     /* Initialize Xt — this opens the X connection for us */
     char **fallbacks = isde_theme_build_resources();
-    wm->toplevel = XtAppInitialize(&wm->app, "ISDE-WM",
+    wm->toplevel = IswAppInitialize(&wm->app, "ISDE-WM",
                                    NULL, 0,
                                    argc, argv,
                                    fallbacks,
                                    NULL, 0);
 
-    wm->conn = XtDisplay(wm->toplevel);
+    wm->conn = IswDisplay(wm->toplevel);
     if (xcb_connection_has_error(wm->conn)) {
         fprintf(stderr, "isde-wm: cannot connect to X server\n");
         return -1;
@@ -69,7 +69,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
     if (wm->scale_factor < 1.0) { wm->scale_factor = 1.0; }
     wm->title_height = WM_TITLE_HEIGHT;
 
-    wm->screen = XtScreen(wm->toplevel);
+    wm->screen = IswScreen(wm->toplevel);
     wm->root = wm->screen->root;
 
     /* Determine screen number by iterating roots */
@@ -198,7 +198,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                         }
 
-                        XtPopup(c->shell, XtGrabNone);
+                        IswPopup(c->shell, IswGrabNone);
                         xcb_map_window(wm->conn, c->client);
                     }
                 }
@@ -219,7 +219,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
 WmClient *wm_find_client_by_frame(Wm *wm, xcb_window_t frame)
 {
     for (WmClient *c = wm->clients; c; c = c->next) {
-        if (c->shell && XtWindow(c->shell) == frame) {
+        if (c->shell && IswWindow(c->shell) == frame) {
             return c;
         }
     }
@@ -268,9 +268,9 @@ void wm_focus_client(Wm *wm, WmClient *c)
                             c->client, XCB_CURRENT_TIME);
         /* Raise frame */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
-                c->client, (unsigned)XtWindow(c->shell));
+                c->client, (unsigned)IswWindow(c->shell));
         uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
-        xcb_configure_window(wm->conn, XtWindow(c->shell),
+        xcb_configure_window(wm->conn, IswWindow(c->shell),
                              XCB_CONFIG_WINDOW_STACK_MODE, vals);
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
@@ -301,6 +301,10 @@ void wm_remove_client(Wm *wm, WmClient *c)
         wm->drag_client = NULL;
         wm->drag_mode = DRAG_NONE;
     }
+
+    /* Cancel the window switcher if active — its client array is now stale */
+    if (wm->switcher_active)
+        wm_switcher_cancel(wm);
 
     frame_destroy(wm, c);
     wm_ewmh_update_client_list(wm);
@@ -620,7 +624,7 @@ void wm_minimize_client(Wm *wm, WmClient *c)
      * add the window to a taskbar/dock list for restoring later. */
     c->minimized = 1;
     if (c->shell) {
-        XtPopdown(c->shell);
+        IswPopdown(c->shell);
     }
     xcb_unmap_window(wm->conn, c->client);
     xcb_flush(wm->conn);
@@ -636,6 +640,17 @@ void wm_minimize_client(Wm *wm, WmClient *c)
         }
         wm_ewmh_update_active(wm);
     }
+}
+
+void wm_restore_client(Wm *wm, WmClient *c)
+{
+    if (!c->minimized) return;
+    c->minimized = 0;
+    xcb_map_window(wm->conn, c->client);
+    if (c->shell) {
+        IswPopup(c->shell, IswGrabNone);
+    }
+    xcb_flush(wm->conn);
 }
 
 /* ---------- WM event handlers (non-widget events) ---------- */
@@ -715,7 +730,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
                                 c->client, c->desktop);
         xcb_map_window(wm->conn, ev->window);
-        XtPopup(c->shell, XtGrabNone);
+        IswPopup(c->shell, IswGrabNone);
         wm_focus_client(wm, c);
         wm_ewmh_update_client_list(wm);
         xcb_flush(wm->conn);
@@ -800,7 +815,7 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 static void on_unmap_notify(Wm *wm, xcb_unmap_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
-    if (c && c->shell && ev->event == XtWindow(c->shell)) {
+    if (c && c->shell && ev->event == IswWindow(c->shell)) {
         wm_remove_client(wm, c);
     }
 }
@@ -832,7 +847,7 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
     if (wm->drag_mode == DRAG_MOVE) {
         c->x = wm->drag_orig_x + dx;
         c->y = wm->drag_orig_y + dy;
-        XtMoveWidget(c->shell, c->x, c->y);
+        IswMoveWidget(c->shell, c->x, c->y);
         int zone = detect_snap_zone(wm, rx, ry);
         if (zone != SNAP_NONE) {
             if (wm->snap_pending != zone) {
@@ -921,10 +936,10 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (!c) { return 1; }
 
-        if (c->shell && !XtIsRealized(c->shell)) {
-            XtRealizeWidget(c->shell);
+        if (c->shell && !IswIsRealized(c->shell)) {
+            IswRealizeWidget(c->shell);
         }
-        XtPopup(c->shell, XtGrabNone);
+        IswPopup(c->shell, IswGrabNone);
         xcb_map_window(wm->conn, c->client);
         wm_focus_client(wm, c);
         return 1;
@@ -952,12 +967,14 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
                 wm_maximize_client(wm, c);
             }
         }
-        /* Check if either atom requests minimize */
+        /* Check if either atom requests minimize/restore */
         if (a1 == ewmh->_NET_WM_STATE_HIDDEN ||
             a2 == ewmh->_NET_WM_STATE_HIDDEN) {
             int want = (action == 1) || (action == 2 && !c->minimized);
             if (want && !c->minimized) {
                 wm_minimize_client(wm, c);
+            } else if (!want && c->minimized) {
+                wm_restore_client(wm, c);
             }
         }
         return 1;
@@ -1054,21 +1071,21 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         break;
     case XCB_CLIENT_MESSAGE:
         if (!on_client_message(wm, (xcb_client_message_event_t *)ev)) {
-            XtDispatchEvent(ev, wm->conn);
+            IswDispatchEvent(ev, wm->conn);
         }
         break;
     case XCB_MOTION_NOTIFY:
         if (wm->drag_mode != DRAG_NONE) {
             on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
         } else {
-            XtDispatchEvent(ev, wm->conn);
+            IswDispatchEvent(ev, wm->conn);
         }
         break;
     case XCB_BUTTON_RELEASE:
         if (wm->drag_mode != DRAG_NONE) {
             on_button_release(wm, (xcb_button_release_event_t *)ev);
         } else {
-            XtDispatchEvent(ev, wm->conn);
+            IswDispatchEvent(ev, wm->conn);
         }
         break;
     case XCB_BUTTON_PRESS: {
@@ -1086,7 +1103,7 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
                                  bp->time);
                 xcb_flush(wm->conn);
             } else {
-                XtDispatchEvent(ev, wm->conn);
+                IswDispatchEvent(ev, wm->conn);
             }
         }
         break;
@@ -1097,8 +1114,11 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     case XCB_KEY_PRESS:
         wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
         break;
+    case XCB_KEY_RELEASE:
+        wm_keys_handle_release(wm, (xcb_key_release_event_t *)ev);
+        break;
     default:
-        XtDispatchEvent(ev, wm->conn);
+        IswDispatchEvent(ev, wm->conn);
         break;
     }
 }
@@ -1107,10 +1127,10 @@ void wm_run(Wm *wm)
 {
     int xcb_fd = xcb_get_file_descriptor(wm->conn);
 
-    while (wm->running && !XtAppGetExitFlag(wm->app)) {
+    while (wm->running && !IswAppGetExitFlag(wm->app)) {
         /* Process any pending Xt work (widget events, timers) */
-        while (XtAppPending(wm->app)) {
-            XtAppProcessEvent(wm->app, XtIMAll);
+        while (IswAppPending(wm->app)) {
+            IswAppProcessEvent(wm->app, IswIMAll);
         }
 
         /* D-Bus dispatch */
@@ -1165,5 +1185,5 @@ void wm_cleanup(Wm *wm)
     isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);
 
-    XtDestroyApplicationContext(wm->app);
+    IswDestroyApplicationContext(wm->app);
 }

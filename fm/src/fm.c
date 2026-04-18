@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/inotify.h>
+#endif
 
 /* App-wide shared state (will move to separate allocation in phase 2) */
 static FmApp g_app;
@@ -246,16 +249,17 @@ static void ctx_free_dynamic(Fm *fm)
 void fm_dismiss_context(Fm *fm)
 {
     if (fm->ctx_shell) {
-        XtPopdown(fm->ctx_shell);
-        XtDestroyWidget(fm->ctx_shell);
+        IswPopdown(fm->ctx_shell);
+        IswDestroyWidget(fm->ctx_shell);
         fm->ctx_shell = NULL;
         fm->ctx_list = NULL;
     }
     ctx_free_dynamic(fm);
+    places_dismiss_device_menu(fm);
 }
 
-static void ctx_select_cb(Widget w, XtPointer client_data,
-                          XtPointer call_data)
+static void ctx_select_cb(Widget w, IswPointer client_data,
+                          IswPointer call_data)
 {
     (void)w;
     (void)client_data;
@@ -394,7 +398,7 @@ static void ctx_build_menu(Fm *fm)
     fm->dyn_labels[pos] = NULL;
 }
 
-static void ctx_handler(Widget w, XtPointer client_data,
+static void ctx_handler(Widget w, IswPointer client_data,
                         xcb_generic_event_t *event, Boolean *cont)
 {
     (void)cont;
@@ -430,27 +434,27 @@ static void ctx_handler(Widget w, XtPointer client_data,
 
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNx, rx);                    n++;
-    XtSetArg(args[n], XtNy, ry);                    n++;
-    XtSetArg(args[n], XtNoverrideRedirect, True);    n++;
-    XtSetArg(args[n], XtNborderWidth, 1);            n++;
-    fm->ctx_shell = XtCreatePopupShell("ctxMenu", overrideShellWidgetClass,
+    IswSetArg(args[n], IswNx, rx);                    n++;
+    IswSetArg(args[n], IswNy, ry);                    n++;
+    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
+    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    fm->ctx_shell = IswCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, args, n);
 
     String *labels = fm->ctx_in_trash ? ctx_trash_labels : fm->dyn_labels;
     int nitems = fm->ctx_in_trash ? CTX_TRASH_NITEMS : fm->dyn_nitems;
 
     n = 0;
-    XtSetArg(args[n], XtNlist, labels);              n++;
-    XtSetArg(args[n], XtNnumberStrings, nitems);     n++;
-    XtSetArg(args[n], XtNdefaultColumns, 1);         n++;
-    XtSetArg(args[n], XtNforceColumns, True);        n++;
-    XtSetArg(args[n], XtNverticalList, True);        n++;
-    XtSetArg(args[n], XtNborderWidth, 0);            n++;
-    XtSetArg(args[n], XtNcursor, None);              n++;
-    fm->ctx_list = XtCreateManagedWidget("ctxList", listWidgetClass,
+    IswSetArg(args[n], IswNlist, labels);              n++;
+    IswSetArg(args[n], IswNnumberStrings, nitems);     n++;
+    IswSetArg(args[n], IswNdefaultColumns, 1);         n++;
+    IswSetArg(args[n], IswNforceColumns, True);        n++;
+    IswSetArg(args[n], IswNverticalList, True);        n++;
+    IswSetArg(args[n], IswNborderWidth, 0);            n++;
+    IswSetArg(args[n], IswNcursor, None);              n++;
+    fm->ctx_list = IswCreateManagedWidget("ctxList", listWidgetClass,
                                      fm->ctx_shell, args, n);
-    XtAddCallback(fm->ctx_list, XtNcallback, ctx_select_cb, NULL);
+    IswAddCallback(fm->ctx_list, IswNcallback, ctx_select_cb, NULL);
 
     static char ctxTranslations[] =
         "<EnterWindow>: Set()\n"
@@ -458,15 +462,15 @@ static void ctx_handler(Widget w, XtPointer client_data,
         "<Motion>:      Set()\n"
         "<BtnDown>:     Set() Notify()\n"
         "<BtnUp>:       Notify()";
-    XtOverrideTranslations(fm->ctx_list,
-                           XtParseTranslationTable(ctxTranslations));
+    IswOverrideTranslations(fm->ctx_list,
+                           IswParseTranslationTable(ctxTranslations));
 
-    XtPopup(fm->ctx_shell, XtGrabNone);
+    IswPopup(fm->ctx_shell, IswGrabNone);
 }
 
 void fm_register_context_menu(Fm *fm, Widget w)
 {
-    XtAddEventHandler(w, XCB_EVENT_MASK_BUTTON_PRESS, False, ctx_handler, fm);
+    IswAddEventHandler(w, XCB_EVENT_MASK_BUTTON_PRESS, False, ctx_handler, fm);
 }
 
 /* ---------- navigation ---------- */
@@ -476,11 +480,6 @@ void fm_navigate(Fm *fm, const char *path)
     fm_dismiss_context(fm);
 
     char *new_path = strdup(path);
-
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
-        IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
-        IswListViewSetData(fm->listview, NULL, 0, 0);
 
     if (browser_read_dir(fm, new_path) != 0) {
         free(new_path);
@@ -506,12 +505,6 @@ void fm_navigate(Fm *fm, const char *path)
 void fm_refresh(Fm *fm)
 {
     fm_dismiss_context(fm);
-
-    if (fm->view_mode == FM_VIEW_ICON && fm->iconview)
-        IswIconViewSetItems(fm->iconview, NULL, NULL, 0);
-    else if (fm->view_mode == FM_VIEW_LIST && fm->listview)
-        IswListViewSetData(fm->listview, NULL, 0, 0);
-
     browser_read_dir(fm, fm->cwd);
     fileview_populate(fm);
     navbar_update(fm);
@@ -662,7 +655,7 @@ static void act_toggle_view(Widget w, xcb_generic_event_t *ev, String *p, Cardin
                          ? FM_VIEW_LIST : FM_VIEW_ICON);
 }
 
-static XtActionsRec fm_actions[] = {
+static IswActionsRec fm_actions[] = {
     {"fm-copy",          act_copy},
     {"fm-cut",           act_cut},
     {"fm-paste",         act_paste},
@@ -699,7 +692,7 @@ static char fm_translations[] =
 
 void fm_install_shortcuts(Widget w)
 {
-    XtOverrideTranslations(w, XtParseTranslationTable(fm_translations));
+    IswOverrideTranslations(w, IswParseTranslationTable(fm_translations));
 }
 
 /* ---------- D-Bus settings reload ---------- */
@@ -740,7 +733,7 @@ static void on_settings_changed(const char *section, const char *key,
     }
 }
 
-static void dbus_input_cb(XtPointer client_data, int *fd, XtInputId *id)
+static void dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd;
     (void)id;
@@ -761,7 +754,7 @@ static void act_close_window(Widget w, xcb_generic_event_t *ev,
     }
 }
 
-static void fm_destroy_cb(Widget w, XtPointer cd, XtPointer call)
+static void fm_destroy_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
     Fm *fm = (Fm *)cd;
@@ -803,7 +796,7 @@ static void app_remove_window(FmApp *app, Fm *fm)
     }
     if (app->nwindows == 0) {
         app->running = 0;
-        XtAppSetExitFlag(app->app);
+        IswAppSetExitFlag(app->app);
     }
 }
 
@@ -838,22 +831,120 @@ static void act_new_window(Widget w, xcb_generic_event_t *ev,
     }
 }
 
+/* ---------- mount monitor ---------- */
+
+#ifdef __linux__
+static void mount_changed_cb(IswPointer cd, int *fd, IswInputId *id)
+{
+    (void)id;
+    FmApp *app = (FmApp *)cd;
+
+    char buf[4096]
+        __attribute__((aligned(__alignof__(struct inotify_event))));
+    ssize_t len;
+
+    while ((len = read(*fd, buf, sizeof(buf))) > 0) {
+        for (char *ptr = buf; ptr < buf + len; ) {
+            struct inotify_event *ev = (struct inotify_event *)ptr;
+            if (ev->len == 0) {
+                ptr += sizeof(*ev) + ev->len;
+                continue;
+            }
+
+            const char *name = ev->name;
+            const char *user = getenv("USER");
+            char path[512];
+            snprintf(path, sizeof(path), "/media/%s/%s",
+                     user ? user : "", name);
+
+            fprintf(stderr, "isde-fm: mount event: %s %s\n",
+                    (ev->mask & IN_CREATE) ? "CREATE" : "DELETE", name);
+
+            for (int i = 0; i < app->nwindows; i++) {
+                Fm *fm = app->windows[i];
+                if (ev->mask & IN_CREATE) {
+                    places_device_added(fm, name, path);
+                } else if (ev->mask & IN_DELETE) {
+                    places_device_removed(fm, name);
+
+                    /* Navigate away if viewing a removed mount */
+                    if (strncmp(fm->cwd, path, strlen(path)) == 0) {
+                        const char *home = getenv("HOME");
+                        fm_navigate(fm, home ? home : "/");
+                    }
+                }
+            }
+
+            ptr += sizeof(*ev) + ev->len;
+        }
+    }
+}
+
+static void mount_monitor_init(FmApp *app)
+{
+    const char *user = getenv("USER");
+    if (!user) {
+        return;
+    }
+
+    char media_path[256];
+    snprintf(media_path, sizeof(media_path), "/media/%s", user);
+
+    struct stat st;
+    if (stat(media_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        return;
+    }
+
+    app->mount_inotify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (app->mount_inotify_fd < 0) {
+        return;
+    }
+
+    app->mount_wd = inotify_add_watch(app->mount_inotify_fd,
+                                       media_path,
+                                       IN_CREATE | IN_DELETE);
+    if (app->mount_wd < 0) {
+        close(app->mount_inotify_fd);
+        app->mount_inotify_fd = -1;
+        return;
+    }
+
+    app->mount_input_id = IswAppAddInput(app->app, app->mount_inotify_fd,
+                                          (IswPointer)IswInputReadMask,
+                                          mount_changed_cb, app);
+    fprintf(stderr, "isde-fm: mount monitor watching %s (fd=%d)\n",
+            media_path, app->mount_inotify_fd);
+}
+
+static void mount_monitor_cleanup(FmApp *app)
+{
+    if (app->mount_inotify_fd >= 0) {
+        if (app->mount_input_id) {
+            IswRemoveInput(app->mount_input_id);
+        }
+        close(app->mount_inotify_fd);
+        app->mount_inotify_fd = -1;
+    }
+}
+#endif /* __linux__ */
+
 /* ---------- app init / run / cleanup ---------- */
 
 int fm_app_init(FmApp *app, int *argc, char **argv)
 {
     memset(app, 0, sizeof(*app));
+    app->mount_inotify_fd = -1;
 
     /* Initialize context key for fm_from_widget lookups */
     fm_window_context = IswUniqueContext();
 
     char **fallbacks = isde_theme_build_resources();
-    app->first_toplevel = XtAppInitialize(&app->app, "ISDE-FM",
+    app->first_toplevel = IswAppInitialize(&app->app, "ISDE-FM",
                                           NULL, 0, argc, argv,
                                           fallbacks, NULL, 0);
 
     /* Register actions globally (once) */
-    XtAppAddActions(app->app, fm_actions, XtNumber(fm_actions));
+    IswAppAddActions(app->app, fm_actions, IswNumber(fm_actions));
 
     /* Determine path to open */
     {
@@ -917,11 +1008,15 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     if (app->dbus) {
         int dbus_fd = isde_dbus_get_fd(app->dbus);
         if (dbus_fd >= 0) {
-            XtAppAddInput(app->app, dbus_fd,
-                          (XtPointer)XtInputReadMask,
+            IswAppAddInput(app->app, dbus_fd,
+                          (IswPointer)IswInputReadMask,
                           dbus_input_cb, app->dbus);
         }
     }
+
+    /* Connect to mountd before creating windows so the sidebar
+     * can show all devices (mounted and unmounted). */
+    fm_mountd_init(app);
 
     /* Open initial window */
     Fm *first = fm_window_new(app, app->initial_path);
@@ -937,7 +1032,7 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         fm_window_destroy(first);
         free(app->initial_path);
         app->initial_path = NULL;
-        XtDestroyApplicationContext(app->app);
+        IswDestroyApplicationContext(app->app);
         return 1;
     }
 
@@ -945,6 +1040,13 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     if (app->dbus) {
         isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
     }
+
+#ifdef __linux__
+    /* Only use inotify mount monitor when mountd is not available —
+     * mountd signals handle device changes when it's running. */
+    if (!app->has_mountd)
+        mount_monitor_init(app);
+#endif
 
     app->running = 1;
     return 0;
@@ -962,66 +1064,66 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     load_window_config(fm);
 
-    /* Create toplevel shell — first window reuses XtAppInitialize's shell,
+    /* Create toplevel shell — first window reuses IswAppInitialize's shell,
      * subsequent windows create new application shells. */
     int fm_w = 700;
     int fm_h = 500;
-    isde_clamp_to_workarea(XtDisplay(app->first_toplevel), 0, &fm_w, &fm_h);
+    isde_clamp_to_workarea(IswDisplay(app->first_toplevel), 0, &fm_w, &fm_h);
 
     if (app->nwindows == 0) {
         fm->toplevel = app->first_toplevel;
     } else {
         Arg args[20];
         Cardinal n = 0;
-        XtSetArg(args[n], XtNwidth, fm_w);                n++;
-        XtSetArg(args[n], XtNheight, fm_h);               n++;
-        XtSetArg(args[n], XtNminWidth, 400);  n++;
-        XtSetArg(args[n], XtNminHeight, 300); n++;
-        fm->toplevel = XtAppCreateShell("isde-fm", "ISDE-FM",
+        IswSetArg(args[n], IswNwidth, fm_w);                n++;
+        IswSetArg(args[n], IswNheight, fm_h);               n++;
+        IswSetArg(args[n], IswNminWidth, 400);  n++;
+        IswSetArg(args[n], IswNminHeight, 300); n++;
+        fm->toplevel = IswAppCreateShell("isde-fm", "ISDE-FM",
                                         applicationShellWidgetClass,
-                                        XtDisplay(app->first_toplevel),
+                                        IswDisplay(app->first_toplevel),
                                         args, n);
     }
 
     if (app->nwindows == 0) {
         Arg args[20];
         Cardinal n = 0;
-        XtSetArg(args[n], XtNwidth, fm_w);                n++;
-        XtSetArg(args[n], XtNheight, fm_h);               n++;
-        XtSetArg(args[n], XtNminWidth, 400);  n++;
-        XtSetArg(args[n], XtNminHeight, 300); n++;
-        XtSetValues(fm->toplevel, args, n);
+        IswSetArg(args[n], IswNwidth, fm_w);                n++;
+        IswSetArg(args[n], IswNheight, fm_h);               n++;
+        IswSetArg(args[n], IswNminWidth, 400);  n++;
+        IswSetArg(args[n], IswNminHeight, 300); n++;
+        IswSetValues(fm->toplevel, args, n);
     }
 
-    XtAddCallback(fm->toplevel, XtNdestroyCallback, fm_destroy_cb, fm);
+    IswAddCallback(fm->toplevel, IswNdestroyCallback, fm_destroy_cb, fm);
 
     /* Override Shell's default WM_DELETE_WINDOW handler (which calls
-     * XtAppSetExitFlag, killing all windows) with one that only
+     * IswAppSetExitFlag, killing all windows) with one that only
      * closes this window. */
-    XtOverrideTranslations(fm->toplevel, XtParseTranslationTable(
+    IswOverrideTranslations(fm->toplevel, IswParseTranslationTable(
         "<Message>WM_PROTOCOLS: fm-close-window()\n"));
 
     /* MainWindow */
-    fm->main_window = XtCreateManagedWidget("mainWin", mainWindowWidgetClass,
+    fm->main_window = IswCreateManagedWidget("mainWin", mainWindowWidgetClass,
                                             fm->toplevel, NULL, 0);
-    XtUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
+    IswUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
 
     /* Outer FlexBox: vertical */
     Arg args[20];
     Cardinal n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientVertical); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                 n++;
-    fm->vbox = XtCreateManagedWidget("vbox", flexBoxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    fm->vbox = IswCreateManagedWidget("vbox", flexBoxWidgetClass,
                                       fm->main_window, args, n);
 
     navbar_init(fm);
 
     /* Content area: horizontal FlexBox */
     n = 0;
-    XtSetArg(args[n], XtNorientation, XtorientHorizontal); n++;
-    XtSetArg(args[n], XtNborderWidth, 0);                   n++;
-    XtSetArg(args[n], XtNflexGrow, 1);                      n++;
-    fm->hbox = XtCreateManagedWidget("hbox", flexBoxWidgetClass,
+    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
+    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    IswSetArg(args[n], IswNflexGrow, 1);                      n++;
+    fm->hbox = IswCreateManagedWidget("hbox", flexBoxWidgetClass,
                                       fm->vbox, args, n);
 
     places_init(fm);
@@ -1036,7 +1138,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     browser_read_dir(fm, fm->cwd);
 
-    XtRealizeWidget(fm->toplevel);
+    IswRealizeWidget(fm->toplevel);
 
     /* Store Fm* for fm_from_widget lookups */
     fm_set_context(fm->toplevel, fm);
@@ -1044,6 +1146,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
     /* XDND init must be after realize — re-apply keyboard shortcuts
      * afterward since DnD translation overrides can clobber them. */
     dnd_init(fm);
+    places_register_drop_targets(fm);
     fm_install_shortcuts(fm->iconview);
     fm_install_shortcuts(fm->listview);
 
@@ -1056,15 +1159,15 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
 void fm_window_destroy(Fm *fm)
 {
-    /* All actual cleanup happens in fm_destroy_cb (the XtNdestroyCallback).
+    /* All actual cleanup happens in fm_destroy_cb (the IswNdestroyCallback).
      * This just triggers the widget destruction. */
-    XtDestroyWidget(fm->toplevel);
+    IswDestroyWidget(fm->toplevel);
 }
 
 void fm_app_run(FmApp *app)
 {
-    while (app->running && !XtAppGetExitFlag(app->app)) {
-        XtAppProcessEvent(app->app, XtIMAll);
+    while (app->running && !IswAppGetExitFlag(app->app)) {
+        IswAppProcessEvent(app->app, IswIMAll);
     }
 }
 
@@ -1073,10 +1176,14 @@ void fm_app_cleanup(FmApp *app)
     /* Destroy any remaining windows */
     while (app->nwindows > 0) {
         Fm *fm = app->windows[0];
-        XtDestroyWidget(fm->toplevel);
+        IswDestroyWidget(fm->toplevel);
     }
     free(app->windows);
 
+    fm_mountd_cleanup(app);
+#ifdef __linux__
+    mount_monitor_cleanup(app);
+#endif
     jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
@@ -1085,5 +1192,5 @@ void fm_app_cleanup(FmApp *app)
         isde_desktop_free(app->desktop_entries[i]);
     }
     free(app->desktop_entries);
-    XtDestroyApplicationContext(app->app);
+    IswDestroyApplicationContext(app->app);
 }

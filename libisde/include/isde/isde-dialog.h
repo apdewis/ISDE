@@ -12,7 +12,7 @@
 #ifndef ISDE_DIALOG_H
 #define ISDE_DIALOG_H
 
-#include <X11/Intrinsic.h>
+#include <ISW/Intrinsic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,8 +35,8 @@ extern "C" {
 Widget isde_dialog_create_shell(Widget parent, const char *name,
                                 const char *title, int width, int height);
 
-/* Pop up the dialog.  XtGrabExclusive for modal, XtGrabNone for modeless. */
-void isde_dialog_popup(Widget shell, XtGrabKind grab);
+/* Pop up the dialog.  IswGrabExclusive for modal, IswGrabNone for modeless. */
+void isde_dialog_popup(Widget shell, IswGrabKind grab);
 
 /* Pop down and destroy the dialog shell.  Safe to call with NULL. */
 void isde_dialog_dismiss(Widget shell);
@@ -44,11 +44,11 @@ void isde_dialog_dismiss(Widget shell);
 /*
  * Create a row of HIG-compliant buttons inside a Form widget:
  *   - Each button: 80 logical pixels wide, 8px internal padding
- *   - Anchored bottom-right (XtChainRight, XtChainBottom)
+ *   - Anchored bottom-right (IswChainRight, IswChainBottom)
  *   - Affirmative action first (leftmost), Cancel last (rightmost)
  *
  * form:         the Form widget to add buttons to
- * above_widget: the widget buttons are placed below (XtNfromVert)
+ * above_widget: the widget buttons are placed below (IswNfromVert)
  * form_width:   scaled width of the form (for horizDistance calculation)
  * buttons:      array of button specifications
  * nbuttons:     number of buttons
@@ -57,8 +57,8 @@ void isde_dialog_dismiss(Widget shell);
  */
 typedef struct {
     const char    *label;
-    XtCallbackProc callback;
-    XtPointer      client_data;
+    IswCallbackProc callback;
+    IswPointer      client_data;
 } IsdeDialogButton;
 
 Widget isde_dialog_add_buttons(Widget form, Widget above_widget,
@@ -124,8 +124,8 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
 typedef struct IsdeProgress IsdeProgress;
 
 IsdeProgress *isde_progress_create(Widget parent, const char *title,
-                                   XtAppContext app,
-                                   XtCallbackProc cancel_cb, void *data);
+                                   IswAppContext app,
+                                   IswCallbackProc cancel_cb, void *data);
 void isde_progress_update(IsdeProgress *p, int percent, const char *message);
 void isde_progress_update_file(IsdeProgress *p, int percent,
                                const char *message);
