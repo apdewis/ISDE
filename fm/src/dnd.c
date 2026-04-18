@@ -368,11 +368,29 @@ static void drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
 
     int index = hit_test_view(fm, d->x, d->y);
 
-    /* Only highlight directories — you can't drop into a regular file */
-    if (index >= 0 && index < fm->nentries && fm->entries[index].is_dir)
+    /* Reject drops onto regular files */
+    if (index >= 0 && index < fm->nentries && !fm->entries[index].is_dir) {
+        set_drop_highlight(fm, -1);
+        return;
+    }
+
+    /* Highlight directories; background drops go into cwd */
+    if (index >= 0 && index < fm->nentries)
         set_drop_highlight(fm, index);
     else
         set_drop_highlight(fm, -1);
+
+    /* Accept the proposed action so modifier keys (Ctrl=copy, Shift=move)
+     * are honored instead of falling through to NegotiateType which always
+     * picks copy. Constrain to actions we actually support. */
+    IswDndAction dominated = ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE;
+    IswDndAction action = d->proposed_action & dominated;
+    if (action == ISW_DND_ACTION_NONE)
+        action = ISW_DND_ACTION_COPY;
+
+    Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
+    d->accepted_type   = ISWXdndInternType(dnd_w, "text/uri-list");
+    d->accepted_action = action;
 }
 
 static void drag_leave_cb(Widget w, IswPointer cd, IswPointer call)
