@@ -7,6 +7,7 @@
 #include "settings.h"
 #include <ISW/List.h>
 #include <ISW/Slider.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -225,19 +226,17 @@ static Widget display_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
-    Arg args[20];
-    Cardinal n;
     Dimension pw, ph;
     Arg qargs[20];
     IswSetArg(qargs[0], IswNwidth, &pw);
     IswSetArg(qargs[1], IswNheight, &ph);
     IswGetValues(parent, qargs, 2);
 
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateWidget("displayForm", formWidgetClass,
-                                 parent, args, n);
+                                 parent, ab.args, ab.count);
 
     /* Query outputs */
     xcb_connection_t *conn = IswDisplay(parent);
@@ -254,29 +253,28 @@ static Widget display_create(Widget parent, IswAppContext app)
     int ctrl_w = (pw > 0 ? (int)pw - lbl_w - 8 * 4 : 200);
     if (ctrl_w < 100) { ctrl_w = 100; }
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Outputs:");            n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);                   n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);        n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);              n++;
-    //IswSetArg(args[n], IswNright, IswChainLeft);             n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Outputs:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgLeft(&ab, IswChainLeft);
     Widget out_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, args, n);
+                                           form, ab.args, ab.count);
 
     int list_height = (ph > 0 ? ph / 3 : 100);
-    n = 0;
-    IswSetArg(args[n], IswNlist, output_names);            n++;
-    IswSetArg(args[n], IswNnumberStrings, noutputs);       n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);              n++;
-    IswSetArg(args[n], IswNforceColumns, True);             n++;
-    IswSetArg(args[n], IswNverticalList, True);             n++;
-    IswSetArg(args[n], IswNheight, LIST_W);                 n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
-    IswSetArg(args[n], IswNfromHoriz, out_lbl);             n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, output_names);
+    IswArgNumberStrings(&ab, noutputs);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgHeight(&ab, LIST_W);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromHoriz(&ab, out_lbl);
+    IswArgLeft(&ab, IswChainLeft);
     output_list = IswCreateManagedWidget("outputList", listWidgetClass,
-                                        form, args, n);
+                                        form, ab.args, ab.count);
     IswAddCallback(output_list, IswNcallback, output_select_cb, NULL);
 
     /* Select primary by default */
@@ -289,55 +287,55 @@ static Widget display_create(Widget parent, IswAppContext app)
 
     /* --- Resolution (read-only, label-left) --- */
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Resolution:");    n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNfromVert, prev);             n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);               n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);    n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);          n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);         n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Resolution:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, prev);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     Widget res_lbl_static = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                                   form, args, n);
+                                                   form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                  n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNfromVert, prev);             n++;
-    IswSetArg(args[n], IswNfromHoriz, res_lbl_static);  n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);               n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyLeft);     n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);          n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, prev);
+    IswArgFromHoriz(&ab, res_lbl_static);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgLeft(&ab, IswChainLeft);
     res_label = IswCreateManagedWidget("resValue", labelWidgetClass,
-                                      form, args, n);
+                                      form, ab.args, ab.count);
     update_res_label();
     prev = res_label;
 
     /* --- HiDPI scale (label-left) --- */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Scale:");            n++;
-    IswSetArg(args[n], IswNborderWidth, 0);              n++;
-    IswSetArg(args[n], IswNfromVert, prev);               n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);                 n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);      n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);            n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);           n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Scale:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, prev);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     scale_label = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                        form, args, n);
+                                        form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNminimumValue, 100);          n++;
-    IswSetArg(args[n], IswNmaximumValue, 300);           n++;
-    IswSetArg(args[n], IswNsliderValue, current_scale);   n++;
-    IswSetArg(args[n], IswNshowValue, True);              n++;
-    IswSetArg(args[n], IswNtickInterval, 25);             n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                n++;
-    IswSetArg(args[n], IswNfromVert, prev);                 n++;
-    IswSetArg(args[n], IswNfromHoriz, scale_label);         n++;
-    IswSetArg(args[n], IswNwidth, SLIDER_W);                 n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);             n++;
+    IswArgBuilderReset(&ab);
+    IswArgMinimumValue(&ab, 100);
+    IswArgMaximumValue(&ab, 300);
+    IswArgSliderValue(&ab, current_scale);
+    IswArgShowValue(&ab, True);
+    IswArgTickInterval(&ab, 25);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, prev);
+    IswArgFromHoriz(&ab, scale_label);
+    IswArgWidth(&ab, SLIDER_W);
+    IswArgLeft(&ab, IswChainLeft);
     scale_slider = IswCreateManagedWidget("scaleSlider", sliderWidgetClass,
-                                          form, args, n);
+                                          form, ab.args, ab.count);
     IswAddCallback(scale_slider, IswNvalueChanged, scale_changed_cb, NULL);
     prev = scale_slider;
 

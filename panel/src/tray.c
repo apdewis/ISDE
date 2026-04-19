@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ISW/IswArgMacros.h>
 
 /* System tray opcodes */
 #define SYSTEM_TRAY_REQUEST_DOCK    0
@@ -167,37 +168,36 @@ void tray_init_widgets(Panel *p)
     p->atom_xembed_info = intern(p->conn, "_XEMBED_INFO");
 
     /* Outer vertical FlexBox — child of the panel's horizontal FlexBox */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
-    IswSetArg(args[n], IswNflexBasis, 2);                   n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, XtorientVertical);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 2);
     p->tray_area = IswCreateManagedWidget("trayArea", flexBoxWidgetClass,
-                                          p->form, args, n);
+                                          p->form, ab.args, ab.count);
 
     /* Top spacer — 1/4 of vertical space */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);  n++;
-    IswSetArg(args[n], IswNflexGrow, 1);     n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
     IswCreateManagedWidget("traySpcTop", labelWidgetClass,
-                           p->tray_area, args, n);
+                           p->tray_area, ab.args, ab.count);
 
     /* Inner tray box — 1/2 of vertical space (icons reparented here) */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);  n++;
-    IswSetArg(args[n], IswNflexGrow, 2);     n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 2);
     p->tray_box = IswCreateManagedWidget("trayBox", labelWidgetClass,
-                                          p->tray_area, args, n);
+                                          p->tray_area, ab.args, ab.count);
 
     /* Bottom spacer — 1/4 of vertical space */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);  n++;
-    IswSetArg(args[n], IswNflexGrow, 1);     n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
     IswCreateManagedWidget("traySpcBot", labelWidgetClass,
-                           p->tray_area, args, n);
+                           p->tray_area, ab.args, ab.count);
 }
 
 static void tray_claim_selection(Panel *p);

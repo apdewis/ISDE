@@ -14,6 +14,7 @@
 #include <dbus/dbus.h>
 
 #include <ISW/AsciiText.h>
+#include <ISW/IswArgMacros.h>
 
 
 
@@ -178,14 +179,11 @@ static Widget dm_create(Widget parent, IswAppContext app)
     snprintf(saved_date_fmt, sizeof(saved_date_fmt), "%%Y-%%m-%%d");
     fetch_greeter_config();
 
-    Arg args[20];
-    Cardinal n;
-
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateWidget("dmPanel", formWidgetClass,
-                                 parent, args, n);
+                                 parent, ab.args, ab.count);
 
     Dimension pw;
     Arg qa[20];
@@ -193,52 +191,52 @@ static Widget dm_create(Widget parent, IswAppContext app)
     IswGetValues(parent, qa, 1);
 
     /* Time Format */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Time Format");           n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);                  n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);        n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Time Format");
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     Widget time_lbl = IswCreateManagedWidget("timeFmtLabel",
                                             labelWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNfromHoriz, time_lbl);            n++;
-    IswSetArg(args[n], IswNwidth, TEXT_W);                  n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNstring, saved_time_fmt);          n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromHoriz(&ab, time_lbl);
+    IswArgWidth(&ab, TEXT_W);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgBorderWidth(&ab, 1);
+    IswArgString(&ab, saved_time_fmt);
+    IswArgLeft(&ab, IswChainLeft);
     text_time_fmt = IswCreateManagedWidget("timeFmtText",
                                           asciiTextWidgetClass,
-                                          form, args, n);
+                                          form, ab.args, ab.count);
 
     /* Date Format */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Date Format");           n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);                  n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);        n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNfromVert, time_lbl);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Date Format");
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, time_lbl);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     Widget date_lbl = IswCreateManagedWidget("dateFmtLabel",
                                             labelWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNfromHoriz, date_lbl);            n++;
-    IswSetArg(args[n], IswNfromVert, text_time_fmt);         n++;
-    IswSetArg(args[n], IswNwidth, TEXT_W);                  n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNstring, saved_date_fmt);          n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromHoriz(&ab, date_lbl);
+    IswArgFromVert(&ab, text_time_fmt);
+    IswArgWidth(&ab, TEXT_W);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgBorderWidth(&ab, 1);
+    IswArgString(&ab, saved_date_fmt);
+    IswArgLeft(&ab, IswChainLeft);
     text_date_fmt = IswCreateManagedWidget("dateFmtText",
                                           asciiTextWidgetClass,
-                                          form, args, n);
+                                          form, ab.args, ab.count);
 
     return form;
 }

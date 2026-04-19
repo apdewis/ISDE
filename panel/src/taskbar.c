@@ -15,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <ISW/IswArgMacros.h>
 
 /* Strip desktop field codes (%f, %F, %u, %U, etc.) from an Exec string.
  * Returns a malloc'd copy with codes removed. */
@@ -184,26 +185,25 @@ static void create_window_menu(Panel *p, TaskGroup *g)
     /* Placeholder title so the List has valid data at creation */
     static String placeholder[] = { "", NULL };
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
-    IswSetArg(args[n], IswNborderWidth, 1);            n++;
-    IswSetArg(args[n], IswNallowShellResize, True);    n++;
-    IswSetArg(args[n], IswNborderColor, border_px);    n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
+    IswArgAllowShellResize(&ab, True);
+    IswArgBorderColor(&ab, border_px);
     g->menu = IswCreatePopupShell("winListMenu", overrideShellWidgetClass,
-                                 g->button, args, n);
+                                 g->button, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, placeholder);          n++;
-    IswSetArg(args[n], IswNnumberStrings, 1);           n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);          n++;
-    IswSetArg(args[n], IswNforceColumns, True);         n++;
-    IswSetArg(args[n], IswNverticalList, True);         n++;
-    IswSetArg(args[n], IswNallowShellResize, True);     n++;
-    IswSetArg(args[n], IswNborderWidth, 0);             n++;
-    IswSetArg(args[n], IswNcursor, None);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, placeholder);
+    IswArgNumberStrings(&ab, 1);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgAllowShellResize(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgCursor(&ab, None);
     g->menu_list = IswCreateManagedWidget("winList", listWidgetClass,
-                                         g->menu, args, n);
+                                         g->menu, ab.args, ab.count);
     IswAddCallback(g->menu_list, IswNcallback, wl_select_callback, NULL);
 
     static char wlTranslations[] =
@@ -430,14 +430,11 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     const IsdeColorScheme *s = isde_theme_current();
     Pixel border_px = s ? taskbar_pixel(p, s->border)
                         : p->screen->white_pixel;
-    Arg cargs[20];
-    Cardinal cn = 0;
-    IswSetArg(cargs[cn], IswNborderWidth, 1);          cn++;
-    IswSetArg(cargs[cn], IswNborderColor, border_px);  cn++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBorderWidth(&ab, 1);
+    IswArgBorderColor(&ab, border_px);
     g->ctx_menu = IswCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
-                                     g->button, cargs, cn);
-
-    Arg args[20];
+                                     g->button, ab.args, ab.count);
 
     /* Desktop actions (static — these don't change) */
     if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
@@ -448,9 +445,10 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
             if (!a->name || !a->exec) {
                 continue;
             }
-            IswSetArg(args[0], IswNlabel, a->name);
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, a->name);
             Widget entry = IswCreateManagedWidget("action", smeBSBObjectClass,
-                                                  g->ctx_menu, args, 1);
+                                                  g->ctx_menu, ab.args, ab.count);
             ActionClosure *ac = malloc(sizeof(*ac));
             ac->panel = p;
             ac->exec = strip_field_codes(a->exec);
@@ -465,9 +463,10 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
 
     /* New instance (static) */
     if (g->desktop_exec) {
-        IswSetArg(args[0], IswNlabel, "New instance");
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "New instance");
         Widget ni = IswCreateManagedWidget("newInst", smeBSBObjectClass,
-                                           g->ctx_menu, args, 1);
+                                           g->ctx_menu, ab.args, ab.count);
         ActionClosure *ac = malloc(sizeof(*ac));
         ac->panel = p;
         ac->exec = g->desktop_exec;
@@ -475,18 +474,20 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     }
 
     /* Close all windows (dynamic — shown only when nwindows > 0) */
-    IswSetArg(args[0], IswNlabel, "Close all windows");
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Close all windows");
     g->ctx_close_all = IswCreateManagedWidget("closeAll", smeBSBObjectClass,
-                                              g->ctx_menu, args, 1);
+                                              g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_close_all, IswNcallback, close_all_callback, closure);
 
     g->ctx_close_sep = IswCreateManagedWidget("sep2", smeLineObjectClass,
                                               g->ctx_menu, NULL, 0);
 
     /* Pin/unpin (dynamic label) */
-    IswSetArg(args[0], IswNlabel, "Pin to taskbar");
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Pin to taskbar");
     g->ctx_pin = IswCreateManagedWidget("pinToggle", smeBSBObjectClass,
-                                        g->ctx_menu, args, 1);
+                                        g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
 }
 
@@ -662,22 +663,21 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     }
 
     /* Create button widget */
-    Arg args[20];
-    Cardinal n = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
     if (g->icon_path) {
         Dimension pad = 2;
-        IswSetArg(args[n], IswNimage, g->icon_path);            n++;
-        IswSetArg(args[n], IswNlabel, "");                 n++;
-        IswSetArg(args[n], IswNwidth, PANEL_HEIGHT);       n++;
-        IswSetArg(args[n], IswNinternalWidth, pad);        n++;
-        IswSetArg(args[n], IswNinternalHeight, pad);       n++;
+        IswArgImage(&ab, g->icon_path);
+        IswArgLabel(&ab, "");
+        IswArgWidth(&ab, PANEL_HEIGHT);
+        IswArgInternalWidth(&ab, pad);
+        IswArgInternalHeight(&ab, pad);
     } else {
-        IswSetArg(args[n], IswNlabel, g->display_name);   n++;
+        IswArgLabel(&ab, g->display_name);
     }
-    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);        n++;
-    IswSetArg(args[n], IswNborderWidth, 0);              n++;
+    IswArgHeight(&ab, PANEL_HEIGHT);
+    IswArgBorderWidth(&ab, 0);
     g->button = IswCreateManagedWidget("taskBtn", commandWidgetClass,
-                                      p->box, args, n);
+                                      p->box, ab.args, ab.count);
 
     TaskClosure *tc = malloc(sizeof(*tc));
     tc->panel = p;

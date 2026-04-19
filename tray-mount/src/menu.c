@@ -9,6 +9,7 @@
 
 #include <ISW/IntrinsicP.h>
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -130,11 +131,8 @@ static void menu_grab_handler(Widget w, IswPointer closure,
 
 void tm_menu_init(TrayMount *tm)
 {
-    Arg args[20];
-    Cardinal n = 0;
-
     tm->menu_shell = IswCreatePopupShell("mountMenu", simpleMenuWidgetClass,
-                                          tm->toplevel, args, n);
+                                          tm->toplevel, NULL, 0);
 }
 
 void tm_menu_show(TrayMount *tm)
@@ -147,19 +145,18 @@ void tm_menu_show(TrayMount *tm)
     /* Reset action allocations */
     nactions = 0;
 
-    Arg args[20];
-    Cardinal n = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     tm->menu_shell = IswCreatePopupShell("mountMenu", simpleMenuWidgetClass,
-                                          tm->toplevel, args, n);
+                                          tm->toplevel, NULL, 0);
 
     if (tm->ndevices == 0) {
         /* Show "No devices" */
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "No removable devices"); n++;
-        IswSetArg(args[n], IswNsensitive, False); n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "No removable devices");
+        IswArgSensitive(&ab, False);
         IswCreateManagedWidget("noDevices", smeBSBObjectClass,
-                              tm->menu_shell, args, n);
+                              tm->menu_shell, ab.args, ab.count);
     } else {
         for (int i = 0; i < tm->ndevices; i++) {
             DeviceInfo *d = &tm->devices[i];
@@ -183,36 +180,36 @@ void tm_menu_show(TrayMount *tm)
             }
 
             /* Device label (non-interactive) */
-            n = 0;
-            IswSetArg(args[n], IswNlabel, label); n++;
-            IswSetArg(args[n], IswNsensitive, False); n++;
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, label);
+            IswArgSensitive(&ab, False);
             IswCreateManagedWidget("devLabel", smeBSBObjectClass,
-                                  tm->menu_shell, args, n);
+                                  tm->menu_shell, ab.args, ab.count);
 
             if (d->is_mounted) {
                 /* Unmount action */
-                n = 0;
-                IswSetArg(args[n], IswNlabel, "  Unmount"); n++;
+                IswArgBuilderReset(&ab);
+                IswArgLabel(&ab, "  Unmount");
                 Widget w = IswCreateManagedWidget("unmount",
-                    smeBSBObjectClass, tm->menu_shell, args, n);
+                    smeBSBObjectClass, tm->menu_shell, ab.args, ab.count);
                 MenuAction *a = alloc_action(tm, i, ACTION_UNMOUNT);
                 IswAddCallback(w, IswNcallback, on_action, a);
 
                 /* Eject action (if ejectable) */
                 if (d->is_ejectable) {
-                    n = 0;
-                    IswSetArg(args[n], IswNlabel, "  Eject"); n++;
+                    IswArgBuilderReset(&ab);
+                    IswArgLabel(&ab, "  Eject");
                     w = IswCreateManagedWidget("eject",
-                        smeBSBObjectClass, tm->menu_shell, args, n);
+                        smeBSBObjectClass, tm->menu_shell, ab.args, ab.count);
                     a = alloc_action(tm, i, ACTION_EJECT);
                     IswAddCallback(w, IswNcallback, on_action, a);
                 }
             } else {
                 /* Mount action */
-                n = 0;
-                IswSetArg(args[n], IswNlabel, "  Mount"); n++;
+                IswArgBuilderReset(&ab);
+                IswArgLabel(&ab, "  Mount");
                 Widget w = IswCreateManagedWidget("mount",
-                    smeBSBObjectClass, tm->menu_shell, args, n);
+                    smeBSBObjectClass, tm->menu_shell, ab.args, ab.count);
                 MenuAction *a = alloc_action(tm, i, ACTION_MOUNT);
                 IswAddCallback(w, IswNcallback, on_action, a);
             }

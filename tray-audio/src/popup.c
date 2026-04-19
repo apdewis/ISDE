@@ -10,6 +10,7 @@
 
 #include <ISW/IntrinsicP.h>
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,56 +83,54 @@ static Widget build_volume_row(TrayAudio *ta, Widget parent,
                                uint32_t node_id,
                                float volume, int muted)
 {
-    Arg args[20];
-    Cardinal n;
+    IswArgBuilder ab = IswArgBuilderInit();
     VolumeRow *row = alloc_row(ta, node_id);
 
     /* Sink name label (spans full width above the slider row) */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, label_text); n++;
-    IswSetArg(args[n], IswNborderWidth, 0); n++;
-    IswSetArg(args[n], IswNfromVert, above); n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft); n++;
-    IswSetArg(args[n], IswNright, IswChainRight); n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyLeft); n++;
-    IswSetArg(args[n], IswNhorizDistance, 8); n++;
-    IswSetArg(args[n], IswNvertDistance, 4); n++;
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, above);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgHorizDistance(&ab, 8);
+    IswArgVertDistance(&ab, 4);
     Widget lbl = IswCreateManagedWidget("volLabel", labelWidgetClass,
-                                        parent, args, n);
+                                        parent, ab.args, ab.count);
 
     /* Slider (below the label) */
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, lbl); n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft); n++;
-    IswSetArg(args[n], IswNright, IswChainRight); n++;
-    IswSetArg(args[n], IswNminimumValue, 0); n++;
-    IswSetArg(args[n], IswNmaximumValue, 100); n++;
-    IswSetArg(args[n], IswNsliderValue, (int)(volume * 100.0f + 0.5f)); n++;
-    IswSetArg(args[n], IswNshowValue, False); n++;
-    IswSetArg(args[n], IswNhorizDistance, 8); n++;
-    IswSetArg(args[n], IswNvertDistance, 2); n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, lbl);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgMinimumValue(&ab, 0);
+    IswArgMaximumValue(&ab, 100);
+    IswArgSliderValue(&ab, (int)(volume * 100.0f + 0.5f));
+    IswArgShowValue(&ab, False);
+    IswArgHorizDistance(&ab, 8);
+    IswArgVertDistance(&ab, 2);
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
-                                       parent, args, n);
+                                       parent, ab.args, ab.count);
     IswAddCallback(sl, IswNvalueChanged, on_slider_changed, row);
     row->slider = sl;
 
     /* Mute toggle (right of slider, same row) */
     char *mute_icon = isde_icon_find("status", "audio-volume-muted");
-    n = 0;
-    IswSetArg(args[n], IswNlabel, ""); n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
     if (mute_icon)
-        { IswSetArg(args[n], IswNimage, mute_icon); n++; }
-    IswSetArg(args[n], IswNfromVert, lbl); n++;
-    IswSetArg(args[n], IswNfromHoriz, sl); n++;
-    IswSetArg(args[n], IswNleft, IswChainRight); n++;
-    IswSetArg(args[n], IswNright, IswChainRight); n++;
-    IswSetArg(args[n], IswNstate, muted ? True : False); n++;
-    IswSetArg(args[n], IswNwidth, 24); n++;
-    IswSetArg(args[n], IswNheight, 24); n++;
-    IswSetArg(args[n], IswNhorizDistance, 4); n++;
-    IswSetArg(args[n], IswNvertDistance, 2); n++;
+        { IswArgImage(&ab, mute_icon); }
+    IswArgFromVert(&ab, lbl);
+    IswArgFromHoriz(&ab, sl);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
+    IswArgState(&ab, muted ? True : False);
+    IswArgWidth(&ab, 24);
+    IswArgHeight(&ab, 24);
+    IswArgHorizDistance(&ab, 4);
+    IswArgVertDistance(&ab, 2);
     Widget mb = IswCreateManagedWidget("volMute", toggleWidgetClass,
-                                       parent, args, n);
+                                       parent, ab.args, ab.count);
     free(mute_icon);
     IswAddCallback(mb, IswNcallback, on_mute_toggled, row);
     row->mute_btn = mb;
@@ -165,18 +164,17 @@ static void build_output_content(TrayAudio *ta)
     Widget above = NULL;
 
     if (ta->nsinks == 0) {
-        Arg args[20];
-        Cardinal n = 0;
+        IswArgBuilder ab = IswArgBuilderInit();
         const IsdeColorScheme *scheme = isde_theme_current();
-        IswSetArg(args[n], IswNlabel, "No audio outputs"); n++;
-        IswSetArg(args[n], IswNborderWidth, 0); n++;
+        IswArgLabel(&ab, "No audio outputs");
+        IswArgBorderWidth(&ab, 0);
         if (scheme) {
-            IswSetArg(args[n], IswNforeground, scheme->fg_dim); n++;
+            IswArgForeground(&ab, scheme->fg_dim);
         }
-        IswSetArg(args[n], IswNhorizDistance, 8); n++;
-        IswSetArg(args[n], IswNvertDistance, 8); n++;
+        IswArgHorizDistance(&ab, 8);
+        IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noOutputs", labelWidgetClass,
-                              ta->output_page, args, n);
+                              ta->output_page, ab.args, ab.count);
         return;
     }
 
@@ -199,18 +197,17 @@ static void build_app_content(TrayAudio *ta)
     Widget above = NULL;
 
     if (ta->nstreams == 0) {
-        Arg args[20];
-        Cardinal n = 0;
+        IswArgBuilder ab = IswArgBuilderInit();
         const IsdeColorScheme *scheme = isde_theme_current();
-        IswSetArg(args[n], IswNlabel, "No applications playing"); n++;
-        IswSetArg(args[n], IswNborderWidth, 0); n++;
+        IswArgLabel(&ab, "No applications playing");
+        IswArgBorderWidth(&ab, 0);
         if (scheme) {
-            IswSetArg(args[n], IswNforeground, scheme->fg_dim); n++;
+            IswArgForeground(&ab, scheme->fg_dim);
         }
-        IswSetArg(args[n], IswNhorizDistance, 8); n++;
-        IswSetArg(args[n], IswNvertDistance, 8); n++;
+        IswArgHorizDistance(&ab, 8);
+        IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noStreams", labelWidgetClass,
-                              ta->app_page, args, n);
+                              ta->app_page, ab.args, ab.count);
         return;
     }
 
@@ -346,38 +343,35 @@ void ta_popup_show(TrayAudio *ta)
     /* Reset row allocations */
     nrows = 0;
 
-    Arg args[20];
-    Cardinal n;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell for popup */
-    n = 0;
-    IswSetArg(args[n], IswNwidth, 320); n++;
-    IswSetArg(args[n], IswNheight, 200); n++;
-    IswSetArg(args[n], IswNborderWidth, 1); n++;
+    IswArgWidth(&ab, 320);
+    IswArgHeight(&ab, 200);
+    IswArgBorderWidth(&ab, 1);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
-                                          ta->toplevel, args, n);
+                                          ta->toplevel, ab.args, ab.count);
 
     /* Tabs container */
-    n = 0;
     ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
-                                      ta->popup_shell, args, n);
+                                      ta->popup_shell, NULL, 0);
 
     /* Outputs tab */
-    n = 0;
-    IswSetArg(args[n], IswNtabLabel, "Outputs"); n++;
-    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
+    IswArgBuilderReset(&ab);
+    IswArgTabLabel(&ab, "Outputs");
+    IswArgDefaultDistance(&ab, 0);
     ta->output_page = IswCreateManagedWidget("outputPage",
                                              formWidgetClass,
-                                             ta->tabs, args, n);
+                                             ta->tabs, ab.args, ab.count);
 
     /* Applications tab — created empty, populated on tab switch */
-    n = 0;
-    IswSetArg(args[n], IswNtabLabel, "Applications"); n++;
-    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
+    IswArgBuilderReset(&ab);
+    IswArgTabLabel(&ab, "Applications");
+    IswArgDefaultDistance(&ab, 0);
     ta->app_page = IswCreateManagedWidget("appPage",
                                           formWidgetClass,
-                                          ta->tabs, args, n);
+                                          ta->tabs, ab.args, ab.count);
 
     /* Show the outputs tab by default */
     IswTabsSetTop(ta->tabs, ta->output_page);
@@ -563,11 +557,8 @@ static void menu_grab_handler(Widget w, IswPointer closure,
 
 void ta_menu_init(TrayAudio *ta)
 {
-    Arg args[20];
-    Cardinal n = 0;
-
     ta->menu_shell = IswCreatePopupShell("audioMenu", simpleMenuWidgetClass,
-                                          ta->toplevel, args, n);
+                                          ta->toplevel, NULL, 0);
 }
 
 void ta_menu_show(TrayAudio *ta)
@@ -578,25 +569,24 @@ void ta_menu_show(TrayAudio *ta)
 
     n_menu_actions = 0;
 
-    Arg args[20];
-    Cardinal n = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     ta->menu_shell = IswCreatePopupShell("audioMenu", simpleMenuWidgetClass,
-                                          ta->toplevel, args, n);
+                                          ta->toplevel, NULL, 0);
 
     if (ta->nsinks == 0) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "No audio outputs"); n++;
-        IswSetArg(args[n], IswNsensitive, False); n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "No audio outputs");
+        IswArgSensitive(&ab, False);
         IswCreateManagedWidget("noOutputs", smeBSBObjectClass,
-                              ta->menu_shell, args, n);
+                              ta->menu_shell, ab.args, ab.count);
     } else {
         /* Section header */
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "Output Device"); n++;
-        IswSetArg(args[n], IswNsensitive, False); n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "Output Device");
+        IswArgSensitive(&ab, False);
         IswCreateManagedWidget("hdrOutput", smeBSBObjectClass,
-                              ta->menu_shell, args, n);
+                              ta->menu_shell, ab.args, ab.count);
 
         for (int i = 0; i < ta->nsinks; i++) {
             SinkInfo *s = &ta->sinks[i];
@@ -606,10 +596,10 @@ void ta_menu_show(TrayAudio *ta)
             else
                 snprintf(label, sizeof(label), "  %s", s->name);
 
-            n = 0;
-            IswSetArg(args[n], IswNlabel, label); n++;
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, label);
             Widget w = IswCreateManagedWidget("sinkItem", smeBSBObjectClass,
-                                             ta->menu_shell, args, n);
+                                             ta->menu_shell, ab.args, ab.count);
             MenuAction *a = alloc_menu_action(ta, s->id);
             IswAddCallback(w, IswNcallback, on_select_sink, a);
         }
@@ -619,11 +609,10 @@ void ta_menu_show(TrayAudio *ta)
                               ta->menu_shell, NULL, 0);
 
         SinkInfo *def = ta_default_sink(ta);
-        n = 0;
-        IswSetArg(args[n], IswNlabel,
-                  (def && def->muted) ? "Unmute" : "Mute"); n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, (def && def->muted) ? "Unmute" : "Mute");
         Widget mw = IswCreateManagedWidget("muteItem", smeBSBObjectClass,
-                                           ta->menu_shell, args, n);
+                                           ta->menu_shell, ab.args, ab.count);
         IswAddCallback(mw, IswNcallback, on_mute_default, ta);
     }
 

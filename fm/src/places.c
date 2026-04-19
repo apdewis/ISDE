@@ -8,6 +8,7 @@
 #include "fm.h"
 #include "fm_mountd.h"
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 
 #include <stdio.h>
@@ -497,23 +498,22 @@ void places_init(Fm *fm)
     build_sections(pd);
 
     /* Create sidebar viewport */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNallowVert, True);              n++;
-    IswSetArg(args[n], IswNallowHoriz, False);             n++;
-    IswSetArg(args[n], IswNuseRight, False);                n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                 n++;
-    IswSetArg(args[n], IswNflexGrow, 0);                    n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, False);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexGrow(&ab, 0);
     fm->places_vp = IswCreateManagedWidget("placesVp", viewportWidgetClass,
-                                           fm->hbox, args, n);
+                                           fm->hbox, ab.args, ab.count);
 
     /* Vertical FlexBox inside viewport */
-    n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
-    IswSetArg(args[n], IswNspacing, 0);                     n++;
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, XtorientVertical);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 0);
     fm->places_box = IswCreateManagedWidget("placesBox", flexBoxWidgetClass,
-                                            fm->places_vp, args, n);
+                                            fm->places_vp, ab.args, ab.count);
 
     /* Create header + list for each section */
     char wname[32];
@@ -522,30 +522,30 @@ void places_init(Fm *fm)
         int hdr_idx = s->start_idx - 1;
 
         /* Section header label */
-        n = 0;
+        IswArgBuilderReset(&ab);
         snprintf(wname, sizeof(wname), "placeHdr%d", i);
-        IswSetArg(args[n], IswNlabel, pd->places[hdr_idx].label); n++;
-        IswSetArg(args[n], IswNborderWidth, 0);                n++;
-        IswSetArg(args[n], IswNinternalWidth, 6);  n++;
-        IswSetArg(args[n], IswNinternalHeight, 2); n++;
-        IswSetArg(args[n], IswNjustify, IswJustifyLeft);        n++;
+        IswArgLabel(&ab, pd->places[hdr_idx].label);
+        IswArgBorderWidth(&ab, 0);
+        IswArgInternalWidth(&ab, 6);
+        IswArgInternalHeight(&ab, 2);
+        IswArgJustify(&ab, IswJustifyLeft);
         s->header = IswCreateManagedWidget(wname, labelWidgetClass,
-                                           fm->places_box, args, n);
+                                           fm->places_box, ab.args, ab.count);
 
         /* List widget for this section's items */
         if (s->nitems > 0) {
-            n = 0;
+            IswArgBuilderReset(&ab);
             snprintf(wname, sizeof(wname), "placeList%d", i);
-            IswSetArg(args[n], IswNlist, s->labels);                n++;
-            IswSetArg(args[n], IswNnumberStrings, s->nitems);       n++;
-            IswSetArg(args[n], IswNdefaultColumns, 1);              n++;
-            IswSetArg(args[n], IswNforceColumns, True);             n++;
-            IswSetArg(args[n], IswNverticalList, True);             n++;
-            IswSetArg(args[n], IswNborderWidth, 0);                 n++;
-            IswSetArg(args[n], IswNinternalWidth, 4);   n++;
-            IswSetArg(args[n], IswNinternalHeight, 2);  n++;
+            IswArgList(&ab, s->labels);
+            IswArgNumberStrings(&ab, s->nitems);
+            IswArgDefaultColumns(&ab, 1);
+            IswArgForceColumns(&ab, True);
+            IswArgVerticalList(&ab, True);
+            IswArgBorderWidth(&ab, 0);
+            IswArgInternalWidth(&ab, 4);
+            IswArgInternalHeight(&ab, 2);
             s->list = IswCreateManagedWidget(wname, listWidgetClass,
-                                             fm->places_box, args, n);
+                                             fm->places_box, ab.args, ab.count);
             IswAddCallback(s->list, IswNcallback, place_list_cb, fm);
         }
     }
@@ -933,25 +933,24 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 
     dev_ctx_data.nlabels = pos;
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, root_x);                 n++;
-    IswSetArg(args[n], IswNy, root_y);                  n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);     n++;
-    IswSetArg(args[n], IswNborderWidth, 1);             n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, root_x);
+    IswArgY(&ab, root_y);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
     fm->dev_ctx_shell = IswCreatePopupShell("devCtxMenu",
-                            overrideShellWidgetClass, fm->toplevel, args, n);
+                            overrideShellWidgetClass, fm->toplevel, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, dev_ctx_data.labels);  n++;
-    IswSetArg(args[n], IswNnumberStrings, pos);         n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);          n++;
-    IswSetArg(args[n], IswNforceColumns, True);         n++;
-    IswSetArg(args[n], IswNverticalList, True);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);             n++;
-    IswSetArg(args[n], IswNcursor, None);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, dev_ctx_data.labels);
+    IswArgNumberStrings(&ab, pos);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgCursor(&ab, None);
     Widget list = IswCreateManagedWidget("devCtxList", listWidgetClass,
-                                         fm->dev_ctx_shell, args, n);
+                                         fm->dev_ctx_shell, ab.args, ab.count);
     IswAddCallback(list, IswNcallback, dev_ctx_select_cb, NULL);
 
     static char translations[] =

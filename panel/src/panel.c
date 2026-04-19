@@ -4,6 +4,7 @@
  */
 #include "panel.h"
 #include <ISW/ShellP.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -245,39 +246,37 @@ int panel_init(Panel *p, int *argc, char **argv)
     p->phys_panel_h = (int)(PANEL_HEIGHT * sf + 0.5);
 
     /* Create panel shell — override-redirect dock at bottom of primary */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, logical_mon_x);                n++;
-    IswSetArg(args[n], IswNy, logical_mon_y + logical_mon_h
-                              - PANEL_HEIGHT);              n++;
-    IswSetArg(args[n], IswNwidth, logical_mon_w);             n++;
-    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);            n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);          n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, logical_mon_x);
+    IswArgY(&ab, logical_mon_y + logical_mon_h - PANEL_HEIGHT);
+    IswArgWidth(&ab, logical_mon_w);
+    IswArgHeight(&ab, PANEL_HEIGHT);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 0);
     p->shell = IswCreatePopupShell("panel", overrideShellWidgetClass,
-                                  p->toplevel, args, n);
+                                  p->toplevel, ab.args, ab.count);
 
     /* FlexBox layout: start button | taskbar box | tray | clock */
-    n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
-    IswSetArg(args[n], IswNspacing, 0);                       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgSpacing(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
     p->form = IswCreateManagedWidget("panelFlex", flexBoxWidgetClass,
-                                    p->shell, args, n);
+                                    p->shell, ab.args, ab.count);
 
     /* Initialize applets — they create widgets inside p->form */
     startmenu_init(p);
 
     /* Taskbar box — flexGrow=1 fills remaining space */
-    n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
-    IswSetArg(args[n], IswNhSpace, 2);                        n++;
-    IswSetArg(args[n], IswNvSpace, 0);                        n++;
-    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);             n++;
-    IswSetArg(args[n], IswNflexGrow, 1);                      n++;
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHSpace(&ab, 2);
+    IswArgVSpace(&ab, 0);
+    IswArgHeight(&ab, PANEL_HEIGHT);
+    IswArgFlexGrow(&ab, 1);
     p->box = IswCreateManagedWidget("panelBox", boxWidgetClass,
-                                   p->form, args, n);
+                                   p->form, ab.args, ab.count);
 
     taskbar_init(p);
     tray_init_widgets(p);

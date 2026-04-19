@@ -13,6 +13,7 @@
 #ifdef __linux__
 #include <sys/inotify.h>
 #endif
+#include <ISW/IswArgMacros.h>
 
 /* App-wide shared state (will move to separate allocation in phase 2) */
 static FmApp g_app;
@@ -432,28 +433,27 @@ static void ctx_handler(Widget w, IswPointer client_data,
     Position rx = ev->root_x;
     Position ry = ev->root_y;
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, rx);                    n++;
-    IswSetArg(args[n], IswNy, ry);                    n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
-    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, rx);
+    IswArgY(&ab, ry);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
     fm->ctx_shell = IswCreatePopupShell("ctxMenu", overrideShellWidgetClass,
-                                   fm->toplevel, args, n);
+                                   fm->toplevel, ab.args, ab.count);
 
     String *labels = fm->ctx_in_trash ? ctx_trash_labels : fm->dyn_labels;
     int nitems = fm->ctx_in_trash ? CTX_TRASH_NITEMS : fm->dyn_nitems;
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, labels);              n++;
-    IswSetArg(args[n], IswNnumberStrings, nitems);     n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);         n++;
-    IswSetArg(args[n], IswNforceColumns, True);        n++;
-    IswSetArg(args[n], IswNverticalList, True);        n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNcursor, None);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, labels);
+    IswArgNumberStrings(&ab, nitems);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgCursor(&ab, None);
     fm->ctx_list = IswCreateManagedWidget("ctxList", listWidgetClass,
-                                     fm->ctx_shell, args, n);
+                                     fm->ctx_shell, ab.args, ab.count);
     IswAddCallback(fm->ctx_list, IswNcallback, ctx_select_cb, NULL);
 
     static char ctxTranslations[] =
@@ -1073,26 +1073,24 @@ Fm *fm_window_new(FmApp *app, const char *path)
     if (app->nwindows == 0) {
         fm->toplevel = app->first_toplevel;
     } else {
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNwidth, fm_w);                n++;
-        IswSetArg(args[n], IswNheight, fm_h);               n++;
-        IswSetArg(args[n], IswNminWidth, 400);  n++;
-        IswSetArg(args[n], IswNminHeight, 300); n++;
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgWidth(&ab, fm_w);
+        IswArgHeight(&ab, fm_h);
+        IswArgMinWidth(&ab, 400);
+        IswArgMinHeight(&ab, 300);
         fm->toplevel = IswAppCreateShell("isde-fm", "ISDE-FM",
                                         applicationShellWidgetClass,
                                         IswDisplay(app->first_toplevel),
-                                        args, n);
+                                        ab.args, ab.count);
     }
 
     if (app->nwindows == 0) {
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNwidth, fm_w);                n++;
-        IswSetArg(args[n], IswNheight, fm_h);               n++;
-        IswSetArg(args[n], IswNminWidth, 400);  n++;
-        IswSetArg(args[n], IswNminHeight, 300); n++;
-        IswSetValues(fm->toplevel, args, n);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgWidth(&ab, fm_w);
+        IswArgHeight(&ab, fm_h);
+        IswArgMinWidth(&ab, 400);
+        IswArgMinHeight(&ab, 300);
+        IswSetValues(fm->toplevel, ab.args, ab.count);
     }
 
     IswAddCallback(fm->toplevel, IswNdestroyCallback, fm_destroy_cb, fm);
@@ -1109,22 +1107,21 @@ Fm *fm_window_new(FmApp *app, const char *path)
     IswUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
 
     /* Outer FlexBox: vertical */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, XtorientVertical);
+    IswArgBorderWidth(&ab, 0);
     fm->vbox = IswCreateManagedWidget("vbox", flexBoxWidgetClass,
-                                      fm->main_window, args, n);
+                                      fm->main_window, ab.args, ab.count);
 
     navbar_init(fm);
 
     /* Content area: horizontal FlexBox */
-    n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientHorizontal); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                   n++;
-    IswSetArg(args[n], IswNflexGrow, 1);                      n++;
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
     fm->hbox = IswCreateManagedWidget("hbox", flexBoxWidgetClass,
-                                      fm->vbox, args, n);
+                                      fm->vbox, ab.args, ab.count);
 
     places_init(fm);
     fileview_init(fm);

@@ -26,6 +26,7 @@
 #include <ISW/Text.h>
 #include <ISW/AsciiText.h>
 #include <ISW/Paned.h>
+#include <ISW/IswArgMacros.h>
 
 /* ================================================================
  * File chooser state
@@ -366,38 +367,36 @@ Widget isde_filechooser_show(Widget parent, const char *title,
 
     active_fc = fc;
 
-    Arg args[20];
-    Cardinal n;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     /* Main form */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateManagedWidget("fcMainForm", formWidgetClass,
-                                        fc->shell, args, n);
+                                        fc->shell, ab.args, ab.count);
 
     /* --- Row 1: Location label + path text --- */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Location:");             n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Location:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     Widget loc_label = IswCreateManagedWidget("locLabel", labelWidgetClass,
-                                              form, args, n);
+                                              form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNstring, fc->cwd);                 n++;
-    IswSetArg(args[n], IswNfromHoriz, loc_label);            n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNtype, IswAsciiString);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    IswArgBuilderReset(&ab);
+    IswArgString(&ab, fc->cwd);
+    IswArgFromHoriz(&ab, loc_label);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgType(&ab, IswAsciiString);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     fc->path_text = IswCreateManagedWidget("pathText", asciiTextWidgetClass,
-                                           form, args, n);
+                                           form, ab.args, ab.count);
     IswOverrideTranslations(fc->path_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-path-go()\n"));
 
@@ -410,65 +409,65 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     int pane_h = 250;
     int dir_w  = 160;
 
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, loc_label);             n++;
-    IswSetArg(args[n], IswNallowVert, True);                 n++;
-    IswSetArg(args[n], IswNuseRight, True);                  n++;
-    IswSetArg(args[n], IswNforceBars, True);                 n++;
-    IswSetArg(args[n], IswNwidth, dir_w);                    n++;
-    IswSetArg(args[n], IswNheight, pane_h);                  n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, loc_label);
+    IswArgAllowVert(&ab, True);
+    IswArgUseRight(&ab, True);
+    IswArgForceBars(&ab, True);
+    IswArgWidth(&ab, dir_w);
+    IswArgHeight(&ab, pane_h);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     if (scheme) {
-        IswSetArg(args[n], IswNbackground, scheme->bg);      n++;
+        IswArgBackground(&ab, scheme->bg);
     }
     Widget dir_vp = IswCreateManagedWidget("dirViewport", viewportWidgetClass,
-                                           form, args, n);
+                                           form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNverticalList, True);              n++;
-    IswSetArg(args[n], IswNforceColumns, True);              n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswArgBuilderReset(&ab);
+    IswArgVerticalList(&ab, True);
+    IswArgForceColumns(&ab, True);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     if (scheme) {
-        IswSetArg(args[n], IswNbackground, scheme->bg);      n++;
-        IswSetArg(args[n], IswNforeground, scheme->fg);      n++;
+        IswArgBackground(&ab, scheme->bg);
+        IswArgForeground(&ab, scheme->fg);
     }
     fc->dir_list = IswCreateManagedWidget("dirList", listWidgetClass,
-                                          dir_vp, args, n);
+                                          dir_vp, ab.args, ab.count);
     IswAddCallback(fc->dir_list, IswNcallback, dir_select_cb, fc);
 
     /* File list viewport (right pane) */
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, loc_label);             n++;
-    IswSetArg(args[n], IswNfromHoriz, dir_vp);               n++;
-    IswSetArg(args[n], IswNallowVert, True);                 n++;
-    IswSetArg(args[n], IswNuseRight, True);                  n++;
-    IswSetArg(args[n], IswNforceBars, True);                 n++;
-    IswSetArg(args[n], IswNheight, pane_h);                  n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, loc_label);
+    IswArgFromHoriz(&ab, dir_vp);
+    IswArgAllowVert(&ab, True);
+    IswArgUseRight(&ab, True);
+    IswArgForceBars(&ab, True);
+    IswArgHeight(&ab, pane_h);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     if (scheme) {
-        IswSetArg(args[n], IswNbackground, scheme->bg_light); n++;
+        IswArgBackground(&ab, scheme->bg_light);
     }
     Widget file_vp = IswCreateManagedWidget("fileViewport", viewportWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNverticalList, True);              n++;
-    IswSetArg(args[n], IswNforceColumns, True);              n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswArgBuilderReset(&ab);
+    IswArgVerticalList(&ab, True);
+    IswArgForceColumns(&ab, True);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     if (scheme) {
-        IswSetArg(args[n], IswNbackground, scheme->bg_light); n++;
-        IswSetArg(args[n], IswNforeground, scheme->fg);       n++;
+        IswArgBackground(&ab, scheme->bg_light);
+        IswArgForeground(&ab, scheme->fg);
     }
     fc->file_list = IswCreateManagedWidget("fileList", listWidgetClass,
-                                           file_vp, args, n);
+                                           file_vp, ab.args, ab.count);
     IswAddCallback(fc->file_list, IswNcallback, file_select_cb, fc);
 
     /* Track the last widget above the bottom rows */
@@ -476,60 +475,60 @@ Widget isde_filechooser_show(Widget parent, const char *title,
 
     /* --- Row 3 (SAVE mode only): Filename --- */
     if (mode == ISDE_FILE_SAVE) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "Name:");             n++;
-        IswSetArg(args[n], IswNborderWidth, 0);              n++;
-        IswSetArg(args[n], IswNfromVert, dir_vp);            n++;
-        IswSetArg(args[n], IswNtop, IswChainBottom);          n++;
-        IswSetArg(args[n], IswNbottom, IswChainBottom);       n++;
-        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "Name:");
+        IswArgBorderWidth(&ab, 0);
+        IswArgFromVert(&ab, dir_vp);
+        IswArgTop(&ab, IswChainBottom);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
         Widget name_label = IswCreateManagedWidget("nameLabel",
                                                    labelWidgetClass,
-                                                   form, args, n);
+                                                   form, ab.args, ab.count);
 
-        n = 0;
-        IswSetArg(args[n], IswNstring, "");                  n++;
-        IswSetArg(args[n], IswNfromVert, dir_vp);            n++;
-        IswSetArg(args[n], IswNfromHoriz, name_label);       n++;
-        IswSetArg(args[n], IswNeditType, IswtextEdit);       n++;
-        IswSetArg(args[n], IswNtype, IswAsciiString);        n++;
-        IswSetArg(args[n], IswNtop, IswChainBottom);          n++;
-        IswSetArg(args[n], IswNbottom, IswChainBottom);       n++;
-        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-        IswSetArg(args[n], IswNright, IswChainRight);         n++;
+        IswArgBuilderReset(&ab);
+        IswArgString(&ab, "");
+        IswArgFromVert(&ab, dir_vp);
+        IswArgFromHoriz(&ab, name_label);
+        IswArgEditType(&ab, IswtextEdit);
+        IswArgType(&ab, IswAsciiString);
+        IswArgTop(&ab, IswChainBottom);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainRight);
         fc->name_text = IswCreateManagedWidget("nameText",
                                                asciiTextWidgetClass,
-                                               form, args, n);
+                                               form, ab.args, ab.count);
         bottom_anchor = name_label;
     }
 
     /* --- Row 4: Filter --- */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Filter:");                n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNfromVert, bottom_anchor);         n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);              n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Filter:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, bottom_anchor);
+    IswArgTop(&ab, IswChainBottom);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     Widget filter_label = IswCreateManagedWidget("filterLabel",
                                                  labelWidgetClass,
-                                                 form, args, n);
+                                                 form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNstring, filter ? filter : "");    n++;
-    IswSetArg(args[n], IswNfromVert, bottom_anchor);         n++;
-    IswSetArg(args[n], IswNfromHoriz, filter_label);         n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNtype, IswAsciiString);            n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);              n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainRight);             n++;
+    IswArgBuilderReset(&ab);
+    IswArgString(&ab, filter ? filter : "");
+    IswArgFromVert(&ab, bottom_anchor);
+    IswArgFromHoriz(&ab, filter_label);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgType(&ab, IswAsciiString);
+    IswArgTop(&ab, IswChainBottom);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     fc->filter_text = IswCreateManagedWidget("filterText",
                                              asciiTextWidgetClass,
-                                             form, args, n);
+                                             form, ab.args, ab.count);
     IswOverrideTranslations(fc->filter_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-filter-go()\n"));
 

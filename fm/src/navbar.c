@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ISW/IswArgMacros.h>
 
 /* ---------- view mode callbacks ---------- */
 
@@ -73,23 +74,22 @@ static Widget make_nav_button(Fm *fm, const char *name,
                               const char *fallback_label,
                               IswCallbackProc cb)
 {
-    Arg args[20];
-    Cardinal n = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     char *icon_path = isde_icon_find("actions", icon_name);
     if (icon_path) {
-        IswSetArg(args[n], IswNimage, icon_path);        n++;
-        IswSetArg(args[n], IswNlabel, "");            n++;
+        IswArgImage(&ab, icon_path);
+        IswArgLabel(&ab, "");
     } else {
-        IswSetArg(args[n], IswNlabel, fallback_label); n++;
+        IswArgLabel(&ab, fallback_label);
     }
-    IswSetArg(args[n], IswNwidth, 32);     n++;
-    IswSetArg(args[n], IswNheight, 32);  n++;
-    IswSetArg(args[n], IswNinternalWidth, 0);        n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);       n++;
+    IswArgWidth(&ab, 32);
+    IswArgHeight(&ab, 32);
+    IswArgInternalWidth(&ab, 0);
+    IswArgInternalHeight(&ab, 0);
 
     Widget btn = IswCreateManagedWidget(name, commandWidgetClass,
-                                       fm->nav_box, args, n);
+                                       fm->nav_box, ab.args, ab.count);
     IswAddCallback(btn, IswNcallback, cb, fm);
 
     /* icon_path intentionally not freed — IswNimage may hold the pointer */
@@ -98,30 +98,27 @@ static Widget make_nav_button(Fm *fm, const char *name,
 
 void navbar_init(Fm *fm)
 {
-    Arg args[20];
-    Cardinal n;
-
-    n = 0;
-    IswSetArg(args[n], IswNborderWidth, 1);                   n++;
-    IswSetArg(args[n], IswNhSpace, 4);              n++;
-    IswSetArg(args[n], IswNvSpace, 2);             n++;
-    IswSetArg(args[n], IswNheight, 36);            n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBorderWidth(&ab, 1);
+    IswArgHSpace(&ab, 4);
+    IswArgVSpace(&ab, 2);
+    IswArgHeight(&ab, 36);
     fm->nav_box = IswCreateManagedWidget("navBar", toolbarWidgetClass,
-                                        fm->vbox, args, n);
+                                        fm->vbox, ab.args, ab.count);
 
     fm->back_btn = make_nav_button(fm, "backBtn", "go-back", "<", back_cb);
     fm->fwd_btn  = make_nav_button(fm, "fwdBtn", "go-forward", ">", fwd_cb);
     fm->up_btn   = make_nav_button(fm, "upBtn", "go-up", "Up", up_cb);
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "/");              n++;
-    IswSetArg(args[n], IswNborderWidth, 0);           n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "/");
+    IswArgBorderWidth(&ab, 0);
     fm->path_label = IswCreateManagedWidget("pathLabel", labelWidgetClass,
-                                           fm->nav_box, args, n);
+                                           fm->nav_box, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNtoolbarAlignment, IswToolbarAlignCenter); n++;
-    IswSetValues(fm->path_label, args, n);
+    IswArgBuilderReset(&ab);
+    IswArgToolbarAlignment(&ab, IswToolbarAlignCenter);
+    IswSetValues(fm->path_label, ab.args, ab.count);
 
     /* View mode toggle buttons — right-aligned */
     fm->icon_view_btn = make_nav_button(fm, "iconViewBtn", "view-grid",
@@ -129,10 +126,10 @@ void navbar_init(Fm *fm)
     fm->list_view_btn = make_nav_button(fm, "listViewBtn", "view-list",
                                         "List", list_view_cb);
 
-    n = 0;
-    IswSetArg(args[n], IswNtoolbarAlignment, IswToolbarAlignRight); n++;
-    IswSetValues(fm->icon_view_btn, args, n);
-    IswSetValues(fm->list_view_btn, args, n);
+    IswArgBuilderReset(&ab);
+    IswArgToolbarAlignment(&ab, IswToolbarAlignRight);
+    IswSetValues(fm->icon_view_btn, ab.args, ab.count);
+    IswSetValues(fm->list_view_btn, ab.args, ab.count);
 }
 
 void navbar_update(Fm *fm)

@@ -27,6 +27,7 @@
 #include <ISW/Label.h>
 #include <ISW/Command.h>
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 static int result = 1;  /* default: cancelled */
 static IswAppContext app;
@@ -125,12 +126,11 @@ int main(int argc, char **argv)
                                       fallbacks, NULL, 0);
 
     /* Don't map the toplevel */
-    Arg tl_args[20];
-    Cardinal tl_n = 0;
-    IswSetArg(tl_args[tl_n], IswNmappedWhenManaged, False); tl_n++;
-    IswSetArg(tl_args[tl_n], IswNwidth, 1);                 tl_n++;
-    IswSetArg(tl_args[tl_n], IswNheight, 1);                tl_n++;
-    IswSetValues(toplevel, tl_args, tl_n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgMappedWhenManaged(&ab, False);
+    IswArgWidth(&ab, 1);
+    IswArgHeight(&ab, 1);
+    IswSetValues(toplevel, ab.args, ab.count);
     IswRealizeWidget(toplevel);
 
     xcb_screen_t *scr = IswScreen(toplevel);
@@ -171,52 +171,51 @@ int main(int argc, char **argv)
     }
 
     /* Fullscreen override-redirect shell */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, 0);                      n++;
-    IswSetArg(args[n], IswNy, 0);                      n++;
-    IswSetArg(args[n], IswNwidth, scr_w);               n++;
-    IswSetArg(args[n], IswNheight, scr_h);              n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);     n++;
-    IswSetArg(args[n], IswNborderWidth, 0);             n++;
-    IswSetArg(args[n], IswNbackground, overlay_bg);     n++;
+    IswArgBuilderReset(&ab);
+    IswArgX(&ab, 0);
+    IswArgY(&ab, 0);
+    IswArgWidth(&ab, scr_w);
+    IswArgHeight(&ab, scr_h);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBackground(&ab, overlay_bg);
     Widget shell = IswCreatePopupShell("confirmOverlay",
                                       overrideShellWidgetClass,
-                                      toplevel, args, n);
+                                      toplevel, ab.args, ab.count);
 
     /* Overlay form */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);             n++;
-    IswSetArg(args[n], IswNbackground, overlay_bg);     n++;
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBackground(&ab, overlay_bg);
     Widget overlay = IswCreateManagedWidget("overlay", formWidgetClass,
-                                           shell, args, n);
+                                           shell, ab.args, ab.count);
 
     /* Centered dialog form */
     int dlg_w = 350;
     int dlg_h = 150;
 
-    n = 0;
-    IswSetArg(args[n], IswNwidth, dlg_w);               n++;
-    IswSetArg(args[n], IswNheight, dlg_h);              n++;
-    IswSetArg(args[n], IswNborderWidth, 1);             n++;
-    IswSetArg(args[n], IswNbackground, form_bg);        n++;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, dlg_w);
+    IswArgHeight(&ab, dlg_h);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBackground(&ab, form_bg);
+    IswArgDefaultDistance(&ab, 8);
     Widget dialog = IswCreateManagedWidget("confirmDialog", formWidgetClass,
-                                          overlay, args, n);
+                                          overlay, ab.args, ab.count);
 
     /* Message label */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, message);             n++;
-    IswSetArg(args[n], IswNborderWidth, 0);             n++;
-    IswSetArg(args[n], IswNbackground, form_bg);        n++;
-    IswSetArg(args[n], IswNforeground, form_fg);        n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);            n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);         n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);          n++;
-    IswSetArg(args[n], IswNright, IswChainRight);        n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, message);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBackground(&ab, form_bg);
+    IswArgForeground(&ab, form_fg);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     Widget label = IswCreateManagedWidget("confirmLabel", labelWidgetClass,
-                                          dialog, args, n);
+                                          dialog, ab.args, ab.count);
 
     /* Button row — affirmative first, Cancel last (per HIG) */
     int btn_w = 80;
@@ -224,33 +223,33 @@ int main(int argc, char **argv)
     int total_btn = btn_w * 2 + btn_pad;
     int first_horiz = dlg_w - total_btn - btn_pad * 2;
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, button_label);        n++;
-    IswSetArg(args[n], IswNwidth, btn_w);               n++;
-    IswSetArg(args[n], IswNfromVert, label);             n++;
-    IswSetArg(args[n], IswNhorizDistance, first_horiz);  n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);         n++;
-    IswSetArg(args[n], IswNright, IswChainRight);        n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);         n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);      n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, button_label);
+    IswArgWidth(&ab, btn_w);
+    IswArgFromVert(&ab, label);
+    IswArgHorizDistance(&ab, first_horiz);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
+    IswArgTop(&ab, IswChainBottom);
+    IswArgBottom(&ab, IswChainBottom);
     Widget action_btn = IswCreateManagedWidget("confirmBtn",
                                               commandWidgetClass,
-                                              dialog, args, n);
+                                              dialog, ab.args, ab.count);
     IswAddCallback(action_btn, IswNcallback, action_cb, NULL);
 
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Cancel");            n++;
-    IswSetArg(args[n], IswNwidth, btn_w);               n++;
-    IswSetArg(args[n], IswNfromVert, label);             n++;
-    IswSetArg(args[n], IswNfromHoriz, action_btn);      n++;
-    IswSetArg(args[n], IswNhorizDistance, btn_pad);      n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);         n++;
-    IswSetArg(args[n], IswNright, IswChainRight);        n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);         n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);      n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Cancel");
+    IswArgWidth(&ab, btn_w);
+    IswArgFromVert(&ab, label);
+    IswArgFromHoriz(&ab, action_btn);
+    IswArgHorizDistance(&ab, btn_pad);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
+    IswArgTop(&ab, IswChainBottom);
+    IswArgBottom(&ab, IswChainBottom);
     Widget cancel_btn = IswCreateManagedWidget("cancelBtn",
                                               commandWidgetClass,
-                                              dialog, args, n);
+                                              dialog, ab.args, ab.count);
     IswAddCallback(cancel_btn, IswNcallback, cancel_cb, NULL);
 
     /* Escape / Enter key handling */

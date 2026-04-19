@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ISW/IswArgMacros.h>
 
 
 static void update_clock(IswPointer client_data, IswIntervalId *id)
@@ -88,13 +89,13 @@ void clock_init(Panel *p)
     snprintf(date_font, sizeof(date_font), "Sans-%d", date_pt);
 
     /* Form container in the FlexBox to stack time/date vertically */
-    p->clock_box = IswVaCreateManagedWidget("clockBox", formWidgetClass,
-        p->form,
-        IswNborderWidth, 0,
-        IswNdefaultDistance, 0,
-        IswNwidth,       PANEL_CLOCK_WIDTH,
-        IswNheight,      PANEL_HEIGHT,
-        NULL);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBorderWidth(&ab, 0);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgWidth(&ab, PANEL_CLOCK_WIDTH);
+    IswArgHeight(&ab, PANEL_HEIGHT);
+    p->clock_box = IswCreateManagedWidget("clockBox", formWidgetClass,
+                                          p->form, ab.args, ab.count);
 
     /* Time label (top half) */
     p->clock_time = IswVaCreateManagedWidget("clockTime", labelWidgetClass,

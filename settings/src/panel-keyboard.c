@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
+#include <ISW/IswArgMacros.h>
 
 static Widget scale_repeat_delay;
 static Widget scale_repeat_interval;
@@ -81,33 +82,30 @@ static void keyboard_revert(void)
 static Widget make_scale_row(Widget form, Widget above, const char *label_text,
                              int min, int max, int value, Widget *out_scale)
 {
-    Arg args[20];
-    Cardinal n;
-
-    n = 0;
-    IswSetArg(args[n], IswNlabel, label_text);           n++;
-    IswSetArg(args[n], IswNborderWidth, 0);              n++;
-    IswSetArg(args[n], IswNwidth, LABEL_W);                n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);     n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);          n++;
-    if (above) { IswSetArg(args[n], IswNfromVert, above); n++; }
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
+    if (above) { IswArgFromVert(&ab, above); }
     Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                       form, args, n);
+                                       form, ab.args, ab.count);
 
-    n = 0;
-    IswSetArg(args[n], IswNfromHoriz, lbl);                   n++;
-    if (above) { IswSetArg(args[n], IswNfromVert, above); n++; }
-    IswSetArg(args[n], IswNminimumValue, min);                 n++;
-    IswSetArg(args[n], IswNmaximumValue, max);                 n++;
-    IswSetArg(args[n], IswNsliderValue, value);                 n++;
-    IswSetArg(args[n], IswNorientation, XtorientHorizontal);   n++;
-    IswSetArg(args[n], IswNshowValue, True);                   n++;
-    IswSetArg(args[n], IswNwidth, SLIDER_W);                    n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);                 n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromHoriz(&ab, lbl);
+    if (above) { IswArgFromVert(&ab, above); }
+    IswArgMinimumValue(&ab, min);
+    IswArgMaximumValue(&ab, max);
+    IswArgSliderValue(&ab, value);
+    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgShowValue(&ab, True);
+    IswArgWidth(&ab, SLIDER_W);
+    IswArgBorderWidth(&ab, 0);
+    IswArgLeft(&ab, IswChainLeft);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
-                                       form, args, n);
+                                       form, ab.args, ab.count);
     return *out_scale;
 }
 
@@ -138,12 +136,11 @@ static Widget keyboard_create(Widget parent, IswAppContext app)
     IswSetArg(qa[0], IswNwidth, &pw);
     IswGetValues(parent, qa, 1);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateWidget("keyboardPanel", formWidgetClass,
-                                 parent, args, n);
+                                 parent, ab.args, ab.count);
 
     Widget row;
     row = make_scale_row(form, NULL, "Key repeat delay (ms):",

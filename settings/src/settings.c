@@ -17,6 +17,7 @@
 #include <ISW/List.h>
 #include <ISW/Viewport.h>
 #include <ISW/Dialog.h>
+#include <ISW/IswArgMacros.h>
 
 #define PANEL_LIST_WIDTH 180
 
@@ -160,11 +161,10 @@ void settings_switch_panel(Settings *s, int index)
 
         /* Set content_area so panels can query parent dimensions */
         if (vpw > 0 || vph > 0) {
-            Arg ca[20];
-            Cardinal cn = 0;
-            if (vpw > 0) { IswSetArg(ca[cn], IswNwidth, vpw); cn++; }
-            if (vph > 0) { IswSetArg(ca[cn], IswNheight, vph); cn++; }
-            IswSetValues(s->content_area, ca, cn);
+            IswArgBuilder ab = IswArgBuilderInit();
+            if (vpw > 0) { IswArgWidth(&ab, vpw); }
+            if (vph > 0) { IswArgHeight(&ab, vph); }
+            IswSetValues(s->content_area, ab.args, ab.count);
         }
 
         s->panel_widgets[index] =
@@ -174,15 +174,14 @@ void settings_switch_panel(Settings *s, int index)
          * when the viewport resizes content_area.  Size it to the
          * current viewport so it realises with nonzero geometry. */
         {
-            Arg sa[20];
-            Cardinal sn = 0;
-            if (vpw > 0) { IswSetArg(sa[sn], IswNwidth, vpw); sn++; }
-            if (vph > 0) { IswSetArg(sa[sn], IswNheight, vph); sn++; }
-            IswSetArg(sa[sn], IswNtop, IswChainTop);       sn++;
-            IswSetArg(sa[sn], IswNbottom, IswChainTop);    sn++;
-            IswSetArg(sa[sn], IswNleft, IswChainLeft);     sn++;
-            IswSetArg(sa[sn], IswNright, IswChainLeft);    sn++;
-            IswSetValues(s->panel_widgets[index], sa, sn);
+            IswArgBuilder ab = IswArgBuilderInit();
+            if (vpw > 0) { IswArgWidth(&ab, vpw); }
+            if (vph > 0) { IswArgHeight(&ab, vph); }
+            IswArgTop(&ab, IswChainTop);
+            IswArgBottom(&ab, IswChainTop);
+            IswArgLeft(&ab, IswChainLeft);
+            IswArgRight(&ab, IswChainLeft);
+            IswSetValues(s->panel_widgets[index], ab.args, ab.count);
         }
     }
 
@@ -254,23 +253,22 @@ int settings_init(Settings *s, int *argc, char **argv)
     int init_h = 450;
     isde_clamp_to_workarea(IswDisplay(s->toplevel), 0, &init_w, &init_h);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNwidth, init_w);              n++;
-    IswSetArg(args[n], IswNheight, init_h);             n++;
-    IswSetArg(args[n], IswNminWidth, 400);  n++;
-    IswSetArg(args[n], IswNminHeight, 300); n++;
-    IswSetValues(s->toplevel, args, n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, init_w);
+    IswArgHeight(&ab, init_h);
+    IswArgMinWidth(&ab, 400);
+    IswArgMinHeight(&ab, 300);
+    IswSetValues(s->toplevel, ab.args, ab.count);
 
     IswAddCallback(s->toplevel, IswNdestroyCallback,
                   settings_destroy_cb, s);
 
     /* Main layout form — direct child of toplevel */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);    n++;
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateManagedWidget("layout", formWidgetClass,
-                                        s->toplevel, args, n);
+                                        s->toplevel, ab.args, ab.count);
 
     /* Register core panels first (so names are available for the list) */
     register_panel(s, &panel_input, NULL);
@@ -291,22 +289,22 @@ int settings_init(Settings *s, int *argc, char **argv)
     }
     panel_names[s->npanels] = NULL;
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, panel_names);        n++;
-    IswSetArg(args[n], IswNnumberStrings, s->npanels); n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);         n++;
-    IswSetArg(args[n], IswNforceColumns, True);        n++;
-    IswSetArg(args[n], IswNverticalList, True);        n++;
-    IswSetArg(args[n], IswNwidth, PANEL_LIST_WIDTH);   n++;
-    IswSetArg(args[n], IswNheight, init_h - 10);       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNresizable, True);           n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);           n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);     n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);        n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, panel_names);
+    IswArgNumberStrings(&ab, s->npanels);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgWidth(&ab, PANEL_LIST_WIDTH);
+    IswArgHeight(&ab, init_h - 10);
+    IswArgBorderWidth(&ab, 0);
+    IswArgResizable(&ab, True);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     s->panel_bar = IswCreateManagedWidget("panelList", listWidgetClass,
-                                         form, args, n);
+                                         form, ab.args, ab.count);
     IswAddCallback(s->panel_bar, IswNcallback, panel_list_cb, s);
 
     /* Right pane: form with scrollable content + fixed buttons at bottom */
@@ -316,85 +314,85 @@ int settings_init(Settings *s, int *argc, char **argv)
     int btn_pad = 8;
     int sb_w = 14;  /* scrollbar thickness */
 
-    n = 0;
-    IswSetArg(args[n], IswNfromHoriz, s->panel_bar);  n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNdefaultDistance, 0);        n++;
-    IswSetArg(args[n], IswNwidth, right_w);            n++;
-    IswSetArg(args[n], IswNheight, right_h);           n++;
-    IswSetArg(args[n], IswNresizable, False);           n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);           n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);     n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
-    IswSetArg(args[n], IswNright, IswChainRight);       n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromHoriz(&ab, s->panel_bar);
+    IswArgBorderWidth(&ab, 0);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgWidth(&ab, right_w);
+    IswArgHeight(&ab, right_h);
+    IswArgResizable(&ab, False);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     s->content_form = IswCreateManagedWidget("contentForm", formWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
     /* Scrollable viewport for panel content */
-    n = 0;
-    IswSetArg(args[n], IswNallowVert, True);          n++;
-    IswSetArg(args[n], IswNallowHoriz, True);         n++;
-    IswSetArg(args[n], IswNuseBottom, True);         n++;
-    IswSetArg(args[n], IswNuseRight, True);            n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNwidth, right_w);            n++;
-    IswSetArg(args[n], IswNheight, right_h - btn_h - btn_pad); n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);           n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);     n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);         n++;
-    IswSetArg(args[n], IswNright, IswChainRight);       n++;
+    IswArgBuilderReset(&ab);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, True);
+    IswArgUseBottom(&ab, True);
+    IswArgUseRight(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, right_w);
+    IswArgHeight(&ab, right_h - btn_h - btn_pad);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
     s->content_vp = IswCreateManagedWidget("contentScroll", viewportWidgetClass,
-                                          s->content_form, args, n);
+                                          s->content_form, ab.args, ab.count);
 
     /* Panel content container inside viewport */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNwidth, right_w);            n++;
-    IswSetArg(args[n], IswNheight, right_h - btn_h - btn_pad); n++;
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, right_w);
+    IswArgHeight(&ab, right_h - btn_h - btn_pad);
     s->content_area = IswCreateManagedWidget("content", formWidgetClass,
-                                            s->content_vp, args, n);
+                                            s->content_vp, ab.args, ab.count);
 
     /* Save / Revert buttons — fixed at bottom right. */
     int btn_w = 80;
 
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, s->content_vp);          n++;
-    IswSetArg(args[n], IswNlabel, "Save");                     n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
-    IswSetArg(args[n], IswNwidth, btn_w);                      n++;
-    IswSetArg(args[n], IswNheight, btn_h - btn_pad);           n++;
-    IswSetArg(args[n], IswNinternalWidth, btn_pad);            n++;
-    IswSetArg(args[n], IswNinternalHeight, btn_pad);           n++;
-    IswSetArg(args[n], IswNvertDistance, btn_pad);             n++;
-    IswSetArg(args[n], IswNhorizDistance, right_w - btn_w * 2 - btn_pad * 2 - sb_w); n++;
-    IswSetArg(args[n], IswNresizable, True);                   n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);             n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);                n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, s->content_vp);
+    IswArgLabel(&ab, "Save");
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, btn_w);
+    IswArgHeight(&ab, btn_h - btn_pad);
+    IswArgInternalWidth(&ab, btn_pad);
+    IswArgInternalHeight(&ab, btn_pad);
+    IswArgVertDistance(&ab, btn_pad);
+    IswArgHorizDistance(&ab, right_w - btn_w * 2 - btn_pad * 2 - sb_w);
+    IswArgResizable(&ab, True);
+    IswArgRight(&ab, IswChainRight);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgTop(&ab, IswChainBottom);
     s->save_btn = IswCreateManagedWidget("saveBtn", commandWidgetClass,
-                                        s->content_form, args, n);
+                                        s->content_form, ab.args, ab.count);
     IswAddCallback(s->save_btn, IswNcallback, common_save_cb, s);
 
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, s->content_vp);          n++;
-    IswSetArg(args[n], IswNfromHoriz, s->save_btn);           n++;
-    IswSetArg(args[n], IswNhorizDistance, btn_pad);            n++;
-    IswSetArg(args[n], IswNvertDistance, btn_pad);             n++;
-    IswSetArg(args[n], IswNlabel, "Revert");                   n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
-    IswSetArg(args[n], IswNwidth, btn_w);                      n++;
-    IswSetArg(args[n], IswNheight, btn_h - btn_pad);           n++;
-    IswSetArg(args[n], IswNinternalWidth, btn_pad);            n++;
-    IswSetArg(args[n], IswNinternalHeight, btn_pad);           n++;
-    IswSetArg(args[n], IswNresizable, True);                   n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);             n++;
-    IswSetArg(args[n], IswNtop, IswChainBottom);                n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, s->content_vp);
+    IswArgFromHoriz(&ab, s->save_btn);
+    IswArgHorizDistance(&ab, btn_pad);
+    IswArgVertDistance(&ab, btn_pad);
+    IswArgLabel(&ab, "Revert");
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, btn_w);
+    IswArgHeight(&ab, btn_h - btn_pad);
+    IswArgInternalWidth(&ab, btn_pad);
+    IswArgInternalHeight(&ab, btn_pad);
+    IswArgResizable(&ab, True);
+    IswArgRight(&ab, IswChainRight);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgTop(&ab, IswChainBottom);
     s->revert_btn = IswCreateManagedWidget("revertBtn", commandWidgetClass,
-                                          s->content_form, args, n);
+                                          s->content_form, ab.args, ab.count);
     IswAddCallback(s->revert_btn, IswNcallback, common_revert_cb, s);
 
     /* D-Bus */

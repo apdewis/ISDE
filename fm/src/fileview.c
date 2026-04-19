@@ -9,6 +9,7 @@
 #include <string.h>
 #include <time.h>
 #include <xcb/xcb.h>
+#include <ISW/IswArgMacros.h>
 
 /* ---------- double-click tracking ---------- */
 
@@ -280,42 +281,41 @@ static IswListViewColumn lv_columns[] = {
 void fileview_init(Fm *fm)
 {
     /* Viewport for scrolling — below the nav bar, right of places sidebar */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNallowVert, True);          n++;
-    IswSetArg(args[n], IswNallowHoriz, False);        n++;
-    IswSetArg(args[n], IswNuseRight, True);            n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
-    IswSetArg(args[n], IswNflexGrow, 1);               n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
     fm->viewport = IswCreateManagedWidget("viewport", viewportWidgetClass,
-                                         fm->hbox, args, n);
+                                         fm->hbox, ab.args, ab.count);
 
     /* Default sort: name descending */
     fm->sort_col = FM_SORT_NAME;
     fm->sort_dir = IswListViewSortDescending;
 
     /* IconView inside viewport */
-    n = 0;
-    IswSetArg(args[n], IswNborderWidth, 0);     n++;
-    IswSetArg(args[n], IswNiconSize, 64);        n++;
-    IswSetArg(args[n], IswNitemSpacing, 16);     n++;
-    IswSetArg(args[n], IswNmultiSelect, True);   n++;
-    IswSetArg(args[n], "labelLines", 3);         n++;
+    IswArgBuilderReset(&ab);
+    IswArgBorderWidth(&ab, 0);
+    IswArgIconSize(&ab, 64);
+    IswArgItemSpacing(&ab, 16);
+    IswArgMultiSelect(&ab, True);
+    IswArgLabelLines(&ab, 3);
     fm->iconview = IswCreateManagedWidget("iconView", iconViewWidgetClass,
-                                         fm->viewport, args, n);
+                                         fm->viewport, ab.args, ab.count);
     IswAddCallback(fm->iconview, IswNselectCallback, iconview_callback, fm);
     fm_register_context_menu(fm, fm->iconview);
     fm_install_shortcuts(fm->iconview);
 
     /* ListView inside viewport (initially unmanaged) */
-    n = 0;
-    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
-    IswSetArg(args[n], IswNlistViewColumns, lv_columns);        n++;
-    IswSetArg(args[n], IswNnumColumns, LV_NCOLS);               n++;
-    IswSetArg(args[n], IswNmultiSelect, True);                   n++;
-    IswSetArg(args[n], IswNshowHeader, True);                    n++;
+    IswArgBuilderReset(&ab);
+    IswArgBorderWidth(&ab, 0);
+    IswArgListViewColumns(&ab, lv_columns);
+    IswArgNumColumns(&ab, LV_NCOLS);
+    IswArgMultiSelect(&ab, True);
+    IswArgShowHeader(&ab, True);
     fm->listview = IswCreateWidget("listView", listViewWidgetClass,
-                                  fm->viewport, args, n);
+                                  fm->viewport, ab.args, ab.count);
     IswAddCallback(fm->listview, IswNselectCallback, listview_callback, fm);
     IswAddCallback(fm->listview, IswNreorderCallback, reorder_callback, fm);
     fm_register_context_menu(fm, fm->listview);
@@ -327,12 +327,12 @@ void fileview_init(Fm *fm)
     /* Status bar */
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
     if (statusbar) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "");           n++;
-        IswSetArg(args[n], IswNborderWidth, 0);      n++;
-        IswSetArg(args[n], IswNstatusStretch, True);  n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
+        IswArgBorderWidth(&ab, 0);
+        IswArgStatusStretch(&ab, True);
         fm->status_label = IswCreateManagedWidget("status", labelWidgetClass,
-                                                  statusbar, args, n);
+                                                  statusbar, ab.args, ab.count);
     }
 }
 

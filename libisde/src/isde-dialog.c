@@ -19,6 +19,7 @@
 #include <ISW/Dialog.h>
 #include <ISW/FontChooser.h>
 #include <ISW/ProgressBar.h>
+#include <ISW/IswArgMacros.h>
 
 /* ================================================================
  * Internal: Xt action for dismiss (registered once)
@@ -69,16 +70,15 @@ Widget isde_dialog_create_shell(Widget parent, const char *name,
     if (!shell_parent)
         shell_parent = parent;
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNwidth, width);   n++;
-    IswSetArg(args[n], IswNheight, height);  n++;
-    IswSetArg(args[n], IswNborderWidth, 1);              n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, width);
+    IswArgHeight(&ab, height);
+    IswArgBorderWidth(&ab, 1);
     if (title) {
-        IswSetArg(args[n], IswNtitle, title);            n++;
+        IswArgTitle(&ab, title);
     }
     Widget shell = IswCreatePopupShell((String)name, transientShellWidgetClass,
-                                      shell_parent, args, n);
+                                      shell_parent, ab.args, ab.count);
 
     /* Escape and WM close button both dismiss */
     IswOverrideTranslations(shell, IswParseTranslationTable(
@@ -122,27 +122,26 @@ Widget isde_dialog_add_buttons(Widget form, Widget above_widget,
     Widget prev = NULL;
 
     for (int i = 0; i < nbuttons; i++) {
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNlabel, buttons[i].label);      n++;
-        IswSetArg(args[n], IswNwidth, btn_w);                  n++;
-        IswSetArg(args[n], IswNinternalWidth, btn_pad);        n++;
-        IswSetArg(args[n], IswNinternalHeight, btn_pad);       n++;
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, buttons[i].label);
+        IswArgWidth(&ab, btn_w);
+        IswArgInternalWidth(&ab, btn_pad);
+        IswArgInternalHeight(&ab, btn_pad);
         if (above_widget) {
-            IswSetArg(args[n], IswNfromVert, above_widget);    n++;
+            IswArgFromVert(&ab, above_widget);
         }
         if (i == 0) {
-            IswSetArg(args[n], IswNhorizDistance, first_horiz); n++;
+            IswArgHorizDistance(&ab, first_horiz);
         } else {
-            IswSetArg(args[n], IswNfromHoriz, prev);           n++;
-            IswSetArg(args[n], IswNhorizDistance, btn_pad);    n++;
+            IswArgFromHoriz(&ab, prev);
+            IswArgHorizDistance(&ab, btn_pad);
         }
-        IswSetArg(args[n], IswNleft, IswChainRight);            n++;
-        IswSetArg(args[n], IswNright, IswChainRight);           n++;
-        IswSetArg(args[n], IswNbottom, IswChainBottom);         n++;
-        IswSetArg(args[n], IswNtop, IswChainBottom);            n++;
+        IswArgLeft(&ab, IswChainRight);
+        IswArgRight(&ab, IswChainRight);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgTop(&ab, IswChainBottom);
         Widget btn = IswCreateManagedWidget("btn", commandWidgetClass,
-                                           form, args, n);
+                                           form, ab.args, ab.count);
         IswAddCallback(btn, IswNcallback, buttons[i].callback,
                       buttons[i].client_data);
         if (i == 0) first = btn;
@@ -214,11 +213,10 @@ Widget isde_dialog_confirm(Widget parent, const char *title,
     ctx->shell = isde_dialog_create_shell(parent, "confirmShell",
                                           title, 300, 120);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNlabel, message); n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, message);
     Widget dialog = IswCreateManagedWidget("confirmDialog", dialogWidgetClass,
-                                          ctx->shell, args, n);
+                                          ctx->shell, ab.args, ab.count);
 
     Widget anchor = IswNameToWidget(dialog, "label");
 
@@ -256,11 +254,10 @@ Widget isde_dialog_message(Widget parent, const char *title,
     ctx->shell = isde_dialog_create_shell(parent, "messageShell",
                                           title, 300, 120);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNlabel, message); n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, message);
     Widget dialog = IswCreateManagedWidget("messageDialog", dialogWidgetClass,
-                                          ctx->shell, args, n);
+                                          ctx->shell, ab.args, ab.count);
 
     Widget anchor = IswNameToWidget(dialog, "label");
 
@@ -309,15 +306,14 @@ Widget isde_dialog_input(Widget parent, const char *title,
     ctx->shell = isde_dialog_create_shell(parent, "inputShell",
                                           title, 300, 120);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNlabel, prompt);                    n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, prompt);
     if (initial_value) {
-        IswSetArg(args[n], IswNvalue, initial_value);         n++;
+        IswArgValue(&ab, initial_value);
     }
     ctx->dialog_widget = IswCreateManagedWidget("inputDialog",
                                                dialogWidgetClass,
-                                               ctx->shell, args, n);
+                                               ctx->shell, ab.args, ab.count);
 
     Widget value_w = IswNameToWidget(ctx->dialog_widget, "value");
     Widget anchor = value_w ? value_w :
@@ -373,29 +369,28 @@ Widget isde_dialog_font(Widget parent, const char *title,
     ctx->shell = isde_dialog_create_shell(parent, "fontChooserShell",
                                           title, 400, 350);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateManagedWidget("fcForm", formWidgetClass,
-                                        ctx->shell, args, n);
+                                        ctx->shell, ab.args, ab.count);
 
     /* FontChooser widget */
-    n = 0;
+    IswArgBuilderReset(&ab);
     if (initial_family) {
-        IswSetArg(args[n], IswNfontFamily, initial_family); n++;
+        IswArgFontFamily(&ab, initial_family);
     }
-    IswSetArg(args[n], IswNfontSize, initial_size);          n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainBottom);           n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainRight);             n++;
-    IswSetArg(args[n], IswNwidth, 390);          n++;
-    IswSetArg(args[n], IswNheight, 290);         n++;
+    IswArgFontSize(&ab, initial_size);
+    IswArgBorderWidth(&ab, 0);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgWidth(&ab, 390);
+    IswArgHeight(&ab, 290);
     ctx->chooser_widget = IswCreateManagedWidget("fontChooser",
                                                  fontChooserWidgetClass,
-                                                 form, args, n);
+                                                 form, ab.args, ab.count);
 
     IsdeDialogButton btns[2] = {
         { "OK",     font_ok_cb,     ctx },
@@ -428,44 +423,43 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
     ctx->shell = isde_dialog_create_shell(parent, "aboutShell",
                                           app_name, 300, 200);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 8); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgDefaultDistance(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateManagedWidget("aboutForm", formWidgetClass,
-                                        ctx->shell, args, n);
+                                        ctx->shell, ab.args, ab.count);
 
     Widget prev = NULL;
 
     /* Icon (optional) */
     if (icon_path) {
-        n = 0;
-        IswSetArg(args[n], IswNimage, icon_path);        n++;
-        IswSetArg(args[n], IswNlabel, "");               n++;
-        IswSetArg(args[n], IswNborderWidth, 0);          n++;
+        IswArgBuilderReset(&ab);
+        IswArgImage(&ab, icon_path);
+        IswArgLabel(&ab, "");
+        IswArgBorderWidth(&ab, 0);
         prev = IswCreateManagedWidget("aboutIcon", labelWidgetClass,
-                                      form, args, n);
+                                      form, ab.args, ab.count);
     }
 
     /* App name + version */
     char title_buf[256];
     snprintf(title_buf, sizeof(title_buf), "%s %s",
              app_name ? app_name : "", version ? version : "");
-    n = 0;
-    IswSetArg(args[n], IswNlabel, title_buf);        n++;
-    IswSetArg(args[n], IswNborderWidth, 0);          n++;
-    if (prev) { IswSetArg(args[n], IswNfromVert, prev); n++; }
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, title_buf);
+    IswArgBorderWidth(&ab, 0);
+    if (prev) { IswArgFromVert(&ab, prev); }
     prev = IswCreateManagedWidget("aboutTitle", labelWidgetClass,
-                                  form, args, n);
+                                  form, ab.args, ab.count);
 
     /* Description */
     if (description) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, description);     n++;
-        IswSetArg(args[n], IswNborderWidth, 0);          n++;
-        IswSetArg(args[n], IswNfromVert, prev);          n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, description);
+        IswArgBorderWidth(&ab, 0);
+        IswArgFromVert(&ab, prev);
         prev = IswCreateManagedWidget("aboutDesc", labelWidgetClass,
-                                      form, args, n);
+                                      form, ab.args, ab.count);
     }
 
     /* Close button */
@@ -508,56 +502,55 @@ static void progress_create_dialog(IsdeProgress *p)
     p->shell = isde_dialog_create_shell(p->parent, "progressShell",
                                         p->title, 350, 190);
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNorientation, XtorientVertical); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, XtorientVertical);
+    IswArgBorderWidth(&ab, 0);
     Widget vbox = IswCreateManagedWidget("progressBox", flexBoxWidgetClass,
-                                         p->shell, args, n);
+                                         p->shell, ab.args, ab.count);
 
     /* Label — disable resize so text changes don't trigger relayout */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyLeft);          n++;
-    IswSetArg(args[n], IswNresize, False);                   n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgResize(&ab, False);
     p->label = IswCreateManagedWidget("progressLabel", labelWidgetClass,
-                                      vbox, args, n);
+                                      vbox, ab.args, ab.count);
 
     /* Progress bar */
-    n = 0;
-    IswSetArg(args[n], IswNvalue, 0);                        n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNflexGrow, 1);                     n++;
+    IswArgBuilderReset(&ab);
+    IswArgValue(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexGrow(&ab, 1);
     p->bar = IswCreateManagedWidget("progressBar", progressBarWidgetClass,
-                                    vbox, args, n);
+                                    vbox, ab.args, ab.count);
 
     /* Per-file label — disable resize so text changes don't trigger relayout */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                       n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyLeft);          n++;
-    IswSetArg(args[n], IswNresize, False);                   n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgResize(&ab, False);
     p->file_label = IswCreateManagedWidget("fileLabel", labelWidgetClass,
-                                           vbox, args, n);
+                                           vbox, ab.args, ab.count);
 
     /* Per-file progress bar */
-    n = 0;
-    IswSetArg(args[n], IswNvalue, 0);                        n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNflexGrow, 1);                     n++;
+    IswArgBuilderReset(&ab);
+    IswArgValue(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexGrow(&ab, 1);
     p->file_bar = IswCreateManagedWidget("fileBar", progressBarWidgetClass,
-                                         vbox, args, n);
+                                         vbox, ab.args, ab.count);
 
     /* Cancel button — right-aligned */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Cancel");                 n++;
-    IswSetArg(args[n], IswNwidth, 80);           n++;
-    IswSetArg(args[n], IswNinternalWidth, 8);    n++;
-    IswSetArg(args[n], IswNinternalHeight, 8);   n++;
-    IswSetArg(args[n], IswNflexAlign, XtflexAlignEnd);       n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Cancel");
+    IswArgWidth(&ab, 80);
+    IswArgInternalWidth(&ab, 8);
+    IswArgInternalHeight(&ab, 8);
+    IswArgFlexAlign(&ab, XtflexAlignEnd);
     Widget cancel = IswCreateManagedWidget("cancelBtn", commandWidgetClass,
-                                           vbox, args, n);
+                                           vbox, ab.args, ab.count);
     if (p->cancel_cb)
         IswAddCallback(cancel, IswNcallback, p->cancel_cb, p->cancel_data);
 

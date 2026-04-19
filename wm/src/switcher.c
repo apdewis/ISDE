@@ -12,6 +12,7 @@
 
 #include <ISW/Label.h>
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -151,45 +152,38 @@ static void create_osd(Wm *wm)
     int sx = (log_sw - osd_w) / 2;
     int sy = (log_sh - osd_h) / 2;
 
-    Arg args[20];
-    Cardinal n;
-
-    n = 0;
-    IswSetArg(args[n], IswNx, sx);                    n++;
-    IswSetArg(args[n], IswNy, sy);                    n++;
-    IswSetArg(args[n], IswNwidth, osd_w);              n++;
-    IswSetArg(args[n], IswNheight, osd_h);             n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
-    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, sx);
+    IswArgY(&ab, sy);
+    IswArgWidth(&ab, osd_w);
+    IswArgHeight(&ab, osd_h);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
     if (scheme) {
-        IswSetArg(args[n], IswNborderColor,
-                  (Pixel)scheme->border);               n++;
-        IswSetArg(args[n], IswNbackground,
-                  (Pixel)scheme->bg);                   n++;
+        IswArgBorderColor(&ab, (Pixel)scheme->border);
+        IswArgBackground(&ab, (Pixel)scheme->bg);
     }
     wm->switcher_shell = IswCreatePopupShell("switcherOSD",
                                              overrideShellWidgetClass,
-                                             wm->toplevel, args, n);
+                                             wm->toplevel, ab.args, ab.count);
 
     int label_w = osd_w - 2 * SWITCHER_PAD;
 
     /* Create placeholder labels — content set by update_labels() */
     for (int i = 0; i < visible; i++) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "");                        n++;
-        IswSetArg(args[n], IswNwidth, label_w);                   n++;
-        IswSetArg(args[n], IswNheight, row_h);                    n++;
-        IswSetArg(args[n], IswNborderWidth, 0);                   n++;
-        IswSetArg(args[n], IswNjustify, IswJustifyLeft);          n++;
-        IswSetArg(args[n], IswNinternalWidth, 4);                 n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
+        IswArgWidth(&ab, label_w);
+        IswArgHeight(&ab, row_h);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+        IswArgInternalWidth(&ab, 4);
         if (scheme) {
-            IswSetArg(args[n], IswNbackground,
-                      (Pixel)scheme->bg);                         n++;
-            IswSetArg(args[n], IswNforeground,
-                      (Pixel)scheme->fg_light);                   n++;
+            IswArgBackground(&ab, (Pixel)scheme->bg);
+            IswArgForeground(&ab, (Pixel)scheme->fg_light);
         }
         IswCreateManagedWidget("switcherItem", labelWidgetClass,
-                               wm->switcher_shell, args, n);
+                               wm->switcher_shell, ab.args, ab.count);
     }
 
     IswRealizeWidget(wm->switcher_shell);

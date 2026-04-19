@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb_cursor.h>
+#include <ISW/IswArgMacros.h>
 
 #define GRIP_SIZE 6
 
@@ -279,22 +280,21 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Create OverrideShell for the frame.  All geometry is logical;
        ISW scales to physical when creating the X window. */
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, c->x);               n++;
-    IswSetArg(args[n], IswNy, c->y);               n++;
-    IswSetArg(args[n], IswNwidth, fw);              n++;
-    IswSetArg(args[n], IswNheight, fh);             n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True); n++;
-    IswSetArg(args[n], IswNborderWidth, 1);         n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, c->x);
+    IswArgY(&ab, c->y);
+    IswArgWidth(&ab, fw);
+    IswArgHeight(&ab, fh);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
     {
         const IsdeColorScheme *s = isde_theme_current();
         if (s) {
-            IswSetArg(args[n], IswNborderColor, color_to_pixel(wm, s->fg)); n++;
+            IswArgBorderColor(&ab, color_to_pixel(wm, s->fg));
         }
     }
     c->shell = IswCreatePopupShell("frame", overrideShellWidgetClass,
-                                  wm->toplevel, args, n);
+                                  wm->toplevel, ab.args, ab.count);
 
     /* Title bar widgets — only for decorated windows */
     if (c->decorated) {
@@ -303,61 +303,61 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         if (title_w < 1) { title_w = 1; }
 
         /* Title bar label */
-        n = 0;
-        IswSetArg(args[n], IswNlabel, c->title ? c->title : "(untitled)"); n++;
-        IswSetArg(args[n], IswNwidth, title_w);              n++;
-        IswSetArg(args[n], IswNheight, WM_TITLE_HEIGHT);    n++;
-        IswSetArg(args[n], IswNborderWidth, 0);              n++;
-        IswSetArg(args[n], IswNresize, False);               n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, c->title ? c->title : "(untitled)");
+        IswArgWidth(&ab, title_w);
+        IswArgHeight(&ab, WM_TITLE_HEIGHT);
+        IswArgBorderWidth(&ab, 0);
+        IswArgResize(&ab, False);
         c->title_label = IswCreateWidget("titleBar", labelWidgetClass,
-                                        c->shell, args, n);
+                                        c->shell, ab.args, ab.count);
 
         IswAddEventHandler(c->title_label,
                           XCB_EVENT_MASK_BUTTON_PRESS,
                           False, title_button_handler, closure);
 
         /* Minimize button */
-        n = 0;
+        IswArgBuilderReset(&ab);
         if (icon_minimize) {
-            IswSetArg(args[n], IswNimage, icon_minimize); n++;
+            IswArgImage(&ab, icon_minimize);
         }
-        IswSetArg(args[n], IswNwidth, WM_TITLE_HEIGHT);     n++;
-        IswSetArg(args[n], IswNheight, WM_TITLE_HEIGHT);    n++;
-        IswSetArg(args[n], IswNinternalWidth, 0);            n++;
-        IswSetArg(args[n], IswNinternalHeight, 0);           n++;
-        IswSetArg(args[n], IswNcornerRadius, 0);             n++;
+        IswArgWidth(&ab, WM_TITLE_HEIGHT);
+        IswArgHeight(&ab, WM_TITLE_HEIGHT);
+        IswArgInternalWidth(&ab, 0);
+        IswArgInternalHeight(&ab, 0);
+        IswArgCornerRadius(&ab, 0);
         c->minimize_btn = IswCreateWidget("minimizeBtn", commandWidgetClass,
-                                         c->shell, args, n);
+                                         c->shell, ab.args, ab.count);
         IswOverrideTranslations(c->minimize_btn, btn_leave_fixup);
         IswAddCallback(c->minimize_btn, IswNcallback, minimize_callback, closure);
 
         /* Maximize / restore button */
-        n = 0;
+        IswArgBuilderReset(&ab);
         if (icon_maximize) {
-            IswSetArg(args[n], IswNimage, icon_maximize); n++;
+            IswArgImage(&ab, icon_maximize);
         }
-        IswSetArg(args[n], IswNwidth, WM_TITLE_HEIGHT);     n++;
-        IswSetArg(args[n], IswNheight, WM_TITLE_HEIGHT);    n++;
-        IswSetArg(args[n], IswNinternalWidth, 0);            n++;
-        IswSetArg(args[n], IswNinternalHeight, 0);           n++;
-        IswSetArg(args[n], IswNcornerRadius, 0);             n++;
+        IswArgWidth(&ab, WM_TITLE_HEIGHT);
+        IswArgHeight(&ab, WM_TITLE_HEIGHT);
+        IswArgInternalWidth(&ab, 0);
+        IswArgInternalHeight(&ab, 0);
+        IswArgCornerRadius(&ab, 0);
         c->maximize_btn = IswCreateWidget("maximizeBtn", commandWidgetClass,
-                                         c->shell, args, n);
+                                         c->shell, ab.args, ab.count);
         IswOverrideTranslations(c->maximize_btn, btn_leave_fixup);
         IswAddCallback(c->maximize_btn, IswNcallback, maximize_callback, closure);
 
         /* Close button */
-        n = 0;
+        IswArgBuilderReset(&ab);
         if (icon_close) {
-            IswSetArg(args[n], IswNimage, icon_close); n++;
+            IswArgImage(&ab, icon_close);
         }
-        IswSetArg(args[n], IswNwidth, WM_TITLE_HEIGHT);     n++;
-        IswSetArg(args[n], IswNheight, WM_TITLE_HEIGHT);    n++;
-        IswSetArg(args[n], IswNinternalWidth, 0);            n++;
-        IswSetArg(args[n], IswNinternalHeight, 0);           n++;
-        IswSetArg(args[n], IswNcornerRadius, 0);             n++;
+        IswArgWidth(&ab, WM_TITLE_HEIGHT);
+        IswArgHeight(&ab, WM_TITLE_HEIGHT);
+        IswArgInternalWidth(&ab, 0);
+        IswArgInternalHeight(&ab, 0);
+        IswArgCornerRadius(&ab, 0);
         c->close_btn = IswCreateWidget("closeBtn", commandWidgetClass,
-                                      c->shell, args, n);
+                                      c->shell, ab.args, ab.count);
         IswOverrideTranslations(c->close_btn, btn_leave_fixup);
         IswAddCallback(c->close_btn, IswNcallback, close_callback, closure);
     }

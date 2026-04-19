@@ -9,6 +9,7 @@
 #include "panel.h"
 #include <ISW/ShellP.h>
 #include <ISW/List.h>
+#include <ISW/IswArgMacros.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -445,43 +446,42 @@ void startmenu_init(Panel *p)
     logout_icon_path = isde_icon_find("actions", "system-log-out");
 
     /* Start button — child of form, pinned left */
-    Arg args[20];
-    Cardinal n = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
     if (start_icon_path) {
-        IswSetArg(args[n], IswNimage, start_icon_path);       n++;
+        IswArgImage(&ab, start_icon_path);
     }
-    IswSetArg(args[n], IswNlabel, "");                 n++;
-    IswSetArg(args[n], IswNwidth, PANEL_HEIGHT);       n++;
-    IswSetArg(args[n], IswNheight, PANEL_HEIGHT);      n++;
-    IswSetArg(args[n], IswNinternalWidth, 0);          n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);         n++;
-    IswSetArg(args[n], IswNflexBasis, PANEL_HEIGHT);   n++;
-    IswSetArg(args[n], IswNborderWidth, 0);            n++;
+    IswArgLabel(&ab, "");
+    IswArgWidth(&ab, PANEL_HEIGHT);
+    IswArgHeight(&ab, PANEL_HEIGHT);
+    IswArgInternalWidth(&ab, 0);
+    IswArgInternalHeight(&ab, 0);
+    IswArgFlexBasis(&ab, PANEL_HEIGHT);
+    IswArgBorderWidth(&ab, 0);
     p->start_btn = IswCreateManagedWidget("startBtn", commandWidgetClass,
-                                         p->form, args, n);
+                                         p->form, ab.args, ab.count);
     IswAddCallback(p->start_btn, IswNcallback, toggle_start_menu, p);
 
     /* Start menu shell */
-    n = 0;
     const IsdeColorScheme *scheme_border = isde_theme_current();
     Pixel border_px = scheme_border
         ? start_color_pixel(p, scheme_border->border)
         : IswScreen(p->start_btn)->white_pixel;
-    IswSetArg(args[n], IswNwidth, MENU_WIDTH);           n++;
-    IswSetArg(args[n], IswNheight, MENU_HEIGHT);         n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);      n++;
-    IswSetArg(args[n], IswNborderWidth, 1);              n++;
-    IswSetArg(args[n], IswNborderColor, border_px);      n++;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, MENU_WIDTH);
+    IswArgHeight(&ab, MENU_HEIGHT);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBorderColor(&ab, border_px);
     p->start_shell = IswCreatePopupShell("startMenu",
                                         overrideShellWidgetClass,
-                                        p->start_btn, args, n);
+                                        p->start_btn, ab.args, ab.count);
 
     /* Form container — single child of the shell */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0);  n++;
-    IswSetArg(args[n], IswNborderWidth, 0);      n++;
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
     Widget form = IswCreateManagedWidget("menuForm", formWidgetClass,
-                                        p->start_shell, args, n);
+                                        p->start_shell, ab.args, ab.count);
 
     /* Pane background tones from theme */
     const IsdeColorScheme *scheme = isde_theme_current();
@@ -491,16 +491,16 @@ void startmenu_init(Panel *p)
                            : IswScreen(p->start_btn)->white_pixel;
 
     /* Viewport for category list (left pane) — darker tone, vertical scroll */
-    n = 0;
-    IswSetArg(args[n], IswNwidth, CAT_PANE_WIDTH);              n++;
-    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT); n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
-    IswSetArg(args[n], IswNallowVert, True);                    n++;
-    IswSetArg(args[n], IswNallowHoriz, False);                  n++;
-    IswSetArg(args[n], IswNbackground, cat_bg);                 n++;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, CAT_PANE_WIDTH);
+    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
+    IswArgBorderWidth(&ab, 0);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgBackground(&ab, cat_bg);
     p->cat_viewport = IswCreateManagedWidget("catViewport",
                                             viewportWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
     /* Category list — child of viewport */
     String *cat_names = malloc((p->ncategories + 1) * sizeof(String));
@@ -509,50 +509,50 @@ void startmenu_init(Panel *p)
     }
     cat_names[p->ncategories] = NULL;
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, cat_names);                    n++;
-    IswSetArg(args[n], IswNnumberStrings, p->ncategories);     n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);                  n++;
-    IswSetArg(args[n], IswNforceColumns, True);                 n++;
-    IswSetArg(args[n], IswNverticalList, True);                 n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                     n++;
-    IswSetArg(args[n], IswNwidth, CAT_PANE_WIDTH);              n++;
-    IswSetArg(args[n], IswNcursor, None);                       n++;
-    IswSetArg(args[n], IswNbackground, cat_bg);                 n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, cat_names);
+    IswArgNumberStrings(&ab, p->ncategories);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, CAT_PANE_WIDTH);
+    IswArgCursor(&ab, None);
+    IswArgBackground(&ab, cat_bg);
     p->cat_box = IswCreateManagedWidget("catList", listWidgetClass,
-                                       p->cat_viewport, args, n);
+                                       p->cat_viewport, ab.args, ab.count);
     IswAddCallback(p->cat_box, IswNcallback, category_selected, p);
     /* Don't free cat_names — the List widget holds a pointer to it */
 
     /* Viewport for app list (right pane) — lighter tone, vertical scroll */
-    n = 0;
-    IswSetArg(args[n], IswNfromHoriz, p->cat_viewport);              n++;
-    IswSetArg(args[n], IswNwidth, MENU_WIDTH - CAT_PANE_WIDTH);    n++;
-    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                         n++;
-    IswSetArg(args[n], IswNallowVert, True);                        n++;
-    IswSetArg(args[n], IswNallowHoriz, False);                      n++;
-    IswSetArg(args[n], IswNuseRight, True);                          n++;
-    IswSetArg(args[n], IswNbackground, app_bg);                      n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromHoriz(&ab, p->cat_viewport);
+    IswArgWidth(&ab, MENU_WIDTH - CAT_PANE_WIDTH);
+    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
+    IswArgBorderWidth(&ab, 0);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, True);
+    IswArgBackground(&ab, app_bg);
     p->app_viewport = IswCreateManagedWidget("appViewport",
                                             viewportWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
     /* App list — child of viewport.
      * Must be static since the List widget holds the pointer. */
     static String initial[] = { "Select a category", NULL };
-    n = 0;
-    IswSetArg(args[n], IswNlist, initial);                          n++;
-    IswSetArg(args[n], IswNnumberStrings, 1);                       n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);                      n++;
-    IswSetArg(args[n], IswNforceColumns, True);                     n++;
-    IswSetArg(args[n], IswNverticalList, True);                     n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                         n++;
-    IswSetArg(args[n], IswNheight, MENU_HEIGHT - TOOLBAR_HEIGHT);  n++;
-    IswSetArg(args[n], IswNcursor, None);                            n++;
-    IswSetArg(args[n], IswNbackground, app_bg);                      n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, initial);
+    IswArgNumberStrings(&ab, 1);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
+    IswArgCursor(&ab, None);
+    IswArgBackground(&ab, app_bg);
     p->app_box = IswCreateManagedWidget("appList", listWidgetClass,
-                                       p->app_viewport, args, n);
+                                       p->app_viewport, ab.args, ab.count);
     IswAddCallback(p->app_box, IswNcallback, app_selected, p);
 
     /* Category list: hover highlights and switches category immediately */
@@ -582,15 +582,15 @@ void startmenu_init(Panel *p)
     /* Bottom toolbar — right-aligned action buttons.
      * No defaultDistance override: the Form's default 4px acts as bottom margin,
      * so the natural height = vertDistance + btn_size + 4 = TOOLBAR_HEIGHT. */
-    n = 0;
-    IswSetArg(args[n], IswNfromVert, p->cat_viewport);         n++;
-    IswSetArg(args[n], IswNvertDistance, 0);                   n++;
-    IswSetArg(args[n], IswNwidth, MENU_WIDTH);                 n++;
-    IswSetArg(args[n], IswNheight, TOOLBAR_HEIGHT);            n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                    n++;
-    IswSetArg(args[n], IswNbackground, cat_bg);                n++;
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, p->cat_viewport);
+    IswArgVertDistance(&ab, 0);
+    IswArgWidth(&ab, MENU_WIDTH);
+    IswArgHeight(&ab, TOOLBAR_HEIGHT);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBackground(&ab, cat_bg);
     p->menu_toolbar = IswCreateManagedWidget("menuToolbar", formWidgetClass,
-                                            form, args, n);
+                                            form, ab.args, ab.count);
 
     /* btn_size = TOOLBAR_HEIGHT - top_margin(4) - bottom_margin(4) */
     int btn_margin = 4;
@@ -598,62 +598,62 @@ void startmenu_init(Panel *p)
     int btn_x      = MENU_WIDTH - btn_size - btn_margin;
 
     /* Logout button (rightmost) */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                         n++;
-    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
-    IswSetArg(args[n], IswNheight, btn_size);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
-    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
-    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgWidth(&ab, btn_size);
+    IswArgHeight(&ab, btn_size);
+    IswArgHorizDistance(&ab, btn_x);
+    IswArgVertDistance(&ab, btn_margin);
+    IswArgBorderWidth(&ab, 1);
+    IswArgInternalWidth(&ab, 0);
+    IswArgInternalHeight(&ab, 0);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
     if (logout_icon_path) {
-        IswSetArg(args[n], IswNimage, logout_icon_path);       n++;
+        IswArgImage(&ab, logout_icon_path);
     }
     p->logout_btn = IswCreateManagedWidget("logoutBtn", commandWidgetClass,
-                                          p->menu_toolbar, args, n);
+                                          p->menu_toolbar, ab.args, ab.count);
     IswAddCallback(p->logout_btn, IswNcallback, logout_cb, p);
 
     /* Reboot button (left of logout) */
     btn_x -= btn_size + btn_margin;
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                         n++;
-    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
-    IswSetArg(args[n], IswNheight, btn_size);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
-    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
-    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgWidth(&ab, btn_size);
+    IswArgHeight(&ab, btn_size);
+    IswArgHorizDistance(&ab, btn_x);
+    IswArgVertDistance(&ab, btn_margin);
+    IswArgBorderWidth(&ab, 1);
+    IswArgInternalWidth(&ab, 0);
+    IswArgInternalHeight(&ab, 0);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
     if (reboot_icon_path) {
-        IswSetArg(args[n], IswNimage, reboot_icon_path);       n++;
+        IswArgImage(&ab, reboot_icon_path);
     }
     p->reboot_btn = IswCreateManagedWidget("rebootBtn", commandWidgetClass,
-                                          p->menu_toolbar, args, n);
+                                          p->menu_toolbar, ab.args, ab.count);
     IswAddCallback(p->reboot_btn, IswNcallback, reboot_cb, p);
 
     /* Shut Down button (left of reboot) */
     btn_x -= btn_size + btn_margin;
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                         n++;
-    IswSetArg(args[n], IswNwidth, btn_size);                   n++;
-    IswSetArg(args[n], IswNheight, btn_size);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, btn_x);              n++;
-    IswSetArg(args[n], IswNvertDistance, btn_margin);          n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                    n++;
-    IswSetArg(args[n], IswNinternalWidth, 0);                  n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);                 n++;
-    IswSetArg(args[n], IswNleft, IswChainRight);                n++;
-    IswSetArg(args[n], IswNright, IswChainRight);               n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgWidth(&ab, btn_size);
+    IswArgHeight(&ab, btn_size);
+    IswArgHorizDistance(&ab, btn_x);
+    IswArgVertDistance(&ab, btn_margin);
+    IswArgBorderWidth(&ab, 1);
+    IswArgInternalWidth(&ab, 0);
+    IswArgInternalHeight(&ab, 0);
+    IswArgLeft(&ab, IswChainRight);
+    IswArgRight(&ab, IswChainRight);
     if (shutdown_icon_path) {
-        IswSetArg(args[n], IswNimage, shutdown_icon_path);     n++;
+        IswArgImage(&ab, shutdown_icon_path);
     }
     p->shutdown_btn = IswCreateManagedWidget("shutdownBtn", commandWidgetClass,
-                                            p->menu_toolbar, args, n);
+                                            p->menu_toolbar, ab.args, ab.count);
     IswAddCallback(p->shutdown_btn, IswNcallback, shutdown_cb, p);
 
     /* Hide app list until a category is hovered */

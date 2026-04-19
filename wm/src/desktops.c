@@ -9,6 +9,7 @@
 #include "wm.h"
 #include "isde/isde-config.h"
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -163,17 +164,16 @@ void wm_desktops_show_osd(Wm *wm)
         wm->desk_osd = NULL;
     }
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNx, sx);                    n++;
-    IswSetArg(args[n], IswNy, sy);                    n++;
-    IswSetArg(args[n], IswNwidth, w);                  n++;
-    IswSetArg(args[n], IswNheight, h);                 n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);    n++;
-    IswSetArg(args[n], IswNborderWidth, 1);            n++;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgX(&ab, sx);
+    IswArgY(&ab, sy);
+    IswArgWidth(&ab, w);
+    IswArgHeight(&ab, h);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 1);
     wm->desk_osd = IswCreatePopupShell("desktopOSD",
                                        overrideShellWidgetClass,
-                                       wm->toplevel, args, n);
+                                       wm->toplevel, ab.args, ab.count);
 
     /* Create a label for each desktop cell */
     const IsdeColorScheme *scheme = isde_theme_current();
@@ -185,21 +185,19 @@ void wm_desktops_show_osd(Wm *wm)
             char name[16];
             snprintf(name, sizeof(name), "%d", idx + 1);
 
-            n = 0;
-            IswSetArg(args[n], IswNlabel, name);    n++;
-            IswSetArg(args[n], IswNwidth, OSD_CELL);  n++;
-            IswSetArg(args[n], IswNheight, OSD_CELL); n++;
-            IswSetArg(args[n], IswNborderWidth, 1);   n++;
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, name);
+            IswArgWidth(&ab, OSD_CELL);
+            IswArgHeight(&ab, OSD_CELL);
+            IswArgBorderWidth(&ab, 1);
 
             if (scheme && is_active) {
-                IswSetArg(args[n], IswNbackground,
-                    (Pixel)scheme->active); n++;
-                IswSetArg(args[n], IswNforeground,
-                    (Pixel)scheme->fg_light); n++;
+                IswArgBackground(&ab, (Pixel)scheme->active);
+                IswArgForeground(&ab, (Pixel)scheme->fg_light);
             }
 
             Widget cell = IswCreateManagedWidget("deskCell",
-                labelWidgetClass, wm->desk_osd, args, n);
+                labelWidgetClass, wm->desk_osd, ab.args, ab.count);
 
             /* Position manually after realize */
             (void)cell;

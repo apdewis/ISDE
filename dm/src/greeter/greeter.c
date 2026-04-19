@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <xcb/randr.h>
+#include <ISW/IswArgMacros.h>
 
 /* ---------- Geometry ---------- */
 
@@ -238,39 +239,37 @@ static void load_config(Greeter *g)
 
 static void build_ui(Greeter *g)
 {
-    Arg args[20];
-    Cardinal n;
+    IswArgBuilder ab = IswArgBuilderInit();
 
     /* Fullscreen OverrideShell */
-    n = 0;
-    IswSetArg(args[n], IswNx, 0);                          n++;
-    IswSetArg(args[n], IswNy, 0);                          n++;
-    IswSetArg(args[n], IswNwidth, g->logical_w);             n++;
-    IswSetArg(args[n], IswNheight, g->logical_h);           n++;
-    IswSetArg(args[n], IswNoverrideRedirect, True);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                 n++;
+    IswArgX(&ab, 0);
+    IswArgY(&ab, 0);
+    IswArgWidth(&ab, g->logical_w);
+    IswArgHeight(&ab, g->logical_h);
+    IswArgOverrideRedirect(&ab, True);
+    IswArgBorderWidth(&ab, 0);
     g->shell = IswCreatePopupShell("greeter", overrideShellWidgetClass,
-                                  g->toplevel, args, n);
+                                  g->toplevel, ab.args, ab.count);
 
     /* Main form — uses logical pixels; ISW scales internally */
-    n = 0;
-    IswSetArg(args[n], IswNdefaultDistance, 0);     n++;
-    IswSetArg(args[n], IswNborderWidth, 0);         n++;
-    IswSetArg(args[n], IswNwidth, g->logical_w);    n++;
-    IswSetArg(args[n], IswNheight, g->logical_h);   n++;
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, g->logical_w);
+    IswArgHeight(&ab, g->logical_h);
     g->form = IswCreateManagedWidget("greeterForm", formWidgetClass,
-                                    g->shell, args, n);
+                                    g->shell, ab.args, ab.count);
 
     /* --- Clock area (centered at top) --- */
     greeter_clock_init(g);
 
     /* Measure font-derived row height and label width: create a temporary
      * label with the widest label text, read its natural size, destroy it. */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Username");              n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Username");
+    IswArgBorderWidth(&ab, 0);
     Widget probe = IswCreateWidget("probe", labelWidgetClass,
-                                  g->form, args, n);
+                                  g->form, ab.args, ab.count);
     Dimension natural_h = 0, natural_lw = 0;
     IswVaGetValues(probe, IswNheight, &natural_h,
                          IswNwidth, &natural_lw, NULL);
@@ -289,87 +288,87 @@ static void build_ui(Greeter *g)
     int row4_y = row3_y + input_h + SECTION_GAP;
 
     /* Username label */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Username");              n++;
-    IswSetArg(args[n], IswNwidth, label_w);                   n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row1_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Username");
+    IswArgWidth(&ab, label_w);
+    IswArgHeight(&ab, input_h);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHorizDistance(&ab, label_x);
+    IswArgVertDistance(&ab, row1_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->user_label = IswCreateManagedWidget("userLabel", labelWidgetClass,
-                                          g->form, args, n);
+                                          g->form, ab.args, ab.count);
 
     /* Username text input */
-    n = 0;
-    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row1_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, INPUT_W);
+    IswArgHeight(&ab, input_h);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgBorderWidth(&ab, 1);
+    IswArgHorizDistance(&ab, input_x);
+    IswArgVertDistance(&ab, row1_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->user_text = IswCreateManagedWidget("userText", asciiTextWidgetClass,
-                                         g->form, args, n);
+                                         g->form, ab.args, ab.count);
 
     /* Password label */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Password");              n++;
-    IswSetArg(args[n], IswNwidth, label_w);                   n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Password");
+    IswArgWidth(&ab, label_w);
+    IswArgHeight(&ab, input_h);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHorizDistance(&ab, label_x);
+    IswArgVertDistance(&ab, row2_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->pass_label = IswCreateManagedWidget("passLabel", labelWidgetClass,
-                                          g->form, args, n);
+                                          g->form, ab.args, ab.count);
 
     /* Password text input (echo off) */
-    n = 0;
-    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNeditType, IswtextEdit);           n++;
-    IswSetArg(args[n], IswNecho, False);                     n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, INPUT_W);
+    IswArgHeight(&ab, input_h);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgEcho(&ab, False);
+    IswArgBorderWidth(&ab, 1);
+    IswArgHorizDistance(&ab, input_x);
+    IswArgVertDistance(&ab, row2_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->pass_text = IswCreateManagedWidget("passText", asciiTextWidgetClass,
-                                         g->form, args, n);
+                                         g->form, ab.args, ab.count);
 
     /* Install Enter-to-login translation on password field */
     IswOverrideTranslations(g->pass_text,
                            IswParseTranslationTable(greeter_translations));
 
     /* Session label */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "Session");                n++;
-    IswSetArg(args[n], IswNwidth, label_w);                   n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNjustify, IswJustifyRight);         n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row3_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Session");
+    IswArgWidth(&ab, label_w);
+    IswArgHeight(&ab, input_h);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHorizDistance(&ab, label_x);
+    IswArgVertDistance(&ab, row3_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->session_label = IswCreateManagedWidget("sessionLabel", labelWidgetClass,
-                                             g->form, args, n);
+                                             g->form, ab.args, ab.count);
 
     /* Session dropdown */
     g->session_names = malloc((g->nsessions + 1) * sizeof(String));
@@ -378,61 +377,61 @@ static void build_ui(Greeter *g)
     }
     g->session_names[g->nsessions] = NULL;
 
-    n = 0;
-    IswSetArg(args[n], IswNlist, g->session_names);          n++;
-    IswSetArg(args[n], IswNnumberStrings, g->nsessions);    n++;
-    IswSetArg(args[n], IswNdropdownMode, True);              n++;
-    IswSetArg(args[n], IswNdefaultColumns, 1);               n++;
-    IswSetArg(args[n], IswNforceColumns, True);              n++;
-    IswSetArg(args[n], IswNwidth, INPUT_W);                  n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNborderWidth, 1);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, input_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row3_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, g->session_names);
+    IswArgNumberStrings(&ab, g->nsessions);
+    IswArgDropdownMode(&ab, True);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgWidth(&ab, INPUT_W);
+    IswArgHeight(&ab, input_h);
+    IswArgBorderWidth(&ab, 1);
+    IswArgHorizDistance(&ab, input_x);
+    IswArgVertDistance(&ab, row3_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->session_btn = IswCreateManagedWidget("sessionBtn", listWidgetClass,
-                                           g->form, args, n);
+                                           g->form, ab.args, ab.count);
     IswAddCallback(g->session_btn, IswNcallback, session_dropdown_cb, g);
     if (g->nsessions > 0) {
         IswListHighlight(g->session_btn, g->active_session);
     }
 
     /* Error label */
-    n = 0;
-    IswSetArg(args[n], IswNlabel, " ");                     n++;
-    IswSetArg(args[n], IswNwidth, label_w + ROW_GAP + INPUT_W); n++;
-    IswSetArg(args[n], IswNheight, input_h);                 n++;
-    IswSetArg(args[n], IswNborderWidth, 0);                  n++;
-    IswSetArg(args[n], IswNhorizDistance, label_x);          n++;
-    IswSetArg(args[n], IswNvertDistance, row4_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, " ");
+    IswArgWidth(&ab, label_w + ROW_GAP + INPUT_W);
+    IswArgHeight(&ab, input_h);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHorizDistance(&ab, label_x);
+    IswArgVertDistance(&ab, row4_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->error_label = IswCreateManagedWidget("errorLabel", labelWidgetClass,
-                                           g->form, args, n);
+                                           g->form, ab.args, ab.count);
 
     /* Login button (inline right of password field) */
     char *login_icon = isde_icon_find("actions", "system-log-in");
-    n = 0;
-    IswSetArg(args[n], IswNlabel, "");                       n++;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
     if (login_icon) {
-        IswSetArg(args[n], IswNimage, login_icon);           n++;
+        IswArgImage(&ab, login_icon);
     }
-    IswSetArg(args[n], IswNheight, input_h);                  n++;
-    IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);       n++;
-    IswSetArg(args[n], IswNinternalHeight, 0);               n++;
-    IswSetArg(args[n], IswNhorizDistance, input_x + INPUT_W + ROW_GAP); n++;
-    IswSetArg(args[n], IswNvertDistance, row2_y);            n++;
-    IswSetArg(args[n], IswNtop, IswChainTop);                 n++;
-    IswSetArg(args[n], IswNbottom, IswChainTop);              n++;
-    IswSetArg(args[n], IswNleft, IswChainLeft);               n++;
-    IswSetArg(args[n], IswNright, IswChainLeft);              n++;
+    IswArgHeight(&ab, input_h);
+    IswArgInternalWidth(&ab, BUTTON_PAD);
+    IswArgInternalHeight(&ab, 0);
+    IswArgHorizDistance(&ab, input_x + INPUT_W + ROW_GAP);
+    IswArgVertDistance(&ab, row2_y);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
     g->login_btn = IswCreateManagedWidget("loginBtn", commandWidgetClass,
-                                         g->form, args, n);
+                                         g->form, ab.args, ab.count);
     IswAddCallback(g->login_btn, IswNcallback, login_cb, g);
 
     /* --- Power buttons (horizontally centered at bottom) --- */
@@ -447,67 +446,67 @@ static void build_ui(Greeter *g)
     char *suspend_icon  = isde_icon_find("actions", "system-suspend");
 
     if (g->allow_shutdown) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "");                   n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
         if (shutdown_icon) {
-            IswSetArg(args[n], IswNimage, shutdown_icon);    n++;
+            IswArgImage(&ab, shutdown_icon);
         }
-        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
-        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
-        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
-        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
-        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
-        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
-        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
-        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        IswArgWidth(&ab, BUTTON_W);
+        IswArgInternalWidth(&ab, BUTTON_PAD);
+        IswArgInternalHeight(&ab, BUTTON_PAD);
+        IswArgHorizDistance(&ab, btn_x);
+        IswArgVertDistance(&ab, btn_y);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
         g->shutdown_btn = IswCreateManagedWidget("shutdownBtn",
                                                 commandWidgetClass,
-                                                g->form, args, n);
+                                                g->form, ab.args, ab.count);
         IswAddCallback(g->shutdown_btn, IswNcallback, shutdown_cb, g);
         btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_reboot) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "");                   n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
         if (reboot_icon) {
-            IswSetArg(args[n], IswNimage, reboot_icon);     n++;
+            IswArgImage(&ab, reboot_icon);
         }
-        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
-        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
-        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
-        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
-        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
-        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
-        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
-        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        IswArgWidth(&ab, BUTTON_W);
+        IswArgInternalWidth(&ab, BUTTON_PAD);
+        IswArgInternalHeight(&ab, BUTTON_PAD);
+        IswArgHorizDistance(&ab, btn_x);
+        IswArgVertDistance(&ab, btn_y);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
         g->reboot_btn = IswCreateManagedWidget("rebootBtn",
                                               commandWidgetClass,
-                                              g->form, args, n);
+                                              g->form, ab.args, ab.count);
         IswAddCallback(g->reboot_btn, IswNcallback, reboot_cb, g);
         btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_suspend) {
-        n = 0;
-        IswSetArg(args[n], IswNlabel, "");                   n++;
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
         if (suspend_icon) {
-            IswSetArg(args[n], IswNimage, suspend_icon);    n++;
+            IswArgImage(&ab, suspend_icon);
         }
-        IswSetArg(args[n], IswNwidth, BUTTON_W);             n++;
-        IswSetArg(args[n], IswNinternalWidth, BUTTON_PAD);   n++;
-        IswSetArg(args[n], IswNinternalHeight, BUTTON_PAD);  n++;
-        IswSetArg(args[n], IswNhorizDistance, btn_x);        n++;
-        IswSetArg(args[n], IswNvertDistance, btn_y);         n++;
-        IswSetArg(args[n], IswNtop, IswChainTop);             n++;
-        IswSetArg(args[n], IswNbottom, IswChainTop);          n++;
-        IswSetArg(args[n], IswNleft, IswChainLeft);           n++;
-        IswSetArg(args[n], IswNright, IswChainLeft);          n++;
+        IswArgWidth(&ab, BUTTON_W);
+        IswArgInternalWidth(&ab, BUTTON_PAD);
+        IswArgInternalHeight(&ab, BUTTON_PAD);
+        IswArgHorizDistance(&ab, btn_x);
+        IswArgVertDistance(&ab, btn_y);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
         g->suspend_btn = IswCreateManagedWidget("suspendBtn",
                                                commandWidgetClass,
-                                               g->form, args, n);
+                                               g->form, ab.args, ab.count);
         IswAddCallback(g->suspend_btn, IswNcallback, suspend_cb, g);
     }
 
