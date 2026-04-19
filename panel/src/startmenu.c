@@ -49,19 +49,15 @@ static void set_start_btn_active(Panel *p, int active)
     if (!s) {
         return;
     }
-    Arg args[2];
+    IswArgBuilder ab = IswArgBuilderInit();
     if (active) {
-        IswSetArg(args[0], IswNforeground,
-                 start_color_pixel(p, s->taskbar_button.hover_fg));
-        IswSetArg(args[1], IswNbackground,
-                 start_color_pixel(p, s->active));
+        IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.hover_fg));
+        IswArgBackground(&ab, start_color_pixel(p, s->active));
     } else {
-        IswSetArg(args[0], IswNforeground,
-                 start_color_pixel(p, s->taskbar_button.fg));
-        IswSetArg(args[1], IswNbackground,
-                 start_color_pixel(p, s->taskbar_button.bg));
+        IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.fg));
+        IswArgBackground(&ab, start_color_pixel(p, s->taskbar_button.bg));
     }
-    IswSetValues(p->start_btn, args, 2);
+    IswSetValues(p->start_btn, ab.args, ab.count);
 }
 
 #define MENU_WIDTH       400

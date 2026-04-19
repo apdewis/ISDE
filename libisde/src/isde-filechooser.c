@@ -151,9 +151,9 @@ static void update_lists(FcState *fc)
 
     /* Update path text */
     if (fc->path_text) {
-        Arg a;
-        IswSetArg(a, IswNstring, fc->cwd);
-        IswSetValues(fc->path_text, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgString(&ab, fc->cwd);
+        IswSetValues(fc->path_text, ab.args, ab.count);
     }
 }
 
@@ -233,9 +233,9 @@ static void file_select_cb(Widget w, IswPointer cd, IswPointer call)
     if (!ret || !ret->string) return;
 
     if (fc->mode == ISDE_FILE_SAVE && fc->name_text) {
-        Arg a;
-        IswSetArg(a, IswNstring, ret->string);
-        IswSetValues(fc->name_text, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgString(&ab, ret->string);
+        IswSetValues(fc->name_text, ab.args, ab.count);
     } else if (fc->mode == ISDE_FILE_OPEN) {
         fc_accept(fc, ret->string);
     }
@@ -250,9 +250,9 @@ static void action_cb(Widget w, IswPointer cd, IswPointer call)
     if (fc->mode == ISDE_FILE_SAVE && fc->name_text) {
         /* Get filename from text field */
         String val = NULL;
-        Arg a;
-        IswSetArg(a, IswNstring, &val);
-        IswGetValues(fc->name_text, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgString(&ab, &val);
+        IswGetValues(fc->name_text, ab.args, ab.count);
         if (val && val[0]) {
             fc_accept(fc, val);
             return;
@@ -286,9 +286,9 @@ static void path_action(Widget w, xcb_generic_event_t *ev,
     if (!fc) return;
 
     String val = NULL;
-    Arg a;
-    IswSetArg(a, IswNstring, &val);
-    IswGetValues(w, &a, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &val);
+    IswGetValues(w, ab.args, ab.count);
     if (val && val[0])
         navigate_to(fc, val);
 }
@@ -302,9 +302,9 @@ static void filter_action(Widget w, xcb_generic_event_t *ev,
     if (!fc) return;
 
     String val = NULL;
-    Arg a;
-    IswSetArg(a, IswNstring, &val);
-    IswGetValues(w, &a, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &val);
+    IswGetValues(w, ab.args, ab.count);
 
     free(fc->filter);
     fc->filter = (val && val[0]) ? strdup(val) : NULL;

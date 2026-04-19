@@ -589,15 +589,15 @@ void isde_progress_update(IsdeProgress *p, int percent, const char *message)
     if (percent > 100) percent = 100;
 
     if (p->bar && percent != p->last_pct) {
-        Arg a;
-        IswSetArg(a, IswNvalue, percent);
-        IswSetValues(p->bar, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgValue(&ab, percent);
+        IswSetValues(p->bar, ab.args, ab.count);
         p->last_pct = percent;
     }
     if (p->label && message && strcmp(message, p->last_msg) != 0) {
-        Arg a;
-        IswSetArg(a, IswNlabel, message);
-        IswSetValues(p->label, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, message);
+        IswSetValues(p->label, ab.args, ab.count);
         snprintf(p->last_msg, sizeof(p->last_msg), "%s", message);
     }
 }
@@ -611,16 +611,16 @@ void isde_progress_update_file(IsdeProgress *p, int percent,
     if (percent > 100) percent = 100;
 
     if (p->file_bar && percent != p->last_file_pct) {
-        Arg a;
-        IswSetArg(a, IswNvalue, percent);
-        IswSetValues(p->file_bar, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgValue(&ab, percent);
+        IswSetValues(p->file_bar, ab.args, ab.count);
         p->last_file_pct = percent;
     }
     if (p->file_label && message &&
         strcmp(message, p->last_file_msg) != 0) {
-        Arg a;
-        IswSetArg(a, IswNlabel, message);
-        IswSetValues(p->file_label, &a, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, message);
+        IswSetValues(p->file_label, ab.args, ab.count);
         snprintf(p->last_file_msg, sizeof(p->last_file_msg), "%s", message);
     }
 }

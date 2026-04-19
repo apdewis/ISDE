@@ -108,23 +108,18 @@ static void update_labels(Wm *wm)
         int idx = row_to_index(wm, i, center_row);
         int is_sel = (i == center_row);
 
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNlabel, wm->switcher_labels[idx]); n++;
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, wm->switcher_labels[idx]);
         if (scheme) {
             if (is_sel) {
-                IswSetArg(args[n], IswNbackground,
-                          (Pixel)scheme->active);      n++;
-                IswSetArg(args[n], IswNforeground,
-                          (Pixel)scheme->fg_light);    n++;
+                IswArgBackground(&ab, (Pixel)scheme->active);
+                IswArgForeground(&ab, (Pixel)scheme->fg_light);
             } else {
-                IswSetArg(args[n], IswNbackground,
-                          (Pixel)scheme->bg);          n++;
-                IswSetArg(args[n], IswNforeground,
-                          (Pixel)scheme->fg_light);    n++;
+                IswArgBackground(&ab, (Pixel)scheme->bg);
+                IswArgForeground(&ab, (Pixel)scheme->fg_light);
             }
         }
-        IswSetValues(cw->composite.children[i], args, n);
+        IswSetValues(cw->composite.children[i], ab.args, ab.count);
     }
 }
 

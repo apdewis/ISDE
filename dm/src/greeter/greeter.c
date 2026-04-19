@@ -30,15 +30,16 @@ static void login_cb(Widget w, IswPointer cd, IswPointer call)
     Greeter *g = (Greeter *)cd;
 
     /* Get username and password from text widgets */
-    Arg args[20];
     String username = NULL;
     String password = NULL;
 
-    IswSetArg(args[0], IswNstring, &username);
-    IswGetValues(g->user_text, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &username);
+    IswGetValues(g->user_text, ab.args, ab.count);
 
-    IswSetArg(args[0], IswNstring, &password);
-    IswGetValues(g->pass_text, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgString(&ab, &password);
+    IswGetValues(g->pass_text, ab.args, ab.count);
 
     if (!username || !*username) {
         greeter_set_error(g, "Username is required");
@@ -176,9 +177,9 @@ static void handle_ipc_line(Greeter *g, const char *line)
     } else if (strncmp(line, "AUTH_FAIL ", 10) == 0) {
         greeter_set_error(g, line + 10);
         /* Clear password field */
-        Arg args[20];
-        IswSetArg(args[0], IswNstring, "");
-        IswSetValues(g->pass_text, args, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgString(&ab, "");
+        IswSetValues(g->pass_text, ab.args, ab.count);
     } else if (strncmp(line, "MODE_LOCK ", 10) == 0) {
         greeter_enter_lock_mode(g, line + 10);
     } else if (strcmp(line, "MODE_LOGIN") == 0) {
@@ -808,16 +809,16 @@ void greeter_cleanup(Greeter *g)
 
 void greeter_set_error(Greeter *g, const char *msg)
 {
-    Arg args[20];
-    IswSetArg(args[0], IswNlabel, msg);
-    IswSetValues(g->error_label, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, msg);
+    IswSetValues(g->error_label, ab.args, ab.count);
 }
 
 void greeter_clear_error(Greeter *g)
 {
-    Arg args[20];
-    IswSetArg(args[0], IswNlabel, " ");
-    IswSetValues(g->error_label, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, " ");
+    IswSetValues(g->error_label, ab.args, ab.count);
 }
 
 /* ---------- Lock mode ---------- */
@@ -829,16 +830,17 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
     free(g->lock_user);
     g->lock_user = strdup(username);
 
-    Arg args[20];
+    IswArgBuilder ab = IswArgBuilderInit();
 
     /* Pre-fill username and make it read-only */
-    IswSetArg(args[0], IswNstring, username);
-    IswSetValues(g->user_text, args, 1);
+    IswArgString(&ab, username);
+    IswSetValues(g->user_text, ab.args, ab.count);
     IswSetSensitive(g->user_text, False);
 
     /* Clear password and focus it */
-    IswSetArg(args[0], IswNstring, "");
-    IswSetValues(g->pass_text, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgString(&ab, "");
+    IswSetValues(g->pass_text, ab.args, ab.count);
     IswSetKeyboardFocus(g->form, g->pass_text);
 
     /* Hide session selector in lock mode */
@@ -879,16 +881,17 @@ void greeter_enter_login_mode(Greeter *g)
     free(g->lock_user);
     g->lock_user = NULL;
 
-    Arg args[20];
+    IswArgBuilder ab = IswArgBuilderInit();
 
     /* Clear and re-enable username field */
-    IswSetArg(args[0], IswNstring, "");
-    IswSetValues(g->user_text, args, 1);
+    IswArgString(&ab, "");
+    IswSetValues(g->user_text, ab.args, ab.count);
     IswSetSensitive(g->user_text, True);
 
     /* Clear password */
-    IswSetArg(args[0], IswNstring, "");
-    IswSetValues(g->pass_text, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgString(&ab, "");
+    IswSetValues(g->pass_text, ab.args, ab.count);
 
     /* Show session selector */
     IswManageChild(g->session_label);

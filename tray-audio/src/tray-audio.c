@@ -10,6 +10,7 @@
 #include "tray-audio.h"
 
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -183,12 +184,11 @@ int tray_audio_init(TrayAudio *ta, int *argc, char **argv)
     }
 
     /* Invisible toplevel — connection provider only */
-    Arg sa[20];
-    Cardinal sn = 0;
-    IswSetArg(sa[sn], IswNwidth, 1);                  sn++;
-    IswSetArg(sa[sn], IswNheight, 1);                 sn++;
-    IswSetArg(sa[sn], IswNmappedWhenManaged, False);   sn++;
-    IswSetValues(ta->toplevel, sa, sn);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, 1);
+    IswArgHeight(&ab, 1);
+    IswArgMappedWhenManaged(&ab, False);
+    IswSetValues(ta->toplevel, ab.args, ab.count);
 
     IswRealizeWidget(ta->toplevel);
 

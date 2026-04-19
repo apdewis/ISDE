@@ -132,9 +132,9 @@ static Widget keyboard_create(Widget parent, IswAppContext app)
     }
 
     Dimension pw;
-    Arg qa[20];
-    IswSetArg(qa[0], IswNwidth, &pw);
-    IswGetValues(parent, qa, 1);
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswGetValues(parent, qb.args, qb.count);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgDefaultDistance(&ab, 8);

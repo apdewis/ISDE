@@ -154,10 +154,10 @@ void settings_switch_panel(Settings *s, int index)
     if (!s->panel_widgets[index]) {
         /* Query viewport size for initial panel dimensions. */
         Dimension vpw, vph;
-        Arg qa[20];
-        IswSetArg(qa[0], IswNwidth, &vpw);
-        IswSetArg(qa[1], IswNheight, &vph);
-        IswGetValues(s->content_vp, qa, 2);
+        IswArgBuilder qb = IswArgBuilderInit();
+        IswArgWidth(&qb, &vpw);
+        IswArgHeight(&qb, &vph);
+        IswGetValues(s->content_vp, qb.args, qb.count);
 
         /* Set content_area so panels can query parent dimensions */
         if (vpw > 0 || vph > 0) {
@@ -190,17 +190,26 @@ void settings_switch_panel(Settings *s, int index)
     /* Debug: dump widget dimensions */
     {
         Dimension tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph;
-        Arg da[20];
-        IswSetArg(da[0], IswNwidth, &tw); IswSetArg(da[1], IswNheight, &th);
-        IswGetValues(s->toplevel, da, 2);
-        IswSetArg(da[0], IswNwidth, &cfw); IswSetArg(da[1], IswNheight, &cfh);
-        IswGetValues(s->content_form, da, 2);
-        IswSetArg(da[0], IswNwidth, &vpw); IswSetArg(da[1], IswNheight, &vph);
-        IswGetValues(s->content_vp, da, 2);
-        IswSetArg(da[0], IswNwidth, &caw); IswSetArg(da[1], IswNheight, &cah);
-        IswGetValues(s->content_area, da, 2);
-        IswSetArg(da[0], IswNwidth, &pw); IswSetArg(da[1], IswNheight, &pph);
-        IswGetValues(s->panel_widgets[index], da, 2);
+        IswArgBuilder db = IswArgBuilderInit();
+
+        IswArgWidth(&db, &tw); IswArgHeight(&db, &th);
+        IswGetValues(s->toplevel, db.args, db.count);
+
+        IswArgBuilderReset(&db);
+        IswArgWidth(&db, &cfw); IswArgHeight(&db, &cfh);
+        IswGetValues(s->content_form, db.args, db.count);
+
+        IswArgBuilderReset(&db);
+        IswArgWidth(&db, &vpw); IswArgHeight(&db, &vph);
+        IswGetValues(s->content_vp, db.args, db.count);
+
+        IswArgBuilderReset(&db);
+        IswArgWidth(&db, &caw); IswArgHeight(&db, &cah);
+        IswGetValues(s->content_area, db.args, db.count);
+
+        IswArgBuilderReset(&db);
+        IswArgWidth(&db, &pw); IswArgHeight(&db, &pph);
+        IswGetValues(s->panel_widgets[index], db.args, db.count);
         fprintf(stderr, "DEBUG: toplevel=%dx%d content_form=%dx%d viewport=%dx%d content_area=%dx%d panel=%dx%d\n",
                 tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph);
     }

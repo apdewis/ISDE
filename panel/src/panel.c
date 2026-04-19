@@ -461,10 +461,10 @@ void panel_dismiss_popup(Panel *p)
         if (s) {
             Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
             Pixel bg = panel_color_pixel(p, s->taskbar_button.bg);
-            Arg ia[2];
-            IswSetArg(ia[0], IswNforeground, fg);
-            IswSetArg(ia[1], IswNbackground, bg);
-            IswSetValues(p->start_btn, ia, 2);
+            IswArgBuilder ab = IswArgBuilderInit();
+            IswArgForeground(&ab, fg);
+            IswArgBackground(&ab, bg);
+            IswSetValues(p->start_btn, ab.args, ab.count);
         }
     }
 

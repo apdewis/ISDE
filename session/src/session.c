@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
+#include <ISW/IswArgMacros.h>
 #include <dbus/dbus.h>
 
 #include "isde/isde-theme.h"
@@ -467,12 +468,11 @@ int session_init(Session *s)
                                   fallbacks, NULL, 0);
 
     /* Realize but don't map — needed as parent for popup shells */
-    Arg tl_args[20];
-    Cardinal tl_n = 0;
-    IswSetArg(tl_args[tl_n], IswNmappedWhenManaged, False); tl_n++;
-    IswSetArg(tl_args[tl_n], IswNwidth, 1);                 tl_n++;
-    IswSetArg(tl_args[tl_n], IswNheight, 1);                tl_n++;
-    IswSetValues(s->toplevel, tl_args, tl_n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgMappedWhenManaged(&ab, False);
+    IswArgWidth(&ab, 1);
+    IswArgHeight(&ab, 1);
+    IswSetValues(s->toplevel, ab.args, ab.count);
     IswRealizeWidget(s->toplevel);
 
     /* Install SIGCHLD handler via Xt signal mechanism */

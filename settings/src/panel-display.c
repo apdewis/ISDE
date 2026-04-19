@@ -174,9 +174,9 @@ static void update_res_label(void)
     OutputInfo *o = &outputs[selected_output];
     char buf[64];
     snprintf(buf, sizeof(buf), "%ux%u", o->width, o->height);
-    Arg a[1];
-    IswSetArg(a[0], IswNlabel, buf);
-    IswSetValues(res_label, a, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, buf);
+    IswSetValues(res_label, ab.args, ab.count);
 }
 
 /* ---------- callbacks ---------- */
@@ -215,9 +215,9 @@ static void display_apply(void)
 static void display_revert(void)
 {
     current_scale = saved_scale;
-    Arg a[1];
-    IswSetArg(a[0], IswNsliderValue, saved_scale);
-    IswSetValues(scale_slider, a, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgSliderValue(&ab, saved_scale);
+    IswSetValues(scale_slider, ab.args, ab.count);
 }
 
 /* ---------- create ---------- */
@@ -227,10 +227,10 @@ static Widget display_create(Widget parent, IswAppContext app)
     (void)app;
 
     Dimension pw, ph;
-    Arg qargs[20];
-    IswSetArg(qargs[0], IswNwidth, &pw);
-    IswSetArg(qargs[1], IswNheight, &ph);
-    IswGetValues(parent, qargs, 2);
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswArgHeight(&qb, &ph);
+    IswGetValues(parent, qb.args, qb.count);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgDefaultDistance(&ab, 8);

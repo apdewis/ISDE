@@ -393,9 +393,9 @@ void fileview_populate(Fm *fm)
             }
         }
         snprintf(buf, sizeof(buf), "%d folders, %d files", ndirs, nfiles);
-        Arg args[20];
-        IswSetArg(args[0], IswNlabel, buf);
-        IswSetValues(fm->status_label, args, 1);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, buf);
+        IswSetValues(fm->status_label, ab.args, ab.count);
     }
 }
 

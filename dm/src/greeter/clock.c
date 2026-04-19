@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <ISW/IswArgMacros.h>
 
 static void update_clock(IswPointer client_data, IswIntervalId *id)
 {
@@ -20,12 +21,13 @@ static void update_clock(IswPointer client_data, IswIntervalId *id)
     strftime(tbuf, sizeof(tbuf), g->clock_time_fmt, tm);
     strftime(dbuf, sizeof(dbuf), g->clock_date_fmt, tm);
 
-    Arg args[20];
-    IswSetArg(args[0], IswNlabel, tbuf);
-    IswSetValues(g->clock_time, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, tbuf);
+    IswSetValues(g->clock_time, ab.args, ab.count);
 
-    IswSetArg(args[0], IswNlabel, dbuf);
-    IswSetValues(g->clock_date, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, dbuf);
+    IswSetValues(g->clock_date, ab.args, ab.count);
 
     /* Reschedule at the next minute boundary */
     unsigned long ms = (60 - tm->tm_sec) * 1000;

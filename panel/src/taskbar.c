@@ -242,19 +242,16 @@ static void show_window_menu(Panel *p, TaskGroup *g)
         IswRealizeWidget(g->menu);
     }
 
-    Arg args[20];
-    Cardinal n;
-
     Dimension list_w, list_h;
-    n = 0;
-    IswSetArg(args[n], IswNwidth, &list_w);   n++;
-    IswSetArg(args[n], IswNheight, &list_h);  n++;
-    IswGetValues(g->menu_list, args, n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, &list_w);
+    IswArgHeight(&ab, &list_h);
+    IswGetValues(g->menu_list, ab.args, ab.count);
 
     Dimension bw;
-    n = 0;
-    IswSetArg(args[n], IswNborderWidth, &bw); n++;
-    IswGetValues(g->menu, args, n);
+    IswArgBuilderReset(&ab);
+    IswArgBorderWidth(&ab, &bw);
+    IswGetValues(g->menu, ab.args, ab.count);
 
     Position bx, by;
     IswTranslateCoords(g->button, 0, 0, &bx, &by);
@@ -493,8 +490,6 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
 
 static void show_context_menu(Panel *p, TaskGroup *g)
 {
-    Arg args[20];
-
     /* Update dynamic entries */
     if (g->nwindows > 0) {
         IswManageChild(g->ctx_close_all);
@@ -506,8 +501,9 @@ static void show_context_menu(Panel *p, TaskGroup *g)
 
     const char *label = g->pinned ? "Unpin from taskbar"
                                   : "Pin to taskbar";
-    IswSetArg(args[0], IswNlabel, label);
-    IswSetValues(g->ctx_pin, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, label);
+    IswSetValues(g->ctx_pin, ab.args, ab.count);
 
     /* Position above button, bottom flush with panel top */
     Position bx, by;
@@ -518,15 +514,15 @@ static void show_context_menu(Panel *p, TaskGroup *g)
     }
 
     Dimension mh, bw;
-    Cardinal qn = 0;
-    IswSetArg(args[qn], IswNheight, &mh);     qn++;
-    IswSetArg(args[qn], IswNborderWidth, &bw); qn++;
-    IswGetValues(g->ctx_menu, args, qn);
+    IswArgBuilderReset(&ab);
+    IswArgHeight(&ab, &mh);
+    IswArgBorderWidth(&ab, &bw);
+    IswGetValues(g->ctx_menu, ab.args, ab.count);
 
-    Arg margs[2];
-    IswSetArg(margs[0], IswNx, bx);
-    IswSetArg(margs[1], IswNy, by - (Position)mh - (Position)(2 * bw));
-    IswSetValues(g->ctx_menu, margs, 2);
+    IswArgBuilderReset(&ab);
+    IswArgX(&ab, bx);
+    IswArgY(&ab, by - (Position)mh - (Position)(2 * bw));
+    IswSetValues(g->ctx_menu, ab.args, ab.count);
 
     IswPopup(g->ctx_menu, IswGrabNone);
 
@@ -820,11 +816,10 @@ void taskbar_highlight_active(Panel *p)
             ec = &s->taskbar_button;
         }
 
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNbackground, taskbar_pixel(p, ec->bg)); n++;
-        IswSetArg(args[n], IswNforeground, taskbar_pixel(p, ec->fg)); n++;
-        IswSetValues(g->button, args, n);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgBackground(&ab, taskbar_pixel(p, ec->bg));
+        IswArgForeground(&ab, taskbar_pixel(p, ec->fg));
+        IswSetValues(g->button, ab.args, ab.count);
     }
 
     free(active_class);

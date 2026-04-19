@@ -23,11 +23,12 @@ static void update_clock(IswPointer client_data, IswIntervalId *id)
     strftime(tbuf, sizeof(tbuf), p->clock_time_fmt, tm);
     strftime(dbuf, sizeof(dbuf), p->clock_date_fmt, tm);
 
-    Arg args[20];
-    IswSetArg(args[0], IswNlabel, tbuf);
-    IswSetValues(p->clock_time, args, 1);
-    IswSetArg(args[0], IswNlabel, dbuf);
-    IswSetValues(p->clock_date, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, tbuf);
+    IswSetValues(p->clock_time, ab.args, ab.count);
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, dbuf);
+    IswSetValues(p->clock_date, ab.args, ab.count);
 
     /* Schedule next update — align to the next minute boundary */
     unsigned long ms = (60 - tm->tm_sec) * 1000;

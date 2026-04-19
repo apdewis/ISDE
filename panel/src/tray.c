@@ -70,10 +70,9 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     int tray_w = p->ntray * stride + 2;
 
     /* Tell the outer FlexBox our new size */
-    Arg a[20];
-    Cardinal na = 0;
-    IswSetArg(a[na], IswNflexBasis, tray_w); na++;
-    IswSetValues(p->tray_area, a, na);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgFlexBasis(&ab, tray_w);
+    IswSetValues(p->tray_area, ab.args, ab.count);
 
     /* Get physical dimensions after relayout */
     double sf = ISWScaleFactor(p->toplevel);
@@ -135,10 +134,9 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
     int stride = icon_size + 2;
     int tray_w = p->ntray > 0 ? p->ntray * stride + 2 : 2;
 
-    Arg a[20];
-    Cardinal na = 0;
-    IswSetArg(a[na], IswNflexBasis, tray_w); na++;
-    IswSetValues(p->tray_area, a, na);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgFlexBasis(&ab, tray_w);
+    IswSetValues(p->tray_area, ab.args, ab.count);
 
     double sf = ISWScaleFactor(p->toplevel);
     int phys_stride = (int)(stride * sf + 0.5);
@@ -371,10 +369,9 @@ void tray_check_icons(Panel *p)
         int stride = icon_size + 2;
         int tray_w = p->ntray > 0 ? p->ntray * stride + 2 : 2;
 
-        Arg a[20];
-        Cardinal na = 0;
-        IswSetArg(a[na], IswNflexBasis, tray_w); na++;
-        IswSetValues(p->tray_area, a, na);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgFlexBasis(&ab, tray_w);
+        IswSetValues(p->tray_area, ab.args, ab.count);
 
         double sf = ISWScaleFactor(p->toplevel);
         int phys_stride = (int)(stride * sf + 0.5);

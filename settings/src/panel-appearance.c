@@ -103,10 +103,10 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     (void)app;
 
     Dimension pw, ph;
-    Arg qargs[20];
-    IswSetArg(qargs[0], IswNwidth, &pw);
-    IswSetArg(qargs[1], IswNheight, &ph);
-    IswGetValues(parent, qargs, 2);
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswArgHeight(&qb, &ph);
+    IswGetValues(parent, qb.args, qb.count);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgDefaultDistance(&ab, 8);

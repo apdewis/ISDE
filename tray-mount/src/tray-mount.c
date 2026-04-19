@@ -8,6 +8,7 @@
 #include "tray-mount.h"
 
 #include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -144,12 +145,11 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
     /* Give the toplevel a nominal size and suppress mapping —
      * it exists only to provide a connection for IswTrayIconCreate
      * and as the parent for the popup menu. */
-    Arg sa[20];
-    Cardinal sn = 0;
-    IswSetArg(sa[sn], IswNwidth, 1);                  sn++;
-    IswSetArg(sa[sn], IswNheight, 1);                 sn++;
-    IswSetArg(sa[sn], IswNmappedWhenManaged, False);  sn++;
-    IswSetValues(tm->toplevel, sa, sn);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, 1);
+    IswArgHeight(&ab, 1);
+    IswArgMappedWhenManaged(&ab, False);
+    IswSetValues(tm->toplevel, ab.args, ab.count);
 
     IswRealizeWidget(tm->toplevel);
 

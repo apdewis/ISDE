@@ -133,18 +133,18 @@ static void set_greeter_config(const char *key, const char *value)
 
 static const char *get_text(Widget w)
 {
-    Arg args[20];
     String str = NULL;
-    IswSetArg(args[0], IswNstring, &str);
-    IswGetValues(w, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &str);
+    IswGetValues(w, ab.args, ab.count);
     return str ? str : "";
 }
 
 static void set_text(Widget w, const char *str)
 {
-    Arg args[20];
-    IswSetArg(args[0], IswNstring, str);
-    IswSetValues(w, args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, str);
+    IswSetValues(w, ab.args, ab.count);
 }
 
 /* ---------- panel interface ---------- */
@@ -186,9 +186,9 @@ static Widget dm_create(Widget parent, IswAppContext app)
                                  parent, ab.args, ab.count);
 
     Dimension pw;
-    Arg qa[20];
-    IswSetArg(qa[0], IswNwidth, &pw);
-    IswGetValues(parent, qa, 1);
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswGetValues(parent, qb.args, qb.count);
 
     /* Time Format */
     IswArgBuilderReset(&ab);

@@ -95,9 +95,9 @@ static void update_desc_label(int idx)
 {
     char buf[160];
     format_font_desc(buf, sizeof(buf), current[idx].family, current[idx].size);
-    Arg args[20];
-    IswSetArg(args[0], IswNlabel, buf);
-    IswSetValues(desc_labels[idx], args, 1);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, buf);
+    IswSetValues(desc_labels[idx], ab.args, ab.count);
 }
 
 /* ---------- font chooser dialog ---------- */
@@ -155,9 +155,9 @@ static Widget fonts_create(Widget parent, IswAppContext app)
     }
 
     Dimension pw;
-    Arg qa[20];
-    IswSetArg(qa[0], IswNwidth, &pw);
-    IswGetValues(parent, qa, 1);
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswGetValues(parent, qb.args, qb.count);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgDefaultDistance(&ab, 8);

@@ -134,18 +134,20 @@ void navbar_init(Fm *fm)
 
 void navbar_update(Fm *fm)
 {
-    Arg args[20];
+    IswArgBuilder ab = IswArgBuilderInit();
 
-    IswSetArg(args[0], IswNlabel, fm->cwd ? fm->cwd : "/");
-    IswSetValues(fm->path_label, args, 1);
+    IswArgLabel(&ab, fm->cwd ? fm->cwd : "/");
+    IswSetValues(fm->path_label, ab.args, ab.count);
 
-    IswSetArg(args[0], IswNsensitive, fm->hist_pos > 0);
-    IswSetValues(fm->back_btn, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgSensitive(&ab, fm->hist_pos > 0);
+    IswSetValues(fm->back_btn, ab.args, ab.count);
 
-    IswSetArg(args[0], IswNsensitive, fm->hist_pos < fm->hist_count - 1);
-    IswSetValues(fm->fwd_btn, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgSensitive(&ab, fm->hist_pos < fm->hist_count - 1);
+    IswSetValues(fm->fwd_btn, ab.args, ab.count);
 
-    IswSetArg(args[0], IswNsensitive,
-             fm->cwd && strcmp(fm->cwd, "/") != 0);
-    IswSetValues(fm->up_btn, args, 1);
+    IswArgBuilderReset(&ab);
+    IswArgSensitive(&ab, fm->cwd && strcmp(fm->cwd, "/") != 0);
+    IswSetValues(fm->up_btn, ab.args, ab.count);
 }

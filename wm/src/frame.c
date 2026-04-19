@@ -60,13 +60,12 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     int title_w = c->width - btn_area;
     if (title_w < 1) { title_w = 1; }
 
-    Arg args[20];
-    Cardinal n = 0;
-    IswSetArg(args[n], IswNbackground, color_to_pixel(wm, tb->bg)); n++;
-    IswSetArg(args[n], IswNforeground, color_to_pixel(wm, tb->fg)); n++;
-    IswSetArg(args[n], IswNwidth, title_w);                          n++;
-    IswSetArg(args[n], IswNheight, th);                              n++;
-    IswSetValues(c->title_label, args, n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBackground(&ab, color_to_pixel(wm, tb->bg));
+    IswArgForeground(&ab, color_to_pixel(wm, tb->fg));
+    IswArgWidth(&ab, title_w);
+    IswArgHeight(&ab, th);
+    IswSetValues(c->title_label, ab.args, ab.count);
 }
 
 /* ---------- icon paths (resolved once) ---------- */
@@ -157,12 +156,11 @@ static void maximize_callback(Widget w, IswPointer client_data,
                 if (data) {
                     fread(data, 1, len, fp);
                     data[len] = '\0';
-                    Arg a[20];
-                    Cardinal an = 0;
-                    IswSetArg(a[an], IswNimage, data);          an++;
-                    IswSetArg(a[an], IswNwidth, wm->title_height);  an++;
-                    IswSetArg(a[an], IswNheight, wm->title_height); an++;
-                    IswSetValues(c->maximize_btn, a, an);
+                    IswArgBuilder ab = IswArgBuilderInit();
+                    IswArgImage(&ab, data);
+                    IswArgWidth(&ab, wm->title_height);
+                    IswArgHeight(&ab, wm->title_height);
+                    IswSetValues(c->maximize_btn, ab.args, ab.count);
                     free(data);
                 }
                 fclose(fp);
@@ -550,12 +548,11 @@ void frame_update_title(Wm *wm, WmClient *c)
         int title_w = c->width - btn_area;
         if (title_w < 1) { title_w = 1; }
 
-        Arg args[20];
-        Cardinal n = 0;
-        IswSetArg(args[n], IswNlabel, c->title ? c->title : "(untitled)"); n++;
-        IswSetArg(args[n], IswNwidth, title_w);                             n++;
-        IswSetArg(args[n], IswNheight, th);                                 n++;
-        IswSetValues(c->title_label, args, n);
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, c->title ? c->title : "(untitled)");
+        IswArgWidth(&ab, title_w);
+        IswArgHeight(&ab, th);
+        IswSetValues(c->title_label, ab.args, ab.count);
     }
 }
 

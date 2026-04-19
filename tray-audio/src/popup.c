@@ -66,11 +66,10 @@ static void on_mute_toggled(Widget w, IswPointer client_data,
     (void)call_data;
     VolumeRow *r = (VolumeRow *)client_data;
 
-    Arg args[20];
-    Cardinal n = 0;
     Boolean state = False;
-    IswSetArg(args[n], IswNstate, (IswArgVal)&state); n++;
-    IswGetValues(w, args, n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgState(&ab, &state);
+    IswGetValues(w, ab.args, ab.count);
 
     ta_pw_set_mute(r->ta, r->node_id, state ? 1 : 0);
 }
@@ -144,12 +143,10 @@ static void clear_form_children(Widget form)
 {
     WidgetList children;
     Cardinal num;
-    Arg args[20];
-    Cardinal n = 0;
-
-    IswSetArg(args[n], IswNchildren, &children); n++;
-    IswSetArg(args[n], IswNnumChildren, &num); n++;
-    IswGetValues(form, args, n);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBuilderAdd(&ab, IswNchildren, (IswArgVal)&children);
+    IswArgBuilderAdd(&ab, IswNnumChildren, (IswArgVal)&num);
+    IswGetValues(form, ab.args, ab.count);
 
     /* Destroy in reverse to avoid index shifting */
     for (int i = (int)num - 1; i >= 0; i--)
@@ -454,10 +451,9 @@ void ta_popup_update(TrayAudio *ta)
             IswSliderSetValue(r->slider, (int)(vol * 100.0f + 0.5f));
 
         if (r->mute_btn) {
-            Arg args[20];
-            Cardinal n = 0;
-            IswSetArg(args[n], IswNstate, muted ? True : False); n++;
-            IswSetValues(r->mute_btn, args, n);
+            IswArgBuilder ab = IswArgBuilderInit();
+            IswArgState(&ab, muted ? True : False);
+            IswSetValues(r->mute_btn, ab.args, ab.count);
         }
     }
 }
