@@ -192,6 +192,21 @@ static void panel_reconfigure(Panel *p);
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(IswPointer, int *, IswInputId *);
 
+static void panel_ipc_event_handler(Widget w, IswPointer client_data,
+                                    xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+
+    uint32_t cmd;
+    if (!isde_ipc_decode(p->ipc, xev, &cmd, NULL, NULL, NULL, NULL)) {
+        return;
+    }
+    if (cmd == ISDE_CMD_TOGGLE_START_MENU) {
+        startmenu_toggle(p);
+    }
+}
+
 int panel_init(Panel *p, int *argc, char **argv)
 {
     memset(p, 0, sizeof(*p));
@@ -303,10 +318,23 @@ int panel_init(Panel *p, int *argc, char **argv)
     strut.bottom_end_x = p->mon_x + p->mon_w - 1;
     xcb_ewmh_set_wm_strut_partial(ewmh, panel_win, strut);
 
-    /* Watch root for property changes (client list updates) */
-    uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
+    /* Watch root for:
+     *   PROPERTY_CHANGE — client list updates
+     *   STRUCTURE_NOTIFY — required for ClientMessages sent to root with
+     *                      SUBSTRUCTURE_REDIRECT|STRUCTURE_NOTIFY mask
+     *                      (isde_ipc_send uses that mask). */
+    uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE |
+                    XCB_EVENT_MASK_STRUCTURE_NOTIFY;
     xcb_change_window_attributes(p->conn, p->root,
                                  XCB_CW_EVENT_MASK, &mask);
+
+    /* Route root-window events to the shell so raw handlers can receive
+     * IPC ClientMessages (ISW drops unmatched root events otherwise). */
+    IswRegisterDrawable(p->conn, p->root, p->shell);
+    IswAddRawEventHandler(p->shell,
+                         XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+                         True,  /* nonmaskable — needed for ClientMessage */
+                         panel_ipc_event_handler, p);
 
     /* Subscribe to RandR screen change events */
     xcb_randr_select_input(p->conn, p->root,

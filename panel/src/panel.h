@@ -189,6 +189,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class);
 
 /* ---------- startmenu.c ---------- */
 void  startmenu_init(Panel *p);
+void  startmenu_toggle(Panel *p);
 void  startmenu_cleanup(Panel *p);
 
 /* ---------- tray.c ---------- */

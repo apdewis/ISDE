@@ -42,6 +42,7 @@ int isde_ipc_decode(IsdeIpc *ipc, xcb_generic_event_t *ev,
 #define ISDE_CMD_SHUTDOWN   5  /* Request shutdown (with confirmation) */
 #define ISDE_CMD_REBOOT     6  /* Request reboot (with confirmation) */
 #define ISDE_CMD_SUSPEND    7  /* Request suspend */
+#define ISDE_CMD_TOGGLE_START_MENU 8  /* Toggle panel start menu */
 
 #ifdef __cplusplus
 }

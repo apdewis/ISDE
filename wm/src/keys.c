@@ -6,6 +6,7 @@
  *   Alt+F4       — close focused window
  *   Alt+Tab      — cycle focus to next window
  *   Shift+Alt+Tab — cycle focus to previous window
+ *   Super (tap)  — toggle panel start menu
  */
 #include "wm.h"
 
@@ -66,8 +67,15 @@ void wm_keys_setup(Wm *wm)
     /* Super+L — lock screen */
     grab_key(wm, XK_l, MOD_SUPER);
 
+    /* Super tap — open start menu */
+    grab_key(wm, XK_Super_L, 0);
+
     xcb_flush(wm->conn);
 }
+
+/* Super-tap state: set on Super_L press, cleared on any other key event
+ * or modifier press. Fires start-menu toggle on Super_L release when set. */
+static int super_tap_armed;
 
 /* Keysym for Alt_L / Alt_R to detect modifier release */
 #define XK_Alt_L   0xffe9
@@ -81,6 +89,14 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
     /* Mask out NumLock/CapsLock for comparison */
     uint16_t mod = ev->state & (XCB_MOD_MASK_1 | XCB_MOD_MASK_SHIFT |
                                 XCB_MOD_MASK_CONTROL | MOD_SUPER);
+
+    /* Super tap detection: arm on lone Super_L press, disarm on any other
+     * key. The grab only matches when no modifiers are held. */
+    if (sym == XK_Super_L && mod == 0) {
+        super_tap_armed = 1;
+    } else {
+        super_tap_armed = 0;
+    }
 
     /* Escape cancels the window switcher */
     if (sym == XK_Escape && wm->switcher_active) {
@@ -128,10 +144,18 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
 
 void wm_keys_handle_release(Wm *wm, xcb_key_release_event_t *ev)
 {
-    if (!wm->switcher_active) return;
-
     xcb_keysym_t sym = xcb_key_symbols_get_keysym(wm->keysyms,
                                                    ev->detail, 0);
+
+    /* Super_L released while armed = tap — toggle start menu */
+    if (sym == XK_Super_L && super_tap_armed) {
+        super_tap_armed = 0;
+        isde_ipc_send(wm->ipc, ISDE_CMD_TOGGLE_START_MENU, 0, 0, 0, 0);
+        return;
+    }
+
+    if (!wm->switcher_active) return;
+
     /* Commit the selection when Alt is released */
     if (sym == XK_Alt_L || sym == XK_Alt_R) {
         wm_switcher_commit(wm);

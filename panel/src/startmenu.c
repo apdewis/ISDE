@@ -334,6 +334,8 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         break;
 
     case XK_Escape:
+    case XK_Super_L:
+    case XK_Super_R:
         panel_dismiss_popup(p);
         break;
     }
@@ -365,13 +367,16 @@ static void logout_cb(Widget w, IswPointer client_data, IswPointer call_data)
 
 /* ---------- toggle ---------- */
 
-static void toggle_start_menu(Widget w, IswPointer client_data,
-                              IswPointer call_data)
+static void toggle_start_menu_cb(Widget w, IswPointer client_data,
+                                 IswPointer call_data)
 {
     (void)w;
     (void)call_data;
-    Panel *p = (Panel *)client_data;
+    startmenu_toggle((Panel *)client_data);
+}
 
+void startmenu_toggle(Panel *p)
+{
     if (p->active_popup == p->start_shell) {
         panel_dismiss_popup(p);
         return;
@@ -455,7 +460,7 @@ void startmenu_init(Panel *p)
     IswArgBorderWidth(&ab, 0);
     p->start_btn = IswCreateManagedWidget("startBtn", commandWidgetClass,
                                          p->form, ab.args, ab.count);
-    IswAddCallback(p->start_btn, IswNcallback, toggle_start_menu, p);
+    IswAddCallback(p->start_btn, IswNcallback, toggle_start_menu_cb, p);
 
     /* Start menu shell */
     const IsdeColorScheme *scheme_border = isde_theme_current();
