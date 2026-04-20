@@ -297,13 +297,18 @@ static void taskbar_press_handler(Widget w, IswPointer client_data,
         return;
     }
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 1) {
+    if (ev->detail != 1 && ev->detail != 2) {
         return;
     }
 
     TaskClosure *tc = (TaskClosure *)client_data;
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
+
+    if (ev->detail == 2) {
+        launch_app(p, g);
+        return;
+    }
 
     if (g->nwindows <= 1) {
         return;  /* handled by the Command callback on release */
