@@ -336,9 +336,9 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 
 Taskbar and system tray have no overflow handling. When too many task buttons or tray icons exist for the available space, buttons shrink indefinitely (taskbar) or icons overlap/clip (tray). Needs scroll arrows or an overflow menu for both areas, plus a minimum button width for the taskbar.
 
-## Keybinding settings
-
-Add keybinding management to isde-settings and ensure apps accept user settings externally.
+## Global hotkeys and keybinding settings
+- Consider where hotkey management lives, the general approach seems to be that this lives in the WM, but that also couples the other components to isde-wm, however simplifies WM hotkey operations. Need to decide if de-coupling/modularity/portability is more important or not.
+- Add keybinding management to isde-settings and ensure apps accept user settings externally.
 
 ## Extention architecture.
 
