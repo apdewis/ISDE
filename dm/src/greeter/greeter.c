@@ -309,6 +309,7 @@ static void build_ui(Greeter *g)
     IswArgWidth(&ab, INPUT_W);
     IswArgHeight(&ab, input_h);
     IswArgEditType(&ab, IswtextEdit);
+    IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
     IswArgHorizDistance(&ab, input_x);
     IswArgVertDistance(&ab, row1_y);
@@ -341,6 +342,7 @@ static void build_ui(Greeter *g)
     IswArgHeight(&ab, input_h);
     IswArgEditType(&ab, IswtextEdit);
     IswArgEcho(&ab, False);
+    IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
     IswArgHorizDistance(&ab, input_x);
     IswArgVertDistance(&ab, row2_y);
