@@ -3,6 +3,7 @@
  * child.c — child process spawning, reaping, and respawning
  */
 #include "session.h"
+#include "isde/isde-ewmh.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,6 +106,36 @@ void child_kill_all(Session *s)
     /* Disable respawning */
     for (Child *c = s->children; c; c = c->next) {
         c->respawn = 0;
+    }
+
+    /* Phase 0: ask the WM to close every managed client via _NET_CLOSE_WINDOW.
+     * Daemonized apps (VSCodium, Electron apps that call setsid) escape our
+     * process group, so kill(0, SIGTERM) alone misses them. Closing them by
+     * their top-level window goes through the WM regardless of PID lineage
+     * and also gives apps a chance to save state before exiting. */
+    if (s->conn && !xcb_connection_has_error(s->conn)) {
+        IsdeEwmh *ewmh = isde_ewmh_init(s->conn, s->screen_num);
+        if (ewmh) {
+            xcb_window_t *wins = NULL;
+            int n = isde_ewmh_get_client_list(ewmh, &wins);
+            for (int i = 0; i < n; i++) {
+                isde_ewmh_request_close_window(ewmh, wins[i]);
+            }
+            free(wins);
+            xcb_flush(s->conn);
+            isde_ewmh_free(ewmh);
+
+            /* Give apps up to ~3 seconds to save state and exit cleanly. */
+            for (int i = 0; i < 60; i++) {
+                int status;
+                pid_t pid;
+                while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+                    Child *c = child_find_pid(s, pid);
+                    if (c) { child_remove(s, c); }
+                }
+                nanosleep(&ts, NULL);
+            }
+        }
     }
 
     /* Phase 1: SIGTERM everything in our process group */

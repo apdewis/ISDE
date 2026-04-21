@@ -496,15 +496,14 @@ int session_init(Session *s)
     init_system_bus(s);
 
     /* XCB connection for IPC (ISDE_CMD_LOGOUT etc.) */
-    int screen_num;
-    s->conn = xcb_connect(getenv("DISPLAY"), &screen_num);
+    s->conn = xcb_connect(getenv("DISPLAY"), &s->screen_num);
     if (!xcb_connection_has_error(s->conn)) {
-        s->ipc = isde_ipc_init(s->conn, screen_num);
+        s->ipc = isde_ipc_init(s->conn, s->screen_num);
 
         /* Select StructureNotify on root so IPC ClientMessages are delivered */
         xcb_screen_iterator_t it =
             xcb_setup_roots_iterator(xcb_get_setup(s->conn));
-        for (int i = 0; i < screen_num; i++) { xcb_screen_next(&it); }
+        for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
         uint32_t ev_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
         xcb_change_window_attributes(s->conn, it.data->root,
                                      XCB_CW_EVENT_MASK, &ev_mask);

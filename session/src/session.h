@@ -42,6 +42,7 @@ typedef struct Session {
 
     /* XCB / IPC */
     xcb_connection_t *conn;
+    int               screen_num;
     IsdeIpc          *ipc;
 
     /* Xt */
