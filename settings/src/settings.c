@@ -369,7 +369,6 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswArgBuilderReset(&ab);
     IswArgFromVert(&ab, s->content_vp);
     IswArgLabel(&ab, "Revert");
-    IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, btn_w);
     IswArgHeight(&ab, btn_h - btn_pad);
     IswArgInternalWidth(&ab, btn_pad);
@@ -388,7 +387,6 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswArgBuilderReset(&ab);
     IswArgFromVert(&ab, s->content_vp);
     IswArgLabel(&ab, "Apply");
-    IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, btn_w);
     IswArgHeight(&ab, btn_h - btn_pad);
     IswArgInternalWidth(&ab, btn_pad);

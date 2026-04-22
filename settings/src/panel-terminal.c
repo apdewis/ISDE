@@ -170,7 +170,6 @@ static Widget terminal_create(Widget parent, IswAppContext app)
 
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Edit...");
-    IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, 80);
     IswArgFromHoriz(&ab, font_desc_lbl);
     IswArgLeft(&ab, IswChainLeft);

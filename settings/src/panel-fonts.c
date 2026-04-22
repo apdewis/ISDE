@@ -233,7 +233,6 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         /* Edit button */
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "Edit...");
-        IswArgBorderWidth(&ab, 0);
         IswArgWidth(&ab, BUTTON_W);
         IswArgFromHoriz(&ab, desc_labels[i]);
         IswArgLeft(&ab, IswChainLeft);
