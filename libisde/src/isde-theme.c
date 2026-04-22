@@ -849,10 +849,12 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Viewport.background", s->bg);
     res[i++] = fmt_color("*MainWindow.background", s->bg);
 
-    /* Buttons — rounded stroke border (Command default), no X11 border */
+    /* Buttons — 3px rounded border */
     res[i++] = fmt_color("*Command.background", s->bg_bright);
     res[i++] = fmt_color("*Command.foreground", s->fg);
     res[i++] = fmt_color("*Command.borderColor", s->border);
+    res[i++] = strdup("*Command.borderWidth: 1");
+    res[i++] = strdup("*Command.cornerRadius: 3");
 
     /* Labels */
     res[i++] = fmt_color("*Label.background", s->bg);
