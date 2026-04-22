@@ -332,6 +332,10 @@ Install targets: both binaries to `${CMAKE_INSTALL_BINDIR}`, PAM service to `${D
 - **libisde:** New IPC command constants added to `isde-ipc.h`.
 - **common/data/isde.desktop:** `Type` changed to `XSession`.
 
+## Theme resources: merge into Xrm database
+
+`isde_theme_build_resources()` returns strings that are currently passed to `IswAppInitialize` as Xt fallback resources. Fallbacks are only consulted when the resource DB is otherwise empty, so these values silently stop applying if a user ever has `.Xdefaults`, an app-defaults file, or `xrdb`-loaded resources present. Merge each line into the actual Xrm DB via `XrmPutLineResource(XtDatabase(dpy), ...)` after display open, so theme values participate in normal resource lookup and specificity rules regardless of what else is loaded.
+
 ## Panel overflow handling
 
 Taskbar and system tray have no overflow handling. When too many task buttons or tray icons exist for the available space, buttons shrink indefinitely (taskbar) or icons overlap/clip (tray). Needs scroll arrows or an overflow menu for both areas, plus a minimum button width for the taskbar.
