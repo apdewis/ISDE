@@ -127,6 +127,11 @@ typedef struct Panel {
     IsdeDesktopEntry **desktop_entries;
     int                ndesktop;
 
+    /* .desktop directory watch (inotify) */
+    int                desktop_inotify_fd;
+    IswInputId         desktop_input_id;
+    IswIntervalId      desktop_refresh_timer;
+
     /* XCB / EWMH */
     xcb_connection_t  *conn;
     xcb_screen_t      *screen;
@@ -173,6 +178,7 @@ typedef struct Panel {
 
 /* ---------- panel.c ---------- */
 int   panel_init(Panel *p, int *argc, char **argv);
+void  panel_reload_desktop_entries(Panel *p);
 void  panel_show_popup(Panel *p, Widget popup);
 void  panel_dismiss_popup(Panel *p);
 void  panel_run(Panel *p);

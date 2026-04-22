@@ -15,6 +15,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __linux__
+#include <sys/inotify.h>
+#endif
+
 #include <xcb/xcb_keysyms.h>
 #include <X11/keysym.h>
 
@@ -423,6 +427,159 @@ void startmenu_toggle(Panel *p)
     xcb_flush(p->conn);
 }
 
+/* ---------- refresh / watch ---------- */
+
+/* Backing array for cat_box strings; List widget keeps the pointer, so we
+ * retain ownership here and free the previous array on each rebuild. */
+static String *cat_names_backing;
+
+static void free_categories(Panel *p)
+{
+    for (int i = 0; i < p->ncategories; i++) {
+        free(p->categories[i].apps);
+    }
+    free(p->categories);
+    p->categories = NULL;
+    p->ncategories = 0;
+}
+
+static void startmenu_refresh(Panel *p)
+{
+    /* Menu is closed on refresh so widget pointers stay valid but nothing
+     * is currently displayed from the stale data. */
+    if (p->active_popup == p->start_shell) {
+        panel_dismiss_popup(p);
+    }
+
+    free_categories(p);
+    panel_reload_desktop_entries(p);
+    build_categories(p);
+
+    String *names = malloc((p->ncategories + 1) * sizeof(String));
+    for (int i = 0; i < p->ncategories; i++) {
+        names[i] = (String)p->categories[i].label;
+    }
+    names[p->ncategories] = NULL;
+
+    IswListChange(p->cat_box, names, p->ncategories, 0, True);
+    free(cat_names_backing);
+    cat_names_backing = names;
+
+    /* App pane shows stale pointers into freed categories; clear it. */
+    static String empty[] = { NULL };
+    IswListChange(p->app_box, empty, 0, 0, True);
+    IswUnmapWidget(p->app_viewport);
+
+    p->active_cat = -1;
+    p->cat_highlight = -1;
+    p->app_highlight = -1;
+}
+
+#ifdef __linux__
+#define DESKTOP_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MOVED_FROM | \
+                            IN_MOVED_TO | IN_MODIFY | IN_ATTRIB)
+#define DESKTOP_REFRESH_DEBOUNCE_MS 300
+
+static void desktop_refresh_timer_cb(IswPointer cd, IswIntervalId *id)
+{
+    (void)id;
+    Panel *p = (Panel *)cd;
+    p->desktop_refresh_timer = 0;
+    startmenu_refresh(p);
+}
+
+static void desktop_watch_cb(IswPointer cd, int *fd, IswInputId *id)
+{
+    (void)id;
+    Panel *p = (Panel *)cd;
+
+    char buf[4096]
+        __attribute__((aligned(__alignof__(struct inotify_event))));
+    ssize_t len;
+    int saw_desktop = 0;
+
+    while ((len = read(*fd, buf, sizeof(buf))) > 0) {
+        for (char *ptr = buf; ptr < buf + len; ) {
+            struct inotify_event *ev = (struct inotify_event *)ptr;
+            if (ev->len > 0) {
+                /* Only care about .desktop files */
+                const char *dot = strrchr(ev->name, '.');
+                if (dot && strcmp(dot, ".desktop") == 0) {
+                    saw_desktop = 1;
+                }
+            }
+            ptr += sizeof(*ev) + ev->len;
+        }
+    }
+
+    if (saw_desktop) {
+        if (p->desktop_refresh_timer) {
+            IswRemoveTimeOut(p->desktop_refresh_timer);
+        }
+        p->desktop_refresh_timer = IswAppAddTimeOut(
+            p->app, DESKTOP_REFRESH_DEBOUNCE_MS,
+            desktop_refresh_timer_cb, p);
+    }
+}
+
+static void desktop_watch_add_dir(Panel *p, const char *path)
+{
+    /* Non-existent dirs are skipped; directories created later won't be
+     * picked up without a restart, but that's the usual tradeoff. */
+    inotify_add_watch(p->desktop_inotify_fd, path, DESKTOP_WATCH_MASK);
+}
+
+static void desktop_watch_start(Panel *p)
+{
+    p->desktop_inotify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (p->desktop_inotify_fd < 0) {
+        return;
+    }
+
+    const char *data_dirs = isde_xdg_data_dirs();
+    const char *dp = data_dirs;
+    while (dp && *dp) {
+        const char *colon = strchr(dp, ':');
+        size_t dlen = colon ? (size_t)(colon - dp) : strlen(dp);
+        if (dlen > 0) {
+            char path[512];
+            snprintf(path, sizeof(path), "%.*s/applications",
+                     (int)dlen, dp);
+            desktop_watch_add_dir(p, path);
+        }
+        dp = colon ? colon + 1 : NULL;
+    }
+
+    char home_path[512];
+    snprintf(home_path, sizeof(home_path), "%s/applications",
+             isde_xdg_data_home());
+    desktop_watch_add_dir(p, home_path);
+
+    p->desktop_input_id = IswAppAddInput(p->app, p->desktop_inotify_fd,
+                                         (IswPointer)IswInputReadMask,
+                                         desktop_watch_cb, p);
+}
+
+static void desktop_watch_stop(Panel *p)
+{
+    if (p->desktop_refresh_timer) {
+        IswRemoveTimeOut(p->desktop_refresh_timer);
+        p->desktop_refresh_timer = 0;
+    }
+    if (p->desktop_input_id) {
+        IswRemoveInput(p->desktop_input_id);
+        p->desktop_input_id = 0;
+    }
+    if (p->desktop_inotify_fd >= 0) {
+        close(p->desktop_inotify_fd);
+        p->desktop_inotify_fd = -1;
+    }
+}
+#else
+static void desktop_watch_start(Panel *p) { (void)p; }
+static void desktop_watch_stop(Panel *p) { (void)p; }
+#endif
+
 /* ---------- init / cleanup ---------- */
 
 void startmenu_init(Panel *p)
@@ -523,7 +680,8 @@ void startmenu_init(Panel *p)
     p->cat_box = IswCreateManagedWidget("catList", listWidgetClass,
                                        p->cat_viewport, ab.args, ab.count);
     IswAddCallback(p->cat_box, IswNcallback, category_selected, p);
-    /* Don't free cat_names — the List widget holds a pointer to it */
+    /* List widget holds the pointer — track it for later free on refresh */
+    cat_names_backing = cat_names;
 
     /* Viewport for app list (right pane) — lighter tone, vertical scroll */
     IswArgBuilderReset(&ab);
@@ -659,16 +817,18 @@ void startmenu_init(Panel *p)
 
     /* Hide app list until a category is hovered */
     IswUnmapWidget(p->app_viewport);
+
+    p->desktop_inotify_fd = -1;
+    desktop_watch_start(p);
 }
 
 void startmenu_cleanup(Panel *p)
 {
-    for (int i = 0; i < p->ncategories; i++) {
-        free(p->categories[i].apps);
-    }
-    free(p->categories);
-    p->categories = NULL;
-    p->ncategories = 0;
+    desktop_watch_stop(p);
+
+    free_categories(p);
+    free(cat_names_backing);
+    cat_names_backing = NULL;
 
     free(shutdown_icon_path);
     shutdown_icon_path = NULL;

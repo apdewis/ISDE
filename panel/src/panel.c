@@ -89,6 +89,25 @@ static void load_desktop_entries(Panel *p)
     }
 }
 
+void panel_reload_desktop_entries(Panel *p)
+{
+    for (int i = 0; i < p->ndesktop; i++) {
+        isde_desktop_free(p->desktop_entries[i]);
+    }
+    free(p->desktop_entries);
+    p->desktop_entries = NULL;
+    p->ndesktop = 0;
+
+    load_desktop_entries(p);
+
+    /* Taskbar groups cache indices into desktop_entries; invalidate them
+     * so they aren't dereferenced against the new (renumbered) array.
+     * Pre-built context menus retain any actions from the previous scan. */
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        g->desktop_index = -1;
+    }
+}
+
 /* Find a .desktop entry whose WM_CLASS (StartupWMClass) or executable
  * name matches the given class */
 static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
