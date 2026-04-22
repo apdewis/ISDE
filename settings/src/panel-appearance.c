@@ -139,7 +139,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
 
     int lbl_w = 150;
-    int list_w = 150;
+    int list_w = 250;
 
     /* --- Colour Scheme --- */
     IswArgBuilderReset(&ab);
@@ -164,21 +164,29 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     saved_scheme_idx = find_index(scheme_names_arr, scheme_count, cur_scheme);
 
     IswArgBuilderReset(&ab);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, True);
+    IswArgHeight(&ab, list_height);
+    IswArgWidth(&ab, list_w);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFromHoriz(&ab, scheme_lbl);
+    IswArgLeft(&ab, IswChainLeft);
+    if (prev) { IswArgFromVert(&ab, prev); }
+    Widget scheme_vp = IswCreateManagedWidget("schemeVp", viewportWidgetClass,
+                                              form, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgList(&ab, scheme_names_arr);
     IswArgNumberStrings(&ab, scheme_count);
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgHeight(&ab, list_height);
-    IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 0);
-    IswArgFromHoriz(&ab, scheme_lbl);
-    IswArgLeft(&ab, IswChainLeft);
-    if (prev) { IswArgFromVert(&ab, prev); }
     scheme_list = IswCreateManagedWidget("schemeList", listWidgetClass,
-                                        form, ab.args, ab.count);
+                                        scheme_vp, ab.args, ab.count);
     IswListHighlight(scheme_list, saved_scheme_idx);
-    prev = scheme_list;
+    prev = scheme_vp;
 
     /* --- Cursor Theme --- */
     IswArgBuilderReset(&ab);
@@ -203,21 +211,29 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     saved_cursor_idx = find_index(cursor_names_arr, cursor_count, cur_cursor);
 
     IswArgBuilderReset(&ab);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, True);
+    IswArgHeight(&ab, list_height);
+    IswArgWidth(&ab, list_w);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFromHoriz(&ab, cursor_lbl);
+    IswArgFromVert(&ab, prev);
+    IswArgLeft(&ab, IswChainLeft);
+    Widget cursor_vp = IswCreateManagedWidget("cursorVp", viewportWidgetClass,
+                                              form, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgList(&ab, cursor_names_arr);
     IswArgNumberStrings(&ab, cursor_count);
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgHeight(&ab, list_height);
-    IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 0);
-    IswArgFromHoriz(&ab, cursor_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
-                                        form, ab.args, ab.count);
+                                        cursor_vp, ab.args, ab.count);
     IswListHighlight(cursor_list, saved_cursor_idx);
-    prev = cursor_list;
+    prev = cursor_vp;
 
     /* --- Icon Theme --- */
     IswArgBuilderReset(&ab);
@@ -242,21 +258,29 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     saved_icon_idx = find_index(icon_names_arr, icon_count, cur_icon);
 
     IswArgBuilderReset(&ab);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgUseRight(&ab, True);
+    IswArgHeight(&ab, list_height);
+    IswArgWidth(&ab, list_w);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFromHoriz(&ab, icon_lbl);
+    IswArgFromVert(&ab, prev);
+    IswArgLeft(&ab, IswChainLeft);
+    Widget icon_vp = IswCreateManagedWidget("iconVp", viewportWidgetClass,
+                                            form, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgList(&ab, icon_names_arr);
     IswArgNumberStrings(&ab, icon_count);
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgHeight(&ab, list_height);
-    IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 0);
-    IswArgFromHoriz(&ab, icon_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
-                                      form, ab.args, ab.count);
+                                      icon_vp, ab.args, ab.count);
     IswListHighlight(icon_list, saved_icon_idx);
-    prev = icon_list;
+    prev = icon_vp;
 
     free(cur_scheme);
     free(cur_cursor);
