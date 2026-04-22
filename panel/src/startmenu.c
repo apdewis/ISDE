@@ -64,7 +64,7 @@ static void set_start_btn_active(Panel *p, int active)
     IswSetValues(p->start_btn, ab.args, ab.count);
 }
 
-#define MENU_WIDTH       400
+#define MENU_WIDTH       600
 #define MENU_HEIGHT      350
 #define CAT_PANE_WIDTH   150
 #define TOOLBAR_HEIGHT   28
