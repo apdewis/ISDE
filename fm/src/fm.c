@@ -473,6 +473,97 @@ void fm_register_context_menu(Fm *fm, Widget w)
     IswAddEventHandler(w, XCB_EVENT_MASK_BUTTON_PRESS, False, ctx_handler, fm);
 }
 
+/* ---------- cwd directory watch ---------- */
+
+#ifdef __linux__
+#define CWD_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | \
+                        IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF)
+#define CWD_REFRESH_DEBOUNCE_MS 150
+
+static void cwd_refresh_timer_cb(IswPointer cd, IswIntervalId *id)
+{
+    (void)id;
+    Fm *fm = (Fm *)cd;
+    fm->cwd_refresh_timer = 0;
+    fm_refresh(fm);
+}
+
+static void cwd_watch_cb(IswPointer cd, int *fd, IswInputId *id)
+{
+    (void)id;
+    Fm *fm = (Fm *)cd;
+
+    char buf[4096]
+        __attribute__((aligned(__alignof__(struct inotify_event))));
+    ssize_t len;
+    int need_refresh = 0;
+
+    while ((len = read(*fd, buf, sizeof(buf))) > 0) {
+        for (char *ptr = buf; ptr < buf + len; ) {
+            struct inotify_event *ev = (struct inotify_event *)ptr;
+            if (ev->mask & (IN_IGNORED | IN_Q_OVERFLOW)) {
+                /* Watch gone (dir removed) or events dropped — just refresh */
+                need_refresh = 1;
+            } else {
+                need_refresh = 1;
+            }
+            ptr += sizeof(*ev) + ev->len;
+        }
+    }
+
+    if (need_refresh) {
+        /* Debounce: coalesce bursts of events */
+        if (fm->cwd_refresh_timer) {
+            IswRemoveTimeOut(fm->cwd_refresh_timer);
+        }
+        fm->cwd_refresh_timer = IswAppAddTimeOut(
+            fm->app_state->app, CWD_REFRESH_DEBOUNCE_MS,
+            cwd_refresh_timer_cb, fm);
+    }
+}
+
+static void cwd_watch_stop(Fm *fm)
+{
+    if (fm->cwd_refresh_timer) {
+        IswRemoveTimeOut(fm->cwd_refresh_timer);
+        fm->cwd_refresh_timer = 0;
+    }
+    if (fm->cwd_input_id) {
+        IswRemoveInput(fm->cwd_input_id);
+        fm->cwd_input_id = 0;
+    }
+    if (fm->cwd_inotify_fd >= 0) {
+        close(fm->cwd_inotify_fd);
+        fm->cwd_inotify_fd = -1;
+    }
+    fm->cwd_wd = -1;
+}
+
+static void cwd_watch_start(Fm *fm, const char *path)
+{
+    cwd_watch_stop(fm);
+
+    fm->cwd_inotify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (fm->cwd_inotify_fd < 0) {
+        return;
+    }
+
+    fm->cwd_wd = inotify_add_watch(fm->cwd_inotify_fd, path, CWD_WATCH_MASK);
+    if (fm->cwd_wd < 0) {
+        close(fm->cwd_inotify_fd);
+        fm->cwd_inotify_fd = -1;
+        return;
+    }
+
+    fm->cwd_input_id = IswAppAddInput(fm->app_state->app, fm->cwd_inotify_fd,
+                                      (IswPointer)IswInputReadMask,
+                                      cwd_watch_cb, fm);
+}
+#else
+static void cwd_watch_start(Fm *fm, const char *path) { (void)fm; (void)path; }
+static void cwd_watch_stop(Fm *fm) { (void)fm; }
+#endif
+
 /* ---------- navigation ---------- */
 
 void fm_navigate(Fm *fm, const char *path)
@@ -497,6 +588,8 @@ void fm_navigate(Fm *fm, const char *path)
         fm->history[fm->hist_pos] = strdup(new_path);
         fm->hist_count = fm->hist_pos + 1;
     }
+
+    cwd_watch_start(fm, fm->cwd);
 
     fileview_populate(fm);
     navbar_update(fm);
@@ -763,6 +856,7 @@ static void fm_destroy_cb(Widget w, IswPointer cd, IswPointer call)
     FmApp *app = fm->app_state;
     app_remove_window(app, fm);
     /* Free per-window state (widgets are destroyed by Xt) */
+    cwd_watch_stop(fm);
     fm_dismiss_context(fm);
     ctx_free_dynamic(fm);
     dnd_cleanup(fm);
@@ -1061,6 +1155,8 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm->app_state = app;
     fm->rename_index = -1;
     fm->last_click_index = -1;
+    fm->cwd_inotify_fd = -1;
+    fm->cwd_wd = -1;
 
     load_window_config(fm);
 
@@ -1134,6 +1230,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm->hist_count = 1;
 
     browser_read_dir(fm, fm->cwd);
+    cwd_watch_start(fm, fm->cwd);
 
     IswRealizeWidget(fm->toplevel);
 

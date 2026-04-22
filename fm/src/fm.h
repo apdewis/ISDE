@@ -278,6 +278,12 @@ typedef struct Fm {
     int            dnd_ndrag_paths;
     Boolean        dnd_drop_was_noop;
     int            dnd_drop_highlight; /* entry index highlighted as drop target, -1 = none */
+
+    /* Directory watch (inotify on cwd) */
+    int            cwd_inotify_fd;
+    int            cwd_wd;
+    IswInputId     cwd_input_id;
+    IswIntervalId  cwd_refresh_timer;  /* debounce */
 } Fm;
 
 /* ---------- Context for storing Fm* on shell windows ---------- */
