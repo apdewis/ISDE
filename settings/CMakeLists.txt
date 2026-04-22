@@ -7,6 +7,7 @@ add_executable(isde-settings
     src/panel-display.c
     src/panel-desktops.c
     src/panel-fonts.c
+    src/panel-terminal.c
     src/panel-dm.c
 )
 

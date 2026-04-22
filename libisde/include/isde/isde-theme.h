@@ -56,6 +56,16 @@ typedef struct {
     IsdeElementColors taskbar_button;       /* taskbar button (no windows) */
     IsdeElementColors taskbar_button_active; /* taskbar button (has windows) */
     IsdeElementColors taskbar_button_focus;  /* taskbar button (focused app) */
+
+    /* Terminal palette — 16 ANSI + foreground + background + cursor.
+     * Values are 0xRRGGBB. If terminal_valid is 0 the palette was not
+     * explicitly provided by the theme and callers should fall back to
+     * defaults derived from bg/fg. */
+    int          terminal_valid;
+    unsigned int terminal_ansi[16];
+    unsigned int terminal_fg;
+    unsigned int terminal_bg;
+    unsigned int terminal_cursor;
 } IsdeColorScheme;
 
 /* Load a named colour scheme from the theme directories.

@@ -113,7 +113,8 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         SEC_TITLEBAR, SEC_TITLEBAR_ACTIVE, SEC_TITLEBAR_BUTTON,
         SEC_CLOSE_BUTTON, SEC_MENU, SEC_MENU_ITEM,
         SEC_TASKBAR, SEC_TASKBAR_BUTTON,
-        SEC_TASKBAR_BUTTON_ACTIVE, SEC_TASKBAR_BUTTON_FOCUS
+        SEC_TASKBAR_BUTTON_ACTIVE, SEC_TASKBAR_BUTTON_FOCUS,
+        SEC_TERMINAL
     } section = SEC_NONE;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -133,6 +134,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
             else if (strcmp(line, "[TaskbarButton]")       == 0) { section = SEC_TASKBAR_BUTTON; }
             else if (strcmp(line, "[TaskbarButtonActive]") == 0) { section = SEC_TASKBAR_BUTTON_ACTIVE; }
             else if (strcmp(line, "[TaskbarButtonFocus]")  == 0) { section = SEC_TASKBAR_BUTTON_FOCUS; }
+            else if (strcmp(line, "[Terminal]")            == 0) { section = SEC_TERMINAL; }
             else { section = SEC_NONE; }
             continue;
         }
@@ -178,6 +180,24 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         case SEC_TASKBAR_BUTTON:        parse_element(&s->taskbar_button,        key, val); break;
         case SEC_TASKBAR_BUTTON_ACTIVE: parse_element(&s->taskbar_button_active, key, val); break;
         case SEC_TASKBAR_BUTTON_FOCUS:  parse_element(&s->taskbar_button_focus,  key, val); break;
+
+        case SEC_TERMINAL: {
+            unsigned int c = parse_hex_color(val);
+            if (strncmp(key, "Color", 5) == 0) {
+                int idx = atoi(key + 5);
+                if (idx >= 0 && idx < 16) {
+                    s->terminal_ansi[idx] = c;
+                    s->terminal_valid = 1;
+                }
+            } else if (strcmp(key, "Foreground") == 0) {
+                s->terminal_fg = c; s->terminal_valid = 1;
+            } else if (strcmp(key, "Background") == 0) {
+                s->terminal_bg = c; s->terminal_valid = 1;
+            } else if (strcmp(key, "Cursor") == 0) {
+                s->terminal_cursor = c; s->terminal_valid = 1;
+            }
+            break;
+        }
         default: break;
         }
     }
@@ -199,6 +219,27 @@ IsdeColorScheme *isde_scheme_load(const char *name)
     element_defaults(&s->taskbar_button,       s->bg_light,  s->fg,       s->border);
     element_defaults(&s->taskbar_button_active,s->select_bg, s->fg,       s->border);
     element_defaults(&s->taskbar_button_focus, s->active,    s->fg_light, s->active);
+
+    /* Terminal fallbacks: derive FG/BG/cursor from the general scheme;
+     * supply a built-in ANSI palette when the theme did not set one. */
+    if (!s->terminal_fg) { s->terminal_fg = s->fg; }
+    if (!s->terminal_bg) { s->terminal_bg = s->bg; }
+    if (!s->terminal_cursor) { s->terminal_cursor = s->fg; }
+    {
+        static const unsigned int default_ansi[16] = {
+            0x000000, 0xCD3131, 0x0DBC79, 0xE5E510,
+            0x2472C8, 0xBC3FBC, 0x11A8CD, 0xE5E5E5,
+            0x666666, 0xF14C4C, 0x23D18B, 0xF5F543,
+            0x3B8EEA, 0xD670D6, 0x29B8DB, 0xFFFFFF,
+        };
+        int any = 0;
+        for (int i = 0; i < 16; i++) {
+            if (s->terminal_ansi[i]) { any = 1; break; }
+        }
+        if (!any) {
+            memcpy(s->terminal_ansi, default_ansi, sizeof(default_ansi));
+        }
+    }
 
     return s;
 }

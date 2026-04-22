@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ISDE Terminal
+GenericName=Terminal
+Comment=Terminal emulator for the ISDE desktop
+Exec=isde-term
+Icon=isde-term
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;commandline;cmd;
+StartupNotify=true

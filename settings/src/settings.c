@@ -284,6 +284,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     register_panel(s, &panel_keyboard, NULL);
     register_panel(s, &panel_appearance, NULL);
     register_panel(s, &panel_fonts, NULL);
+    register_panel(s, &panel_terminal, NULL);
     register_panel(s, &panel_display, NULL);
     register_panel(s, &panel_desktops, NULL);
     register_panel(s, &panel_dm, NULL);
@@ -414,6 +415,7 @@ int settings_init(Settings *s, int *argc, char **argv)
         }
         panel_appearance_set_dbus(s->dbus);
         panel_fonts_set_dbus(s->dbus);
+        panel_terminal_set_dbus(s->dbus);
         panel_display_set_dbus(s->dbus);
         panel_desktops_set_dbus(s->dbus);
     }
