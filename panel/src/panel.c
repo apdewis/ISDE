@@ -503,6 +503,7 @@ void panel_dismiss_popup(Panel *p)
     /* Reset start button to inactive state and release keyboard grab */
     if (p->active_popup == p->start_shell) {
         xcb_ungrab_keyboard(p->conn, XCB_CURRENT_TIME);
+        xcb_ungrab_pointer(p->conn, XCB_CURRENT_TIME);
         xcb_flush(p->conn);
         const IsdeColorScheme *s = isde_theme_current();
         if (s) {

@@ -240,6 +240,23 @@ static void app_selected(Widget w, IswPointer client_data,
 
 static xcb_key_symbols_t *key_syms;
 
+static void menu_button_handler(Widget w, IswPointer client_data,
+                                xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)cont;
+    Panel *p = (Panel *)client_data;
+    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+        return;
+    }
+    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
+    /* With owner_events=1 on the pointer grab, clicks inside our own
+     * windows deliver to those windows normally. Clicks outside deliver
+     * to the grab window (the shell). Dismiss on the latter. */
+    if (bev->event == IswWindow(w)) {
+        panel_dismiss_popup(p);
+    }
+}
+
 static void menu_key_handler(Widget w, IswPointer client_data,
                              xcb_generic_event_t *xev, Boolean *cont)
 {
@@ -424,6 +441,13 @@ void startmenu_toggle(Panel *p)
     xcb_grab_keyboard(p->conn, 1, IswWindow(p->start_shell),
                       XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
                       XCB_GRAB_MODE_ASYNC);
+    /* owner_events=1 so clicks on our own child widgets still dispatch
+     * normally; clicks outside deliver to the shell and dismiss. */
+    xcb_grab_pointer(p->conn, 1, IswWindow(p->start_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
     xcb_flush(p->conn);
 }
 
@@ -737,6 +761,8 @@ void startmenu_init(Panel *p)
     /* Keyboard navigation via event handler on the shell */
     IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       menu_key_handler, p);
+    IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_BUTTON_PRESS, False,
+                      menu_button_handler, p);
 
     /* Bottom toolbar — right-aligned action buttons.
      * No defaultDistance override: the Form's default 4px acts as bottom margin,
