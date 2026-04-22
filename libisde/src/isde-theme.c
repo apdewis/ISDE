@@ -987,6 +987,11 @@ char **isde_theme_build_resources(void)
     /* Settings sidebar — lighter background to match fm/startmenu convention */
     res[i++] = fmt_color("*panelList.background", s->bg_light);
 
+    /* FontChooser list panes — match sidebar convention */
+    res[i++] = fmt_color("*familyList.background", s->bg_light);
+    res[i++] = fmt_color("*styleList.background", s->bg_light);
+    res[i++] = fmt_color("*sizeList.background", s->bg_light);
+
     /* Settings panel list widgets — match sidebar background */
     res[i++] = fmt_color("*schemeList.background", s->bg_light);
     res[i++] = fmt_color("*cursorList.background", s->bg_light);
