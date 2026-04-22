@@ -53,8 +53,11 @@ struct TermWidget {
     xcb_key_symbols_t *key_syms;
 
     /* selection (cell coords) */
-    int  sel_active;
-    int  sel_pressed;
+    int  sel_active;      /* a selection currently exists on screen */
+    int  sel_pressed;     /* left button held down */
+    int  sel_started;     /* tsm_screen_selection_start has been called this drag */
+    int  press_cx;
+    int  press_cy;
 
     /* preferred initial geometry */
     int  initial_cols;
@@ -336,6 +339,10 @@ static void handle_key_press(TermWidget *t, xcb_key_press_event_t *kev)
                                             mods, uc);
     if (consumed) {
         tsm_screen_sb_reset(t->screen);
+        if (t->sel_active) {
+            tsm_screen_selection_reset(t->screen);
+            t->sel_active = 0;
+        }
         request_redraw(t);
     }
 }
@@ -362,13 +369,19 @@ static void handle_button(TermWidget *t, xcb_button_press_event_t *bev, bool pre
 
     if (bev->detail == 1 /* left */) {
         if (press) {
-            tsm_screen_selection_start(t->screen, cx, cy);
             t->sel_pressed = 1;
-            t->sel_active = 1;
+            t->sel_started = 0;
+            t->press_cx = cx;
+            t->press_cy = cy;
         } else {
             t->sel_pressed = 0;
+            if (!t->sel_started && t->sel_active) {
+                /* Simple click with no drag: clear any existing selection. */
+                tsm_screen_selection_reset(t->screen);
+                t->sel_active = 0;
+                request_redraw(t);
+            }
         }
-        request_redraw(t);
         return;
     }
 
@@ -385,6 +398,12 @@ static void handle_motion(TermWidget *t, xcb_motion_notify_event_t *mev)
     int cy = (int)(mev->event_y / t->cell_h);
     if (cx < 0) cx = 0;
     if (cy < 0) cy = 0;
+    if (!t->sel_started) {
+        if (cx == t->press_cx && cy == t->press_cy) return;
+        tsm_screen_selection_start(t->screen, t->press_cx, t->press_cy);
+        t->sel_started = 1;
+        t->sel_active  = 1;
+    }
     tsm_screen_selection_target(t->screen, cx, cy);
     request_redraw(t);
 }
