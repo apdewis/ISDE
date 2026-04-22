@@ -968,8 +968,11 @@ char **isde_theme_build_resources(void)
 
     /* Navbar — lighter background, dark border */
     res[i++] = fmt_color("*navBar.background", s->bg_light);
-    res[i++] = fmt_color("*navBar.borderColor", s->fg);
-    res[i++] = fmt_color("*placesVp.borderColor", s->fg);
+    res[i++] = fmt_color("*navBar.borderColor", s->border);
+    res[i++] = fmt_color("*placesVp.borderColor", s->border);
+
+    /* Settings sidebar — lighter background to match fm/startmenu convention */
+    res[i++] = fmt_color("*panelList.background", s->bg_light);
 
     /* Taskbar — square buttons */
     res[i++] = strdup("*taskBtn.cornerRadius: 0");

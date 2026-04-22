@@ -288,7 +288,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     {
         const IsdeColorScheme *s = isde_theme_current();
         if (s) {
-            IswArgBorderColor(&ab, color_to_pixel(wm, s->fg));
+            IswArgBorderColor(&ab, color_to_pixel(wm, s->titlebar.border));
         }
     }
     c->shell = IswCreatePopupShell("frame", overrideShellWidgetClass,

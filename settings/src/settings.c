@@ -307,7 +307,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswArgVerticalList(&ab, True);
     IswArgWidth(&ab, PANEL_LIST_WIDTH);
     IswArgHeight(&ab, init_h - 10);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgResizable(&ab, True);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainBottom);
@@ -344,7 +344,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswArgAllowHoriz(&ab, True);
     IswArgUseBottom(&ab, True);
     IswArgUseRight(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgWidth(&ab, right_w);
     IswArgHeight(&ab, right_h - btn_h - btn_pad);
     IswArgTop(&ab, IswChainTop);

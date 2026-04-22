@@ -643,9 +643,9 @@ void startmenu_init(Panel *p)
 
     /* Pane background tones from theme */
     const IsdeColorScheme *scheme = isde_theme_current();
-    Pixel cat_bg  = scheme ? start_color_pixel(p, scheme->bg)
+    Pixel cat_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
                            : IswScreen(p->start_btn)->white_pixel;
-    Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
+    Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg)
                            : IswScreen(p->start_btn)->white_pixel;
 
     /* Viewport for category list (left pane) — darker tone, vertical scroll */
