@@ -983,9 +983,9 @@ char **isde_theme_build_resources(void)
 
     /* Taskbar / start — square window-chrome buttons, no rounded stroke */
     res[i++] = strdup("*taskBtn.cornerRadius: 0");
-    res[i++] = strdup("*taskBtn.borderStrokeWidth: 0");
+    res[i++] = strdup("*taskBtn.borderWidth: 0");
     res[i++] = strdup("*startBtn.cornerRadius: 0");
-    res[i++] = strdup("*startBtn.borderStrokeWidth: 0");
+    res[i++] = strdup("*startBtn.borderWidth: 0");
 
     /* --- Fonts from [fonts] config --- */
     {
