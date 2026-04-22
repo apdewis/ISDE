@@ -94,9 +94,16 @@ static void format_font_desc(char *buf, size_t bufsz,
 static void update_desc_label(int idx)
 {
     char buf[160];
+    char font[160];
     format_font_desc(buf, sizeof(buf), current[idx].family, current[idx].size);
+    snprintf(font, sizeof(font), "%s-%d",
+             current[idx].family, current[idx].size);
+    IswFontStruct *fs = isde_resolve_font(desc_labels[idx], font);
     IswArgBuilder ab = IswArgBuilderInit();
+    IswArgResize(&ab, True);
+    IswArgWidth(&ab, SELECTED_W);
     IswArgLabel(&ab, buf);
+    if (fs) { IswArgFont(&ab, fs); }
     IswSetValues(desc_labels[idx], ab.args, ab.count);
 }
 
@@ -113,7 +120,7 @@ static void chooser_result_cb(IsdeDialogResult result,
     if (result != ISDE_DIALOG_OK)
         return;
 
-    if (family && family[0]) {
+    if (family && family[0] && family != current[chooser_slot].family) {
         snprintf(current[chooser_slot].family,
                  sizeof(current[chooser_slot].family), "%s", family);
     }
@@ -213,21 +220,28 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         Widget lbl = IswCreateManagedWidget("fontCatLbl", labelWidgetClass,
                                             form, ab.args, ab.count);
 
-        /* Font description label */
+        /* Font description label — rendered in the configured font */
         char desc[160];
+        char font[160];
         format_font_desc(desc, sizeof(desc),
                          current[i].family, current[i].size);
+        snprintf(font, sizeof(font), "%s-%d",
+                 current[i].family, current[i].size);
+        IswFontStruct *fs = isde_resolve_font(form, font);
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, desc);
         IswArgBorderWidth(&ab, 0);
         IswArgWidth(&ab, SELECTED_W);
         IswArgJustify(&ab, IswJustifyLeft);
         IswArgFromHoriz(&ab, lbl);
+        IswArgResize(&ab, True);
         IswArgResizable(&ab, True);
         IswArgLeft(&ab, IswChainLeft);
         IswArgRight(&ab, IswChainLeft);
         if (prev) { IswArgFromVert(&ab, prev); }
-        desc_labels[i] = IswCreateManagedWidget("fontDescLbl", labelWidgetClass,
+        if (fs) { IswArgFont(&ab, fs); }
+        desc_labels[i] = IswCreateManagedWidget("fontDescLbl",
+                                                labelWidgetClass,
                                                 form, ab.args, ab.count);
 
         /* Edit button */

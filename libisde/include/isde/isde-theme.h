@@ -8,6 +8,8 @@
 #ifndef ISDE_THEME_H
 #define ISDE_THEME_H
 
+#include <ISW/Intrinsic.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -133,6 +135,11 @@ void   isde_theme_free_resources(char **resources);
  * category: "general", "fixed", "small", "toolbar", "menu", "title"
  * padding:  extra vertical padding (unscaled pixels) added to font height */
 int isde_font_height(const char *category, int padding);
+
+/* Resolve a fontconfig-style "Family-Size" spec to an IswFontStruct* via
+ * ISW's String→FontStruct converter.  Returns NULL on failure.  The returned
+ * struct is owned by the converter cache and must not be freed. */
+struct _IswFontStruct *isde_resolve_font(Widget w, const char *spec);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,9 @@
 #include "isde/isde-config.h"
 #include "isde/isde-xdg.h"
 
+#include <ISW/Intrinsic.h>
+#include <ISW/StringDefs.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1132,4 +1135,19 @@ int isde_font_height(const char *category, int padding)
      * pixels = pt * (96 / 72) = pt * 4/3, then add padding and scale */
     int px = (g_font_sizes[idx] * 4 + 2) / 3 + padding;
     return px;
+}
+
+IswFontStruct *isde_resolve_font(Widget w, const char *spec)
+{
+    if (!w || !spec) { return NULL; }
+    XrmValue from, to;
+    IswFontStruct *fs = NULL;
+    from.addr = (IswPointer)spec;
+    from.size = strlen(spec) + 1;
+    to.addr = (IswPointer)&fs;
+    to.size = sizeof(fs);
+    if (!IswConvertAndStore(w, IswRString, &from, IswRFontStruct, &to)) {
+        return NULL;
+    }
+    return fs;
 }

@@ -60,9 +60,15 @@ static int find_idx(String *arr, int n, const char *name)
 static void update_font_label(void)
 {
     char buf[160];
+    char font[160];
     snprintf(buf, sizeof(buf), "%s %dpt", cur_font_family, cur_font_size);
+    snprintf(font, sizeof(font), "%s-%d", cur_font_family, cur_font_size);
+    IswFontStruct *fs = isde_resolve_font(font_desc_lbl, font);
     IswArgBuilder ab = IswArgBuilderInit();
+    IswArgResize(&ab, True);
+    IswArgWidth(&ab, 250);
     IswArgLabel(&ab, buf);
+    if (fs) { IswArgFont(&ab, fs); }
     IswSetValues(font_desc_lbl, ab.args, ab.count);
 }
 
@@ -72,7 +78,7 @@ static void chooser_result_cb(IsdeDialogResult result,
     (void)data;
     chooser_shell = NULL;
     if (result != ISDE_DIALOG_OK) return;
-    if (family && family[0]) {
+    if (family && family[0] && family != cur_font_family) {
         snprintf(cur_font_family, sizeof(cur_font_family), "%s", family);
     }
     if (size > 0) cur_font_size = size;
@@ -157,14 +163,19 @@ static Widget terminal_create(Widget parent, IswAppContext app)
                                              form, ab.args, ab.count);
 
     char desc[160];
+    char font[160];
     snprintf(desc, sizeof(desc), "%s %dpt", cur_font_family, cur_font_size);
+    snprintf(font, sizeof(font), "%s-%d", cur_font_family, cur_font_size);
+    IswFontStruct *fs = isde_resolve_font(form, font);
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, desc);
     IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, 250);
     IswArgJustify(&ab, IswJustifyLeft);
     IswArgFromHoriz(&ab, font_lbl);
+    IswArgResize(&ab, True);
     IswArgLeft(&ab, IswChainLeft);
+    if (fs) { IswArgFont(&ab, fs); }
     font_desc_lbl = IswCreateManagedWidget("fontDesc", labelWidgetClass,
                                            form, ab.args, ab.count);
 
