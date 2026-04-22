@@ -368,14 +368,33 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     IswArgBuilderReset(&ab);
     IswArgFromVert(&ab, s->content_vp);
-    IswArgLabel(&ab, "Save");
+    IswArgLabel(&ab, "Revert");
     IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, btn_w);
     IswArgHeight(&ab, btn_h - btn_pad);
     IswArgInternalWidth(&ab, btn_pad);
     IswArgInternalHeight(&ab, btn_pad);
     IswArgVertDistance(&ab, btn_pad);
-    IswArgHorizDistance(&ab, right_w - btn_w * 2 - btn_pad * 2 - sb_w);
+    IswArgHorizDistance(&ab, btn_pad);
+    IswArgResizable(&ab, True);
+    IswArgRight(&ab, IswChainLeft);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgTop(&ab, IswChainBottom);
+    s->revert_btn = IswCreateManagedWidget("revertBtn", commandWidgetClass,
+                                          s->content_form, ab.args, ab.count);
+    IswAddCallback(s->revert_btn, IswNcallback, common_revert_cb, s);
+
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, s->content_vp);
+    IswArgLabel(&ab, "Apply");
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, btn_w);
+    IswArgHeight(&ab, btn_h - btn_pad);
+    IswArgInternalWidth(&ab, btn_pad);
+    IswArgInternalHeight(&ab, btn_pad);
+    IswArgVertDistance(&ab, btn_pad);
+    IswArgHorizDistance(&ab, right_w - btn_w - btn_pad - sb_w);
     IswArgResizable(&ab, True);
     IswArgRight(&ab, IswChainRight);
     IswArgLeft(&ab, IswChainRight);
@@ -384,26 +403,6 @@ int settings_init(Settings *s, int *argc, char **argv)
     s->save_btn = IswCreateManagedWidget("saveBtn", commandWidgetClass,
                                         s->content_form, ab.args, ab.count);
     IswAddCallback(s->save_btn, IswNcallback, common_save_cb, s);
-
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, s->content_vp);
-    IswArgFromHoriz(&ab, s->save_btn);
-    IswArgHorizDistance(&ab, btn_pad);
-    IswArgVertDistance(&ab, btn_pad);
-    IswArgLabel(&ab, "Revert");
-    IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, btn_w);
-    IswArgHeight(&ab, btn_h - btn_pad);
-    IswArgInternalWidth(&ab, btn_pad);
-    IswArgInternalHeight(&ab, btn_pad);
-    IswArgResizable(&ab, True);
-    IswArgRight(&ab, IswChainRight);
-    IswArgLeft(&ab, IswChainRight);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgTop(&ab, IswChainBottom);
-    s->revert_btn = IswCreateManagedWidget("revertBtn", commandWidgetClass,
-                                          s->content_form, ab.args, ab.count);
-    IswAddCallback(s->revert_btn, IswNcallback, common_revert_cb, s);
 
     /* D-Bus */
     s->dbus = isde_dbus_init();
