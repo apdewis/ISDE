@@ -974,6 +974,14 @@ char **isde_theme_build_resources(void)
     /* Settings sidebar — lighter background to match fm/startmenu convention */
     res[i++] = fmt_color("*panelList.background", s->bg_light);
 
+    /* Settings panel list widgets — match sidebar background */
+    res[i++] = fmt_color("*schemeList.background", s->bg_light);
+    res[i++] = fmt_color("*cursorList.background", s->bg_light);
+    res[i++] = fmt_color("*iconList.background", s->bg_light);
+    res[i++] = fmt_color("*outputList.background", s->bg_light);
+    res[i++] = fmt_color("*termSchemeList.background", s->bg_light);
+    res[i++] = fmt_color("*termCursorList.background", s->bg_light);
+
     /* Taskbar — square buttons */
     res[i++] = strdup("*taskBtn.cornerRadius: 0");
     res[i++] = strdup("*startBtn.cornerRadius: 0");
