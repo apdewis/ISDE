@@ -652,7 +652,7 @@ void startmenu_init(Panel *p)
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgBackground(&ab, cat_bg);
@@ -673,7 +673,7 @@ void startmenu_init(Panel *p)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgCursor(&ab, None);
     IswArgBackground(&ab, cat_bg);
@@ -688,7 +688,7 @@ void startmenu_init(Panel *p)
     IswArgFromHoriz(&ab, p->cat_viewport);
     IswArgWidth(&ab, MENU_WIDTH - CAT_PANE_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, True);
@@ -706,7 +706,7 @@ void startmenu_init(Panel *p)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
     IswArgCursor(&ab, None);
     IswArgBackground(&ab, app_bg);
@@ -746,7 +746,7 @@ void startmenu_init(Panel *p)
     IswArgVertDistance(&ab, 0);
     IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgBackground(&ab, cat_bg);
     p->menu_toolbar = IswCreateManagedWidget("menuToolbar", formWidgetClass,
                                             form, ab.args, ab.count);
