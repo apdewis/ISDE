@@ -849,11 +849,10 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Viewport.background", s->bg);
     res[i++] = fmt_color("*MainWindow.background", s->bg);
 
-    /* Buttons — use X11 border, not highlight_thickness */
-    res[i++] = fmt_color("*Command.background", s->bg_light);
+    /* Buttons — rounded stroke border (Command default), no X11 border */
+    res[i++] = fmt_color("*Command.background", s->bg_bright);
     res[i++] = fmt_color("*Command.foreground", s->fg);
     res[i++] = fmt_color("*Command.borderColor", s->border);
-    res[i++] = strdup("*Command.borderStrokeWidth: 0");
 
     /* Labels */
     res[i++] = fmt_color("*Label.background", s->bg);
@@ -982,9 +981,11 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*termSchemeList.background", s->bg_light);
     res[i++] = fmt_color("*termCursorList.background", s->bg_light);
 
-    /* Taskbar — square buttons */
+    /* Taskbar / start — square window-chrome buttons, no rounded stroke */
     res[i++] = strdup("*taskBtn.cornerRadius: 0");
+    res[i++] = strdup("*taskBtn.borderStrokeWidth: 0");
     res[i++] = strdup("*startBtn.cornerRadius: 0");
+    res[i++] = strdup("*startBtn.borderStrokeWidth: 0");
 
     /* --- Fonts from [fonts] config --- */
     {
