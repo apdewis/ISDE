@@ -504,6 +504,7 @@ void places_init(Fm *fm)
     IswArgUseRight(&ab, False);
     IswArgBorderWidth(&ab, 1);
     IswArgFlexGrow(&ab, 0);
+    IswArgWidth(&ab, 180);
     fm->places_vp = IswCreateManagedWidget("placesVp", viewportWidgetClass,
                                            fm->hbox, ab.args, ab.count);
 
