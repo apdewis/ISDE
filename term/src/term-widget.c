@@ -473,10 +473,14 @@ static void deliver_paste_bytes(TermWidget *t, const unsigned char *data,
     if (!buf) return;
     size_t out = 0;
     for (unsigned long i = 0; i < len; i++) {
-        if (data[i] < 0x80) buf[out++] = (char)data[i];
+        unsigned char ch = data[i];
+        if (ch == '\t' || ch == '\n' || ch == '\r' ||
+            (ch >= 0x20 && ch < 0x7F)) {
+            buf[out++] = (char)ch;
+        }
     }
     buf[out] = '\0';
-    if (out) tsm_vte_paste(t->vte, buf);
+    if (out && t->pty) term_pty_write(t->pty, buf, out);
     free(buf);
 }
 
@@ -550,9 +554,14 @@ static void copy_selection_to(TermWidget *t, xcb_atom_t which)
     int n = tsm_screen_selection_copy(t->screen, &out);
     if (n < 0 || !out) { free(out); return; }
 
+    size_t len = (size_t)n;
+    while (len > 0 && out[len - 1] == '\0') len--;
+    for (size_t i = 0; i < len; i++) {
+        if (out[i] == '\0') out[i] = ' ';
+    }
     free(t->sel_text);
     t->sel_text = out;
-    t->sel_len  = (size_t)n;
+    t->sel_len  = len;
 
     ensure_atoms(t);
     ensure_selection_handler(t);
@@ -567,6 +576,11 @@ static void request_paste(TermWidget *t, xcb_atom_t which)
     ensure_atoms(t);
     ensure_selection_handler(t);
     t->paste_fallback_used = 0;
+    if (t->sel_active) {
+        tsm_screen_selection_reset(t->screen);
+        t->sel_active = 0;
+        request_redraw(t);
+    }
     xcb_connection_t *c = IswDisplay(t->canvas);
     xcb_convert_selection(c, IswWindow(t->canvas), which, XCB_ATOM_STRING,
                           t->a_paste_prop, XCB_CURRENT_TIME);
