@@ -342,10 +342,9 @@ void ta_popup_show(TrayAudio *ta)
 
     IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell for popup */
+    /* Override shell for popup — border via theme resources */
     IswArgWidth(&ab, 320);
     IswArgHeight(&ab, 200);
-    IswArgBorderWidth(&ab, 1);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
                                           ta->toplevel, ab.args, ab.count);

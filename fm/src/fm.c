@@ -437,7 +437,6 @@ static void ctx_handler(Widget w, IswPointer client_data,
     IswArgX(&ab, rx);
     IswArgY(&ab, ry);
     IswArgOverrideRedirect(&ab, True);
-    IswArgBorderWidth(&ab, 1);
     fm->ctx_shell = IswCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, ab.args, ab.count);
 

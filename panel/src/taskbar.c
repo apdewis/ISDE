@@ -178,18 +178,12 @@ static void free_menu_titles(TaskGroup *g)
 /* Create the persistent window-list popup shell + List widget for a group */
 static void create_window_menu(Panel *p, TaskGroup *g)
 {
-    const IsdeColorScheme *s = isde_theme_current();
-    Pixel border_px = s ? taskbar_pixel(p, s->border)
-                        : p->screen->white_pixel;
-
     /* Placeholder title so the List has valid data at creation */
     static String placeholder[] = { "", NULL };
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOverrideRedirect(&ab, True);
-    IswArgBorderWidth(&ab, 1);
     IswArgAllowShellResize(&ab, True);
-    IswArgBorderColor(&ab, border_px);
     g->menu = IswCreatePopupShell("winListMenu", overrideShellWidgetClass,
                                  g->button, ab.args, ab.count);
 
@@ -429,12 +423,7 @@ static void close_all_callback(Widget w, IswPointer client_data,
  * are toggled via manage/unmanage on show. */
 static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
 {
-    const IsdeColorScheme *s = isde_theme_current();
-    Pixel border_px = s ? taskbar_pixel(p, s->border)
-                        : p->screen->white_pixel;
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgBorderWidth(&ab, 1);
-    IswArgBorderColor(&ab, border_px);
     g->ctx_menu = IswCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                      g->button, ab.args, ab.count);
 

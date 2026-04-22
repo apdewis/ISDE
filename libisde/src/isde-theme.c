@@ -868,6 +868,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*SimpleMenu.background", s->menu.bg);
     res[i++] = fmt_color("*SimpleMenu.foreground", s->menu.fg);
     res[i++] = fmt_color("*SimpleMenu.borderColor", s->menu.border);
+    res[i++] = strdup("*SimpleMenu.borderWidth: 1");
     res[i++] = fmt_color("*SmeBSB.foreground", s->menu_item.fg);
 
     /* MenuBar buttons */
@@ -915,6 +916,7 @@ char **isde_theme_build_resources(void)
     /* Start menu */
     res[i++] = fmt_color("*startMenu.background", s->menu.bg);
     res[i++] = fmt_color("*startMenu.borderColor", s->menu.border);
+    res[i++] = strdup("*startMenu.borderWidth: 1");
     res[i++] = fmt_color("*catList.background", s->menu.bg);
     res[i++] = fmt_color("*catList.foreground", s->menu.fg);
     res[i++] = fmt_color("*appList.background", s->menu.bg);
@@ -923,12 +925,22 @@ char **isde_theme_build_resources(void)
     /* Window list popup */
     res[i++] = fmt_color("*winListMenu.background", s->menu.bg);
     res[i++] = fmt_color("*winListMenu.borderColor", s->menu.border);
+    res[i++] = strdup("*winListMenu.borderWidth: 1");
     res[i++] = fmt_color("*winList.background", s->menu.bg);
     res[i++] = fmt_color("*winList.foreground", s->menu.fg);
 
     /* Context menus */
     res[i++] = fmt_color("*ctxMenu.background", s->menu.bg);
     res[i++] = fmt_color("*ctxMenu.borderColor", s->menu.border);
+    res[i++] = strdup("*ctxMenu.borderWidth: 1");
+
+    /* Tray applet popups */
+    res[i++] = fmt_color("*mountMenu.background", s->menu.bg);
+    res[i++] = fmt_color("*mountMenu.borderColor", s->menu.border);
+    res[i++] = strdup("*mountMenu.borderWidth: 1");
+    res[i++] = fmt_color("*audioPopup.background", s->menu.bg);
+    res[i++] = fmt_color("*audioPopup.borderColor", s->menu.border);
+    res[i++] = strdup("*audioPopup.borderWidth: 1");
     res[i++] = fmt_color("*ctxList.background", s->menu.bg);
     res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
 

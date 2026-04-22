@@ -643,17 +643,11 @@ void startmenu_init(Panel *p)
                                          p->form, ab.args, ab.count);
     IswAddCallback(p->start_btn, IswNcallback, toggle_start_menu_cb, p);
 
-    /* Start menu shell */
-    const IsdeColorScheme *scheme_border = isde_theme_current();
-    Pixel border_px = scheme_border
-        ? start_color_pixel(p, scheme_border->border)
-        : IswScreen(p->start_btn)->white_pixel;
+    /* Start menu shell — border via theme resources */
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT);
     IswArgOverrideRedirect(&ab, True);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBorderColor(&ab, border_px);
     p->start_shell = IswCreatePopupShell("startMenu",
                                         overrideShellWidgetClass,
                                         p->start_btn, ab.args, ab.count);
