@@ -1,0 +1,21 @@
+[Unit]
+Description=ISDE Display Manager
+Documentation=man:isde-dm(8)
+Conflicts=getty@tty1.service
+After=systemd-user-sessions.service getty@tty1.service plymouth-quit.service systemd-logind.service
+Requires=dbus.service
+After=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/isde-dm
+Restart=always
+RestartSec=1s
+KillMode=mixed
+IgnoreSIGPIPE=no
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+Alias=display-manager.service

@@ -1,0 +1,5 @@
+#!/bin/sh
+exec 2>&1
+# Reset TTY after daemon exits so a plain text console is usable.
+/usr/bin/tput -T linux reset >/dev/tty7 2>/dev/null || true
+exit 0

@@ -11,6 +11,13 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
+# Service unit install destinations (used by dm/ and mountd/ for the optional
+# `install-systemd` and `install-runit` components).
+set(ISDE_SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_PREFIX}/lib/systemd/system"
+    CACHE PATH "systemd system unit directory")
+set(ISDE_RUNIT_SERVICE_DIR "/etc/sv"
+    CACHE PATH "runit service directory (sv tree)")
+
 # FreeBSD (and other systems) install to /usr/local; ensure pkg-config finds
 # .pc files there.  This is a no-op when the path doesn't exist.
 if(EXISTS "/usr/local/libdata/pkgconfig")
@@ -76,3 +83,20 @@ pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 add_subdirectory(tray-audio)
 add_subdirectory(term)
 add_subdirectory(common)
+
+# --- Optional service-unit install targets ---------------------------------
+# These are NOT part of `make install`. Invoke explicitly:
+#   cmake --build build --target install-systemd
+#   cmake --build build --target install-runit
+
+add_custom_target(install-systemd
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=systemd
+            -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+    COMMENT "Installing systemd unit files")
+
+add_custom_target(install-runit
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=runit
+            -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+    COMMENT "Installing runit service files")

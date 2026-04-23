@@ -1,0 +1,14 @@
+[Unit]
+Description=ISDE Mount Daemon
+Documentation=man:isde-mountd(8)
+Requires=dbus.service
+After=dbus.service systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/isde-mountd
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

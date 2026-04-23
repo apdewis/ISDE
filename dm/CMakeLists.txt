@@ -69,3 +69,15 @@ target_link_libraries(isde-greeter
 )
 
 install(TARGETS isde-greeter RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+# --- Service unit files (opt-in install components) ---
+
+install(FILES data/isde-dm.service
+        DESTINATION "${ISDE_SYSTEMD_UNIT_DIR}"
+        COMPONENT systemd
+        EXCLUDE_FROM_ALL)
+
+install(PROGRAMS data/runit/run data/runit/finish
+        DESTINATION "${ISDE_RUNIT_SERVICE_DIR}/isde-dm"
+        COMPONENT runit
+        EXCLUDE_FROM_ALL)

@@ -30,3 +30,15 @@ target_link_libraries(isde-mountd
 install(TARGETS isde-mountd RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES data/org.isde.DiskManager.conf
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dbus-1/system.d")
+
+# --- Service unit files (opt-in install components) ---
+
+install(FILES data/isde-mountd.service
+        DESTINATION "${ISDE_SYSTEMD_UNIT_DIR}"
+        COMPONENT systemd
+        EXCLUDE_FROM_ALL)
+
+install(PROGRAMS data/runit/run
+        DESTINATION "${ISDE_RUNIT_SERVICE_DIR}/isde-mountd"
+        COMPONENT runit
+        EXCLUDE_FROM_ALL)
