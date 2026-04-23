@@ -20,6 +20,7 @@ target_link_libraries(isde-term
     PkgConfig::XCB_ICCCM
     PkgConfig::CAIRO
     PkgConfig::CAIRO_XCB
+    PkgConfig::CAIRO_FT
     PkgConfig::FONTCONFIG
     PkgConfig::FREETYPE
     PkgConfig::TSM

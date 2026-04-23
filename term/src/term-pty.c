@@ -116,6 +116,24 @@ TermPty *term_pty_spawn(IswAppContext app,
         unsetenv("COLUMNS");
         unsetenv("LINES");
 
+        {
+            const char *lc_all   = getenv("LC_ALL");
+            const char *lc_ctype = getenv("LC_CTYPE");
+            const char *lang     = getenv("LANG");
+            int has_utf8 = 0;
+            const char *probes[] = { lc_all, lc_ctype, lang };
+            for (size_t i = 0; i < sizeof(probes)/sizeof(probes[0]); i++) {
+                const char *v = probes[i];
+                if (!v || !*v) continue;
+                if (strstr(v, "UTF-8") || strstr(v, "utf8") ||
+                    strstr(v, "UTF8")  || strstr(v, "utf-8")) {
+                    has_utf8 = 1;
+                    break;
+                }
+            }
+            if (!has_utf8) setenv("LANG", "C.UTF-8", 1);
+        }
+
         char *fallback_argv[2];
         if (!argv || !argv[0]) {
             fallback_argv[0] = (char *)shell;

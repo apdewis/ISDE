@@ -9,6 +9,11 @@
 
 #include <cairo/cairo.h>
 #include <cairo/cairo-xcb.h>
+#include <cairo/cairo-ft.h>
+
+#include <fontconfig/fontconfig.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
@@ -43,11 +48,17 @@ struct TermWidget {
     struct tsm_vte    *vte;
     TermPty           *pty;
 
-    cairo_font_face_t *font_face;
+    /* Font rendering: primary FreeType/FcCharSet-backed cairo face plus a
+     * small cache of fallback faces keyed by codepoint coverage. */
     double             font_size_px;
     double             cell_w;
     double             cell_h;
     double             baseline;
+
+    struct TermFont   *primary_font;
+    struct TermFont  **fallback_fonts;  /* dyn array */
+    size_t             fallback_count;
+    size_t             fallback_cap;
 
     unsigned           cols;
     unsigned           rows;
@@ -86,23 +97,153 @@ struct TermWidget {
 
 /* ---------- rendering ---------- */
 
+typedef struct TermFont {
+    FT_Face            ft_face;
+    cairo_font_face_t *cr_face;
+    FcCharSet         *charset;  /* owned */
+    char              *file;     /* owned, for dedup */
+} TermFont;
+
+static FT_Library g_ft_lib;
+
+static void term_ft_init(void)
+{
+    if (!g_ft_lib) FT_Init_FreeType(&g_ft_lib);
+}
+
+static TermFont *term_font_from_pattern(FcPattern *match)
+{
+    FcChar8 *file = NULL;
+    if (FcPatternGetString(match, FC_FILE, 0, &file) != FcResultMatch)
+        return NULL;
+    int index = 0;
+    FcPatternGetInteger(match, FC_INDEX, 0, &index);
+
+    FT_Face ft = NULL;
+    if (FT_New_Face(g_ft_lib, (const char *)file, index, &ft) != 0)
+        return NULL;
+
+    cairo_font_face_t *cr = cairo_ft_font_face_create_for_ft_face(ft, 0);
+    if (!cr || cairo_font_face_status(cr) != CAIRO_STATUS_SUCCESS) {
+        if (cr) cairo_font_face_destroy(cr);
+        FT_Done_Face(ft);
+        return NULL;
+    }
+
+    TermFont *f = calloc(1, sizeof(*f));
+    f->ft_face = ft;
+    f->cr_face = cr;
+    f->file    = strdup((const char *)file);
+
+    FcCharSet *cs = NULL;
+    if (FcPatternGetCharSet(match, FC_CHARSET, 0, &cs) == FcResultMatch && cs)
+        f->charset = FcCharSetCopy(cs);
+
+    return f;
+}
+
+static void term_font_free(TermFont *f)
+{
+    if (!f) return;
+    if (f->cr_face) cairo_font_face_destroy(f->cr_face);
+    if (f->ft_face) FT_Done_Face(f->ft_face);
+    if (f->charset) FcCharSetDestroy(f->charset);
+    free(f->file);
+    free(f);
+}
+
+static TermFont *term_resolve_primary(const char *family)
+{
+    term_ft_init();
+    FcPattern *pat = FcPatternCreate();
+    FcPatternAddString(pat, FC_FAMILY, (const FcChar8 *)(family ? family : "Monospace"));
+    FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+    FcConfigSubstitute(NULL, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    FcResult result;
+    FcPattern *match = FcFontMatch(NULL, pat, &result);
+    FcPatternDestroy(pat);
+    if (!match) return NULL;
+    TermFont *f = term_font_from_pattern(match);
+    FcPatternDestroy(match);
+    return f;
+}
+
+static TermFont *term_resolve_fallback_for(TermWidget *t, uint32_t ucs)
+{
+    /* Cached? */
+    for (size_t i = 0; i < t->fallback_count; i++) {
+        TermFont *f = t->fallback_fonts[i];
+        if (f->charset && FcCharSetHasChar(f->charset, ucs))
+            return f;
+    }
+
+    term_ft_init();
+    FcCharSet *cs = FcCharSetCreate();
+    FcCharSetAddChar(cs, ucs);
+    FcPattern *pat = FcPatternCreate();
+    FcPatternAddCharSet(pat, FC_CHARSET, cs);
+    FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
+    FcConfigSubstitute(NULL, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    FcResult result;
+    FcPattern *match = FcFontMatch(NULL, pat, &result);
+    FcCharSetDestroy(cs);
+    FcPatternDestroy(pat);
+    if (!match) return NULL;
+
+    TermFont *f = term_font_from_pattern(match);
+    FcPatternDestroy(match);
+    if (!f) return NULL;
+
+    /* Dedup by file */
+    for (size_t i = 0; i < t->fallback_count; i++) {
+        if (t->fallback_fonts[i]->file && f->file &&
+            strcmp(t->fallback_fonts[i]->file, f->file) == 0) {
+            term_font_free(f);
+            return t->fallback_fonts[i];
+        }
+    }
+
+    if (t->fallback_count == t->fallback_cap) {
+        size_t nc = t->fallback_cap ? t->fallback_cap * 2 : 8;
+        t->fallback_fonts = realloc(t->fallback_fonts, nc * sizeof(*t->fallback_fonts));
+        t->fallback_cap = nc;
+    }
+    t->fallback_fonts[t->fallback_count++] = f;
+    return f;
+}
+
+static TermFont *term_font_for_codepoint(TermWidget *t, uint32_t ucs)
+{
+    if (t->primary_font && t->primary_font->charset &&
+        FcCharSetHasChar(t->primary_font->charset, ucs))
+        return t->primary_font;
+    if (!t->primary_font) return NULL;
+    TermFont *fb = term_resolve_fallback_for(t, ucs);
+    return fb ? fb : t->primary_font;
+}
+
+static void term_fonts_clear(TermWidget *t)
+{
+    if (t->primary_font) { term_font_free(t->primary_font); t->primary_font = NULL; }
+    for (size_t i = 0; i < t->fallback_count; i++) term_font_free(t->fallback_fonts[i]);
+    free(t->fallback_fonts);
+    t->fallback_fonts = NULL;
+    t->fallback_count = t->fallback_cap = 0;
+}
+
 static void recompute_metrics(TermWidget *t)
 {
     t->font_size_px = (double)t->cfg.font_size * 96.0 / 72.0;
 
-    if (t->font_face) {
-        cairo_font_face_destroy(t->font_face);
-        t->font_face = NULL;
-    }
-    t->font_face = cairo_toy_font_face_create(t->cfg.font_family,
-                                              CAIRO_FONT_SLANT_NORMAL,
-                                              CAIRO_FONT_WEIGHT_NORMAL);
+    term_fonts_clear(t);
+    t->primary_font = term_resolve_primary(t->cfg.font_family);
 
-    /* Measure cell size using a scratch cairo surface */
-    cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                                       16, 16);
+    cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 16, 16);
     cairo_t *cr = cairo_create(surf);
-    cairo_set_font_face(cr, t->font_face);
+    if (t->primary_font)
+        cairo_set_font_face(cr, t->primary_font->cr_face);
     cairo_set_font_size(cr, t->font_size_px);
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
@@ -184,11 +325,19 @@ static int draw_cell_cb(struct tsm_screen *con, uint64_t id,
         return 0;
     }
 
-    /* Convert UTF-32 codepoints to UTF-8 for cairo_show_text */
-    char utf8[32];
-    int n = 0;
-    for (size_t k = 0; k < len && n + 4 < (int)sizeof(utf8); k++) {
+    /* Render each codepoint with a font that actually covers it. Combining
+     * marks (len > 1) typically share coverage with the base, but resolve
+     * per-codepoint anyway so odd combinations still render. */
+    cairo_set_font_size(cr, t->font_size_px);
+    cairo_set_source_rgb(cr, fr/255.0, fg/255.0, fb/255.0);
+    cairo_move_to(cr, x, y + t->baseline);
+
+    for (size_t k = 0; k < len; k++) {
         uint32_t c = ch[k];
+        if (!c) continue;
+
+        char utf8[8];
+        int n = 0;
         if (c < 0x80) {
             utf8[n++] = (char)c;
         } else if (c < 0x800) {
@@ -204,14 +353,12 @@ static int draw_cell_cb(struct tsm_screen *con, uint64_t id,
             utf8[n++] = 0x80 | ((c >> 6) & 0x3F);
             utf8[n++] = 0x80 | (c & 0x3F);
         }
-    }
-    utf8[n] = '\0';
+        utf8[n] = '\0';
 
-    cairo_set_font_face(cr, t->font_face);
-    cairo_set_font_size(cr, t->font_size_px);
-    cairo_set_source_rgb(cr, fr/255.0, fg/255.0, fb/255.0);
-    cairo_move_to(cr, x, y + t->baseline);
-    cairo_show_text(cr, utf8);
+        TermFont *font = term_font_for_codepoint(t, c);
+        if (font) cairo_set_font_face(cr, font->cr_face);
+        cairo_show_text(cr, utf8);
+    }
 
     if (attr->underline) {
         cairo_rectangle(cr, x, y + h - 1.5, w, 1.0);
@@ -441,10 +588,10 @@ static void handle_selection_request(TermWidget *t,
     }
 
     if (req->target == t->a_targets) {
-        xcb_atom_t list[4] = { t->a_targets, t->a_timestamp,
-                               XCB_ATOM_STRING, t->a_text };
+        xcb_atom_t list[5] = { t->a_targets, t->a_timestamp,
+                               t->a_utf8_string, XCB_ATOM_STRING, t->a_text };
         xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
-                            XCB_ATOM_ATOM, 32, 4, list);
+                            XCB_ATOM_ATOM, 32, 5, list);
         send_selection_notify(c, req, property);
     } else if (req->target == t->a_timestamp) {
         uint32_t ts = t->sel_own_time;
@@ -456,7 +603,6 @@ static void handle_selection_request(TermWidget *t,
                             XCB_ATOM_STRING, 8, t->sel_len, t->sel_text);
         send_selection_notify(c, req, property);
     } else if (req->target == t->a_utf8_string) {
-        /* sel_text is ASCII, which is valid UTF-8 */
         xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
                             t->a_utf8_string, 8, t->sel_len, t->sel_text);
         send_selection_notify(c, req, property);
@@ -474,10 +620,14 @@ static void deliver_paste_bytes(TermWidget *t, const unsigned char *data,
     size_t out = 0;
     for (unsigned long i = 0; i < len; i++) {
         unsigned char ch = data[i];
-        if (ch == '\t' || ch == '\n' || ch == '\r' ||
-            (ch >= 0x20 && ch < 0x7F)) {
-            buf[out++] = (char)ch;
+        /* Drop C0 controls except tab/newline/carriage-return and DEL.
+         * Pass through all bytes >= 0x80 so UTF-8 sequences survive intact. */
+        if (ch < 0x20) {
+            if (ch != '\t' && ch != '\n' && ch != '\r') continue;
+        } else if (ch == 0x7F) {
+            continue;
         }
+        buf[out++] = (char)ch;
     }
     buf[out] = '\0';
     if (out && t->pty) term_pty_write(t->pty, buf, out);
@@ -489,12 +639,12 @@ static void handle_selection_notify(TermWidget *t,
 {
     if (e->requestor != IswWindow(t->canvas)) return;
     if (e->property == XCB_ATOM_NONE) {
-        /* Owner refused. Fall back once from STRING → UTF8_STRING. */
-        if (e->target == XCB_ATOM_STRING && !t->paste_fallback_used) {
+        /* Owner refused. Fall back once from UTF8_STRING → STRING. */
+        if (e->target == t->a_utf8_string && !t->paste_fallback_used) {
             t->paste_fallback_used = 1;
             xcb_convert_selection(IswDisplay(t->canvas),
                                   IswWindow(t->canvas),
-                                  e->selection, t->a_utf8_string,
+                                  e->selection, XCB_ATOM_STRING,
                                   t->a_paste_prop, XCB_CURRENT_TIME);
             xcb_flush(IswDisplay(t->canvas));
         }
@@ -582,7 +732,7 @@ static void request_paste(TermWidget *t, xcb_atom_t which)
         request_redraw(t);
     }
     xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_convert_selection(c, IswWindow(t->canvas), which, XCB_ATOM_STRING,
+    xcb_convert_selection(c, IswWindow(t->canvas), which, t->a_utf8_string,
                           t->a_paste_prop, XCB_CURRENT_TIME);
     xcb_flush(c);
 }
@@ -742,7 +892,7 @@ void term_widget_destroy(TermWidget *t)
     if (!t) return;
     if (t->vte) tsm_vte_unref(t->vte);
     if (t->screen) tsm_screen_unref(t->screen);
-    if (t->font_face) cairo_font_face_destroy(t->font_face);
+    term_fonts_clear(t);
     if (t->key_syms) xcb_key_symbols_free(t->key_syms);
     free(t->sel_text);
     free(t);
