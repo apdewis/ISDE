@@ -25,6 +25,7 @@ void              isde_desktop_free(IsdeDesktopEntry *entry);
 
 /* Field accessors — return NULL / 0 if the field is absent.
  * Returned strings are owned by the entry; do not free. */
+const char *isde_desktop_id(const IsdeDesktopEntry *e);
 const char *isde_desktop_name(const IsdeDesktopEntry *e);
 const char *isde_desktop_generic_name(const IsdeDesktopEntry *e);
 const char *isde_desktop_comment(const IsdeDesktopEntry *e);

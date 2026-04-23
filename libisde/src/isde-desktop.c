@@ -22,6 +22,7 @@ typedef struct {
 } DesktopAction;
 
 struct IsdeDesktopEntry {
+    char *desktop_id;    /* basename of .desktop file (e.g. "firefox.desktop") */
     char *name;
     char *generic_name;
     char *comment;
@@ -146,6 +147,9 @@ IsdeDesktopEntry *isde_desktop_load(const char *path)
         return NULL;
     }
 
+    const char *slash = strrchr(path, '/');
+    e->desktop_id = strdup(slash ? slash + 1 : path);
+
     char line[1024];
     int in_desktop_entry = 0;
     char *current_action_id = NULL;  /* non-NULL when inside [Desktop Action X] */
@@ -229,6 +233,7 @@ void isde_desktop_free(IsdeDesktopEntry *e)
     if (!e) {
         return;
     }
+    free(e->desktop_id);
     free(e->name);
     free(e->generic_name);
     free(e->comment);
@@ -268,6 +273,7 @@ const IsdeDesktopAction *isde_desktop_action(const IsdeDesktopEntry *e,
     return (const IsdeDesktopAction *)a;
 }
 
+const char *isde_desktop_id(const IsdeDesktopEntry *e)           { return e->desktop_id; }
 const char *isde_desktop_name(const IsdeDesktopEntry *e)         { return e->name; }
 const char *isde_desktop_generic_name(const IsdeDesktopEntry *e) { return e->generic_name; }
 const char *isde_desktop_comment(const IsdeDesktopEntry *e)      { return e->comment; }

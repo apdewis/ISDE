@@ -252,6 +252,9 @@ typedef struct Fm {
     /* Empty trash dialog (per-window) */
     Widget         empty_trash_shell;
 
+    /* Set Default Application dialog (per-window) */
+    Widget         set_default_shell;
+
     /* Context menu (per-window) */
     Widget         ctx_shell;
     Widget         ctx_list;
@@ -267,8 +270,10 @@ typedef struct Fm {
     /* "Open with" state (per-window) */
     int            ow_indices[MAX_OPEN_WITH];
     int            ow_count;
+    int            ow_default;        /* index into ow_indices of the default app, or -1 */
     char          *ow_label_buf[MAX_OPEN_WITH];
     char          *ow_file_path;
+    char          *ow_mime;           /* MIME type of the target file */
 
     /* Fileview backing arrays (per-window) */
     String        *fv_labels;

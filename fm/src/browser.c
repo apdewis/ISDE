@@ -129,24 +129,45 @@ void browser_open_entry(Fm *fm, int index)
     /* Look up default app via mimeapps.list */
     const char *mime = isde_mime_type_for_file(e->name);
     char *desktop_id = mime ? isde_mime_default_app(mime) : NULL;
-    char *desktop_path = desktop_id ? isde_mime_find_desktop(desktop_id) : NULL;
+    if (!desktop_id)
+        return;
 
-    if (desktop_path) {
-        IsdeDesktopEntry *de = isde_desktop_load(desktop_path);
-        if (de) {
-            const char *file = e->full_path;
-            char *cmd = isde_desktop_build_exec(de, &file, 1);
-            if (cmd) {
-                pid_t pid = fork();
-                if (pid == 0) {
-                    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-                    _exit(127);
-                }
-                free(cmd);
-            }
-            isde_desktop_free(de);
+    /* Try the app cache first */
+    FmApp *app = fm->app_state;
+    IsdeDesktopEntry *de = NULL;
+    int from_cache = 0;
+
+    for (int i = 0; i < app->ndesktop; i++) {
+        const char *id = isde_desktop_id(app->desktop_entries[i]);
+        if (id && strcmp(id, desktop_id) == 0) {
+            de = app->desktop_entries[i];
+            from_cache = 1;
+            break;
         }
-        free(desktop_path);
+    }
+
+    /* Fall back to loading from disk */
+    if (!de) {
+        char *desktop_path = isde_mime_find_desktop(desktop_id);
+        if (desktop_path) {
+            de = isde_desktop_load(desktop_path);
+            free(desktop_path);
+        }
+    }
+
+    if (de) {
+        const char *file = e->full_path;
+        char *cmd = isde_desktop_build_exec(de, &file, 1);
+        if (cmd) {
+            pid_t pid = fork();
+            if (pid == 0) {
+                execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+                _exit(127);
+            }
+            free(cmd);
+        }
+        if (!from_cache)
+            isde_desktop_free(de);
     }
 
     free(desktop_id);

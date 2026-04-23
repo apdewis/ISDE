@@ -244,8 +244,11 @@ static void ctx_free_dynamic(Fm *fm)
         free(fm->ow_label_buf[i]);
     }
     fm->ow_count = 0;
+    fm->ow_default = -1;
     free(fm->ow_file_path);
     fm->ow_file_path = NULL;
+    free(fm->ow_mime);
+    fm->ow_mime = NULL;
 }
 
 void fm_dismiss_context(Fm *fm)
@@ -321,70 +324,213 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         return;
     }
 
-    /* Adjust index past "Open with" entries + separator */
-    int base_idx = idx - (fm->ow_count > 0 ? fm->ow_count + 1 : 0);
-    fm_dismiss_context(fm);
+    /* Dynamic action (e.g. "Set Default Application...") or base action.
+     * Call action before dismiss — actions like ctx_set_default read
+     * ow_mime/ow_indices which ctx_free_dynamic() would wipe. */
+    CtxAction action = NULL;
+    if (idx >= 0 && idx < fm->dyn_nitems)
+        action = fm->dyn_actions[idx];
+
     fm->ctx_target_index = target;
 
-    if (base_idx >= 0 && base_idx < BASE_NITEMS) {
-        CtxAction action = base_actions[base_idx];
-        if (action) {
-            action(fm);
-        }
-    }
+    if (action)
+        action(fm);
+
+    fm_dismiss_context(fm);
     fm->ctx_target_index = -1;
+}
+
+static int ow_entry_eligible(IsdeDesktopEntry *de, const char *mime)
+{
+    if (!de) return 0;
+    if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) return 0;
+    if (!isde_desktop_handles_mime(de, mime)) return 0;
+    if (!isde_desktop_name(de)) return 0;
+    return 1;
 }
 
 static void ctx_build_open_with(Fm *fm)
 {
     fm->ow_count = 0;
+    fm->ow_default = -1;
     FmApp *app = fm->app_state;
 
     int sel = fileview_get_selected(fm);
-    if (sel < 0 || sel >= fm->nentries) {
+    if (sel < 0 || sel >= fm->nentries)
         return;
-    }
 
     FmEntry *e = &fm->entries[sel];
-    if (e->is_dir) {
+    if (e->is_dir)
         return;
-    }
 
     const char *mime = isde_mime_type_for_file(e->name);
-    if (!mime || strcmp(mime, "application/octet-stream") == 0) {
+    if (!mime || strcmp(mime, "application/octet-stream") == 0)
         return;
-    }
 
     free(fm->ow_file_path);
     fm->ow_file_path = strdup(e->full_path);
+    free(fm->ow_mime);
+    fm->ow_mime = strdup(mime);
 
+    char *default_id = isde_mime_default_app(mime);
+    int default_de_idx = -1;
+
+    if (default_id) {
+        for (int i = 0; i < app->ndesktop; i++) {
+            IsdeDesktopEntry *de = app->desktop_entries[i];
+            if (!de) continue;
+            const char *id = isde_desktop_id(de);
+            if (id && strcmp(id, default_id) == 0 &&
+                ow_entry_eligible(de, mime)) {
+                default_de_idx = i;
+                break;
+            }
+        }
+        free(default_id);
+    }
+
+    /* Place default app first */
+    if (default_de_idx >= 0) {
+        IsdeDesktopEntry *de = app->desktop_entries[default_de_idx];
+        fm->ow_indices[0] = default_de_idx;
+        char buf[256];
+        snprintf(buf, sizeof(buf), "Open with %s (default)", isde_desktop_name(de));
+        fm->ow_label_buf[0] = strdup(buf);
+        fm->ow_default = 0;
+        fm->ow_count = 1;
+    }
+
+    /* Remaining matching apps */
     for (int i = 0; i < app->ndesktop && fm->ow_count < MAX_OPEN_WITH; i++) {
+        if (i == default_de_idx) continue;
         IsdeDesktopEntry *de = app->desktop_entries[i];
-        if (!de) {
-            continue;
-        }
-        if (isde_desktop_hidden(de) || isde_desktop_no_display(de)) {
-            continue;
-        }
-        if (!isde_desktop_handles_mime(de, mime)) {
-            continue;
-        }
-        const char *name = isde_desktop_name(de);
-        if (!name) {
-            continue;
-        }
+        if (!ow_entry_eligible(de, mime)) continue;
 
         fm->ow_indices[fm->ow_count] = i;
         char buf[256];
-        snprintf(buf, sizeof(buf), "Open with %s", name);
+        snprintf(buf, sizeof(buf), "Open with %s", isde_desktop_name(de));
         fm->ow_label_buf[fm->ow_count] = strdup(buf);
         fm->ow_count++;
     }
 }
 
+/* ---------- "Set Default Application" dialog ---------- */
+
+typedef struct {
+    Fm     *fm;
+    Widget  shell;
+    Widget  list;
+    int    *de_indices;   /* desktop entry indices for each list row */
+    int     nentries;
+    char   *mime;
+    String *labels;       /* kept alive for List widget */
+} SetDefaultCtx;
+
+static void set_default_ok_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    SetDefaultCtx *ctx = (SetDefaultCtx *)cd;
+    Fm *fm = ctx->fm;
+    FmApp *app = fm->app_state;
+
+    IswListReturnStruct *ret = IswListShowCurrent(ctx->list);
+    if (ret && ret->list_index >= 0 && ret->list_index < ctx->nentries) {
+        int de_idx = ctx->de_indices[ret->list_index];
+        const char *desktop_id = isde_desktop_id(app->desktop_entries[de_idx]);
+        if (desktop_id)
+            isde_mime_set_default(ctx->mime, desktop_id);
+    }
+
+    fm->set_default_shell = NULL;
+    isde_dialog_dismiss(ctx->shell);
+    free(ctx->labels);
+    free(ctx->de_indices);
+    free(ctx->mime);
+    free(ctx);
+}
+
+static void set_default_cancel_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    SetDefaultCtx *ctx = (SetDefaultCtx *)cd;
+    ctx->fm->set_default_shell = NULL;
+    isde_dialog_dismiss(ctx->shell);
+    free(ctx->labels);
+    free(ctx->de_indices);
+    free(ctx->mime);
+    free(ctx);
+}
+
+static void ctx_set_default(Fm *fm)
+{
+    if (!fm->ow_mime || fm->ow_count == 0)
+        return;
+
+    isde_dialog_dismiss(fm->set_default_shell);
+
+    SetDefaultCtx *ctx = calloc(1, sizeof(*ctx));
+    ctx->fm = fm;
+    ctx->mime = strdup(fm->ow_mime);
+    ctx->nentries = fm->ow_count;
+    ctx->de_indices = malloc(fm->ow_count * sizeof(int));
+    memcpy(ctx->de_indices, fm->ow_indices, fm->ow_count * sizeof(int));
+
+    ctx->shell = isde_dialog_create_shell(fm->toplevel, "setDefaultShell",
+                                          "Set Default Application", 300, 250);
+
+    FmApp *app = fm->app_state;
+    ctx->labels = malloc((ctx->nentries + 1) * sizeof(String));
+    for (int i = 0; i < ctx->nentries; i++)
+        ctx->labels[i] = (String)isde_desktop_name(app->desktop_entries[ctx->de_indices[i]]);
+    ctx->labels[ctx->nentries] = NULL;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    Widget form = IswCreateManagedWidget("form", formWidgetClass,
+                                        ctx->shell, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Select application:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    Widget prompt = IswCreateManagedWidget("prompt", labelWidgetClass,
+                                           form, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, ctx->labels);
+    IswArgNumberStrings(&ab, ctx->nentries);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgFromVert(&ab, prompt);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    ctx->list = IswCreateManagedWidget("appList", listWidgetClass,
+                                       form, ab.args, ab.count);
+
+    if (fm->ow_default >= 0)
+        IswListHighlight(ctx->list, fm->ow_default);
+
+    IsdeDialogButton btns[2] = {
+        { "Set Default", set_default_ok_cb,     ctx },
+        { "Cancel",      set_default_cancel_cb, ctx },
+    };
+    isde_dialog_add_buttons(form, ctx->list, 300, btns, 2);
+
+    fm->set_default_shell = ctx->shell;
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
+}
+
 static void ctx_build_menu(Fm *fm)
 {
-    int total = (fm->ow_count > 0 ? fm->ow_count + 1 : 0) + BASE_NITEMS;
+    int ow_section = 0;
+    if (fm->ow_count > 0)
+        ow_section = fm->ow_count + 2; /* entries + "Set Default..." + separator */
+    int total = ow_section + BASE_NITEMS;
 
     fm->dyn_labels = malloc((total + 1) * sizeof(String));
     fm->dyn_actions = malloc(total * sizeof(CtxAction));
@@ -398,6 +544,9 @@ static void ctx_build_menu(Fm *fm)
         pos++;
     }
     if (fm->ow_count > 0) {
+        fm->dyn_labels[pos] = "Set Default Application...";
+        fm->dyn_actions[pos] = ctx_set_default;
+        pos++;
         fm->dyn_labels[pos] = "---";
         fm->dyn_actions[pos] = NULL;
         pos++;
