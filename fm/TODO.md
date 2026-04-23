@@ -25,6 +25,14 @@
 - **Undo** — maintain a stack of recent operations (copy, move, rename, delete) with undo support. Deleted files go to a trash directory first.
 
 
+## Dialogs
+
+- **File information & permissions** — "Properties" dialog accessible from context menu or menu bar. Shows:
+  - File name, path, MIME type, size, timestamps (created, modified, accessed)
+  - Permissions editor: owner/group/other read/write/execute toggles
+  - Ownership display (user and group names via `stat`)
+  - Apply/Cancel to commit `chmod` changes
+
 ## Views
 
 - **Detail/column list view** — show name, size, date modified, permissions in columns with sortable headers
