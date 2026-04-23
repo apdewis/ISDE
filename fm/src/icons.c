@@ -107,25 +107,95 @@ void icons_init(FmApp *app)
                                  FALLBACK_FILE);
 }
 
+/* Load an icon by name without fallback. Returns malloc'd SVG or NULL. */
+static char *try_load_mime_icon(const char *theme, const char *name)
+{
+    if (theme) {
+        char *path = isde_icon_theme_lookup(theme, "mimetypes", name);
+        if (path) {
+            char *data = read_svg_file(path);
+            free(path);
+            if (data) { return data; }
+        }
+    }
+    char *path = isde_icon_find("mimetypes", name);
+    if (path) {
+        char *data = read_svg_file(path);
+        free(path);
+        if (data) { return data; }
+    }
+    return NULL;
+}
+
+/* Resolve an icon for a MIME type using freedesktop naming:
+ * "media/sub" -> "media-sub", fallback "media-x-generic".
+ * Caches per-mime results on the FmApp (SVG blob or NULL sentinel). */
+static const char *mime_icon_lookup(FmApp *app, const char *mime)
+{
+    for (int i = 0; i < app->nmime_icons; i++) {
+        if (strcmp(app->mime_icons[i].mime, mime) == 0) {
+            return app->mime_icons[i].svg;
+        }
+    }
+
+    const char *slash = strchr(mime, '/');
+    char *svg = NULL;
+    if (slash) {
+        size_t mlen = slash - mime;
+        size_t slen = strlen(slash + 1);
+        char *name = malloc(mlen + 1 + slen + 1);
+        if (name) {
+            memcpy(name, mime, mlen);
+            name[mlen] = '-';
+            memcpy(name + mlen + 1, slash + 1, slen + 1);
+            svg = try_load_mime_icon(app->icon_theme, name);
+            if (!svg) {
+                /* Fallback: <media>-x-generic */
+                char *gen = malloc(mlen + strlen("-x-generic") + 1);
+                if (gen) {
+                    memcpy(gen, mime, mlen);
+                    strcpy(gen + mlen, "-x-generic");
+                    svg = try_load_mime_icon(app->icon_theme, gen);
+                    free(gen);
+                }
+            }
+            free(name);
+        }
+    }
+
+    if (app->nmime_icons >= app->cmime_icons) {
+        int nc = app->cmime_icons ? app->cmime_icons * 2 : 16;
+        void *n = realloc(app->mime_icons, nc * sizeof(*app->mime_icons));
+        if (!n) { free(svg); return NULL; }
+        app->mime_icons = n;
+        app->cmime_icons = nc;
+    }
+    app->mime_icons[app->nmime_icons].mime = strdup(mime);
+    app->mime_icons[app->nmime_icons].svg = svg;
+    app->nmime_icons++;
+    return svg;
+}
+
 const char *icons_for_entry(FmApp *app, const FmEntry *e)
 {
     if (e->is_dir) {
         return app->icon_folder;
     }
-    if (e->mode & S_IXUSR) {
-        return app->icon_exec;
-    }
 
-    const char *dot = strrchr(e->name, '.');
-    if (dot) {
-        if (strcmp(dot, ".png") == 0 || strcmp(dot, ".jpg") == 0 ||
-            strcmp(dot, ".jpeg") == 0 || strcmp(dot, ".gif") == 0 ||
-            strcmp(dot, ".svg") == 0 || strcmp(dot, ".bmp") == 0 ||
-            strcmp(dot, ".webp") == 0) {
+    const char *mime = isde_mime_type_for_file(e->name);
+    if (mime && strcmp(mime, "application/octet-stream") != 0) {
+        const char *svg = mime_icon_lookup(app, mime);
+        if (svg) { return svg; }
+
+        /* Generic fallback by media type */
+        if (strncmp(mime, "image/", 6) == 0) {
             return app->icon_image;
         }
     }
 
+    if (e->mode & S_IXUSR) {
+        return app->icon_exec;
+    }
     return app->icon_file;
 }
 
@@ -139,4 +209,13 @@ void icons_cleanup(FmApp *app)
     app->icon_file = NULL;
     app->icon_exec = NULL;
     app->icon_image = NULL;
+
+    for (int i = 0; i < app->nmime_icons; i++) {
+        free(app->mime_icons[i].mime);
+        free(app->mime_icons[i].svg);
+    }
+    free(app->mime_icons);
+    app->mime_icons = NULL;
+    app->nmime_icons = 0;
+    app->cmime_icons = 0;
 }

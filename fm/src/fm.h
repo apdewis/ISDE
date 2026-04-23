@@ -142,6 +142,14 @@ typedef struct FmApp {
     char *icon_image;
     char *icon_theme;
 
+    /* Per-MIME icon cache. svg==NULL means lookup failed (use generic). */
+    struct {
+        char *mime;
+        char *svg;
+    } *mime_icons;
+    int   nmime_icons;
+    int   cmime_icons;
+
     /* Clipboard atoms (per-display, shared) */
     xcb_atom_t     atom_clipboard;
     xcb_atom_t     atom_targets;
