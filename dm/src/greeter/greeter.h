@@ -11,7 +11,7 @@
 #include <ISW/Form.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
-#include <ISW/AsciiText.h>
+#include <ISW/Text.h>
 #include <ISW/List.h>
 #include <ISW/ISWRender.h>
 

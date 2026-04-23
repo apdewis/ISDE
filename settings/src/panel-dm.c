@@ -13,7 +13,7 @@
 #include <string.h>
 #include <dbus/dbus.h>
 
-#include <ISW/AsciiText.h>
+#include <ISW/Text.h>
 #include <ISW/IswArgMacros.h>
 
 
@@ -210,7 +210,7 @@ static Widget dm_create(Widget parent, IswAppContext app)
     IswArgString(&ab, saved_time_fmt);
     IswArgLeft(&ab, IswChainLeft);
     text_time_fmt = IswCreateManagedWidget("timeFmtText",
-                                          asciiTextWidgetClass,
+                                          textWidgetClass,
                                           form, ab.args, ab.count);
 
     /* Date Format */
@@ -235,7 +235,7 @@ static Widget dm_create(Widget parent, IswAppContext app)
     IswArgString(&ab, saved_date_fmt);
     IswArgLeft(&ab, IswChainLeft);
     text_date_fmt = IswCreateManagedWidget("dateFmtText",
-                                          asciiTextWidgetClass,
+                                          textWidgetClass,
                                           form, ab.args, ab.count);
 
     return form;

@@ -1036,7 +1036,7 @@ char **isde_theme_build_resources(void)
                 fam = isde_config_string(fonts, "fixed_family", "Monospace");
                 sz  = (int)isde_config_int(fonts, "fixed_size", 10);
                 res[i++] = fmt_font("*Text.font", fam, sz);
-                res[i++] = fmt_font("*AsciiSink.font", fam, sz);
+                res[i++] = fmt_font("*TextSink.font", fam, sz);
 
                 /* Places sidebar headers — 2pt smaller than general */
                 res[i++] = fmt_font("*placeHdr0.font", fam, sz - 2);

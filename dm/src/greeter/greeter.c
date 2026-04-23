@@ -317,7 +317,7 @@ static void build_ui(Greeter *g)
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainLeft);
-    g->user_text = IswCreateManagedWidget("userText", asciiTextWidgetClass,
+    g->user_text = IswCreateManagedWidget("userText", textWidgetClass,
                                          g->form, ab.args, ab.count);
 
     /* Password label */
@@ -350,7 +350,7 @@ static void build_ui(Greeter *g)
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainLeft);
-    g->pass_text = IswCreateManagedWidget("passText", asciiTextWidgetClass,
+    g->pass_text = IswCreateManagedWidget("passText", textWidgetClass,
                                          g->form, ab.args, ab.count);
 
     /* Install Enter-to-login translation on password field */
@@ -709,7 +709,7 @@ int greeter_init(Greeter *g, int *argc, char **argv)
         snprintf(buf, sizeof(buf), "*Text.font: %s-%d",
                  g->font_family, g->font_size);
         fallbacks[count++] = strdup(buf);
-        snprintf(buf, sizeof(buf), "*AsciiSink.font: %s-%d",
+        snprintf(buf, sizeof(buf), "*TextSink.font: %s-%d",
                  g->font_family, g->font_size);
         fallbacks[count++] = strdup(buf);
         snprintf(buf, sizeof(buf), "*Text*textSink.font: %s-%d",

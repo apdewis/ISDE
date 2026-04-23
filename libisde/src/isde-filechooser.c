@@ -24,7 +24,6 @@
 #include <ISW/List.h>
 #include <ISW/Viewport.h>
 #include <ISW/Text.h>
-#include <ISW/AsciiText.h>
 #include <ISW/Paned.h>
 #include <ISW/IswArgMacros.h>
 
@@ -390,12 +389,11 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     IswArgString(&ab, fc->cwd);
     IswArgFromHoriz(&ab, loc_label);
     IswArgEditType(&ab, IswtextEdit);
-    IswArgType(&ab, IswAsciiString);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainRight);
-    fc->path_text = IswCreateManagedWidget("pathText", asciiTextWidgetClass,
+    fc->path_text = IswCreateManagedWidget("pathText", textWidgetClass,
                                            form, ab.args, ab.count);
     IswOverrideTranslations(fc->path_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-path-go()\n"));
@@ -492,13 +490,12 @@ Widget isde_filechooser_show(Widget parent, const char *title,
         IswArgFromVert(&ab, dir_vp);
         IswArgFromHoriz(&ab, name_label);
         IswArgEditType(&ab, IswtextEdit);
-        IswArgType(&ab, IswAsciiString);
         IswArgTop(&ab, IswChainBottom);
         IswArgBottom(&ab, IswChainBottom);
         IswArgLeft(&ab, IswChainLeft);
         IswArgRight(&ab, IswChainRight);
         fc->name_text = IswCreateManagedWidget("nameText",
-                                               asciiTextWidgetClass,
+                                               textWidgetClass,
                                                form, ab.args, ab.count);
         bottom_anchor = name_label;
     }
@@ -521,13 +518,12 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     IswArgFromVert(&ab, bottom_anchor);
     IswArgFromHoriz(&ab, filter_label);
     IswArgEditType(&ab, IswtextEdit);
-    IswArgType(&ab, IswAsciiString);
     IswArgTop(&ab, IswChainBottom);
     IswArgBottom(&ab, IswChainBottom);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainRight);
     fc->filter_text = IswCreateManagedWidget("filterText",
-                                             asciiTextWidgetClass,
+                                             textWidgetClass,
                                              form, ab.args, ab.count);
     IswOverrideTranslations(fc->filter_text, IswParseTranslationTable(
         "<Key>Return: isde-fc-filter-go()\n"));
