@@ -3,9 +3,9 @@ Name=ISDE Dark
 Author=ISDE Project
 
 [Colors]
-Background=#1E1E2E
-BackgroundLight=#2E2E3E
-BackgroundBright=#3E3E5E
+Background=#151525
+BackgroundLight=#252535
+BackgroundBright=#4A4A6A
 Foreground=#D8D8E8
 ForegroundDim=#B0B0C0
 ForegroundLight=#E8E8F0
@@ -61,16 +61,16 @@ HoverBackground=#3E3E5E
 HoverForeground=#E8E8F0
 
 [Taskbar]
-Background=#2E2E3E
+Background=#252535
 Foreground=#D8D8E8
 Border=#585870
 HoverBackground=#2E2E3E
 HoverForeground=#D8D8E8
 
 [TaskbarButton]
-Background=#2E2E3E
+Background=#252535
 Foreground=#D8D8E8
-Border=#2E2E3E
+Border=#252535
 HoverBackground=#3E3E5E
 HoverForeground=#E8E8F0
 
