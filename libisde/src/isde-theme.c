@@ -960,6 +960,15 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*IconView.background", s->bg);
     res[i++] = fmt_color("*IconView.foreground", s->fg);
 
+    /* SpinBox */
+    res[i++] = fmt_color("*SpinBox.background", s->bg_light);
+    res[i++] = fmt_color("*SpinBox*text.background", s->bg_light);
+    res[i++] = fmt_color("*SpinBox*text*textSink.background", s->bg_light);
+    res[i++] = fmt_color("*SpinBox*up.background", s->bg_bright);
+    res[i++] = fmt_color("*SpinBox*up.foreground", s->fg);
+    res[i++] = fmt_color("*SpinBox*down.background", s->bg_bright);
+    res[i++] = fmt_color("*SpinBox*down.foreground", s->fg);
+
     /* StatusBar */
     res[i++] = fmt_color("*StatusBar.background", s->bg_light);
     res[i++] = fmt_color("*StatusBar.foreground", s->fg);
