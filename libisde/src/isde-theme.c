@@ -474,6 +474,69 @@ int isde_icon_theme_list(char ***names)
     return count;
 }
 
+/* Paired version: display name + directory name, dedup by directory. */
+static void scan_icon_themes_full(const char *icons_dir,
+                                  char ***disp, char ***dir,
+                                  int *count, int *cap)
+{
+    DIR *d = opendir(icons_dir);
+    if (!d) { return; }
+
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        if (de->d_name[0] == '.') { continue; }
+        if (!theme_has_directories(icons_dir, de->d_name)) { continue; }
+
+        /* Dedup by directory name */
+        int dup = 0;
+        for (int i = 0; i < *count; i++) {
+            if (strcmp((*dir)[i], de->d_name) == 0) { dup = 1; break; }
+        }
+        if (dup) { continue; }
+
+        char index_path[512];
+        snprintf(index_path, sizeof(index_path), "%s/%s/index.theme",
+                 icons_dir, de->d_name);
+        char *name = read_theme_name(index_path);
+        if (!name) { continue; }
+
+        if (*count >= *cap) {
+            *cap *= 2;
+            *disp = realloc(*disp, *cap * sizeof(char *));
+            *dir  = realloc(*dir,  *cap * sizeof(char *));
+        }
+        (*disp)[*count] = name;
+        (*dir)[*count]  = strdup(de->d_name);
+        (*count)++;
+    }
+    closedir(d);
+}
+
+int isde_icon_theme_list_full(char ***display_names, char ***dir_names)
+{
+    int count = 0, cap = 16;
+    *display_names = malloc(cap * sizeof(char *));
+    *dir_names     = malloc(cap * sizeof(char *));
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/icons", isde_xdg_data_home());
+    scan_icon_themes_full(path, display_names, dir_names, &count, &cap);
+
+    const char *dirs = isde_xdg_data_dirs();
+    const char *p = dirs;
+    while (p && *p) {
+        const char *colon = strchr(p, ':');
+        size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
+        if (dlen > 0) {
+            snprintf(path, sizeof(path), "%.*s/icons", (int)dlen, p);
+            scan_icon_themes_full(path, display_names, dir_names, &count, &cap);
+        }
+        p = colon ? colon + 1 : NULL;
+    }
+
+    return count;
+}
+
 /* Find the base directory containing a theme (where index.theme lives) */
 /* Collect all base directories for a given icon theme.
  * The freedesktop spec says a theme can span multiple data directories

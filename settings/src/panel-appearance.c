@@ -28,7 +28,8 @@ static int     saved_cursor_idx;
 
 /* --- icon theme --- */
 static Widget  icon_list;
-static String *icon_names_arr;
+static String *icon_names_arr;  /* display names (shown in List) */
+static String *icon_dirs_arr;   /* directory names (written to config) */
 static int     icon_count;
 static int     saved_icon_idx;
 
@@ -61,7 +62,7 @@ static void appearance_apply(void)
     sr = IswListShowCurrent(icon_list);
     if (sr && sr->list_index >= 0 && sr->list_index < icon_count) {
         isde_config_write_string(path, "appearance", "icon_theme",
-                                 icon_names_arr[sr->list_index]);
+                                 icon_dirs_arr[sr->list_index]);
         saved_icon_idx = sr->list_index;
     }
 
@@ -247,15 +248,26 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     Widget icon_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
                                             form, ab.args, ab.count);
 
-    char **raw_icons = NULL;
-    icon_count = isde_icon_theme_list(&raw_icons);
-    icon_names_arr = (String *)raw_icons;
+    char **raw_disp = NULL;
+    char **raw_dirs = NULL;
+    icon_count = isde_icon_theme_list_full(&raw_disp, &raw_dirs);
+    icon_names_arr = (String *)raw_disp;
+    icon_dirs_arr  = (String *)raw_dirs;
     if (icon_count == 0) {
         icon_names_arr = malloc(sizeof(String));
+        icon_dirs_arr  = malloc(sizeof(String));
         icon_names_arr[0] = strdup("(none)");
+        icon_dirs_arr[0]  = strdup("");
         icon_count = 1;
     }
-    saved_icon_idx = find_index(icon_names_arr, icon_count, cur_icon);
+    /* Configured value is the directory name — match against icon_dirs_arr.
+     * Fall back to display-name match for configs written before the
+     * dir-name convention was adopted. */
+    saved_icon_idx = find_index(icon_dirs_arr, icon_count, cur_icon);
+    if (saved_icon_idx == 0 && cur_icon &&
+        strcmp(icon_dirs_arr[0], cur_icon) != 0) {
+        saved_icon_idx = find_index(icon_names_arr, icon_count, cur_icon);
+    }
 
     IswArgBuilderReset(&ab);
     IswArgAllowVert(&ab, True);

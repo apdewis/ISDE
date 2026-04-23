@@ -100,6 +100,13 @@ const char *isde_cursor_size_configured(void);
  * Scans $XDG_DATA_DIRS/icons/{theme}/index.theme. */
 int isde_icon_theme_list(char ***names);
 
+/* List available icon themes, returning both display names (from
+ * index.theme Name=) and the theme's directory name (the XDG identifier
+ * used in config files and passed to isde_icon_theme_lookup). Both
+ * arrays are parallel and of equal length; caller frees each string
+ * and both arrays. */
+int isde_icon_theme_list_full(char ***display_names, char ***dir_names);
+
 /* Look up an icon path in a theme by name and category.
  * Prefers scalable SVGs. Returns malloc'd path or NULL. */
 char *isde_icon_theme_lookup(const char *theme, const char *category,
