@@ -256,6 +256,10 @@ typedef struct Fm {
     Widget         ctx_shell;
     Widget         ctx_list;
     int            ctx_in_trash;
+    /* Index of the item under the pointer when the context menu opened.
+     * While non-negative, overrides fileview_get_selected*() so menu
+     * actions target the right-clicked item instead of the selection. */
+    int            ctx_target_index;
     String        *dyn_labels;
     CtxAction     *dyn_actions;
     int            dyn_nitems;

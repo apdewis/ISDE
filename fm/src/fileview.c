@@ -220,6 +220,8 @@ static void reorder_callback(Widget w, IswPointer client_data,
 
 int fileview_get_selected(Fm *fm)
 {
+    if (fm->ctx_target_index >= 0)
+        return fm->ctx_target_index;
     if (fm->view_mode == FM_VIEW_LIST && fm->listview)
         return IswListViewGetSelected(fm->listview);
     if (fm->iconview)
@@ -229,6 +231,13 @@ int fileview_get_selected(Fm *fm)
 
 int fileview_get_selected_items(Fm *fm, int **indices_out)
 {
+    if (fm->ctx_target_index >= 0) {
+        int *out = malloc(sizeof(int));
+        if (!out) { *indices_out = NULL; return 0; }
+        out[0] = fm->ctx_target_index;
+        *indices_out = out;
+        return 1;
+    }
     if (fm->view_mode == FM_VIEW_LIST && fm->listview)
         return IswListViewGetSelectedRows(fm->listview, indices_out);
     if (fm->iconview)

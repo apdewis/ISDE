@@ -14,6 +14,7 @@
 #include <sys/inotify.h>
 #endif
 #include <ISW/IswArgMacros.h>
+#include <ISW/ISWRender.h>
 
 /* App-wide shared state (will move to separate allocation in phase 2) */
 static FmApp g_app;
@@ -257,6 +258,8 @@ void fm_dismiss_context(Fm *fm)
     }
     ctx_free_dynamic(fm);
     places_dismiss_device_menu(fm);
+    /* Do not clear ctx_target_index here: ctx_select_cb dismisses the
+     * menu before invoking the action, which still needs the target. */
 }
 
 static void ctx_select_cb(Widget w, IswPointer client_data,
@@ -273,17 +276,23 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         return;
     }
     int in_trash = fm->ctx_in_trash;
+    /* Preserve across fm_dismiss_context() so the action targets the
+     * right-clicked item; cleared at end. */
+    int target = fm->ctx_target_index;
 
     if (idx < 0) {
         fm_dismiss_context(fm);
+        fm->ctx_target_index = -1;
         return;
     }
 
     if (in_trash) {
         fm_dismiss_context(fm);
+        fm->ctx_target_index = target;
         if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx]) {
             ctx_trash_actions[idx](fm);
         }
+        fm->ctx_target_index = -1;
         return;
     }
 
@@ -308,12 +317,14 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
             }
             free(file);
         }
+        fm->ctx_target_index = -1;
         return;
     }
 
     /* Adjust index past "Open with" entries + separator */
     int base_idx = idx - (fm->ow_count > 0 ? fm->ow_count + 1 : 0);
     fm_dismiss_context(fm);
+    fm->ctx_target_index = target;
 
     if (base_idx >= 0 && base_idx < BASE_NITEMS) {
         CtxAction action = base_actions[base_idx];
@@ -321,6 +332,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
             action(fm);
         }
     }
+    fm->ctx_target_index = -1;
 }
 
 static void ctx_build_open_with(Fm *fm)
@@ -414,6 +426,29 @@ static void ctx_handler(Widget w, IswPointer client_data,
     Fm *fm = (Fm *)client_data;
 
     fm_dismiss_context(fm);
+
+    /* Target the item under the pointer. The event handler is attached
+     * to the iconview/listview, but Viewport places a Clip window in
+     * between, and button events may arrive on the Clip — event_x/y
+     * are relative to ev->event (the Clip), not the inner view. Use
+     * xcb_translate_coordinates to get view-local physical-pixel coords
+     * regardless, then scale to logical pixels for HitTest. */
+    Widget view = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
+    xcb_connection_t *conn = IswDisplay(view);
+    xcb_translate_coordinates_cookie_t tc =
+        xcb_translate_coordinates(conn, ev->event, IswWindow(view),
+                                  ev->event_x, ev->event_y);
+    xcb_translate_coordinates_reply_t *tr =
+        xcb_translate_coordinates_reply(conn, tc, NULL);
+    fm->ctx_target_index = -1;
+    if (tr) {
+        int vx = tr->dst_x;
+        int vy = tr->dst_y;
+        free(tr);
+        fm->ctx_target_index = (fm->view_mode == FM_VIEW_LIST)
+            ? IswListViewHitTest(fm->listview, vx, vy)
+            : IswIconViewHitTest(fm->iconview, vx, vy);
+    }
 
     /* Check if we're in trash */
     char *trash_path = fileops_trash_path();
@@ -1156,6 +1191,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm->last_click_index = -1;
     fm->cwd_inotify_fd = -1;
     fm->cwd_wd = -1;
+    fm->ctx_target_index = -1;
 
     load_window_config(fm);
 
