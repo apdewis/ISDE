@@ -27,6 +27,7 @@ typedef struct VolumeRow {
     uint32_t    node_id;
     Widget      slider;
     Widget      mute_btn;
+    Widget      radio;
 } VolumeRow;
 
 static VolumeRow *rows = NULL;
@@ -44,6 +45,7 @@ static VolumeRow *alloc_row(TrayAudio *ta, uint32_t node_id)
     r->node_id = node_id;
     r->slider = NULL;
     r->mute_btn = NULL;
+    r->radio = NULL;
     return r;
 }
 
@@ -74,25 +76,89 @@ static void on_mute_toggled(Widget w, IswPointer client_data,
     ta_pw_set_mute(r->ta, r->node_id, state ? 1 : 0);
 }
 
+static void on_radio_toggled(Widget w, IswPointer client_data,
+                             IswPointer call_data)
+{
+    (void)call_data;
+    VolumeRow *r = (VolumeRow *)client_data;
+
+    Boolean state = False;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgState(&ab, &state);
+    IswGetValues(w, ab.args, ab.count);
+
+    if (state)
+        ta_pw_set_default_sink(r->ta, r->node_id);
+}
+
 /* ---------- build a single volume row ---------- */
 
+/*
+ * radio_peer:  if non-NULL, join this radio group
+ * is_default:  initial radio state (ignored when radio_out is NULL)
+ * radio_out:   if non-NULL, create a radio button and store it here;
+ *              if NULL, no radio button is created (used for app rows)
+ */
 static Widget build_volume_row(TrayAudio *ta, Widget parent,
                                Widget above,
                                const char *label_text,
                                uint32_t node_id,
-                               float volume, int muted)
+                               float volume, int muted,
+                               Widget radio_peer, int is_default,
+                               Widget *radio_out)
 {
     IswArgBuilder ab = IswArgBuilderInit();
     VolumeRow *row = alloc_row(ta, node_id);
 
-    /* Sink name label (spans full width above the slider row) */
-    IswArgLabel(&ab, label_text);
+    Widget label_left = NULL;  /* widget to the left of the label */
+
+    /* Radio button for output selection */
+    if (radio_out) {
+        IswArgLabel(&ab, "");
+        IswArgBorderWidth(&ab, 0);
+        IswArgFromVert(&ab, above);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
+        IswArgState(&ab, is_default ? True : False);
+        IswArgHorizDistance(&ab, 8);
+        IswArgVertDistance(&ab, 4);
+        IswArgWidth(&ab, 16);
+        IswArgHeight(&ab, 16);
+        if (radio_peer)
+            IswArgRadioGroup(&ab, radio_peer);
+        Widget rb = IswCreateManagedWidget("outRadio", toggleWidgetClass,
+                                           parent, ab.args, ab.count);
+        IswAddCallback(rb, IswNcallback, on_radio_toggled, row);
+        row->radio = rb;
+        *radio_out = rb;
+        label_left = rb;
+        IswArgBuilderReset(&ab);
+    }
+
+    /* Sink/stream name label — wrap long names */
+    char wrapped[512];
+    strncpy(wrapped, label_text, sizeof(wrapped) - 1);
+    wrapped[sizeof(wrapped) - 1] = '\0';
+    if (strlen(wrapped) > 40) {
+        for (int k = 40; wrapped[k]; k++) {
+            if (wrapped[k] == ' ') {
+                wrapped[k] = '\n';
+                break;
+            }
+        }
+    }
+    IswArgLabel(&ab, wrapped);
     IswArgBorderWidth(&ab, 0);
     IswArgFromVert(&ab, above);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainRight);
     IswArgJustify(&ab, IswJustifyLeft);
-    IswArgHorizDistance(&ab, 8);
+    if (label_left) {
+        IswArgFromHoriz(&ab, label_left);
+        IswArgHorizDistance(&ab, 4);
+    } else {
+        IswArgHorizDistance(&ab, 8);
+    }
     IswArgVertDistance(&ab, 4);
     if (ta->small_font)
         IswArgFont(&ab, ta->small_font);
@@ -179,16 +245,16 @@ static void build_output_content(TrayAudio *ta)
         return;
     }
 
+    Widget first_radio = NULL;
     for (int i = 0; i < ta->nsinks; i++) {
         SinkInfo *s = &ta->sinks[i];
-        char label[280];
-        if (s->is_default)
-            snprintf(label, sizeof(label), "* %s", s->name);
-        else
-            snprintf(label, sizeof(label), "  %s", s->name);
+        Widget radio = NULL;
 
         above = build_volume_row(ta, ta->output_page, above,
-                                 label, s->id, s->volume, s->muted);
+                                 s->name, s->id, s->volume, s->muted,
+                                 first_radio, s->is_default, &radio);
+        if (!first_radio)
+            first_radio = radio;
     }
 }
 
@@ -217,7 +283,8 @@ static void build_app_content(TrayAudio *ta)
     for (int i = 0; i < ta->nstreams; i++) {
         StreamInfo *s = &ta->streams[i];
         above = build_volume_row(ta, ta->app_page, above,
-                                 s->name, s->id, s->volume, s->muted);
+                                 s->name, s->id, s->volume, s->muted,
+                                 NULL, 0, NULL);
     }
 }
 
@@ -349,7 +416,7 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell for popup — border via theme resources */
-    IswArgWidth(&ab, 450);
+    IswArgWidth(&ab, 520);
     IswArgHeight(&ab, 200);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
@@ -463,6 +530,12 @@ void ta_popup_update(TrayAudio *ta)
             IswArgBuilder ab = IswArgBuilderInit();
             IswArgState(&ab, muted ? True : False);
             IswSetValues(r->mute_btn, ab.args, ab.count);
+        }
+
+        if (r->radio && sink) {
+            IswArgBuilder ab = IswArgBuilderInit();
+            IswArgState(&ab, sink->is_default ? True : False);
+            IswSetValues(r->radio, ab.args, ab.count);
         }
     }
 }

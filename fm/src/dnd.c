@@ -133,11 +133,15 @@ static void start_drag(Fm *fm)
     Widget drag_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
     uri_type = ISWXdndInternType(drag_w, "text/uri-list");
 
+    IswDndAction actions = ISW_DND_ACTION_COPY;
+    if (fm->dnd_saved_press.state & XCB_MOD_MASK_SHIFT)
+        actions |= ISW_DND_ACTION_MOVE;
+
     IswDragSourceDesc desc;
     memset(&desc, 0, sizeof(desc));
     desc.types       = &uri_type;
     desc.num_types   = 1;
-    desc.actions     = ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE;
+    desc.actions     = actions;
     desc.convert     = drag_convert;
     desc.finished    = drag_finished;
     desc.client_data = fm;
