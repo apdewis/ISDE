@@ -1,9 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <path d="M9.6 10.2 A20 20 0 0 1 43.2 18.4 L25.1 16.1 A8 8 0 0 0 16.6 27.1Z" fill="currentColor" opacity="0.4"/>
-  <path d="M43.2 18.4 A20 20 0 0 1 19.2 43.4 L30.3 28.8 A8 8 0 0 0 25.1 16.1Z" fill="currentColor" opacity="0.2"/>
-  <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" stroke-width="1.5"/>
-  <circle cx="24" cy="24" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/>
-  <line x1="16.6" y1="27.1" x2="9.6" y2="10.2" stroke="currentColor" stroke-width="1.5"/>
-  <line x1="30.3" y1="28.8" x2="19.2" y2="43.4" stroke="currentColor" stroke-width="1.5"/>
-  <line x1="25.1" y1="16.1" x2="43.2" y2="18.4" stroke="currentColor" stroke-width="1.5"/>
+  <path
+     d="m 7.9219325,12.197638 a 20,20 0 0 1 34.3828625,3.744168 l -18.245363,0.0822 a 8,8 0 0 0 -6.991493,12.015366 z"
+     fill="currentColor"
+     opacity="0.4"
+     id="path1" />
+  <path
+     d="M 42.304795,15.941806 A 20,20 0 0 1 21.773273,43.860556 L 30.872628,27.93662 A 8,8 0 0 0 24.059432,16.024007 Z"
+     fill="currentColor"
+     opacity="0.2"
+     id="path2" />
+  <circle
+     cx="20.662048"
+     cy="26.927305"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.5"
+     id="circle2"
+     transform="rotate(-7.5)"
+     r="20" />
+  <circle
+     cx="20.662048"
+     cy="26.927305"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.5"
+     id="circle3"
+     transform="rotate(-7.5)"
+     r="8" />
+  <line
+     x1="17.06794"
+     y1="28.039373"
+     x2="7.9219327"
+     y2="12.197638"
+     stroke="currentColor"
+     stroke-width="1.5"
+     id="line3" />
+  <line
+     x1="30.872627"
+     y1="27.936619"
+     x2="21.773273"
+     y2="43.860558"
+     stroke="currentColor"
+     stroke-width="1.5"
+     id="line4" />
+  <line
+     x1="24.059433"
+     y1="16.024008"
+     x2="42.304794"
+     y2="15.941806"
+     stroke="currentColor"
+     stroke-width="1.5"
+     id="line5" />
 </svg>
