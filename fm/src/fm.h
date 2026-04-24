@@ -352,6 +352,7 @@ void  browser_open_entry(Fm *fm, int index);
 /* ---------- fileview.c ---------- */
 void  fileview_init(Fm *fm);
 void  fileview_populate(Fm *fm);
+void  fileview_update_status(Fm *fm);
 void  fileview_cleanup(Fm *fm);
 void  fileview_set_mode(Fm *fm, FmViewMode mode);
 int   fileview_get_selected(Fm *fm);

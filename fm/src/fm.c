@@ -931,7 +931,17 @@ static void act_toggle_view(Widget w, xcb_generic_event_t *ev, String *p, Cardin
                          ? FM_VIEW_LIST : FM_VIEW_ICON);
 }
 
+static void act_update_status(Widget w, xcb_generic_event_t *ev,
+                              String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm)
+        fileview_update_status(fm);
+}
+
 static IswActionsRec fm_actions[] = {
+    {"fm-update-status", act_update_status},
     {"fm-copy",          act_copy},
     {"fm-cut",           act_cut},
     {"fm-paste",         act_paste},
@@ -1385,6 +1395,10 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm->main_window = IswCreateManagedWidget("mainWin", mainWindowWidgetClass,
                                             fm->toplevel, NULL, 0);
     IswUnmanageChild(IswMainWindowGetMenuBar(fm->main_window));
+
+    /* Status bar (MainWindow auto-claims StatusBar children) */
+    IswCreateManagedWidget("statusBar", statusBarWidgetClass,
+                           fm->main_window, NULL, 0);
 
     /* Outer FlexBox: vertical */
     IswArgBuilder ab = IswArgBuilderInit();

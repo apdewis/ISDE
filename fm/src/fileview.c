@@ -316,6 +316,22 @@ void fileview_init(Fm *fm)
     fm_register_context_menu(fm, fm->iconview);
     fm_install_shortcuts(fm->iconview);
 
+    IswOverrideTranslations(fm->iconview, IswParseTranslationTable(
+        "<Btn1Down>: SelectItem() fm-update-status()\n"
+        "<Btn1Up>: BandFinish() fm-update-status()\n"
+        "Ctrl<Key>a: SelectAll() fm-update-status()\n"
+        "Shift<Key>Left: ExtendSelection(left) fm-update-status()\n"
+        "Shift<Key>Right: ExtendSelection(right) fm-update-status()\n"
+        "Shift<Key>Up: ExtendSelection(up) fm-update-status()\n"
+        "Shift<Key>Down: ExtendSelection(down) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Left: MoveCursor(left) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Right: MoveCursor(right) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Up: MoveCursor(up) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Down: MoveCursor(down) fm-update-status()\n"
+        "<Key>Home: MoveCursor(home) fm-update-status()\n"
+        "<Key>End: MoveCursor(end) fm-update-status()\n"
+        "<Key>space: ToggleCursor() fm-update-status()\n"));
+
     /* ListView inside viewport (initially unmanaged) */
     IswArgBuilderReset(&ab);
     IswArgBorderWidth(&ab, 0);
@@ -329,6 +345,18 @@ void fileview_init(Fm *fm)
     IswAddCallback(fm->listview, IswNreorderCallback, reorder_callback, fm);
     fm_register_context_menu(fm, fm->listview);
     fm_install_shortcuts(fm->listview);
+
+    IswOverrideTranslations(fm->listview, IswParseTranslationTable(
+        "<Btn1Down>: SelectRow() fm-update-status()\n"
+        "<Btn1Up>: BandFinish() fm-update-status()\n"
+        "Ctrl<Key>a: SelectAll() fm-update-status()\n"
+        "Shift<Key>Up: ExtendSelection(up) fm-update-status()\n"
+        "Shift<Key>Down: ExtendSelection(down) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Up: MoveCursor(up) fm-update-status()\n"
+        "~Shift ~Ctrl<Key>Down: MoveCursor(down) fm-update-status()\n"
+        "<Key>Home: MoveCursor(home) fm-update-status()\n"
+        "<Key>End: MoveCursor(end) fm-update-status()\n"
+        "<Key>space: ToggleCursor() fm-update-status()\n"));
 
     /* Default to icon view */
     fm->view_mode = FM_VIEW_ICON;
@@ -363,6 +391,73 @@ void fileview_set_mode(Fm *fm, FmViewMode mode)
     fileview_populate(fm);
 }
 
+static void format_iec_size(off_t size, char *buf, size_t len)
+{
+    if (size < 1024)
+        snprintf(buf, len, "%ld B", (long)size);
+    else if (size < 1024 * 1024)
+        snprintf(buf, len, "%.1f KiB", size / 1024.0);
+    else if (size < 1024L * 1024 * 1024)
+        snprintf(buf, len, "%.1f MiB", size / (1024.0 * 1024));
+    else if (size < 1024LL * 1024 * 1024 * 1024)
+        snprintf(buf, len, "%.1f GiB", size / (1024.0 * 1024 * 1024));
+    else
+        snprintf(buf, len, "%.1f TiB", size / (1024.0 * 1024 * 1024 * 1024));
+}
+
+void fileview_update_status(Fm *fm)
+{
+    if (!fm->status_label)
+        return;
+
+    int ndirs = 0, nfiles = 0;
+    off_t total_size = 0;
+    for (int i = 0; i < fm->nentries; i++) {
+        if (fm->entries[i].is_dir)
+            ndirs++;
+        else {
+            nfiles++;
+            total_size += fm->entries[i].size;
+        }
+    }
+
+    char sizebuf[32];
+    char buf[256];
+
+    int *sel = NULL;
+    int nsel = fileview_get_selected_items(fm, &sel);
+    if (nsel > 0 && sel) {
+        int sel_dirs = 0, sel_files = 0;
+        off_t sel_size = 0;
+        for (int i = 0; i < nsel; i++) {
+            int idx = sel[i];
+            if (idx < 0 || idx >= fm->nentries)
+                continue;
+            if (fm->entries[idx].is_dir)
+                sel_dirs++;
+            else {
+                sel_files++;
+                sel_size += fm->entries[idx].size;
+            }
+        }
+        free(sel);
+
+        format_iec_size(sel_size, sizebuf, sizeof(sizebuf));
+        snprintf(buf, sizeof(buf),
+                 "%d folders, %d files selected (%s)",
+                 sel_dirs, sel_files, sizebuf);
+    } else {
+        free(sel);
+        format_iec_size(total_size, sizebuf, sizeof(sizebuf));
+        snprintf(buf, sizeof(buf), "%d folders, %d files (%s)",
+                 ndirs, nfiles, sizebuf);
+    }
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, buf);
+    IswSetValues(fm->status_label, ab.args, ab.count);
+}
+
 void fileview_populate(Fm *fm)
 {
     if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
@@ -390,22 +485,7 @@ void fileview_populate(Fm *fm)
         IswListViewSetSort(fm->listview, vis_col, fm->sort_dir);
     }
 
-    /* Update status bar */
-    if (fm->status_label) {
-        char buf[128];
-        int ndirs = 0, nfiles = 0;
-        for (int i = 0; i < fm->nentries; i++) {
-            if (fm->entries[i].is_dir) {
-                ndirs++;
-            } else {
-                nfiles++;
-            }
-        }
-        snprintf(buf, sizeof(buf), "%d folders, %d files", ndirs, nfiles);
-        IswArgBuilder ab = IswArgBuilderInit();
-        IswArgLabel(&ab, buf);
-        IswSetValues(fm->status_label, ab.args, ab.count);
-    }
+    fileview_update_status(fm);
 }
 
 void fileview_cleanup(Fm *fm)
