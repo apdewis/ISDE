@@ -516,7 +516,7 @@ static void ctx_set_default(Fm *fm)
         IswListHighlight(ctx->list, fm->ow_default);
 
     IsdeDialogButton btns[2] = {
-        { "Set Default", set_default_ok_cb,     ctx },
+        { "Apply", set_default_ok_cb,     ctx },
         { "Cancel",      set_default_cancel_cb, ctx },
     };
     isde_dialog_add_buttons(form, ctx->list, 300, btns, 2);
