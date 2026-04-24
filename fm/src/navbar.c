@@ -100,9 +100,9 @@ void navbar_init(Fm *fm)
 {
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgBorderWidth(&ab, 1);
-    IswArgHSpace(&ab, 4);
-    IswArgVSpace(&ab, 2);
-    IswArgHeight(&ab, 36);
+    IswArgHSpace(&ab, 7);
+    IswArgVSpace(&ab, 7);
+    IswArgFlexBasis(&ab, 46);
     fm->nav_box = IswCreateManagedWidget("navBar", toolbarWidgetClass,
                                         fm->vbox, ab.args, ab.count);
 
