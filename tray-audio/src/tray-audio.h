@@ -123,6 +123,9 @@ typedef struct TrayAudio {
     struct pw_proxy     *metadata;
     struct spa_hook      metadata_listener;
 
+    /* Small font for popup widgets */
+    IswFontStruct       *small_font;
+
     /* Session D-Bus (theme changes) */
     IsdeDBus            *session_dbus;
 

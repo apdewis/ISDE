@@ -224,6 +224,28 @@ int tray_audio_init(TrayAudio *ta, int *argc, char **argv)
         }
     }
 
+    /* Load the system small font (from [fonts] config, default 9pt) */
+    {
+        const char *fam = "Sans";
+        int sz = 9;
+        char errbuf[256];
+        IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf,
+                                                sizeof(errbuf));
+        if (cfg) {
+            IsdeConfigTable *root = isde_config_root(cfg);
+            IsdeConfigTable *fonts = isde_config_table(root, "fonts");
+            if (fonts) {
+                fam = isde_config_string(fonts, "small_family", fam);
+                int csz = (int)isde_config_int(fonts, "small_size", 0);
+                if (csz > 0) sz = csz;
+            }
+        }
+        char spec[128];
+        snprintf(spec, sizeof(spec), "%s-%d", fam, sz);
+        ta->small_font = isde_resolve_font(ta->toplevel, spec);
+        if (cfg) isde_config_free(cfg);
+    }
+
     ta->icon_state = -1;  /* Force icon load on first update */
     ta->running = 1;
     return 0;

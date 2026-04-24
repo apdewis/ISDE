@@ -94,6 +94,8 @@ static Widget build_volume_row(TrayAudio *ta, Widget parent,
     IswArgJustify(&ab, IswJustifyLeft);
     IswArgHorizDistance(&ab, 8);
     IswArgVertDistance(&ab, 4);
+    if (ta->small_font)
+        IswArgFont(&ab, ta->small_font);
     Widget lbl = IswCreateManagedWidget("volLabel", labelWidgetClass,
                                         parent, ab.args, ab.count);
 
@@ -168,6 +170,8 @@ static void build_output_content(TrayAudio *ta)
         if (scheme) {
             IswArgForeground(&ab, scheme->fg_dim);
         }
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
         IswArgHorizDistance(&ab, 8);
         IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noOutputs", labelWidgetClass,
@@ -201,6 +205,8 @@ static void build_app_content(TrayAudio *ta)
         if (scheme) {
             IswArgForeground(&ab, scheme->fg_dim);
         }
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
         IswArgHorizDistance(&ab, 8);
         IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noStreams", labelWidgetClass,
@@ -343,7 +349,7 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell for popup — border via theme resources */
-    IswArgWidth(&ab, 320);
+    IswArgWidth(&ab, 450);
     IswArgHeight(&ab, 200);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
@@ -357,6 +363,8 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilderReset(&ab);
     IswArgTabLabel(&ab, "Outputs");
     IswArgDefaultDistance(&ab, 0);
+    if (ta->small_font)
+        IswArgFont(&ab, ta->small_font);
     ta->output_page = IswCreateManagedWidget("outputPage",
                                              formWidgetClass,
                                              ta->tabs, ab.args, ab.count);
@@ -365,6 +373,8 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilderReset(&ab);
     IswArgTabLabel(&ab, "Applications");
     IswArgDefaultDistance(&ab, 0);
+    if (ta->small_font)
+        IswArgFont(&ab, ta->small_font);
     ta->app_page = IswCreateManagedWidget("appPage",
                                           formWidgetClass,
                                           ta->tabs, ab.args, ab.count);
