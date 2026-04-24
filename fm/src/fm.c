@@ -15,6 +15,10 @@
 #endif
 #include <ISW/IswArgMacros.h>
 #include <ISW/ISWRender.h>
+#include <ISW/Toggle.h>
+#include <errno.h>
+#include <pwd.h>
+#include <grp.h>
 
 /* App-wide shared state (will move to separate allocation in phase 2) */
 static FmApp g_app;
@@ -183,6 +187,285 @@ static void ctx_open_terminal(Fm *fm)
     }
 }
 
+/* ---------- properties dialog ---------- */
+
+typedef struct {
+    Fm     *fm;
+    Widget  shell;
+    Widget  toggles[9]; /* owner rwx, group rwx, others rwx */
+    char   *path;
+} PropsCtx;
+
+static void props_apply_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    PropsCtx *ctx = (PropsCtx *)cd;
+
+    mode_t mode = 0;
+    static const mode_t bits[] = {
+        S_IRUSR, S_IWUSR, S_IXUSR,
+        S_IRGRP, S_IWGRP, S_IXGRP,
+        S_IROTH, S_IWOTH, S_IXOTH,
+    };
+    for (int i = 0; i < 9; i++) {
+        Boolean state = False;
+        Arg args[1];
+        IswSetArg(args[0], IswNstate, &state);
+        IswGetValues(ctx->toggles[i], args, 1);
+        if (state)
+            mode |= bits[i];
+    }
+
+    if (chmod(ctx->path, mode) != 0) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Cannot change permissions:\n%s",
+                 strerror(errno));
+        isde_dialog_message(ctx->shell, "Error", msg, NULL, NULL);
+    }
+}
+
+static void props_close_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    PropsCtx *ctx = (PropsCtx *)cd;
+    ctx->fm->props_shell = NULL;
+    isde_dialog_dismiss(ctx->shell);
+    free(ctx->path);
+    free(ctx);
+}
+
+static void show_properties_dialog(Fm *fm)
+{
+    int sel = fileview_get_selected(fm);
+    if (sel < 0 || sel >= fm->nentries)
+        return;
+
+    FmEntry *e = &fm->entries[sel];
+    struct stat st;
+    if (stat(e->full_path, &st) != 0) {
+        isde_dialog_message(fm->toplevel, "Error",
+                            "Cannot read file information.", NULL, NULL);
+        return;
+    }
+
+    isde_dialog_dismiss(fm->props_shell);
+
+    PropsCtx *ctx = calloc(1, sizeof(*ctx));
+    ctx->fm = fm;
+    ctx->path = strdup(e->full_path);
+
+    ctx->shell = isde_dialog_create_shell(fm->toplevel, "propsShell",
+                                          "Properties", 420, 480);
+    fm->props_shell = ctx->shell;
+
+    Widget form = IswCreateManagedWidget("form", formWidgetClass,
+                                        ctx->shell, NULL, 0);
+
+    /* --- info rows --- */
+    static const char *field_names[] = {
+        "Name:", "Location:", "Type:", "Size:", "Modified:",
+        "Owner:", "Group:"
+    };
+    #define NFIELDS 7
+    #define LABEL_W 80
+
+    /* Prepare value strings */
+    char size_str[32];
+    if (e->is_dir) {
+        snprintf(size_str, sizeof(size_str), "--");
+    } else {
+        if (st.st_size < 1024)
+            snprintf(size_str, sizeof(size_str), "%ld B", (long)st.st_size);
+        else if (st.st_size < 1024 * 1024)
+            snprintf(size_str, sizeof(size_str), "%.1f KiB",
+                     st.st_size / 1024.0);
+        else if (st.st_size < 1024L * 1024 * 1024)
+            snprintf(size_str, sizeof(size_str), "%.1f MiB",
+                     st.st_size / (1024.0 * 1024));
+        else if (st.st_size < 1024LL * 1024 * 1024 * 1024)
+            snprintf(size_str, sizeof(size_str), "%.1f GiB",
+                     st.st_size / (1024.0 * 1024 * 1024));
+        else
+            snprintf(size_str, sizeof(size_str), "%.1f TiB",
+                     st.st_size / (1024.0 * 1024 * 1024 * 1024));
+    }
+
+    char time_str[64];
+    struct tm *tm = localtime(&st.st_mtime);
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M", tm);
+
+    /* Dirname */
+    char *dir = strdup(e->full_path);
+    char *slash = strrchr(dir, '/');
+    if (slash && slash != dir) *slash = '\0';
+    else if (slash) dir[1] = '\0';
+
+    /* Owner / group */
+    char owner_str[64], group_str[64];
+    struct passwd *pw = getpwuid(st.st_uid);
+    if (pw)
+        snprintf(owner_str, sizeof(owner_str), "%s", pw->pw_name);
+    else
+        snprintf(owner_str, sizeof(owner_str), "%u", st.st_uid);
+
+    struct group *gr = getgrgid(st.st_gid);
+    if (gr)
+        snprintf(group_str, sizeof(group_str), "%s", gr->gr_name);
+    else
+        snprintf(group_str, sizeof(group_str), "%u", st.st_gid);
+
+    const char *type_str = e->is_dir ? "Folder" : "File";
+    const char *dot = e->is_dir ? NULL : strrchr(e->name, '.');
+    char type_buf[64];
+    if (dot && dot[1]) {
+        snprintf(type_buf, sizeof(type_buf), "%s file", dot + 1);
+        type_str = type_buf;
+    }
+
+    const char *values[] = {
+        e->name, dir, type_str, size_str, time_str,
+        owner_str, group_str
+    };
+
+    Widget prev_row = NULL;
+    IswArgBuilder ab = IswArgBuilderInit();
+    for (int i = 0; i < NFIELDS; i++) {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, field_names[i]);
+        IswArgBorderWidth(&ab, 0);
+        IswArgWidth(&ab, LABEL_W);
+        IswArgJustify(&ab, IswJustifyRight);
+        IswArgResize(&ab, False);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        if (prev_row)
+            IswArgFromVert(&ab, prev_row);
+        Widget lbl = IswCreateManagedWidget("fieldLabel", labelWidgetClass,
+                                            form, ab.args, ab.count);
+
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, values[i]);
+        IswArgBorderWidth(&ab, 0);
+        IswArgFromHoriz(&ab, lbl);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainRight);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        IswArgJustify(&ab, IswJustifyLeft);
+        if (prev_row)
+            IswArgFromVert(&ab, prev_row);
+        prev_row = IswCreateManagedWidget("fieldValue", labelWidgetClass,
+                                          form, ab.args, ab.count);
+    }
+
+    free(dir);
+
+    /* --- permissions section --- */
+    static const char *col_headers[] = { "Read", "Write", "Execute" };
+    static const char *row_headers[] = { "Owner", "Group", "Others" };
+    static const mode_t bits[] = {
+        S_IRUSR, S_IWUSR, S_IXUSR,
+        S_IRGRP, S_IWGRP, S_IXGRP,
+        S_IROTH, S_IWOTH, S_IXOTH,
+    };
+
+    /* Section label */
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Permissions");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFromVert(&ab, prev_row);
+    IswArgVertDistance(&ab, 16);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    Widget section_lbl = IswCreateManagedWidget("sectionHd", labelWidgetClass,
+                                                form, ab.args, ab.count);
+
+    /* Column headers */
+    Widget col_prev = NULL;
+    Widget col_hdrs[3];
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgWidth(&ab, LABEL_W);
+    IswArgFromVert(&ab, section_lbl);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgResize(&ab, False);
+    col_prev = IswCreateManagedWidget("spacer", labelWidgetClass,
+                                      form, ab.args, ab.count);
+
+    for (int c = 0; c < 3; c++) {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, col_headers[c]);
+        IswArgBorderWidth(&ab, 0);
+        IswArgFromHoriz(&ab, col_prev);
+        IswArgFromVert(&ab, section_lbl);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        col_hdrs[c] = IswCreateManagedWidget("colHdr", labelWidgetClass,
+                                              form, ab.args, ab.count);
+        col_prev = col_hdrs[c];
+    }
+
+    /* Toggle grid: 3 rows x 3 cols */
+    Widget row_above = col_hdrs[0];
+    for (int r = 0; r < 3; r++) {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, row_headers[r]);
+        IswArgBorderWidth(&ab, 0);
+        IswArgWidth(&ab, LABEL_W);
+        IswArgJustify(&ab, IswJustifyRight);
+        IswArgResize(&ab, False);
+        IswArgFromVert(&ab, row_above);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        Widget row_lbl = IswCreateManagedWidget("rowLabel", labelWidgetClass,
+                                                form, ab.args, ab.count);
+
+        Widget hprev = row_lbl;
+        for (int c = 0; c < 3; c++) {
+            int idx = r * 3 + c;
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, "");
+            IswArgBorderWidth(&ab, 1);
+            IswArgFromHoriz(&ab, hprev);
+            IswArgFromVert(&ab, row_above);
+            IswArgLeft(&ab, IswChainLeft);
+            IswArgRight(&ab, IswChainLeft);
+            IswArgTop(&ab, IswChainTop);
+            IswArgBottom(&ab, IswChainTop);
+            if ((st.st_mode & bits[idx]))
+                IswArgState(&ab, True);
+            ctx->toggles[idx] = IswCreateManagedWidget(
+                "permToggle", toggleWidgetClass, form, ab.args, ab.count);
+            hprev = ctx->toggles[idx];
+        }
+        row_above = row_lbl;
+    }
+
+    /* Buttons */
+    IsdeDialogButton btns[] = {
+        { "Apply", props_apply_cb, ctx },
+        { "Close", props_close_cb, ctx },
+    };
+    isde_dialog_add_buttons(form, row_above, 420, btns, 2);
+
+    isde_dialog_popup(ctx->shell, IswGrabExclusive);
+
+    #undef NFIELDS
+    #undef LABEL_W
+}
+
 /* ---------- right-click context menu (List-based) ---------- */
 
 typedef void (*CtxAction)(Fm *);
@@ -213,17 +496,21 @@ static void ctx_restore(Fm *fm) {
     }
 }
 
+static void ctx_properties(Fm *fm) { show_properties_dialog(fm); }
+
 static String base_labels[] = {
     "Cut", "Copy", "Paste", "---",
     "Rename", "Delete", "---",
-    "New Folder", "Open Terminal Here"
+    "New Folder", "Open Terminal Here", "---",
+    "Properties"
 };
 static CtxAction base_actions[] = {
     ctx_cut, ctx_copy, ctx_paste, NULL,
     ctx_rename, ctx_delete_action, NULL,
-    ctx_new_folder, ctx_open_terminal
+    ctx_new_folder, ctx_open_terminal, NULL,
+    ctx_properties
 };
-#define BASE_NITEMS 9
+#define BASE_NITEMS 11
 
 static String ctx_trash_labels[] = {
     "Restore", "Delete Permanently", "---", "Empty Trash", NULL

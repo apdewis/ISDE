@@ -255,6 +255,9 @@ typedef struct Fm {
     /* Set Default Application dialog (per-window) */
     Widget         set_default_shell;
 
+    /* Properties dialog (per-window) */
+    Widget         props_shell;
+
     /* Context menu (per-window) */
     Widget         ctx_shell;
     Widget         ctx_list;
