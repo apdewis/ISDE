@@ -21,6 +21,18 @@ Including:
  - Panel: Allow replacement of standard widgets, enhance or replace task bar, start menu etc, calendar app hook for the clock and other modularity
  - Settings, allow apps and modules to add to the commons settings area
 
+## Multi-monitor support
+
+ISDE currently treats the entire X screen as a single work area anchored to the RandR primary output. The following are needed for proper multi-monitor support:
+
+- **Per-monitor work areas in WM** — `wm_get_work_area()` computes one rectangle. The WM needs to enumerate outputs via RandR, maintain per-output geometry, and compute per-monitor work areas (screen rect minus applicable struts). Maximize, snap, and fullscreen should target the monitor the window is on, not the combined screen.
+- **Per-monitor window placement** — cascade and dialog centering in `placement.c` should place windows on the monitor where the pointer or parent is, clamped to that monitor's work area.
+- **EWMH per-monitor properties** — advertise `_NET_WORKAREA` arrays (one per desktop × monitor), `_NET_DESKTOP_GEOMETRY`, and `_NET_WM_FULLSCREEN_MONITORS`.
+- **Panel on each monitor** — either spawn a panel instance per output or allow multi-monitor panel configuration. Secondary monitors currently have no panel.
+- **Desktop icons per monitor** — `desktop.c` sizes itself to one `_NET_WORKAREA` rectangle. Desktop icons need per-monitor regions so they don't span across bezels or pile onto one screen.
+- **Display configuration in settings** — the display settings panel can enumerate outputs but cannot set resolutions, positions, rotation, or enable/disable monitors. Needs full RandR mode setting and a spatial arrangement UI.
+- **Per-monitor DPI scaling** — the current global scale factor should become per-output so mixed-DPI setups render correctly.
+
 ## HIG (DESIGN.md)
 
 The following areas are not yet covered and should be added as the DE matures:
