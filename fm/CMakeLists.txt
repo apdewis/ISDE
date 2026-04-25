@@ -13,6 +13,7 @@ add_executable(isde-fm
     src/progress.c
     src/places.c
     src/fm_mountd.c
+    src/actions.c
 )
 
 target_compile_definitions(isde-fm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

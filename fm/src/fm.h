@@ -47,6 +47,7 @@
 #define FM_ICON_SIZE     48
 #define FM_HISTORY_MAX   64
 #define MAX_OPEN_WITH    16
+#define MAX_CTX_ACTIONS  32
 
 /* ---------- View mode ---------- */
 typedef enum {
@@ -115,6 +116,14 @@ typedef struct FmJob {
     IswIntervalId    progress_timer;    /* polls atomic counters */
     struct FmJob   *next;
 } FmJob;
+
+/* ---------- Custom script action ---------- */
+typedef struct {
+    char  *script_path;
+    char  *name;
+    char **mime_types;     /* NULL-terminated, or NULL = unrestricted */
+    char **file_patterns;  /* NULL-terminated, or NULL = unrestricted */
+} FmAction;
 
 /* ---------- Context menu action function ---------- */
 struct Fm;
@@ -185,6 +194,10 @@ typedef struct FmApp {
     FmDeviceInfo    mountd_devices[FM_MAX_DEVICES];
     int             mountd_ndevices;
     int             has_mountd;
+
+    /* Custom script actions */
+    FmAction      *actions;
+    int            nactions;
 
     int            running;
 } FmApp;
@@ -269,6 +282,11 @@ typedef struct Fm {
     String        *dyn_labels;
     CtxAction     *dyn_actions;
     int            dyn_nitems;
+
+    /* Custom actions state (per-window) */
+    int            ctx_action_indices[MAX_CTX_ACTIONS];
+    int            ctx_naction_indices;
+    int            ctx_action_offset;  /* index in dyn_labels where actions start */
 
     /* "Open with" state (per-window) */
     int            ow_indices[MAX_OPEN_WITH];
@@ -424,6 +442,12 @@ FmJob *jobqueue_submit_delete(FmApp *app, Fm *win,
 FmJob *jobqueue_submit_trash(FmApp *app, Fm *win,
                              char **srcs, int nsrc);
 FmJob *jobqueue_submit_empty_trash(FmApp *app, Fm *win);
+
+/* ---------- actions.c ---------- */
+void  actions_scan(FmApp *app);
+int   actions_match(FmApp *app, const FmEntry **entries, int nentries,
+                    int *indices, int max);
+void  actions_cleanup(FmApp *app);
 
 /* ---------- instance.c ---------- */
 int   instance_try_primary(FmApp *app, const char *path);

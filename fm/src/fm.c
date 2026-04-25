@@ -552,6 +552,38 @@ void fm_dismiss_context(Fm *fm)
      * menu before invoking the action, which still needs the target. */
 }
 
+static void ctx_run_action(Fm *fm, int action_idx)
+{
+    FmApp *app = fm->app_state;
+    if (action_idx < 0 || action_idx >= app->nactions)
+        return;
+
+    FmAction *act = &app->actions[action_idx];
+
+    int *sel_indices = NULL;
+    int nsel = fileview_get_selected_items(fm, &sel_indices);
+    if (nsel <= 0) {
+        free(sel_indices);
+        return;
+    }
+
+    /* Build argv: [script_path, file1, file2, ..., NULL] */
+    char **argv = malloc((nsel + 2) * sizeof(char *));
+    argv[0] = act->script_path;
+    for (int i = 0; i < nsel; i++)
+        argv[i + 1] = fm->entries[sel_indices[i]].full_path;
+    argv[nsel + 1] = NULL;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execv(act->script_path, argv);
+        _exit(127);
+    }
+
+    free(argv);
+    free(sel_indices);
+}
+
 static void ctx_select_cb(Widget w, IswPointer client_data,
                           IswPointer call_data)
 {
@@ -607,6 +639,18 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
             }
             free(file);
         }
+        fm->ctx_target_index = -1;
+        return;
+    }
+
+    /* Check if this is a custom script action */
+    if (fm->ctx_naction_indices > 0 &&
+        idx >= fm->ctx_action_offset &&
+        idx < fm->ctx_action_offset + fm->ctx_naction_indices) {
+        int ai = fm->ctx_action_indices[idx - fm->ctx_action_offset];
+        fm->ctx_target_index = target;
+        ctx_run_action(fm, ai);
+        fm_dismiss_context(fm);
         fm->ctx_target_index = -1;
         return;
     }
@@ -812,12 +856,53 @@ static void ctx_set_default(Fm *fm)
     isde_dialog_popup(ctx->shell, IswGrabExclusive);
 }
 
+static void ctx_build_actions(Fm *fm)
+{
+    fm->ctx_naction_indices = 0;
+    fm->ctx_action_offset = 0;
+    FmApp *app = fm->app_state;
+    if (app->nactions == 0)
+        return;
+
+    /* Collect selected entries */
+    int *sel = NULL;
+    int nsel = fileview_get_selected_items(fm, &sel);
+    if (nsel <= 0) {
+        free(sel);
+        /* No selection — only show filterless actions */
+        const FmEntry *none = NULL;
+        fm->ctx_naction_indices = actions_match(app, &none, 0,
+                                                fm->ctx_action_indices,
+                                                MAX_CTX_ACTIONS);
+        return;
+    }
+
+    const FmEntry **entries = malloc(nsel * sizeof(FmEntry *));
+    for (int i = 0; i < nsel; i++)
+        entries[i] = &fm->entries[sel[i]];
+
+    fm->ctx_naction_indices = actions_match(app, entries, nsel,
+                                            fm->ctx_action_indices,
+                                            MAX_CTX_ACTIONS);
+    free(entries);
+    free(sel);
+}
+
 static void ctx_build_menu(Fm *fm)
 {
+    FmApp *app = fm->app_state;
+
+    ctx_build_actions(fm);
+
     int ow_section = 0;
     if (fm->ow_count > 0)
         ow_section = fm->ow_count + 2; /* entries + "Set Default..." + separator */
-    int total = ow_section + BASE_NITEMS;
+
+    int act_section = 0;
+    if (fm->ctx_naction_indices > 0)
+        act_section = fm->ctx_naction_indices + 1; /* entries + separator */
+
+    int total = ow_section + act_section + BASE_NITEMS;
 
     fm->dyn_labels = malloc((total + 1) * sizeof(String));
     fm->dyn_actions = malloc(total * sizeof(CtxAction));
@@ -834,6 +919,19 @@ static void ctx_build_menu(Fm *fm)
         fm->dyn_labels[pos] = "Set Default Application...";
         fm->dyn_actions[pos] = ctx_set_default;
         pos++;
+        fm->dyn_labels[pos] = "---";
+        fm->dyn_actions[pos] = NULL;
+        pos++;
+    }
+
+    /* Custom script actions */
+    fm->ctx_action_offset = pos;
+    for (int i = 0; i < fm->ctx_naction_indices; i++) {
+        fm->dyn_labels[pos] = app->actions[fm->ctx_action_indices[i]].name;
+        fm->dyn_actions[pos] = NULL;
+        pos++;
+    }
+    if (fm->ctx_naction_indices > 0) {
         fm->dyn_labels[pos] = "---";
         fm->dyn_actions[pos] = NULL;
         pos++;
@@ -1588,6 +1686,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
+    /* Custom script actions */
+    actions_scan(app);
+
     /* Connect to mountd before creating windows so the sidebar
      * can show all devices (mounted and unmounted). */
     fm_mountd_init(app);
@@ -1766,6 +1867,7 @@ void fm_app_cleanup(FmApp *app)
     jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
+    actions_cleanup(app);
     free(app->initial_path);
     for (int i = 0; i < app->ndesktop; i++) {
         isde_desktop_free(app->desktop_entries[i]);

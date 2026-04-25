@@ -1,0 +1,4 @@
+[Desktop Entry]
+Name=Extract Here
+MimeType=application/x-tar;application/x-compressed-tar;application/x-bzip2-compressed-tar;application/x-xz-compressed-tar;application/x-zstd-compressed-tar;application/zip;application/x-7z-compressed;application/gzip;application/x-bzip2;application/x-xz;application/zstd;
+FilePattern=*.tar;*.tar.gz;*.tgz;*.tar.bz2;*.tbz2;*.tar.xz;*.txz;*.tar.zst;*.zip;*.7z;
