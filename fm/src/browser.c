@@ -28,6 +28,7 @@ void browser_free_entries(Fm *fm)
     for (int i = 0; i < fm->nentries; i++) {
         free(fm->entries[i].name);
         free(fm->entries[i].full_path);
+        free(fm->entries[i].thumb_path);
     }
     free(fm->entries);
     fm->entries = NULL;

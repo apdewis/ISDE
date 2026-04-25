@@ -1137,6 +1137,7 @@ static void cwd_watch_stop(Fm *fm) { (void)fm; }
 void fm_navigate(Fm *fm, const char *path)
 {
     fm_dismiss_context(fm);
+    thumbs_cancel(fm);
 
     char *new_path = strdup(path);
 
@@ -1434,6 +1435,7 @@ static void fm_destroy_cb(Widget w, IswPointer cd, IswPointer call)
     FmApp *app = fm->app_state;
     app_remove_window(app, fm);
     /* Free per-window state (widgets are destroyed by Xt) */
+    thumbs_cancel(fm);
     cwd_watch_stop(fm);
     fm_dismiss_context(fm);
     ctx_free_dynamic(fm);
@@ -1686,6 +1688,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
+    /* Thumbnail cache */
+    thumbs_init(app);
+
     /* Custom script actions */
     actions_scan(app);
 
@@ -1867,6 +1872,7 @@ void fm_app_cleanup(FmApp *app)
     jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
+    thumbs_cleanup(app);
     actions_cleanup(app);
     free(app->initial_path);
     for (int i = 0; i < app->ndesktop; i++) {

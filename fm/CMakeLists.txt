@@ -14,6 +14,7 @@ add_executable(isde-fm
     src/places.c
     src/fm_mountd.c
     src/actions.c
+    src/thumbs.c
 )
 
 target_compile_definitions(isde-fm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
@@ -29,6 +30,8 @@ target_link_libraries(isde-fm
     PkgConfig::XCB_UTIL
     Threads::Threads
     PkgConfig::DBUS
+    PkgConfig::CAIRO
+    PkgConfig::LIBJPEG
 )
 
 install(TARGETS isde-fm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

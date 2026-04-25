@@ -72,6 +72,7 @@ typedef struct {
     int         is_dir;
     int         is_hidden;
     const char *mime_icon;  /* icon name from icons.c */
+    char       *thumb_path; /* cached thumbnail PNG path, or NULL */
 } FmEntry;
 
 /* ---------- Clipboard ---------- */
@@ -317,6 +318,9 @@ typedef struct Fm {
     Boolean        dnd_drop_was_noop;
     int            dnd_drop_highlight; /* entry index highlighted as drop target, -1 = none */
 
+    /* Thumbnail generation (per-window) */
+    struct ThumbJob *thumb_job;
+
     /* Directory watch (inotify on cwd) */
     int            cwd_inotify_fd;
     int            cwd_wd;
@@ -442,6 +446,14 @@ FmJob *jobqueue_submit_delete(FmApp *app, Fm *win,
 FmJob *jobqueue_submit_trash(FmApp *app, Fm *win,
                              char **srcs, int nsrc);
 FmJob *jobqueue_submit_empty_trash(FmApp *app, Fm *win);
+
+/* ---------- thumbs.c ---------- */
+void  thumbs_init(FmApp *app);
+void  thumbs_cleanup(FmApp *app);
+void  thumbs_apply_cache(Fm *fm);
+void  thumbs_populate_async(Fm *fm);
+void  thumbs_cancel(Fm *fm);
+char *thumbs_lookup(const char *full_path, time_t mtime);
 
 /* ---------- actions.c ---------- */
 void  actions_scan(FmApp *app);

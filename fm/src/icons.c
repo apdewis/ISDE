@@ -178,6 +178,9 @@ static const char *mime_icon_lookup(FmApp *app, const char *mime)
 
 const char *icons_for_entry(FmApp *app, const FmEntry *e)
 {
+    if (e->thumb_path)
+        return e->thumb_path;
+
     if (e->is_dir) {
         return app->icon_folder;
     }

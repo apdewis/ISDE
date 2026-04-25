@@ -461,6 +461,8 @@ void fileview_update_status(Fm *fm)
 void fileview_populate(Fm *fm)
 {
     if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
+        thumbs_apply_cache(fm);
+
         free(fm->fv_labels);
         free(fm->fv_icons);
 
@@ -469,7 +471,8 @@ void fileview_populate(Fm *fm)
 
         for (int i = 0; i < fm->nentries; i++) {
             fm->fv_labels[i] = (String)fm->entries[i].name;
-            fm->fv_icons[i]  = (String)fm->entries[i].mime_icon;
+            fm->fv_icons[i]  = (String)icons_for_entry(fm->app_state,
+                                                        &fm->entries[i]);
         }
         IswIconViewSetItems(fm->iconview, fm->fv_labels, fm->fv_icons,
                             fm->nentries);
@@ -486,6 +489,10 @@ void fileview_populate(Fm *fm)
     }
 
     fileview_update_status(fm);
+
+    /* Kick off async thumbnail generation for image/video files */
+    if (fm->view_mode == FM_VIEW_ICON)
+        thumbs_populate_async(fm);
 }
 
 void fileview_cleanup(Fm *fm)
