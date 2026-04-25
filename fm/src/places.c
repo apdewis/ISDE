@@ -934,9 +934,11 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 
     dev_ctx_data.nlabels = pos;
 
+    double sf = ISWScaleFactor(fm->toplevel);
+    Position px = root_x;
+    Position py = root_y;
+
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgX(&ab, root_x);
-    IswArgY(&ab, root_y);
     IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 1);
     fm->dev_ctx_shell = IswCreatePopupShell("devCtxMenu",
@@ -962,6 +964,27 @@ static void dev_ctx_show(Fm *fm, int places_idx,
         "<BtnUp>:       Notify()";
     IswOverrideTranslations(list, IswParseTranslationTable(translations));
 
+    IswRealizeWidget(fm->dev_ctx_shell);
+
+    xcb_screen_t *scr = IswScreen(fm->toplevel);
+    int scr_w = (int)(scr->width_in_pixels / sf);
+    int scr_h = (int)(scr->height_in_pixels / sf);
+    Dimension mw = fm->dev_ctx_shell->core.width;
+    Dimension mh = fm->dev_ctx_shell->core.height;
+    Dimension bw = fm->dev_ctx_shell->core.border_width;
+    int menu_w = (int)mw + 2 * (int)bw;
+    int menu_h = (int)mh + 2 * (int)bw;
+
+    Position rx = px + 1;
+    Position ry = py;
+    if ((int)rx + menu_w > scr_w)
+        rx = (Position)((int)px - menu_w);
+    if ((int)ry + menu_h > scr_h)
+        ry = (Position)(scr_h - menu_h);
+    if (rx < 0) rx = 0;
+    if (ry < 0) ry = 0;
+
+    IswMoveWidget(fm->dev_ctx_shell, rx, ry);
     IswPopup(fm->dev_ctx_shell, IswGrabNone);
 }
 

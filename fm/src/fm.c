@@ -999,12 +999,18 @@ static void ctx_handler(Widget w, IswPointer client_data,
         ctx_build_menu(fm);
     }
 
-    Position rx = ev->root_x;
-    Position ry = ev->root_y;
+    double sf = ISWScaleFactor(fm->toplevel);
+    Position px = ev->root_x;
+    Position py = ev->root_y;
+
+    static char ctxTranslations[] =
+        "<EnterWindow>: Set()\n"
+        "<LeaveWindow>: Unset()\n"
+        "<Motion>:      Set()\n"
+        "<BtnDown>:     Set() Notify()\n"
+        "<BtnUp>:       Notify()";
 
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgX(&ab, rx);
-    IswArgY(&ab, ry);
     IswArgOverrideRedirect(&ab, True);
     fm->ctx_shell = IswCreatePopupShell("ctxMenu", overrideShellWidgetClass,
                                    fm->toplevel, ab.args, ab.count);
@@ -1023,16 +1029,72 @@ static void ctx_handler(Widget w, IswPointer client_data,
     fm->ctx_list = IswCreateManagedWidget("ctxList", listWidgetClass,
                                      fm->ctx_shell, ab.args, ab.count);
     IswAddCallback(fm->ctx_list, IswNcallback, ctx_select_cb, NULL);
-
-    static char ctxTranslations[] =
-        "<EnterWindow>: Set()\n"
-        "<LeaveWindow>: Unset()\n"
-        "<Motion>:      Set()\n"
-        "<BtnDown>:     Set() Notify()\n"
-        "<BtnUp>:       Notify()";
     IswOverrideTranslations(fm->ctx_list,
                            IswParseTranslationTable(ctxTranslations));
 
+    IswRealizeWidget(fm->ctx_shell);
+
+    xcb_screen_t *scr = IswScreen(fm->toplevel);
+    int scr_w = (int)(scr->width_in_pixels / sf);
+    int scr_h = (int)(scr->height_in_pixels / sf);
+    Dimension mw = fm->ctx_shell->core.width;
+    Dimension mh = fm->ctx_shell->core.height;
+    Dimension bw = fm->ctx_shell->core.border_width;
+    int menu_w = (int)mw + 2 * (int)bw;
+    int menu_h = (int)mh + 2 * (int)bw;
+
+    if (menu_h > scr_h) {
+        IswDestroyWidget(fm->ctx_shell);
+        fm->ctx_shell = NULL;
+        fm->ctx_list = NULL;
+
+        int max_h = scr_h - 16;
+
+        IswArgBuilderReset(&ab);
+        IswArgOverrideRedirect(&ab, True);
+        fm->ctx_shell = IswCreatePopupShell("ctxMenu", overrideShellWidgetClass,
+                                       fm->toplevel, ab.args, ab.count);
+
+        IswArgBuilderReset(&ab);
+        IswArgAllowVert(&ab, True);
+        IswArgUseRight(&ab, True);
+        IswArgHeight(&ab, (Dimension)max_h);
+        Widget vp = IswCreateManagedWidget("ctxVp", viewportWidgetClass,
+                                            fm->ctx_shell, ab.args, ab.count);
+
+        IswArgBuilderReset(&ab);
+        IswArgList(&ab, labels);
+        IswArgNumberStrings(&ab, nitems);
+        IswArgDefaultColumns(&ab, 1);
+        IswArgForceColumns(&ab, True);
+        IswArgVerticalList(&ab, True);
+        IswArgBorderWidth(&ab, 0);
+        IswArgCursor(&ab, None);
+        fm->ctx_list = IswCreateManagedWidget("ctxList", listWidgetClass,
+                                         vp, ab.args, ab.count);
+        IswAddCallback(fm->ctx_list, IswNcallback, ctx_select_cb, NULL);
+        IswOverrideTranslations(fm->ctx_list,
+                               IswParseTranslationTable(ctxTranslations));
+
+        IswRealizeWidget(fm->ctx_shell);
+
+        mw = fm->ctx_shell->core.width;
+        mh = fm->ctx_shell->core.height;
+        bw = fm->ctx_shell->core.border_width;
+        menu_w = (int)mw + 2 * (int)bw;
+        menu_h = (int)mh + 2 * (int)bw;
+    }
+
+    Position rx = px + 1;
+    Position ry = py;
+    if ((int)rx + menu_w > scr_w)
+        rx = (Position)((int)px - menu_w);
+    if ((int)ry + menu_h > scr_h)
+        ry = (Position)(scr_h - menu_h);
+    if (rx < 0) rx = 0;
+    if (ry < 0) ry = 0;
+
+    IswMoveWidget(fm->ctx_shell, rx, ry);
     IswPopup(fm->ctx_shell, IswGrabNone);
 }
 
