@@ -119,11 +119,10 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    /* Initialize Xt with theme resources */
-    char **fallbacks = isde_theme_build_resources();
     Widget toplevel = IswAppInitialize(&app, "ISDE-Confirm",
                                       NULL, 0, &argc, argv,
-                                      fallbacks, NULL, 0);
+                                      NULL, NULL, 0);
+    isde_theme_merge_xrm(toplevel);
 
     /* Don't map the toplevel */
     IswArgBuilder ab = IswArgBuilderInit();

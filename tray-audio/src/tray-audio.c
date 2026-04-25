@@ -173,11 +173,10 @@ int tray_audio_init(TrayAudio *ta, int *argc, char **argv)
 {
     memset(ta, 0, sizeof(*ta));
 
-    /* Initialize ISW/Xt with theme resources */
-    char **fallbacks = isde_theme_build_resources();
     ta->toplevel = IswAppInitialize(&ta->app, "IsdeTrayaudio",
                                      NULL, 0, argc, argv,
-                                     fallbacks, NULL, 0);
+                                     NULL, NULL, 0);
+    isde_theme_merge_xrm(ta->toplevel);
     if (!ta->toplevel) {
         fprintf(stderr, "isde-tray-audio: IswAppInitialize failed\n");
         return -1;

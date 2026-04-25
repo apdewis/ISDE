@@ -230,10 +230,10 @@ int panel_init(Panel *p, int *argc, char **argv)
 {
     memset(p, 0, sizeof(*p));
 
-    char **fallbacks = isde_theme_build_resources();
     p->toplevel = IswAppInitialize(&p->app, "ISDE-Panel",
                                   NULL, 0, argc, argv,
-                                  fallbacks, NULL, 0);
+                                  NULL, NULL, 0);
+    isde_theme_merge_xrm(p->toplevel);
 
     p->conn = IswDisplay(p->toplevel);
     if (xcb_connection_has_error(p->conn)) {
@@ -431,7 +431,7 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
     return px;
 }
 
-/* Theme colors are applied via Xresources (isde_theme_build_resources).
+/* Theme colors are applied via Xresources (isde_theme_merge_xrm).
  * No manual IswSetValues needed — all widget names match resource specs. */
 
 

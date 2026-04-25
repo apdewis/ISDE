@@ -460,12 +460,12 @@ int session_init(Session *s)
     apply_input_settings();
 
     /* Initialize Xt for confirmation dialogs */
-    char **fallbacks = isde_theme_build_resources();
     int argc = 1;
     char *argv[] = { "isde-session", NULL };
     s->toplevel = IswAppInitialize(&s->app, "ISDE-Session",
                                   NULL, 0, &argc, argv,
-                                  fallbacks, NULL, 0);
+                                  NULL, NULL, 0);
+    isde_theme_merge_xrm(s->toplevel);
 
     /* Realize but don't map — needed as parent for popup shells */
     IswArgBuilder ab = IswArgBuilderInit();

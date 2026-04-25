@@ -1102,9 +1102,6 @@ char **isde_theme_build_resources(void)
                 /* Section headings — general +2pt bold */
                 res[i++] = fmt_font_bold("*sectionHd.font", fam, sz + 2);
 
-                /* Section headings — general +2pt bold */
-                res[i++] = fmt_font_bold("*sectionHd.font", fam, sz + 2);
-
                 /* Fixed — Text widget (editors, terminal) */
                 fam = isde_config_string(fonts, "fixed_family", "Monospace");
                 sz  = (int)isde_config_int(fonts, "fixed_size", 10);
@@ -1154,6 +1151,27 @@ void isde_theme_free_resources(char **resources)
         free(resources[i]);
     }
     free(resources);
+}
+
+void isde_theme_merge_xrm(Widget toplevel)
+{
+    char **resources = isde_theme_build_resources();
+    if (!resources) return;
+
+    xcb_xrm_database_t *db = IswDatabase(IswDisplay(toplevel));
+    if (db) {
+        for (int i = 0; resources[i]; i++)
+            xcb_xrm_database_put_resource_line(&db, resources[i]);
+    }
+
+    isde_theme_free_resources(resources);
+}
+
+void isde_xrm_put_line(Widget toplevel, const char *line)
+{
+    xcb_xrm_database_t *db = IswDatabase(IswDisplay(toplevel));
+    if (db)
+        xcb_xrm_database_put_resource_line(&db, line);
 }
 
 /* Cached font sizes — loaded once from config */

@@ -108,10 +108,10 @@ int main(int argc, char **argv)
     memset(&g_app, 0, sizeof(g_app));
     g_app.running = 1;
 
-    char **fallbacks = isde_theme_build_resources();
     g_app.toplevel = IswAppInitialize(&g_app.app, "ISDE-Term",
                                       NULL, 0, &argc, argv,
-                                      fallbacks, NULL, 0);
+                                      NULL, NULL, 0);
+    isde_theme_merge_xrm(g_app.toplevel);
 
     TermConfig cfg;
     term_config_load(&cfg);
@@ -174,6 +174,5 @@ int main(int argc, char **argv)
     term_pty_close(g_app.pty);
     term_widget_destroy(g_app.term);
     if (g_app.dbus) isde_dbus_free(g_app.dbus);
-    if (fallbacks) isde_theme_free_resources(fallbacks);
     return 0;
 }

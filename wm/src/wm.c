@@ -51,12 +51,12 @@ int wm_init(Wm *wm, int *argc, char **argv)
     memset(wm, 0, sizeof(*wm));
 
     /* Initialize Xt — this opens the X connection for us */
-    char **fallbacks = isde_theme_build_resources();
     wm->toplevel = IswAppInitialize(&wm->app, "ISDE-WM",
                                    NULL, 0,
                                    argc, argv,
-                                   fallbacks,
+                                   NULL,
                                    NULL, 0);
+    isde_theme_merge_xrm(wm->toplevel);
 
     wm->conn = IswDisplay(wm->toplevel);
     if (xcb_connection_has_error(wm->conn)) {

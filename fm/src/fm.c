@@ -1674,10 +1674,10 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     /* Initialize context key for fm_from_widget lookups */
     fm_window_context = IswUniqueContext();
 
-    char **fallbacks = isde_theme_build_resources();
     app->first_toplevel = IswAppInitialize(&app->app, "ISDE-FM",
                                           NULL, 0, argc, argv,
-                                          fallbacks, NULL, 0);
+                                          NULL, NULL, 0);
+    isde_theme_merge_xrm(app->first_toplevel);
 
     /* Register actions globally (once) */
     IswAppAddActions(app->app, fm_actions, IswNumber(fm_actions));

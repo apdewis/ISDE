@@ -130,10 +130,18 @@ void isde_theme_reload(void);
 /* Convert a theme color (0xRRGGBB) to a double triplet (0.0-1.0). */
 void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
 
-/* Build an Xt fallback resource list from the current colour scheme.
- * Returns a NULL-terminated array of strings suitable for
- * IswAppInitialize()'s fallback_resources parameter.
- * Caller must free with isde_theme_free_resources(). */
+/* Merge the current colour scheme into the per-screen Xrm database
+ * attached to the given toplevel widget.  Call after IswAppInitialize()
+ * and before creating child widgets. */
+void isde_theme_merge_xrm(Widget toplevel);
+
+/* Put a single "resource: value" line into the per-screen Xrm database. */
+void isde_xrm_put_line(Widget toplevel, const char *line);
+
+/* Build an Xt resource list from the current colour scheme.
+ * Returns a NULL-terminated array of strings.
+ * Caller must free with isde_theme_free_resources().
+ * Prefer isde_theme_merge_xrm() which calls this internally. */
 char **isde_theme_build_resources(void);
 void   isde_theme_free_resources(char **resources);
 

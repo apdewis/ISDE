@@ -132,11 +132,10 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
 {
     memset(tm, 0, sizeof(*tm));
 
-    /* Initialize ISW/Xt with theme resources */
-    char **fallbacks = isde_theme_build_resources();
     tm->toplevel = IswAppInitialize(&tm->app, "IsdeTraymount",
                                      NULL, 0, argc, argv,
-                                     fallbacks, NULL, 0);
+                                     NULL, NULL, 0);
+    isde_theme_merge_xrm(tm->toplevel);
     if (!tm->toplevel) {
         fprintf(stderr, "isde-tray-mount: IswAppInitialize failed\n");
         return -1;

@@ -253,10 +253,10 @@ int settings_init(Settings *s, int *argc, char **argv)
     memset(s, 0, sizeof(*s));
     s->active_panel = -1;
 
-    char **fallbacks = isde_theme_build_resources();
     s->toplevel = IswAppInitialize(&s->app, "ISDE-Settings",
                                   NULL, 0, argc, argv,
-                                  fallbacks, NULL, 0);
+                                  NULL, NULL, 0);
+    isde_theme_merge_xrm(s->toplevel);
 
     int init_w = 960;
     int init_h = 450;

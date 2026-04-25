@@ -689,41 +689,32 @@ int greeter_init(Greeter *g, int *argc, char **argv)
        toolkit picks up the correct scale factor during display setup. */
     detect_hidpi(g->scale);
 
-    /* Initialize Xt with theme resources */
-    char **fallbacks = isde_theme_build_resources();
+    g->toplevel = IswAppInitialize(&g->app, "ISDE-Greeter",
+                                  NULL, 0, argc, argv,
+                                  NULL, NULL, 0);
+    isde_theme_merge_xrm(g->toplevel);
 
     /* Append font resources from DM config — the greeter runs in a
        minimal environment where isde.toml (user config) is unavailable,
-       so isde_theme_build_resources() won't produce font entries. */
+       so isde_theme_merge_xrm() won't produce font entries. */
     if (g->font_family) {
-        int count = 0;
-        if (fallbacks) {
-            while (fallbacks[count]) count++;
-        }
-        /* 5 entries + NULL */
-        fallbacks = realloc(fallbacks, (count + 6) * sizeof(char *));
         char buf[128];
         snprintf(buf, sizeof(buf), "*font: %s-%d",
                  g->font_family, g->font_size);
-        fallbacks[count++] = strdup(buf);
+        isde_xrm_put_line(g->toplevel, buf);
         snprintf(buf, sizeof(buf), "*Text.font: %s-%d",
                  g->font_family, g->font_size);
-        fallbacks[count++] = strdup(buf);
+        isde_xrm_put_line(g->toplevel, buf);
         snprintf(buf, sizeof(buf), "*TextSink.font: %s-%d",
                  g->font_family, g->font_size);
-        fallbacks[count++] = strdup(buf);
+        isde_xrm_put_line(g->toplevel, buf);
         snprintf(buf, sizeof(buf), "*Text*textSink.font: %s-%d",
                  g->font_family, g->font_size);
-        fallbacks[count++] = strdup(buf);
+        isde_xrm_put_line(g->toplevel, buf);
         snprintf(buf, sizeof(buf), "*textSink.font: %s-%d",
                  g->font_family, g->font_size);
-        fallbacks[count++] = strdup(buf);
-        fallbacks[count] = NULL;
+        isde_xrm_put_line(g->toplevel, buf);
     }
-
-    g->toplevel = IswAppInitialize(&g->app, "ISDE-Greeter",
-                                  NULL, 0, argc, argv,
-                                  fallbacks, NULL, 0);
 
     /* Register custom actions */
     IswAppAddActions(g->app, greeter_actions,
