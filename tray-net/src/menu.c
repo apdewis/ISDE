@@ -19,6 +19,8 @@
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
 
+#include "isde/isde-xdg.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -136,6 +138,30 @@ static int is_connected(const ServiceInfo *s)
            strcmp(s->state, "configuration") == 0;
 }
 
+static const char *signal_icon_name(const ServiceInfo *s)
+{
+    int secure = strcmp(s->security, "none") != 0 && s->security[0] != '\0';
+
+    if (strcmp(s->type, "wifi") != 0)
+        return "network-wired";
+
+    if (s->strength >= 75)
+        return secure ? "network-wireless-signal-excellent-secure"
+                      : "network-wireless-signal-excellent";
+    if (s->strength >= 50)
+        return secure ? "network-wireless-signal-good-secure"
+                      : "network-wireless-signal-good";
+    if (s->strength >= 25)
+        return secure ? "network-wireless-signal-ok-secure"
+                      : "network-wireless-signal-ok";
+    if (s->strength > 0)
+        return secure ? "network-wireless-signal-weak-secure"
+                      : "network-wireless-signal-weak";
+
+    return secure ? "network-wireless-signal-none-secure"
+                  : "network-wireless-signal-none";
+}
+
 static const char *state_suffix(const ServiceInfo *s)
 {
     if (strcmp(s->state, "online") == 0)         return "online";
@@ -238,14 +264,8 @@ static void add_service_row(TrayNet *tn, Widget listbox,
     const char *suffix = state_suffix(s);
 
     if (strcmp(s->type, "wifi") == 0) {
-        if (suffix)
-            snprintf(display, sizeof(display), "%s (%s, %d%%)",
-                     s->name[0] ? s->name : "(hidden)",
-                     suffix, s->strength);
-        else
-            snprintf(display, sizeof(display), "%s (%d%%)",
-                     s->name[0] ? s->name : "(hidden)",
-                     s->strength);
+            snprintf(display, sizeof(display), "%s",
+                     s->name[0] ? s->name : "(hidden)");
     } else {
         if (suffix)
             snprintf(display, sizeof(display), "%s (%s)",
@@ -261,7 +281,19 @@ static void add_service_row(TrayNet *tn, Widget listbox,
     Widget row = IswCreateWidget("netRow", listBoxRowWidgetClass,
                                   listbox, ab.args, ab.count);
 
-    /* Label on the left */
+    /* Signal icon on the left */
+    char *icon_path = isde_icon_find("status", signal_icon_name(s));
+    if (icon_path) {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
+        IswArgImage(&ab, icon_path);
+        IswArgBorderWidth(&ab, 0);
+        IswCreateManagedWidget("netIcon", labelWidgetClass,
+                                row, ab.args, ab.count);
+        free(icon_path);
+    }
+
+    /* Network name label */
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, display);
     IswArgBorderWidth(&ab, 0);
@@ -275,6 +307,7 @@ static void add_service_row(TrayNet *tn, Widget listbox,
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, btn_label);
     IswArgBorderWidth(&ab, 1);
+    IswArgJustify(&ab, IswJustifyRight);
     Widget btn = IswCreateManagedWidget("netBtn", commandWidgetClass,
                                          row, ab.args, ab.count);
     MenuAction *a = alloc_action(tn, s->path);
@@ -305,7 +338,7 @@ static void build_content(TrayNet *tn)
             add_service_row(tn, listbox, &tn->services[i], 1);
         }
     }
-
+    add_heading(listbox, "");
     /* Available services */
     int has_available = 0;
     for (int i = 0; i < tn->nservices; i++) {
@@ -353,7 +386,7 @@ void tn_menu_show(TrayNet *tn)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell */
-    IswArgWidth(&ab, 600);
+    IswArgWidth(&ab, 400);
     IswArgHeight(&ab, 400);
     tn->popup_shell = IswCreatePopupShell("netPopup",
                                            overrideShellWidgetClass,
@@ -366,7 +399,7 @@ void tn_menu_show(TrayNet *tn)
                                               tn->popup_shell,
                                               ab.args, ab.count);
 
-    /* Toggle row: Box with WiFi + Bluetooth toggles */
+    /* Toggle row: Box with WiFi power toggles */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
     IswArgBorderWidth(&ab, 0);
@@ -382,8 +415,7 @@ void tn_menu_show(TrayNet *tn)
 
     for (int i = 0; i < tn->ntechs; i++) {
         TechInfo *t = &tn->techs[i];
-        if (strcmp(t->type, "wifi") != 0 &&
-            strcmp(t->type, "bluetooth") != 0)
+        if (strcmp(t->type, "wifi") != 0)
             continue;
 
         ToggleData *td = alloc_toggle(tn, t->path);
@@ -391,7 +423,6 @@ void tn_menu_show(TrayNet *tn)
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, t->name);
         IswArgState(&ab, t->powered ? True : False);
-        IswArgBorderWidth(&ab, 1);
         Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
                                             toggle_box, ab.args, ab.count);
         IswAddCallback(tw, IswNcallback, on_tech_toggled, td);

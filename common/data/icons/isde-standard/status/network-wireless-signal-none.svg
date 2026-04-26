@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<!-- base dot only, no signal arcs -->
+<circle cx="24" cy="38" r="3" fill="currentColor" opacity="0.3"/>
+<path d="M16,30 Q24,22 32,30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+<path d="M10,24 Q24,12 38,24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+<path d="M4,18 Q24,2 44,18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.2"/>
+</svg>
