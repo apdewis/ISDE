@@ -7,9 +7,14 @@
 #include <ISW/Intrinsic.h>
 #include <ISW/StringDefs.h>
 #include <ISW/Shell.h>
-#include <ISW/SimpleMenu.h>
-#include <ISW/SmeBSB.h>
-#include <ISW/SmeLine.h>
+#include <ISW/Command.h>
+#include <ISW/Toggle.h>
+#include <ISW/Label.h>
+#include <ISW/Form.h>
+#include <ISW/Box.h>
+#include <ISW/Viewport.h>
+#include <ISW/ListBox.h>
+#include <ISW/ListBoxRow.h>
 #include <ISW/IswTrayIcon.h>
 #include <ISW/ISWSVG.h>
 
@@ -78,7 +83,12 @@ typedef struct TrayNet {
     IswTrayIcon         tray_icon;
     int                 icon_state;
 
-    Widget              menu_shell;
+    /* Popup */
+    Widget              popup_shell;
+    Widget              popup_outer;
+    Widget              popup_viewport;
+    Widget              popup_listbox;
+    int                 popup_visible;
 
     /* ConnMan state */
     TechInfo            techs[MAX_TECHNOLOGIES];
@@ -119,6 +129,8 @@ int  tn_connman_scan(TrayNet *tn, const char *tech_path);
 /* ---------- menu.c ---------- */
 void tn_menu_init(TrayNet *tn);
 void tn_menu_show(TrayNet *tn);
+void tn_menu_hide(TrayNet *tn);
+void tn_menu_rebuild(TrayNet *tn);
 void tn_menu_cleanup(TrayNet *tn);
 
 #endif /* ISDE_TRAY_NET_H */

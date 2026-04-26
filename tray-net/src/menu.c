@@ -1,9 +1,17 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * menu.c — popup menu for the tray network applet
+ * menu.c — popup for the tray network applet
  *
- * Builds a SimpleMenu listing ConnMan technologies (with power toggle)
- * and services (with connect/disconnect).
+ * Layout:
+ *   overrideShell
+ *     Form (outer)
+ *       Box: WiFi toggle, Bluetooth toggle — single row
+ *       Viewport
+ *         ListBox
+ *           "Connected" heading (non-selectable separator row)
+ *           ListBoxRow per connected service: label + Disconnect button
+ *           "Available" heading (non-selectable separator row)
+ *           ListBoxRow per available service: label + Connect button
  */
 #include "tray-net.h"
 
@@ -17,25 +25,25 @@
 
 /* ---------- callback data ---------- */
 
-enum {
-    ACTION_CONNECT = 0,
-    ACTION_DISCONNECT,
-    ACTION_POWER_ON,
-    ACTION_POWER_OFF,
-    ACTION_SCAN,
-};
-
 typedef struct MenuAction {
     TrayNet    *tn;
     char        path[PATH_LEN];
-    int         action;
 } MenuAction;
+
+typedef struct ToggleData {
+    TrayNet    *tn;
+    char        path[PATH_LEN];
+} ToggleData;
 
 static MenuAction *actions = NULL;
 static int nactions = 0;
 static int cap_actions = 0;
 
-static MenuAction *alloc_action(TrayNet *tn, const char *path, int action)
+static ToggleData *toggle_data = NULL;
+static int ntoggles = 0;
+static int cap_toggles = 0;
+
+static MenuAction *alloc_action(TrayNet *tn, const char *path)
 {
     if (nactions >= cap_actions) {
         cap_actions = cap_actions ? cap_actions * 2 : 16;
@@ -44,326 +52,488 @@ static MenuAction *alloc_action(TrayNet *tn, const char *path, int action)
     MenuAction *a = &actions[nactions++];
     a->tn = tn;
     snprintf(a->path, sizeof(a->path), "%s", path);
-    a->action = action;
     return a;
 }
 
-/* ---------- action callback ---------- */
+static ToggleData *alloc_toggle(TrayNet *tn, const char *path)
+{
+    if (ntoggles >= cap_toggles) {
+        cap_toggles = cap_toggles ? cap_toggles * 2 : 4;
+        toggle_data = realloc(toggle_data, cap_toggles * sizeof(ToggleData));
+    }
+    ToggleData *t = &toggle_data[ntoggles++];
+    t->tn = tn;
+    snprintf(t->path, sizeof(t->path), "%s", path);
+    return t;
+}
 
-static void on_action(Widget w, IswPointer client_data, IswPointer call_data)
+/* ---------- callbacks ---------- */
+
+static void on_tech_toggled(Widget w, IswPointer client_data,
+                            IswPointer call_data)
+{
+    (void)call_data;
+    ToggleData *td = (ToggleData *)client_data;
+
+    Boolean state = False;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgState(&ab, &state);
+    IswGetValues(w, ab.args, ab.count);
+
+    tn_connman_tech_set_powered(td->tn, td->path, state ? 1 : 0);
+}
+
+static void on_connect(Widget w, IswPointer client_data, IswPointer call_data)
 {
     (void)w; (void)call_data;
     MenuAction *a = (MenuAction *)client_data;
-    TrayNet *tn = a->tn;
-
-    switch (a->action) {
-    case ACTION_CONNECT:
-        fprintf(stderr, "isde-tray-net: connecting %s\n", a->path);
-        tn_connman_service_connect(tn, a->path);
-        break;
-
-    case ACTION_DISCONNECT:
-        fprintf(stderr, "isde-tray-net: disconnecting %s\n", a->path);
-        tn_connman_service_disconnect(tn, a->path);
-        break;
-
-    case ACTION_POWER_ON:
-        fprintf(stderr, "isde-tray-net: powering on %s\n", a->path);
-        tn_connman_tech_set_powered(tn, a->path, 1);
-        break;
-
-    case ACTION_POWER_OFF:
-        fprintf(stderr, "isde-tray-net: powering off %s\n", a->path);
-        tn_connman_tech_set_powered(tn, a->path, 0);
-        break;
-
-    case ACTION_SCAN:
-        fprintf(stderr, "isde-tray-net: scanning %s\n", a->path);
-        tn_connman_scan(tn, a->path);
-        break;
-    }
+    tn_connman_service_connect(a->tn, a->path);
 }
 
-/* ---------- dismiss on outside click / ungrab on popdown ---------- */
-
-static void menu_popdown_cb(Widget w, IswPointer client_data,
-                            IswPointer call_data)
+static void on_disconnect(Widget w, IswPointer client_data,
+                          IswPointer call_data)
 {
-    (void)client_data; (void)call_data;
-    xcb_ungrab_pointer(IswDisplay(w), XCB_CURRENT_TIME);
-    xcb_flush(IswDisplay(w));
+    (void)w; (void)call_data;
+    MenuAction *a = (MenuAction *)client_data;
+    tn_connman_service_disconnect(a->tn, a->path);
 }
 
-static void menu_grab_handler(Widget w, IswPointer closure,
-                              xcb_generic_event_t *event,
-                              Boolean *cont)
+/* ---------- popup dismiss ---------- */
+
+#define POPUP_DISMISS_MASK (XCB_EVENT_MASK_BUTTON_PRESS)
+
+static void popup_outside_handler(Widget w, IswPointer closure,
+                                  xcb_generic_event_t *event,
+                                  Boolean *cont)
 {
-    (void)closure;
+    (void)cont;
+    TrayNet *tn = (TrayNet *)closure;
     uint8_t type = event->response_type & 0x7f;
 
-    if (type == XCB_BUTTON_PRESS) {
-        xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-        double sf = ISWScaleFactor(w);
-        int pw = (int)(w->core.width * sf + 0.5);
-        int ph = (int)(w->core.height * sf + 0.5);
-        if (ev->event_x < 0 || ev->event_y < 0 ||
-            ev->event_x >= pw || ev->event_y >= ph) {
-            xcb_ungrab_pointer(IswDisplay(w), XCB_CURRENT_TIME);
-            xcb_flush(IswDisplay(w));
-            IswPopdown(w);
-            *cont = False;
-            return;
-        }
+    if (type != XCB_BUTTON_PRESS)
+        return;
+    if (!tn->popup_visible || !tn->popup_shell)
+        return;
+
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    double sf = ISWScaleFactor(w);
+    int pw = (int)(w->core.width * sf + 0.5);
+    int ph = (int)(w->core.height * sf + 0.5);
+
+    if (ev->event_x < 0 || ev->event_y < 0 ||
+        ev->event_x >= pw || ev->event_y >= ph) {
+        tn_menu_hide(tn);
     }
-    *cont = True;
 }
 
-/* ---------- helper: service state display string ---------- */
-
-static const char *state_display(const ServiceInfo *s)
-{
-    if (strcmp(s->state, "online") == 0)     return "online";
-    if (strcmp(s->state, "ready") == 0)      return "connected";
-    if (strcmp(s->state, "association") == 0) return "connecting...";
-    if (strcmp(s->state, "configuration") == 0) return "configuring...";
-    if (strcmp(s->state, "disconnect") == 0) return "disconnecting...";
-    if (strcmp(s->state, "failure") == 0)    return "failed";
-    return NULL;
-}
+/* ---------- helpers ---------- */
 
 static int is_connected(const ServiceInfo *s)
 {
     return strcmp(s->state, "online") == 0 ||
-           strcmp(s->state, "ready") == 0;
-}
-
-static int is_connecting(const ServiceInfo *s)
-{
-    return strcmp(s->state, "association") == 0 ||
+           strcmp(s->state, "ready") == 0 ||
+           strcmp(s->state, "association") == 0 ||
            strcmp(s->state, "configuration") == 0;
 }
 
-/* ---------- menu construction ---------- */
+static const char *state_suffix(const ServiceInfo *s)
+{
+    if (strcmp(s->state, "online") == 0)         return "online";
+    if (strcmp(s->state, "ready") == 0)          return "connected";
+    if (strcmp(s->state, "association") == 0)     return "connecting...";
+    if (strcmp(s->state, "configuration") == 0)   return "configuring...";
+    if (strcmp(s->state, "disconnect") == 0)      return "disconnecting...";
+    if (strcmp(s->state, "failure") == 0)         return "failed";
+    return NULL;
+}
+
+/* ---------- position popup above tray icon ---------- */
+
+static void position_popup(TrayNet *tn)
+{
+    if (!tn->tray_icon)
+        return;
+
+    xcb_connection_t *conn = IswDisplay(tn->toplevel);
+    xcb_window_t icon_win = IswTrayIconGetWindow(tn->tray_icon);
+    xcb_window_t root = IswScreen(tn->toplevel)->root;
+
+    xcb_translate_coordinates_cookie_t cookie =
+        xcb_translate_coordinates(conn, icon_win, root, 0, 0);
+    xcb_translate_coordinates_reply_t *reply =
+        xcb_translate_coordinates_reply(conn, cookie, NULL);
+
+    if (!reply)
+        return;
+
+    double sf = ISWScaleFactor(tn->toplevel);
+    int phys_w = (int)(tn->popup_shell->core.width * sf + 0.5);
+    int phys_h = (int)(tn->popup_shell->core.height * sf + 0.5);
+    int phys_bw = (int)(tn->popup_shell->core.border_width * sf + 0.5);
+    int total_w = phys_w + 2 * phys_bw;
+    int total_h = phys_h + 2 * phys_bw;
+
+    int scr_w = IswScreen(tn->toplevel)->width_in_pixels;
+
+    int x = reply->dst_x;
+    int y = reply->dst_y - total_h;
+
+    if (x + total_w > scr_w)
+        x = scr_w - total_w;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+
+    uint32_t vals[] = { (uint32_t)x, (uint32_t)y };
+    xcb_configure_window(conn, IswWindow(tn->popup_shell),
+                         XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
+                         vals);
+    xcb_flush(conn);
+    free(reply);
+}
+
+/* ---------- clear listbox children ---------- */
+
+static void clear_listbox(Widget listbox)
+{
+    WidgetList children;
+    Cardinal num;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBuilderAdd(&ab, IswNchildren, (IswArgVal)&children);
+    IswArgBuilderAdd(&ab, IswNnumChildren, (IswArgVal)&num);
+    IswGetValues(listbox, ab.args, ab.count);
+
+    for (int i = (int)num - 1; i >= 0; i--)
+        IswDestroyWidget(children[i]);
+}
+
+/* ---------- add a section heading row ---------- */
+
+static void add_heading(Widget listbox, const char *text)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgSelectable(&ab, false);
+    IswArgListBoxRowHeight(&ab, 20);
+    IswArgBorderWidth(&ab, 0);
+    Widget row = IswCreateWidget("hdrRow", listBoxRowWidgetClass,
+                                  listbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswCreateManagedWidget("hdrLabel", labelWidgetClass,
+                            row, ab.args, ab.count);
+
+    IswManageChild(row);
+}
+
+/* ---------- add a network service row ---------- */
+
+static void add_service_row(TrayNet *tn, Widget listbox,
+                            const ServiceInfo *s, int connected)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+
+    char display[512];
+    const char *suffix = state_suffix(s);
+
+    if (strcmp(s->type, "wifi") == 0) {
+        if (suffix)
+            snprintf(display, sizeof(display), "%s (%s, %d%%)",
+                     s->name[0] ? s->name : "(hidden)",
+                     suffix, s->strength);
+        else
+            snprintf(display, sizeof(display), "%s (%d%%)",
+                     s->name[0] ? s->name : "(hidden)",
+                     s->strength);
+    } else {
+        if (suffix)
+            snprintf(display, sizeof(display), "%s (%s)",
+                     s->name[0] ? s->name : s->type, suffix);
+        else
+            snprintf(display, sizeof(display), "%s",
+                     s->name[0] ? s->name : s->type);
+    }
+
+    IswArgBuilderAdd(&ab, IswNselectable, (IswArgVal)False);
+    IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)40);
+    IswArgBorderWidth(&ab, 0);
+    Widget row = IswCreateWidget("netRow", listBoxRowWidgetClass,
+                                  listbox, ab.args, ab.count);
+
+    /* Label on the left */
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, display);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswCreateManagedWidget("netName", labelWidgetClass,
+                            row, ab.args, ab.count);
+
+    /* Button on the right */
+    const char *btn_label = connected ? "Disconnect" : "Connect";
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, btn_label);
+    IswArgBorderWidth(&ab, 1);
+    Widget btn = IswCreateManagedWidget("netBtn", commandWidgetClass,
+                                         row, ab.args, ab.count);
+    MenuAction *a = alloc_action(tn, s->path);
+    IswAddCallback(btn, IswNcallback,
+                   connected ? on_disconnect : on_connect, a);
+
+    IswManageChild(row);
+}
+
+/* ---------- build listbox content ---------- */
+
+static void build_content(TrayNet *tn)
+{
+    Widget listbox = tn->popup_listbox;
+
+    if (!tn->connman_available) {
+        add_heading(listbox, "Network manager unavailable");
+        return;
+    }
+
+    /* Connected services */
+    int has_connected = 0;
+    for (int i = 0; i < tn->nservices; i++) {
+        if (is_connected(&tn->services[i])) {
+            if (!has_connected)
+                add_heading(listbox, "Connected");
+            has_connected = 1;
+            add_service_row(tn, listbox, &tn->services[i], 1);
+        }
+    }
+
+    /* Available services */
+    int has_available = 0;
+    for (int i = 0; i < tn->nservices; i++) {
+        if (!is_connected(&tn->services[i])) {
+            if (!has_available)
+                add_heading(listbox, "Available");
+            has_available = 1;
+            add_service_row(tn, listbox, &tn->services[i], 0);
+        }
+    }
+
+    if (!has_connected && !has_available)
+        add_heading(listbox, "No networks");
+}
+
+/* ---------- public API ---------- */
 
 void tn_menu_init(TrayNet *tn)
 {
-    tn->menu_shell = IswCreatePopupShell("netMenu", simpleMenuWidgetClass,
-                                          tn->toplevel, NULL, 0);
+    tn->popup_shell = NULL;
+    tn->popup_outer = NULL;
+    tn->popup_viewport = NULL;
+    tn->popup_listbox = NULL;
+    tn->popup_visible = 0;
 }
 
 void tn_menu_show(TrayNet *tn)
 {
-    if (tn->menu_shell)
-        IswDestroyWidget(tn->menu_shell);
+    if (tn->popup_visible) {
+        tn_menu_hide(tn);
+        return;
+    }
+
+    if (tn->popup_shell) {
+        IswDestroyWidget(tn->popup_shell);
+        tn->popup_shell = NULL;
+        tn->popup_outer = NULL;
+        tn->popup_viewport = NULL;
+        tn->popup_listbox = NULL;
+    }
 
     nactions = 0;
+    ntoggles = 0;
 
     IswArgBuilder ab = IswArgBuilderInit();
 
-    tn->menu_shell = IswCreatePopupShell("netMenu", simpleMenuWidgetClass,
-                                          tn->toplevel, NULL, 0);
+    /* Override shell */
+    IswArgWidth(&ab, 600);
+    IswArgHeight(&ab, 400);
+    tn->popup_shell = IswCreatePopupShell("netPopup",
+                                           overrideShellWidgetClass,
+                                           tn->toplevel, ab.args, ab.count);
 
-    if (!tn->connman_available) {
-        IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, "Network manager unavailable");
-        IswArgSensitive(&ab, False);
-        IswCreateManagedWidget("noConnman", smeBSBObjectClass,
-                              tn->menu_shell, ab.args, ab.count);
-        goto popup;
-    }
+    /* Outer form */
+    IswArgBuilderReset(&ab);
+    IswArgDefaultDistance(&ab, 0);
+    tn->popup_outer = IswCreateManagedWidget("outerForm", formWidgetClass,
+                                              tn->popup_shell,
+                                              ab.args, ab.count);
 
-    /* Technologies */
+    /* Toggle row: Box with WiFi + Bluetooth toggles */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainTop);
+    IswArgHorizDistance(&ab, 4);
+    IswArgVertDistance(&ab, 4);
+    Widget toggle_box = IswCreateManagedWidget("toggleBox", boxWidgetClass,
+                                                tn->popup_outer,
+                                                ab.args, ab.count);
+
     for (int i = 0; i < tn->ntechs; i++) {
         TechInfo *t = &tn->techs[i];
+        if (strcmp(t->type, "wifi") != 0 &&
+            strcmp(t->type, "bluetooth") != 0)
+            continue;
 
-        if (i > 0) {
-            IswCreateManagedWidget("sep", smeLineObjectClass,
-                                  tn->menu_shell, NULL, 0);
-        }
+        ToggleData *td = alloc_toggle(tn, t->path);
 
-        /* Technology toggle: "WiFi  [Disable]" or "WiFi  [Enable]" */
-        char label[384];
-        if (t->powered) {
-            snprintf(label, sizeof(label), "%s — Disable", t->name);
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, label);
-            Widget w = IswCreateManagedWidget("techToggle", smeBSBObjectClass,
-                                              tn->menu_shell,
-                                              ab.args, ab.count);
-            MenuAction *a = alloc_action(tn, t->path, ACTION_POWER_OFF);
-            IswAddCallback(w, IswNcallback, on_action, a);
-        } else {
-            snprintf(label, sizeof(label), "%s — Enable", t->name);
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, label);
-            Widget w = IswCreateManagedWidget("techToggle", smeBSBObjectClass,
-                                              tn->menu_shell,
-                                              ab.args, ab.count);
-            MenuAction *a = alloc_action(tn, t->path, ACTION_POWER_ON);
-            IswAddCallback(w, IswNcallback, on_action, a);
-        }
-
-        /* Scan option for wifi */
-        if (strcmp(t->type, "wifi") == 0 && t->powered) {
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, "  Scan");
-            Widget w = IswCreateManagedWidget("scan", smeBSBObjectClass,
-                                              tn->menu_shell,
-                                              ab.args, ab.count);
-            MenuAction *a = alloc_action(tn, t->path, ACTION_SCAN);
-            IswAddCallback(w, IswNcallback, on_action, a);
-        }
-
-        /* Services belonging to this technology */
-        int has_services = 0;
-        for (int j = 0; j < tn->nservices; j++) {
-            ServiceInfo *s = &tn->services[j];
-            if (strcmp(s->type, t->type) != 0)
-                continue;
-
-            has_services = 1;
-            char slabel[512];
-            const char *sdisplay = state_display(s);
-
-            if (strcmp(s->type, "wifi") == 0) {
-                if (sdisplay) {
-                    snprintf(slabel, sizeof(slabel), "  %s (%s, %d%%)",
-                             s->name[0] ? s->name : "(hidden)",
-                             sdisplay, s->strength);
-                } else {
-                    snprintf(slabel, sizeof(slabel), "  %s (%d%%)",
-                             s->name[0] ? s->name : "(hidden)",
-                             s->strength);
-                }
-            } else {
-                if (sdisplay) {
-                    snprintf(slabel, sizeof(slabel), "  %s (%s)",
-                             s->name[0] ? s->name : s->type, sdisplay);
-                } else {
-                    snprintf(slabel, sizeof(slabel), "  %s",
-                             s->name[0] ? s->name : s->type);
-                }
-            }
-
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, slabel);
-
-            if (is_connected(s) || is_connecting(s)) {
-                /* Disconnect option */
-                Widget w = IswCreateManagedWidget("svcDisconnect",
-                    smeBSBObjectClass, tn->menu_shell, ab.args, ab.count);
-                MenuAction *a = alloc_action(tn, s->path, ACTION_DISCONNECT);
-                IswAddCallback(w, IswNcallback, on_action, a);
-            } else if (s->favorite) {
-                /* Known network — can connect without agent */
-                Widget w = IswCreateManagedWidget("svcConnect",
-                    smeBSBObjectClass, tn->menu_shell, ab.args, ab.count);
-                MenuAction *a = alloc_action(tn, s->path, ACTION_CONNECT);
-                IswAddCallback(w, IswNcallback, on_action, a);
-            } else {
-                /* Unknown secured network — no agent yet, show but disable */
-                int needs_passphrase = strcmp(s->security, "none") != 0 &&
-                                       strcmp(s->security, "") != 0;
-                if (needs_passphrase) {
-                    IswArgSensitive(&ab, False);
-                    IswCreateManagedWidget("svcLocked", smeBSBObjectClass,
-                                          tn->menu_shell, ab.args, ab.count);
-                } else {
-                    Widget w = IswCreateManagedWidget("svcConnect",
-                        smeBSBObjectClass, tn->menu_shell,
-                        ab.args, ab.count);
-                    MenuAction *a = alloc_action(tn, s->path, ACTION_CONNECT);
-                    IswAddCallback(w, IswNcallback, on_action, a);
-                }
-            }
-        }
-
-        if (!has_services && t->powered) {
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, "  No networks found");
-            IswArgSensitive(&ab, False);
-            IswCreateManagedWidget("noNetworks", smeBSBObjectClass,
-                                  tn->menu_shell, ab.args, ab.count);
-        }
-    }
-
-    if (tn->ntechs == 0) {
         IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, "No network interfaces");
-        IswArgSensitive(&ab, False);
-        IswCreateManagedWidget("noTech", smeBSBObjectClass,
-                              tn->menu_shell, ab.args, ab.count);
+        IswArgLabel(&ab, t->name);
+        IswArgState(&ab, t->powered ? True : False);
+        IswArgBorderWidth(&ab, 1);
+        Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
+                                            toggle_box, ab.args, ab.count);
+        IswAddCallback(tw, IswNcallback, on_tech_toggled, td);
     }
 
-popup:
-    if (tn->tray_icon)
-        IswTrayIconSetMenu(tn->tray_icon, tn->menu_shell);
+    /* Viewport below the toggle row */
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, toggle_box);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgTop(&ab, IswChainTop);
+    IswArgBottom(&ab, IswChainBottom);
+    IswArgHorizDistance(&ab, 0);
+    IswArgVertDistance(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+    tn->popup_viewport = IswCreateManagedWidget("viewport",
+                                                 viewportWidgetClass,
+                                                 tn->popup_outer,
+                                                 ab.args, ab.count);
 
-    IswPopup(tn->menu_shell, IswGrabExclusive);
+    /* ListBox inside viewport */
+    IswArgBuilderReset(&ab);
+    IswArgBuilderAdd(&ab, IswNselectionMode,
+                     (IswArgVal)IswListBoxSelectNone);
+    IswArgBuilderAdd(&ab, IswNshowSeparators, (IswArgVal)True);
+    IswArgBuilderAdd(&ab, IswNrowSpacing, (IswArgVal)2);
+    tn->popup_listbox = IswCreateManagedWidget("netList",
+                                                listBoxWidgetClass,
+                                                tn->popup_viewport,
+                                                ab.args, ab.count);
 
-    /* Grab pointer for outside-click dismiss */
+    build_content(tn);
+
+    IswPopup(tn->popup_shell, IswGrabNone);
+
     {
         xcb_connection_t *conn = IswDisplay(tn->toplevel);
-        xcb_grab_pointer(conn, 1, IswWindow(tn->menu_shell),
+        xcb_grab_pointer(conn, True, IswWindow(tn->popup_shell),
                          XCB_EVENT_MASK_BUTTON_PRESS |
                          XCB_EVENT_MASK_BUTTON_RELEASE,
                          XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                          XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
         xcb_flush(conn);
     }
-    IswAddRawEventHandler(tn->menu_shell, 0, True,
-                          menu_grab_handler, NULL);
-    IswAddCallback(tn->menu_shell, IswNpopdownCallback,
-                   menu_popdown_cb, NULL);
 
-    /* Reposition above the tray icon */
-    if (tn->tray_icon) {
-        xcb_connection_t *conn = IswDisplay(tn->toplevel);
-        xcb_window_t icon_win = IswTrayIconGetWindow(tn->tray_icon);
-        xcb_window_t root = IswScreen(tn->toplevel)->root;
+    IswAddEventHandler(tn->popup_shell, POPUP_DISMISS_MASK, False,
+                       popup_outside_handler, tn);
 
-        xcb_translate_coordinates_cookie_t cookie =
-            xcb_translate_coordinates(conn, icon_win, root, 0, 0);
-        xcb_translate_coordinates_reply_t *reply =
-            xcb_translate_coordinates_reply(conn, cookie, NULL);
+    position_popup(tn);
+    tn->popup_visible = 1;
+}
 
-        if (reply) {
-            double sf = ISWScaleFactor(tn->toplevel);
-            int phys_mw = (int)(tn->menu_shell->core.width * sf + 0.5);
-            int phys_mh = (int)(tn->menu_shell->core.height * sf + 0.5);
-            int phys_bw = (int)(tn->menu_shell->core.border_width * sf + 0.5);
-            int total_w = phys_mw + 2 * phys_bw;
-            int total_h = phys_mh + 2 * phys_bw;
+void tn_menu_hide(TrayNet *tn)
+{
+    if (!tn->popup_visible)
+        return;
 
-            int scr_w = IswScreen(tn->toplevel)->width_in_pixels;
-            int scr_h = IswScreen(tn->toplevel)->height_in_pixels;
+    if (tn->popup_shell)
+        IswRemoveEventHandler(tn->popup_shell, POPUP_DISMISS_MASK, False,
+                              popup_outside_handler, tn);
 
-            int x = reply->dst_x;
-            int y = reply->dst_y - total_h;
+    xcb_ungrab_pointer(IswDisplay(tn->toplevel), XCB_CURRENT_TIME);
+    xcb_flush(IswDisplay(tn->toplevel));
 
-            if (x + total_w > scr_w)
-                x = scr_w - total_w;
-            if (x < 0) x = 0;
-            if (y < 0) y = 0;
+    if (tn->popup_shell)
+        IswPopdown(tn->popup_shell);
 
-            uint32_t vals[] = { (uint32_t)x, (uint32_t)y };
-            xcb_configure_window(conn, IswWindow(tn->menu_shell),
-                                 XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                                 vals);
-            xcb_flush(conn);
-            free(reply);
+    tn->popup_visible = 0;
+}
+
+void tn_menu_rebuild(TrayNet *tn)
+{
+    if (!tn->popup_visible || !tn->popup_listbox)
+        return;
+
+    nactions = 0;
+    ntoggles = 0;
+
+    /* Update toggle states */
+    WidgetList outer_children;
+    Cardinal outer_num;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBuilderAdd(&ab, IswNchildren, (IswArgVal)&outer_children);
+    IswArgBuilderAdd(&ab, IswNnumChildren, (IswArgVal)&outer_num);
+    IswGetValues(tn->popup_outer, ab.args, ab.count);
+
+    if (outer_num > 0) {
+        Widget toggle_box = outer_children[0];
+        WidgetList box_children;
+        Cardinal box_num;
+        IswArgBuilderReset(&ab);
+        IswArgBuilderAdd(&ab, IswNchildren, (IswArgVal)&box_children);
+        IswArgBuilderAdd(&ab, IswNnumChildren, (IswArgVal)&box_num);
+        IswGetValues(toggle_box, ab.args, ab.count);
+
+        int ti = 0;
+        for (int i = 0; i < tn->ntechs && ti < (int)box_num; i++) {
+            TechInfo *t = &tn->techs[i];
+            if (strcmp(t->type, "wifi") != 0 &&
+                strcmp(t->type, "bluetooth") != 0)
+                continue;
+
+            ToggleData *td = alloc_toggle(tn, t->path);
+
+            IswArgBuilderReset(&ab);
+            IswArgState(&ab, t->powered ? True : False);
+            IswSetValues(box_children[ti], ab.args, ab.count);
+
+            IswRemoveAllCallbacks(box_children[ti], IswNcallback);
+            IswAddCallback(box_children[ti], IswNcallback,
+                           on_tech_toggled, td);
+            ti++;
         }
     }
+
+    clear_listbox(tn->popup_listbox);
+    build_content(tn);
+
+    position_popup(tn);
 }
 
 void tn_menu_cleanup(TrayNet *tn)
 {
-    if (tn->menu_shell) {
-        IswDestroyWidget(tn->menu_shell);
-        tn->menu_shell = NULL;
+    if (tn->popup_shell) {
+        IswDestroyWidget(tn->popup_shell);
+        tn->popup_shell = NULL;
+        tn->popup_outer = NULL;
+        tn->popup_viewport = NULL;
+        tn->popup_listbox = NULL;
     }
+    tn->popup_visible = 0;
+
     free(actions);
     actions = NULL;
     nactions = 0;
     cap_actions = 0;
+
+    free(toggle_data);
+    toggle_data = NULL;
+    ntoggles = 0;
+    cap_toggles = 0;
 }

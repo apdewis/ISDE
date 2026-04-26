@@ -153,14 +153,17 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     snprintf(tn->manager_state, sizeof(tn->manager_state),
                              "%s", v);
                     tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 }
             }
         } else if (strcmp(member, "ServicesChanged") == 0) {
             tn_connman_get_services(tn);
             tray_net_update_icon(tn);
+            tn_menu_rebuild(tn);
         } else if (strcmp(member, "TechnologyAdded") == 0 ||
                    strcmp(member, "TechnologyRemoved") == 0) {
             tn_connman_get_technologies(tn);
+            tn_menu_rebuild(tn);
         }
         return DBUS_HANDLER_RESULT_HANDLED;
     }
@@ -182,17 +185,20 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     dbus_message_iter_get_basic(&variant, &v);
                     snprintf(svc->state, sizeof(svc->state), "%s", v);
                     tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 } else if (strcmp(key, "Strength") == 0 &&
                            vtype == DBUS_TYPE_BYTE) {
                     uint8_t v;
                     dbus_message_iter_get_basic(&variant, &v);
                     svc->strength = v;
                     tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 } else if (strcmp(key, "Error") == 0 &&
                            vtype == DBUS_TYPE_STRING) {
                     const char *v;
                     dbus_message_iter_get_basic(&variant, &v);
                     snprintf(svc->error, sizeof(svc->error), "%s", v);
+                    tn_menu_rebuild(tn);
                 }
             }
         }
@@ -216,11 +222,16 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     dbus_bool_t v;
                     dbus_message_iter_get_basic(&variant, &v);
                     tech->powered = v;
+                    tn_connman_get_services(tn);
+                    tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 } else if (strcmp(key, "Connected") == 0 &&
                            vtype == DBUS_TYPE_BOOLEAN) {
                     dbus_bool_t v;
                     dbus_message_iter_get_basic(&variant, &v);
                     tech->connected = v;
+                    tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 }
             }
         }
@@ -242,6 +253,7 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     tn->connman_available = 1;
                     tn_connman_refresh(tn);
                     tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 } else {
                     fprintf(stderr, "isde-tray-net: ConnMan disappeared\n");
                     tn->connman_available = 0;
@@ -250,6 +262,7 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
                     snprintf(tn->manager_state,
                              sizeof(tn->manager_state), "idle");
                     tray_net_update_icon(tn);
+                    tn_menu_rebuild(tn);
                 }
             }
         }
@@ -512,56 +525,53 @@ int tn_connman_refresh(TrayNet *tn)
 
 /* ---------- Service.Connect / Disconnect ---------- */
 
-int tn_connman_service_connect(TrayNet *tn, const char *path)
+static void async_reply_cb(DBusPendingCall *pending, void *user_data)
+{
+    const char *action = (const char *)user_data;
+    DBusMessage *reply = dbus_pending_call_steal_reply(pending);
+    if (reply) {
+        if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+            const char *err = dbus_message_get_error_name(reply);
+            fprintf(stderr, "isde-tray-net: %s failed: %s\n",
+                    action, err ? err : "unknown error");
+        }
+        dbus_message_unref(reply);
+    }
+    dbus_pending_call_unref(pending);
+}
+
+static int send_service_method(TrayNet *tn, const char *path,
+                               const char *method)
 {
     if (!tn->system_bus)
         return -1;
 
     DBusMessage *msg = dbus_message_new_method_call(
-        CONNMAN_SERVICE, path, CONNMAN_SERVICE_IFACE, "Connect");
+        CONNMAN_SERVICE, path, CONNMAN_SERVICE_IFACE, method);
     if (!msg)
         return -1;
 
-    /* Connect can take a long time (DHCP, etc.) — send async */
     DBusPendingCall *pending = NULL;
     if (!dbus_connection_send_with_reply(tn->system_bus, msg, &pending, 30000)) {
         dbus_message_unref(msg);
         return -1;
     }
-
     dbus_message_unref(msg);
+
     if (pending)
-        dbus_pending_call_unref(pending);
+        dbus_pending_call_set_notify(pending, async_reply_cb,
+                                     (void *)method, NULL);
     return 0;
+}
+
+int tn_connman_service_connect(TrayNet *tn, const char *path)
+{
+    return send_service_method(tn, path, "Connect");
 }
 
 int tn_connman_service_disconnect(TrayNet *tn, const char *path)
 {
-    if (!tn->system_bus)
-        return -1;
-
-    DBusMessage *msg = dbus_message_new_method_call(
-        CONNMAN_SERVICE, path, CONNMAN_SERVICE_IFACE, "Disconnect");
-    if (!msg)
-        return -1;
-
-    DBusError err;
-    dbus_error_init(&err);
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(
-        tn->system_bus, msg, 5000, &err);
-    dbus_message_unref(msg);
-
-    if (!reply) {
-        if (dbus_error_is_set(&err)) {
-            fprintf(stderr, "isde-tray-net: disconnect: %s\n", err.message);
-            dbus_error_free(&err);
-        }
-        return -1;
-    }
-
-    dbus_message_unref(reply);
-    dbus_error_free(&err);
-    return 0;
+    return send_service_method(tn, path, "Disconnect");
 }
 
 /* ---------- Technology.SetProperty (Powered) ---------- */
