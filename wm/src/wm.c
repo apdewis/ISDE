@@ -44,6 +44,10 @@ static void wm_on_settings_changed(const char *section, const char *key,
     }
 }
 
+/* ---------- dock window tracking ---------- */
+static void wm_add_dock(Wm *wm, xcb_window_t win);
+static void wm_remove_dock(Wm *wm, xcb_window_t win);
+
 /* ---------- initialization ---------- */
 
 int wm_init(Wm *wm, int *argc, char **argv)
@@ -162,6 +166,18 @@ int wm_init(Wm *wm, int *argc, char **argv)
             if (attr) {
                 if (!attr->override_redirect &&
                     attr->map_state == XCB_MAP_STATE_VIEWABLE) {
+                    xcb_atom_t wtype = isde_ewmh_get_window_type(
+                        wm->ewmh, children[i]);
+                    if (wtype == isde_ewmh_connection(wm->ewmh)
+                                     ->_NET_WM_WINDOW_TYPE_DOCK) {
+                        wm_add_dock(wm, children[i]);
+                        uint32_t emask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+                        xcb_change_window_attributes(wm->conn, children[i],
+                                                     XCB_CW_EVENT_MASK,
+                                                     &emask);
+                        free(attr);
+                        continue;
+                    }
                     WmClient *c = frame_create(wm, children[i]);
                     if (c) {
                         c->desktop = wm->current_desktop;
@@ -271,12 +287,20 @@ void wm_focus_client(Wm *wm, WmClient *c)
         c->focus_seq = ++wm->focus_seq;
         xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
                             c->client, XCB_CURRENT_TIME);
-        /* Raise frame */
+        /* Raise frame — below dock windows so we don't have to
+           restack docks (which triggers ConfigureNotify on them) */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)IswWindow(c->shell));
-        uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
-        xcb_configure_window(wm->conn, IswWindow(c->shell),
-                             XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        if (wm->ndocks > 0 && !c->above) {
+            uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
+            xcb_configure_window(wm->conn, IswWindow(c->shell),
+                                 XCB_CONFIG_WINDOW_SIBLING |
+                                 XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        } else {
+            uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
+            xcb_configure_window(wm->conn, IswWindow(c->shell),
+                                 XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        }
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
     }
@@ -681,6 +705,8 @@ void wm_restack_above_below(Wm *wm)
                                  XCB_CONFIG_WINDOW_STACK_MODE, v);
         }
     }
+    /* Dock windows are never restacked here — normal windows are raised
+       below them in wm_focus_client to avoid ConfigureNotify on docks. */
     for (WmClient *c = wm->clients; c; c = c->next) {
         if (!c->shell || !IswIsRealized(c->shell))
             continue;
@@ -789,6 +815,36 @@ int wm_window_type_wants_decorations(Wm *wm, xcb_window_t win)
     return 1;
 }
 
+static void wm_add_dock(Wm *wm, xcb_window_t win)
+{
+    for (int i = 0; i < wm->ndocks; i++) {
+        if (wm->docks[i] == win)
+            return;
+    }
+    if (wm->ndocks >= wm->cap_docks) {
+        wm->cap_docks = wm->cap_docks ? wm->cap_docks * 2 : 4;
+        wm->docks = realloc(wm->docks, wm->cap_docks * sizeof(xcb_window_t));
+    }
+    wm->docks[wm->ndocks++] = win;
+
+    /* Raise once so the dock sits above all normal windows.
+       After this, normal windows are raised below the dock —
+       the dock window is never reconfigured again. */
+    uint32_t v[] = { XCB_STACK_MODE_ABOVE };
+    xcb_configure_window(wm->conn, win,
+                         XCB_CONFIG_WINDOW_STACK_MODE, v);
+}
+
+static void wm_remove_dock(Wm *wm, xcb_window_t win)
+{
+    for (int i = 0; i < wm->ndocks; i++) {
+        if (wm->docks[i] == win) {
+            wm->docks[i] = wm->docks[--wm->ndocks];
+            return;
+        }
+    }
+}
+
 static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 {
     fprintf(stderr, "isde-wm: MapRequest for window 0x%x\n", ev->window);
@@ -810,6 +866,19 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             return;
         }
         free(attr);
+    }
+
+    xcb_atom_t type = isde_ewmh_get_window_type(wm->ewmh, ev->window);
+    if (type == isde_ewmh_connection(wm->ewmh)->_NET_WM_WINDOW_TYPE_DOCK) {
+        fprintf(stderr, "isde-wm:   dock window — not managing\n");
+        wm_add_dock(wm, ev->window);
+        uint32_t mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+        xcb_change_window_attributes(wm->conn, ev->window,
+                                     XCB_CW_EVENT_MASK, &mask);
+        xcb_map_window(wm->conn, ev->window);
+        wm_restack_above_below(wm);
+        xcb_flush(wm->conn);
+        return;
     }
 
     WmClient *c = frame_create(wm, ev->window);
@@ -910,6 +979,8 @@ static void on_unmap_notify(Wm *wm, xcb_unmap_notify_event_t *ev)
 
 static void on_destroy_notify(Wm *wm, xcb_destroy_notify_event_t *ev)
 {
+    wm_remove_dock(wm, ev->window);
+
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
         wm_remove_client(wm, c);
@@ -1276,6 +1347,9 @@ void wm_cleanup(Wm *wm)
     while (wm->clients) {
         wm_remove_client(wm, wm->clients);
     }
+    free(wm->docks);
+    wm->docks = NULL;
+    wm->ndocks = wm->cap_docks = 0;
     xcb_flush(wm->conn);
 
     if (wm->keysyms) {

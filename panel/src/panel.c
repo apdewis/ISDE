@@ -279,7 +279,9 @@ int panel_init(Panel *p, int *argc, char **argv)
        (both operate in physical pixels). */
     p->phys_panel_h = (int)(PANEL_HEIGHT * sf + 0.5);
 
-    /* Create panel shell — override-redirect dock at bottom of primary */
+    /* Create panel shell as OverrideShell for simple Xt geometry (no WM
+       negotiation), then clear override_redirect on the X window so the
+       WM receives MapRequest and can handle dock stacking. */
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgX(&ab, logical_mon_x);
     IswArgY(&ab, logical_mon_y + logical_mon_h - PANEL_HEIGHT);
@@ -317,25 +319,32 @@ int panel_init(Panel *p, int *argc, char **argv)
     clock_init(p);
 
     IswRealizeWidget(p->shell);
-    IswPopup(p->shell, IswGrabNone);
 
-    /* Claim system tray selection (needs realized window) */
-    tray_init_selection(p);
-
-    /* Set _NET_WM_WINDOW_TYPE_DOCK and strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_window_t panel_win = IswWindow(p->shell);
+
+    /* Clear override_redirect so the WM receives MapRequest */
+    uint32_t ov = 0;
+    xcb_change_window_attributes(p->conn, panel_win,
+                                 XCB_CW_OVERRIDE_REDIRECT, &ov);
+
+    /* Set _NET_WM_WINDOW_TYPE_DOCK and strut before mapping so the WM
+       can read them when it receives MapRequest */
 
     xcb_atom_t dock_type = ewmh->_NET_WM_WINDOW_TYPE_DOCK;
     xcb_ewmh_set_wm_window_type(ewmh, panel_win, 1, &dock_type);
 
-    /* Reserve space at bottom of screen — use physical height */
     xcb_ewmh_wm_strut_partial_t strut;
     memset(&strut, 0, sizeof(strut));
     strut.bottom = p->phys_panel_h;
     strut.bottom_start_x = p->mon_x;
     strut.bottom_end_x = p->mon_x + p->mon_w - 1;
     xcb_ewmh_set_wm_strut_partial(ewmh, panel_win, strut);
+
+    IswMapWidget(p->shell);
+
+    /* Claim system tray selection (needs realized window) */
+    tray_init_selection(p);
 
     /* Watch root for:
      *   PROPERTY_CHANGE — client list updates

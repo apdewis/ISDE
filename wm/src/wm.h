@@ -105,6 +105,12 @@ typedef struct Wm {
     WmClient              *focused;
     unsigned long          focus_seq;  /* monotonic counter for MRU tracking */
 
+    /* Unmanaged dock windows (_NET_WM_WINDOW_TYPE_DOCK) —
+       tracked for stacking only, not reparented or focused */
+    xcb_window_t          *docks;
+    int                    ndocks;
+    int                    cap_docks;
+
     /* Virtual desktops */
     int                    desk_rows;
     int                    desk_cols;
