@@ -82,6 +82,7 @@ add_subdirectory(mountd)
 add_subdirectory(tray-mount)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 add_subdirectory(tray-audio)
+add_subdirectory(tray-net)
 add_subdirectory(term)
 add_subdirectory(common)
 
