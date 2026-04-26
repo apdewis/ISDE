@@ -238,7 +238,6 @@ static void add_heading(Widget listbox, const char *text)
 {
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgSelectable(&ab, false);
-    IswArgListBoxRowHeight(&ab, 20);
     IswArgBorderWidth(&ab, 0);
     Widget row = IswCreateWidget("hdrRow", listBoxRowWidgetClass,
                                   listbox, ab.args, ab.count);
@@ -367,6 +366,9 @@ void tn_menu_init(TrayNet *tn)
 
 void tn_menu_show(TrayNet *tn)
 {
+    /* Pane background tones from theme */
+    const IsdeColorScheme *scheme = isde_theme_current();
+
     if (tn->popup_visible) {
         tn_menu_hide(tn);
         return;
@@ -392,24 +394,21 @@ void tn_menu_show(TrayNet *tn)
                                            overrideShellWidgetClass,
                                            tn->toplevel, ab.args, ab.count);
 
-    /* Outer form */
+    /* Outer vertical FlexBox */
     IswArgBuilderReset(&ab);
-    IswArgDefaultDistance(&ab, 0);
-    tn->popup_outer = IswCreateManagedWidget("outerForm", formWidgetClass,
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    tn->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
                                               tn->popup_shell,
                                               ab.args, ab.count);
 
-    /* Toggle row: Box with WiFi power toggles */
+    /* Toggle row: horizontal Box with WiFi power toggles */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    IswArgTop(&ab, IswChainTop);
-    IswArgBottom(&ab, IswChainTop);
-    IswArgHorizDistance(&ab, 4);
-    IswArgVertDistance(&ab, 4);
-    Widget toggle_box = IswCreateManagedWidget("toggleBox", boxWidgetClass,
+    IswArgFlexBasis(&ab, 50);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBackground(&ab, scheme->bg_light);
+    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
                                                 tn->popup_outer,
                                                 ab.args, ab.count);
 
@@ -423,20 +422,19 @@ void tn_menu_show(TrayNet *tn)
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, t->name);
         IswArgState(&ab, t->powered ? True : False);
+        IswArgRight(&ab, IswChainLeft);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgBackground(&ab, scheme->bg_light);
         Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
-                                            toggle_box, ab.args, ab.count);
+                                            toggle_area, ab.args, ab.count);
         IswAddCallback(tw, IswNcallback, on_tech_toggled, td);
     }
 
-    /* Viewport below the toggle row */
+    /* Viewport — fills remaining space */
     IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, toggle_box);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    IswArgTop(&ab, IswChainTop);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgHorizDistance(&ab, 0);
-    IswArgVertDistance(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
+    IswArgForceBars(&ab, True);
     IswArgBorderWidth(&ab, 0);
     IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
     IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);

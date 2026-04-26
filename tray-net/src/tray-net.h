@@ -11,6 +11,7 @@
 #include <ISW/Toggle.h>
 #include <ISW/Label.h>
 #include <ISW/Form.h>
+#include <ISW/FlexBox.h>
 #include <ISW/Box.h>
 #include <ISW/Viewport.h>
 #include <ISW/ListBox.h>
