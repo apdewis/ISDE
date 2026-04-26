@@ -167,7 +167,7 @@ void tray_init_widgets(Panel *p)
 
     /* Outer vertical FlexBox — child of the panel's horizontal FlexBox */
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgOrientation(&ab, XtorientVertical);
+    IswArgOrientation(&ab, IswOrientVertical);
     IswArgBorderWidth(&ab, 0);
     IswArgFlexBasis(&ab, 2);
     p->tray_area = IswCreateManagedWidget("trayArea", flexBoxWidgetClass,

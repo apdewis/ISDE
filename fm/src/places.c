@@ -510,7 +510,7 @@ void places_init(Fm *fm)
 
     /* Vertical FlexBox inside viewport */
     IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, XtorientVertical);
+    IswArgOrientation(&ab, IswOrientVertical);
     IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 0);
     fm->places_box = IswCreateManagedWidget("placesBox", flexBoxWidgetClass,

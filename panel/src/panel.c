@@ -294,7 +294,7 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* FlexBox layout: start button | taskbar box | tray | clock */
     IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgOrientation(&ab, IswOrientHorizontal);
     IswArgSpacing(&ab, 0);
     IswArgBorderWidth(&ab, 0);
     p->form = IswCreateManagedWidget("panelFlex", flexBoxWidgetClass,
@@ -305,7 +305,7 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* Taskbar box — flexGrow=1 fills remaining space */
     IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgOrientation(&ab, IswOrientHorizontal);
     IswArgBorderWidth(&ab, 0);
     IswArgHSpace(&ab, 2);
     IswArgVSpace(&ab, 0);

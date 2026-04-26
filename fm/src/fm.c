@@ -1857,7 +1857,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     /* Outer FlexBox: vertical */
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgOrientation(&ab, XtorientVertical);
+    IswArgOrientation(&ab, IswOrientVertical);
     IswArgBorderWidth(&ab, 0);
     fm->vbox = IswCreateManagedWidget("vbox", flexBoxWidgetClass,
                                       fm->main_window, ab.args, ab.count);
@@ -1866,7 +1866,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     /* Content area: horizontal FlexBox */
     IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgOrientation(&ab, IswOrientHorizontal);
     IswArgBorderWidth(&ab, 0);
     IswArgFlexGrow(&ab, 1);
     fm->hbox = IswCreateManagedWidget("hbox", flexBoxWidgetClass,

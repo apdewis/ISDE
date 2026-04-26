@@ -503,7 +503,7 @@ static void progress_create_dialog(IsdeProgress *p)
                                         p->title, 350, 190);
 
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgOrientation(&ab, XtorientVertical);
+    IswArgOrientation(&ab, IswOrientVertical);
     IswArgBorderWidth(&ab, 0);
     Widget vbox = IswCreateManagedWidget("progressBox", flexBoxWidgetClass,
                                          p->shell, ab.args, ab.count);
@@ -548,7 +548,7 @@ static void progress_create_dialog(IsdeProgress *p)
     IswArgWidth(&ab, 80);
     IswArgInternalWidth(&ab, 8);
     IswArgInternalHeight(&ab, 8);
-    IswArgFlexAlign(&ab, XtflexAlignEnd);
+    IswArgFlexAlign(&ab, IswFlexAlignEnd);
     Widget cancel = IswCreateManagedWidget("cancelBtn", commandWidgetClass,
                                            vbox, ab.args, ab.count);
     if (p->cancel_cb)

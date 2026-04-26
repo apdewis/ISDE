@@ -67,7 +67,7 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     IswArgMinimumValue(&ab, min);
     IswArgMaximumValue(&ab, max);
     IswArgSliderValue(&ab, value);
-    IswArgOrientation(&ab, XtorientHorizontal);
+    IswArgOrientation(&ab, IswOrientHorizontal);
     IswArgShowValue(&ab, True);
     IswArgTickInterval(&ab, 1);
     IswArgWidth(&ab, SLIDER_W);
