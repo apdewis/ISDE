@@ -10,6 +10,9 @@
 #include <ISW/IntrinsicP.h>
 #include <ISW/Label.h>
 #include <ISW/Command.h>
+#include <ISW/SimpleMenu.h>
+#include <ISW/SmeBSB.h>
+#include <ISW/SmeLine.h>
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
@@ -37,6 +40,8 @@ typedef struct WmClient {
 
     /* ISW widget tree for the frame */
     Widget       shell;        /* OverrideShell — the frame window */
+    Widget       menu_btn;     /* Command — window menu button */
+    Widget       win_menu;     /* SimpleMenu — window operations */
     Widget       title_label;  /* Label — window title */
     Widget       minimize_btn; /* Command — minimize (placeholder) */
     Widget       maximize_btn; /* Command — maximize/restore */
@@ -47,6 +52,8 @@ typedef struct WmClient {
     int          focused;
     int          maximized;
     int          minimized;
+    int          above;        /* _NET_WM_STATE_ABOVE */
+    int          below;        /* _NET_WM_STATE_BELOW */
     int          decorated;     /* 0 = CSD/no frame chrome */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
     xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */
@@ -164,6 +171,10 @@ void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);
 void      wm_minimize_client(Wm *wm, WmClient *c);
 void      wm_restore_client(Wm *wm, WmClient *c);
+void      wm_set_above(Wm *wm, WmClient *c, int enable);
+void      wm_set_below(Wm *wm, WmClient *c, int enable);
+void      wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop);
+void      wm_restack_above_below(Wm *wm);
 
 /* ---------- wm.c — work area ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);

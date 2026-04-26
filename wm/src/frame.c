@@ -56,7 +56,7 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     /* Include explicit width/height so IswSetValues doesn't resize the
      * label to its preferred (text-fitting) geometry. */
     int th = wm->title_height;
-    int btn_area = 3 * th;
+    int btn_area = 4 * th;
     int title_w = c->width - btn_area;
     if (title_w < 1) { title_w = 1; }
 
@@ -74,6 +74,7 @@ static char *icon_minimize;
 static char *icon_maximize;
 static char *icon_restore;
 static char *icon_close;
+static char *icon_menu;
 
 static void frame_init_icons(void)
 {
@@ -81,10 +82,12 @@ static void frame_init_icons(void)
     free(icon_maximize);
     free(icon_restore);
     free(icon_close);
+    free(icon_menu);
     icon_minimize = isde_icon_find("actions", "window-minimize");
     icon_maximize = isde_icon_find("actions", "window-maximize");
     icon_restore  = isde_icon_find("actions", "window-restore");
     icon_close    = isde_icon_find("actions", "window-close");
+    icon_menu     = isde_icon_find("actions", "application-menu");
 }
 
 /* ---------- title fetching ---------- */
@@ -228,6 +231,139 @@ static void title_button_handler(Widget w, IswPointer client_data,
  * cancels the press. */
 static IswTranslations btn_leave_fixup;
 
+/* ---------- window menu ---------- */
+
+typedef struct {
+    Wm       *wm;
+    WmClient *client;
+    uint32_t  desktop;
+} MenuDesktopClosure;
+
+static void above_callback(Widget w, IswPointer client_data,
+                            IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    Wm *wm       = ((void **)client_data)[0];
+    WmClient *c   = ((void **)client_data)[1];
+    wm_set_above(wm, c, !c->above);
+}
+
+static void below_callback(Widget w, IswPointer client_data,
+                            IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    Wm *wm       = ((void **)client_data)[0];
+    WmClient *c   = ((void **)client_data)[1];
+    wm_set_below(wm, c, !c->below);
+}
+
+static void desktop_move_callback(Widget w, IswPointer client_data,
+                                  IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    MenuDesktopClosure *mc = client_data;
+    wm_move_to_desktop(mc->wm, mc->client, mc->desktop);
+}
+
+static void free_closure_callback(Widget w, IswPointer client_data,
+                                  IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    free(client_data);
+}
+
+static void win_menu_show(Wm *wm, WmClient *c)
+{
+    if (c->win_menu) {
+        IswDestroyWidget(c->win_menu);
+        c->win_menu = NULL;
+    }
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    c->win_menu = IswCreatePopupShell("winMenu", simpleMenuWidgetClass,
+                                      c->menu_btn, ab.args, ab.count);
+
+    void **closure = malloc(2 * sizeof(void *));
+    closure[0] = wm;
+    closure[1] = c;
+    IswAddCallback(c->win_menu, IswNdestroyCallback,
+                   free_closure_callback, closure);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, c->above ? "* Keep Above" : "  Keep Above");
+    Widget above_item = IswCreateManagedWidget("above", smeBSBObjectClass,
+                                               c->win_menu, ab.args, ab.count);
+    IswAddCallback(above_item, IswNcallback, above_callback, closure);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, c->below ? "* Keep Below" : "  Keep Below");
+    Widget below_item = IswCreateManagedWidget("below", smeBSBObjectClass,
+                                               c->win_menu, ab.args, ab.count);
+    IswAddCallback(below_item, IswNcallback, below_callback, closure);
+
+    IswCreateManagedWidget("sep", smeLineObjectClass, c->win_menu, NULL, 0);
+
+    for (int d = 0; d < wm->num_desktops; d++) {
+        char label[32];
+        if (c->desktop == (uint32_t)d)
+            snprintf(label, sizeof(label), "* Desktop %d", d + 1);
+        else
+            snprintf(label, sizeof(label), "  Desktop %d", d + 1);
+
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, label);
+        Widget di = IswCreateManagedWidget("desk", smeBSBObjectClass,
+                                           c->win_menu, ab.args, ab.count);
+        MenuDesktopClosure *mc = malloc(sizeof(*mc));
+        mc->wm      = wm;
+        mc->client  = c;
+        mc->desktop = d;
+        IswAddCallback(di, IswNcallback, desktop_move_callback, mc);
+        IswAddCallback(di, IswNdestroyCallback, free_closure_callback, mc);
+    }
+
+    /* "All Desktops" (sticky) */
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, c->desktop == 0xFFFFFFFF ? "* All Desktops"
+                                              : "  All Desktops");
+    Widget sticky = IswCreateManagedWidget("sticky", smeBSBObjectClass,
+                                           c->win_menu, ab.args, ab.count);
+    MenuDesktopClosure *mc = malloc(sizeof(*mc));
+    mc->wm      = wm;
+    mc->client  = c;
+    mc->desktop = 0xFFFFFFFF;
+    IswAddCallback(sticky, IswNcallback, desktop_move_callback, mc);
+    IswAddCallback(sticky, IswNdestroyCallback, free_closure_callback, mc);
+
+    /* Position below the menu button */
+    Position bx, by;
+    IswTranslateCoords(c->menu_btn, 0, 0, &bx, &by);
+
+    Dimension bh;
+    IswArgBuilderReset(&ab);
+    IswArgHeight(&ab, &bh);
+    IswGetValues(c->menu_btn, ab.args, ab.count);
+
+    IswRealizeWidget(c->win_menu);
+
+    IswArgBuilderReset(&ab);
+    IswArgX(&ab, bx);
+    IswArgY(&ab, by + (Position)bh);
+    IswSetValues(c->win_menu, ab.args, ab.count);
+
+    IswPopup(c->win_menu, IswGrabNone);
+}
+
+static void menu_button_callback(Widget w, IswPointer client_data,
+                                 IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    Wm *wm       = ((void **)client_data)[0];
+    WmClient *c   = ((void **)client_data)[1];
+    wm_focus_client(wm, c);
+    win_menu_show(wm, c);
+}
+
 /* ---------- frame creation ---------- */
 
 WmClient *frame_create(Wm *wm, xcb_window_t client)
@@ -296,9 +432,25 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     /* Title bar widgets — only for decorated windows */
     if (c->decorated) {
-        int btn_area = 3 * wm->title_height;
-        int title_w = fw - btn_area;
+        int th = wm->title_height;
+        int btn_area = 4 * th;  /* menu + min + max + close */
+        int title_w = c->width - btn_area;
         if (title_w < 1) { title_w = 1; }
+
+        /* Menu button (left-most) */
+        IswArgBuilderReset(&ab);
+        if (icon_menu) {
+            IswArgImage(&ab, icon_menu);
+        }
+        IswArgWidth(&ab, WM_TITLE_HEIGHT);
+        IswArgHeight(&ab, WM_TITLE_HEIGHT);
+        IswArgInternalWidth(&ab, 0);
+        IswArgInternalHeight(&ab, 0);
+        IswArgCornerRadius(&ab, 0);
+        c->menu_btn = IswCreateWidget("menuBtn", commandWidgetClass,
+                                     c->shell, ab.args, ab.count);
+        IswOverrideTranslations(c->menu_btn, btn_leave_fixup);
+        IswAddCallback(c->menu_btn, IswNcallback, menu_button_callback, closure);
 
         /* Title bar label */
         IswArgBuilderReset(&ab);
@@ -366,6 +518,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
     frame_init_cursors(wm);
     IswRealizeWidget(c->shell);
     if (c->decorated) {
+        IswMapWidget(c->menu_btn);
         IswMapWidget(c->title_label);
         IswMapWidget(c->minimize_btn);
         IswMapWidget(c->maximize_btn);
@@ -496,19 +649,21 @@ void frame_configure(Wm *wm, WmClient *c)
                          XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw32);
 
     if (c->decorated) {
-        int btn_area = 3 * th;
+        int btn_area = 4 * th;  /* menu + min + max + close */
         int inner_w = c->width;
         int title_w = inner_w - btn_area;
         if (title_w < 1) { title_w = 1; }
         int bx = WM_BORDER_WIDTH;
         int by = WM_BORDER_WIDTH;
-        IswConfigureWidget(c->title_label, bx, by,
+        IswConfigureWidget(c->menu_btn, bx, by,
+                          th, th, 0);
+        IswConfigureWidget(c->title_label, bx + th, by,
                           title_w, th, 0);
-        IswConfigureWidget(c->minimize_btn, bx + title_w, by,
+        IswConfigureWidget(c->minimize_btn, bx + th + title_w, by,
                           th, th, 0);
-        IswConfigureWidget(c->maximize_btn, bx + title_w + th, by,
+        IswConfigureWidget(c->maximize_btn, bx + th + title_w + th, by,
                           th, th, 0);
-        IswConfigureWidget(c->close_btn, bx + title_w + 2 * th, by,
+        IswConfigureWidget(c->close_btn, bx + th + title_w + 2 * th, by,
                           th, th, 0);
     }
 
@@ -544,7 +699,7 @@ void frame_update_title(Wm *wm, WmClient *c)
 
     if (c->title_label) {
         int th = wm->title_height;
-        int btn_area = 3 * th;
+        int btn_area = 4 * th;
         int title_w = c->width - btn_area;
         if (title_w < 1) { title_w = 1; }
 

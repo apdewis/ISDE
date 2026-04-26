@@ -177,10 +177,15 @@ int wm_init(Wm *wm, int *argc, char **argv)
                                     children[i]),
                                 &state, NULL)) {
                             int was_max = 0;
+                            xcb_ewmh_connection_t *ec = isde_ewmh_connection(wm->ewmh);
                             for (uint32_t s = 0; s < state.atoms_len; s++) {
-                                if (state.atoms[s] == isde_ewmh_connection(wm->ewmh)->_NET_WM_STATE_MAXIMIZED_VERT ||
-                                    state.atoms[s] == isde_ewmh_connection(wm->ewmh)->_NET_WM_STATE_MAXIMIZED_HORZ) {
+                                if (state.atoms[s] == ec->_NET_WM_STATE_MAXIMIZED_VERT ||
+                                    state.atoms[s] == ec->_NET_WM_STATE_MAXIMIZED_HORZ) {
                                     was_max = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_ABOVE) {
+                                    c->above = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_BELOW) {
+                                    c->below = 1;
                                 }
                             }
                             xcb_ewmh_get_atoms_reply_wipe(&state);
@@ -276,7 +281,7 @@ void wm_focus_client(Wm *wm, WmClient *c)
         frame_update_title(wm, c);
     }
     wm_ewmh_update_active(wm);
-    xcb_flush(wm->conn);
+    wm_restack_above_below(wm);
 }
 
 /* ---------- remove client ---------- */
@@ -576,6 +581,26 @@ static void apply_snap(Wm *wm, WmClient *c, int zone)
     xcb_flush(wm->conn);
 }
 
+/* ---------- _NET_WM_STATE helper ---------- */
+
+static void wm_update_net_wm_state(Wm *wm, WmClient *c)
+{
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    xcb_atom_t states[6];
+    int n = 0;
+
+    if (c->maximized) {
+        states[n++] = ewmh->_NET_WM_STATE_MAXIMIZED_VERT;
+        states[n++] = ewmh->_NET_WM_STATE_MAXIMIZED_HORZ;
+    }
+    if (c->above)
+        states[n++] = ewmh->_NET_WM_STATE_ABOVE;
+    if (c->below)
+        states[n++] = ewmh->_NET_WM_STATE_BELOW;
+
+    xcb_ewmh_set_wm_state(ewmh, c->client, n, n ? states : NULL);
+}
+
 /* ---------- maximize / minimize ---------- */
 
 void wm_maximize_client(Wm *wm, WmClient *c)
@@ -603,17 +628,7 @@ void wm_maximize_client(Wm *wm, WmClient *c)
     }
     frame_configure(wm, c);
 
-    /* Update _NET_WM_STATE so the client knows about the change */
-    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
-    if (c->maximized) {
-        xcb_atom_t states[] = {
-            ewmh->_NET_WM_STATE_MAXIMIZED_VERT,
-            ewmh->_NET_WM_STATE_MAXIMIZED_HORZ
-        };
-        xcb_ewmh_set_wm_state(ewmh, c->client, 2, states);
-    } else {
-        xcb_ewmh_set_wm_state(ewmh, c->client, 0, NULL);
-    }
+    wm_update_net_wm_state(wm, c);
 
     xcb_flush(wm->conn);
 }
@@ -650,6 +665,79 @@ void wm_restore_client(Wm *wm, WmClient *c)
     if (c->shell) {
         IswPopup(c->shell, IswGrabNone);
     }
+    xcb_flush(wm->conn);
+}
+
+/* ---------- above / below / move to desktop ---------- */
+
+void wm_restack_above_below(Wm *wm)
+{
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (!c->shell || !IswIsRealized(c->shell))
+            continue;
+        if (c->below) {
+            uint32_t v[] = { XCB_STACK_MODE_BELOW };
+            xcb_configure_window(wm->conn, IswWindow(c->shell),
+                                 XCB_CONFIG_WINDOW_STACK_MODE, v);
+        }
+    }
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (!c->shell || !IswIsRealized(c->shell))
+            continue;
+        if (c->above) {
+            uint32_t v[] = { XCB_STACK_MODE_ABOVE };
+            xcb_configure_window(wm->conn, IswWindow(c->shell),
+                                 XCB_CONFIG_WINDOW_STACK_MODE, v);
+        }
+    }
+    xcb_flush(wm->conn);
+}
+
+void wm_set_above(Wm *wm, WmClient *c, int enable)
+{
+    if (enable && c->below)
+        c->below = 0;
+    c->above = enable;
+    wm_update_net_wm_state(wm, c);
+    wm_restack_above_below(wm);
+}
+
+void wm_set_below(Wm *wm, WmClient *c, int enable)
+{
+    if (enable && c->above)
+        c->above = 0;
+    c->below = enable;
+    wm_update_net_wm_state(wm, c);
+    wm_restack_above_below(wm);
+}
+
+void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
+{
+    if (desktop == c->desktop)
+        return;
+
+    uint32_t old = c->desktop;
+    c->desktop = desktop;
+    xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
+                            c->client, desktop);
+
+    int visible_now = (desktop == wm->current_desktop ||
+                       desktop == 0xFFFFFFFF);
+    int visible_before = (old == wm->current_desktop ||
+                          old == 0xFFFFFFFF);
+
+    if (visible_before && !visible_now) {
+        if (c->shell && IswIsRealized(c->shell))
+            xcb_unmap_window(wm->conn, IswWindow(c->shell));
+        if (wm->focused == c) {
+            wm->focused = NULL;
+            wm_ewmh_update_active(wm);
+        }
+    } else if (!visible_before && visible_now) {
+        if (c->shell && IswIsRealized(c->shell))
+            xcb_map_window(wm->conn, IswWindow(c->shell));
+    }
+
     xcb_flush(wm->conn);
 }
 
@@ -976,6 +1064,18 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
             } else if (!want && c->minimized) {
                 wm_restore_client(wm, c);
             }
+        }
+        /* Above */
+        if (a1 == ewmh->_NET_WM_STATE_ABOVE ||
+            a2 == ewmh->_NET_WM_STATE_ABOVE) {
+            int want = (action == 1) || (action == 2 && !c->above);
+            wm_set_above(wm, c, want);
+        }
+        /* Below */
+        if (a1 == ewmh->_NET_WM_STATE_BELOW ||
+            a2 == ewmh->_NET_WM_STATE_BELOW) {
+            int want = (action == 1) || (action == 2 && !c->below);
+            wm_set_below(wm, c, want);
         }
         return 1;
     } else if (ev->type == ewmh->_NET_WM_MOVERESIZE) {
