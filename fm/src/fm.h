@@ -222,7 +222,7 @@ typedef struct Fm {
 
     /* Places sidebar */
     Widget         places_vp;
-    Widget         places_box;
+    Widget         places_listbox;
     FmPlacesData  *places_data;
     Widget         dev_ctx_shell;   /* device context menu (SimpleMenu) */
 

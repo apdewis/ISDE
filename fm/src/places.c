@@ -9,6 +9,7 @@
 #include "fm_mountd.h"
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/ListBox.h>
 
 
 #include <stdio.h>
@@ -32,25 +33,14 @@ typedef struct {
     int   is_header;    /* section header, not clickable */
 } PlaceEntry;
 
-/* ---------- Section tracking ---------- */
-
-typedef struct {
-    Widget  header;     /* Label widget for section title */
-    Widget  list;       /* List widget for section items */
-    int     start_idx;  /* index into places[] of first item */
-    int     nitems;     /* number of items in this section */
-    String *labels;     /* string array owned by us, pointed to by List */
-} PlaceSection;
-
 /* ---------- Per-window places data ---------- */
 
 struct FmPlacesData {
-    PlaceEntry   *places;
-    int           nplaces;
-    int           places_cap;
-
-    PlaceSection *sections;
-    int           nsections;
+    PlaceEntry *places;
+    int         nplaces;
+    int         places_cap;
+    Widget     *row_widgets;    /* parallel to places[], one Label per entry */
+    int         nrow_widgets;
 };
 
 static void places_add(FmPlacesData *pd, const char *label, const char *path,
@@ -78,16 +68,6 @@ static void places_free_entries(FmPlacesData *pd)
     pd->places = NULL;
     pd->nplaces = 0;
     pd->places_cap = 0;
-}
-
-static void sections_free(FmPlacesData *pd)
-{
-    for (int i = 0; i < pd->nsections; i++) {
-        free(pd->sections[i].labels);
-    }
-    free(pd->sections);
-    pd->sections = NULL;
-    pd->nsections = 0;
 }
 
 /* ---------- Device display name: label > vendor > dev_path ---------- */
@@ -249,43 +229,6 @@ static void build_places_list(FmPlacesData *pd, FmApp *app)
     }
 }
 
-/* ---------- Build sections from flat place list ---------- */
-
-static void build_sections(FmPlacesData *pd)
-{
-    sections_free(pd);
-
-    /* Count sections (headers) */
-    int count = 0;
-    for (int i = 0; i < pd->nplaces; i++) {
-        if (pd->places[i].is_header) { count++; }
-    }
-
-    pd->sections = calloc(count, sizeof(PlaceSection));
-    pd->nsections = 0;
-
-    for (int i = 0; i < pd->nplaces; i++) {
-        if (!pd->places[i].is_header) {
-            continue;
-        }
-
-        PlaceSection *s = &pd->sections[pd->nsections++];
-        s->start_idx = i + 1;
-
-        /* Count items until next header or end */
-        s->nitems = 0;
-        for (int j = i + 1; j < pd->nplaces && !pd->places[j].is_header; j++) {
-            s->nitems++;
-        }
-
-        /* Build label array for the List widget */
-        s->labels = calloc(s->nitems, sizeof(String));
-        for (int j = 0; j < s->nitems; j++) {
-            s->labels[j] = pd->places[s->start_idx + j].label;
-        }
-    }
-}
-
 /* ---------- Sidebar UI ---------- */
 
 static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
@@ -293,103 +236,68 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
     (void)w;
     Fm *fm = (Fm *)cd;
     FmPlacesData *pd = fm->places_data;
-    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    IswListBoxCallbackData *cb = (IswListBoxCallbackData *)call;
 
-    if (ret->list_index == XAW_LIST_NONE) {
+    int idx = cb->index;
+    if (idx < 0 || idx >= pd->nplaces)
         return;
-    }
-
-    /* Find which section this List widget belongs to */
-    for (int i = 0; i < pd->nsections; i++) {
-        if (pd->sections[i].list != w) {
-            continue;
-        }
-
-        int idx = pd->sections[i].start_idx + ret->list_index;
-        if (idx < pd->nplaces && pd->places[idx].path) {
-            struct stat st;
-            if (stat(pd->places[idx].path, &st) != 0)
-                mkdir(pd->places[idx].path, 0755);
-            fm_navigate(fm, pd->places[idx].path);
-        }
-
-        /* Unhighlight all other section lists */
-        for (int j = 0; j < pd->nsections; j++) {
-            if (j != i && pd->sections[j].list) {
-                IswListUnhighlight(pd->sections[j].list);
-            }
-        }
+    if (pd->places[idx].is_header || !pd->places[idx].path)
         return;
-    }
+
+    struct stat st;
+    if (stat(pd->places[idx].path, &st) != 0)
+        mkdir(pd->places[idx].path, 0755);
+    fm_navigate(fm, pd->places[idx].path);
 }
 
 /* ---------- places sidebar hit-test ---------- */
 
-/* Hit-test the places sidebar by querying the pointer against each section's
- * list widget. Returns the target directory path, or NULL if no valid place
- * is under the cursor. If sect_out/row_out are non-NULL, they receive the
- * section pointer and row index for highlight purposes. */
+/* Hit-test the places sidebar: query the pointer against each row widget
+ * in the ListBox. Returns the target directory path, or NULL if no valid
+ * place is under the cursor. If idx_out is non-NULL, receives the places
+ * array index for highlight purposes. */
 static const char *
-places_hit_test(Fm *fm, PlaceSection **sect_out, int *row_out)
+places_hit_test(Fm *fm, int *idx_out)
 {
     FmPlacesData *pd = fm->places_data;
-    if (!pd)
+    if (!pd || !fm->places_listbox || !IswIsRealized(fm->places_listbox))
         return NULL;
 
     xcb_connection_t *conn = IswDisplay(fm->toplevel);
+    xcb_query_pointer_cookie_t qpc =
+        xcb_query_pointer(conn, IswWindow(fm->places_listbox));
+    xcb_query_pointer_reply_t *qpr =
+        xcb_query_pointer_reply(conn, qpc, NULL);
+    if (!qpr)
+        return NULL;
 
-    for (int i = 0; i < pd->nsections; i++) {
-        PlaceSection *s = &pd->sections[i];
-        if (!s->list || s->nitems <= 0 || !IswIsRealized(s->list))
+    int wy = qpr->win_y;
+    free(qpr);
+
+    double sf = ISWScaleFactor(fm->toplevel);
+    wy = (int)(wy / sf + 0.5);
+
+    for (int i = 0; i < pd->nplaces; i++) {
+        Widget rw = pd->row_widgets[i];
+        if (!rw || !IswIsManaged(rw))
             continue;
-
-        xcb_query_pointer_cookie_t qpc =
-            xcb_query_pointer(conn, IswWindow(s->list));
-        xcb_query_pointer_reply_t *qpr =
-            xcb_query_pointer_reply(conn, qpc, NULL);
-        if (!qpr)
-            continue;
-
-        int wx = qpr->win_x;
-        int wy = qpr->win_y;
-        free(qpr);
-
-        double sf = ISWScaleFactor(fm->toplevel);
-        wx = (int)(wx / sf + 0.5);
-        wy = (int)(wy / sf + 0.5);
-
-        if (wx < 0 || wy < 0 ||
-            wx >= (int)s->list->core.width ||
-            wy >= (int)s->list->core.height)
-            continue;
-
-        int row = wy * s->nitems / (int)s->list->core.height;
-        if (row < 0) row = 0;
-        if (row >= s->nitems) row = s->nitems - 1;
-
-        int idx = s->start_idx + row;
-        if (idx < pd->nplaces && pd->places[idx].path) {
-            if (sect_out) *sect_out = s;
-            if (row_out)  *row_out = row;
-            return pd->places[idx].path;
+        int cy = rw->core.y;
+        int ch = (int)rw->core.height + 2 * (int)rw->core.border_width;
+        if (wy >= cy && wy < cy + ch) {
+            if (pd->places[i].is_header || !pd->places[i].path)
+                return NULL;
+            if (idx_out) *idx_out = i;
+            return pd->places[i].path;
         }
-        break;
     }
 
     return NULL;
 }
 
-/* Clear any drop highlight on the places sidebar */
 static void places_clear_drop_highlight(Fm *fm)
 {
-    FmPlacesData *pd = fm->places_data;
-    if (!pd)
-        return;
-    for (int i = 0; i < pd->nsections; i++) {
-        PlaceSection *s = &pd->sections[i];
-        if (s->list)
-            IswListUnhighlight(s->list);
-    }
+    if (fm->places_listbox)
+        IswListBoxClearSelection(fm->places_listbox);
 }
 
 /* ---------- places sidebar drag-over callbacks ---------- */
@@ -398,15 +306,15 @@ static void places_drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Fm *fm = (Fm *)cd;
+    FmPlacesData *pd = fm->places_data;
     (void)call;
 
-    PlaceSection *sect = NULL;
-    int row = -1;
-    const char *target = places_hit_test(fm, &sect, &row);
+    int idx = -1;
+    const char *target = places_hit_test(fm, &idx);
 
     places_clear_drop_highlight(fm);
-    if (target && sect)
-        IswListHighlight(sect->list, row);
+    if (target && idx >= 0 && idx < pd->nplaces && pd->row_widgets[idx])
+        IswListBoxSelectChild(fm->places_listbox, pd->row_widgets[idx]);
 }
 
 static void places_drag_leave_cb(Widget w, IswPointer cd, IswPointer call)
@@ -425,7 +333,7 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 
     places_clear_drop_highlight(fm);
 
-    const char *target_dir = places_hit_test(fm, NULL, NULL);
+    const char *target_dir = places_hit_test(fm, NULL);
     if (!target_dir)
         return;
 
@@ -489,13 +397,63 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 static void dev_list_ctx_handler(Widget w, IswPointer client_data,
                                  xcb_generic_event_t *event, Boolean *cont);
 
+/* Determine if places[idx] is the last non-header item before the next
+ * header or end-of-list — used to set the separator constraint. */
+static int is_last_in_section(FmPlacesData *pd, int idx)
+{
+    if (pd->places[idx].is_header)
+        return 0;
+    int next = idx + 1;
+    return (next >= pd->nplaces || pd->places[next].is_header);
+}
+
+/* Destroy all row widgets and rebuild from the places[] array. */
+static void rebuild_listbox_children(Fm *fm)
+{
+    FmPlacesData *pd = fm->places_data;
+    Widget listbox = fm->places_listbox;
+
+    /* Destroy existing children */
+    if (pd->row_widgets) {
+        for (int i = 0; i < pd->nrow_widgets; i++) {
+            if (pd->row_widgets[i])
+                IswDestroyWidget(pd->row_widgets[i]);
+        }
+    }
+
+    pd->row_widgets = realloc(pd->row_widgets, pd->nplaces * sizeof(Widget));
+    pd->nrow_widgets = pd->nplaces;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    char wname[32];
+    for (int i = 0; i < pd->nplaces; i++) {
+        PlaceEntry *p = &pd->places[i];
+        IswArgBuilderReset(&ab);
+        snprintf(wname, sizeof(wname), "placeRow%d", i);
+        IswArgLabel(&ab, p->label);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+
+        if (p->is_header) {
+            IswArgInternalWidth(&ab, 6);
+            IswArgInternalHeight(&ab, 2);
+            IswArgSelectable(&ab, False);
+        } else {
+            IswArgInternalWidth(&ab, 12);
+            IswArgInternalHeight(&ab, 2);
+        }
+
+        pd->row_widgets[i] = IswCreateManagedWidget(wname, labelWidgetClass,
+                                                     listbox, ab.args, ab.count);
+    }
+}
+
 void places_init(Fm *fm)
 {
     FmPlacesData *pd = calloc(1, sizeof(FmPlacesData));
     fm->places_data = pd;
 
     build_places_list(pd, fm->app_state);
-    build_sections(pd);
 
     /* Create sidebar viewport */
     IswArgBuilder ab = IswArgBuilderInit();
@@ -508,55 +466,21 @@ void places_init(Fm *fm)
     fm->places_vp = IswCreateManagedWidget("placesVp", viewportWidgetClass,
                                            fm->hbox, ab.args, ab.count);
 
-    /* Vertical FlexBox inside viewport */
+    /* Single ListBox inside viewport */
     IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSelectionMode(&ab, IswListBoxSelectSingle);
+    IswArgShowSeparators(&ab, True);
+    IswArgRowSpacing(&ab, 2);
     IswArgBorderWidth(&ab, 0);
-    IswArgSpacing(&ab, 0);
-    fm->places_box = IswCreateManagedWidget("placesBox", flexBoxWidgetClass,
-                                            fm->places_vp, ab.args, ab.count);
+    fm->places_listbox = IswCreateManagedWidget("placesListBox",
+                             listBoxWidgetClass, fm->places_vp,
+                             ab.args, ab.count);
 
-    /* Create header + list for each section */
-    char wname[32];
-    for (int i = 0; i < pd->nsections; i++) {
-        PlaceSection *s = &pd->sections[i];
-        int hdr_idx = s->start_idx - 1;
+    IswAddCallback(fm->places_listbox, IswNselectCallback, place_list_cb, fm);
+    IswAddRawEventHandler(fm->places_listbox, XCB_EVENT_MASK_BUTTON_PRESS,
+                          False, dev_list_ctx_handler, fm);
 
-        /* Section header label */
-        IswArgBuilderReset(&ab);
-        snprintf(wname, sizeof(wname), "placeHdr%d", i);
-        IswArgLabel(&ab, pd->places[hdr_idx].label);
-        IswArgBorderWidth(&ab, 0);
-        IswArgInternalWidth(&ab, 6);
-        IswArgInternalHeight(&ab, 2);
-        IswArgJustify(&ab, IswJustifyLeft);
-        s->header = IswCreateManagedWidget(wname, labelWidgetClass,
-                                           fm->places_box, ab.args, ab.count);
-
-        /* List widget for this section's items */
-        if (s->nitems > 0) {
-            IswArgBuilderReset(&ab);
-            snprintf(wname, sizeof(wname), "placeList%d", i);
-            IswArgList(&ab, s->labels);
-            IswArgNumberStrings(&ab, s->nitems);
-            IswArgDefaultColumns(&ab, 1);
-            IswArgForceColumns(&ab, True);
-            IswArgVerticalList(&ab, True);
-            IswArgBorderWidth(&ab, 0);
-            IswArgInternalWidth(&ab, 4);
-            IswArgInternalHeight(&ab, 2);
-            s->list = IswCreateManagedWidget(wname, listWidgetClass,
-                                             fm->places_box, ab.args, ab.count);
-            IswAddCallback(s->list, IswNcallback, place_list_cb, fm);
-        }
-    }
-
-    /* Right-click handler on the Devices section list */
-    PlaceSection *devs = (pd->nsections > 1) ? &pd->sections[1] : NULL;
-    if (devs && devs->list) {
-        IswAddRawEventHandler(devs->list, XCB_EVENT_MASK_BUTTON_PRESS, False,
-                              dev_list_ctx_handler, fm);
-    }
+    rebuild_listbox_children(fm);
 }
 
 void places_register_drop_targets(Fm *fm)
@@ -571,29 +495,28 @@ void places_register_drop_targets(Fm *fm)
         ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 }
 
-/* Find the Devices section (index 1) */
-static PlaceSection *devices_section(FmPlacesData *pd)
+/* Find the index of the "Devices" header in the flat array */
+static int devices_header_idx(FmPlacesData *pd)
 {
-    return (pd->nsections > 1) ? &pd->sections[1] : NULL;
+    int hdr = 0;
+    for (int i = 0; i < pd->nplaces; i++) {
+        if (pd->places[i].is_header) {
+            hdr++;
+            if (hdr == 2) return i;
+        }
+    }
+    return -1;
 }
 
-static void devices_update_list(PlaceSection *s, FmPlacesData *pd)
+/* Return the range [start, end) of device items (excludes header) */
+static void devices_range(FmPlacesData *pd, int *start, int *end)
 {
-    free(s->labels);
-    s->labels = calloc(s->nitems, sizeof(String));
-    for (int j = 0; j < s->nitems; j++) {
-        s->labels[j] = pd->places[s->start_idx + j].label;
-    }
-    fprintf(stderr, "isde-fm: devices_update_list nitems=%d list=%p\n",
-            s->nitems, (void *)s->list);
-    for (int k = 0; k < s->nitems; k++) {
-        fprintf(stderr, "  [%d] %s\n", k, s->labels[k]);
-    }
-    if (s->list) {
-        IswUnmanageChild(s->list);
-        IswListChange(s->list, s->labels, s->nitems, 0, True);
-        IswManageChild(s->list);
-    }
+    int hdr = devices_header_idx(pd);
+    if (hdr < 0) { *start = *end = 0; return; }
+    *start = hdr + 1;
+    *end = *start;
+    while (*end < pd->nplaces && !pd->places[*end].is_header)
+        (*end)++;
 }
 
 void places_refresh_devices(Fm *fm)
@@ -601,38 +524,34 @@ void places_refresh_devices(Fm *fm)
     FmPlacesData *pd = fm->places_data;
     if (!pd)
         return;
-    PlaceSection *s = devices_section(pd);
-    if (!s)
+
+    int ds, de;
+    devices_range(pd, &ds, &de);
+    if (ds >= de && ds == 0)
         return;
 
-    /* Remove all existing device entries (keep "File System" at index 0) */
-    int keep = 1;  /* "File System" */
-    for (int i = keep; i < s->nitems; i++) {
-        int idx = s->start_idx + i;
-        free(pd->places[idx].label);
-        free(pd->places[idx].path);
-        free(pd->places[idx].icon_name);
+    /* Remove all existing device entries except "File System" (index 0) */
+    int keep = 1;
+    for (int i = ds + keep; i < de; i++) {
+        free(pd->places[i].label);
+        free(pd->places[i].path);
+        free(pd->places[i].icon_name);
     }
-    int removed = s->nitems - keep;
+    int removed = (de - ds) - keep;
     if (removed > 0) {
-        int after = s->start_idx + s->nitems;
-        memmove(&pd->places[s->start_idx + keep],
-                &pd->places[after],
-                (pd->nplaces - after) * sizeof(PlaceEntry));
+        memmove(&pd->places[ds + keep], &pd->places[de],
+                (pd->nplaces - de) * sizeof(PlaceEntry));
         pd->nplaces -= removed;
-        s->nitems = keep;
-        for (int i = 2; i < pd->nsections; i++)
-            pd->sections[i].start_idx -= removed;
     }
 
     /* Re-add devices from mountd */
     FmApp *app = fm->app_state;
+    int ins = ds + keep;
     for (int i = 0; i < app->mountd_ndevices; i++) {
         FmDeviceInfo *d = &app->mountd_devices[i];
         const char *name = device_display_name(d);
         const char *path = d->is_mounted ? d->mount_point : NULL;
 
-        int ins = s->start_idx + s->nitems;
         if (pd->nplaces >= pd->places_cap) {
             pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
             pd->places = realloc(pd->places,
@@ -647,19 +566,10 @@ void places_refresh_devices(Fm *fm)
         p->path = path ? strdup(path) : NULL;
         p->icon_name = strdup("drive-removable-media");
         p->is_header = 0;
-
-        s->nitems++;
-        for (int j = 2; j < pd->nsections; j++)
-            pd->sections[j].start_idx++;
+        ins++;
     }
 
-    devices_update_list(s, pd);
-
-    /* Re-register right-click handler (list widget may have been recreated) */
-    if (s->list) {
-        IswAddRawEventHandler(s->list, XCB_EVENT_MASK_BUTTON_PRESS, False,
-                              dev_list_ctx_handler, fm);
-    }
+    rebuild_listbox_children(fm);
 }
 
 /* ---------- device context menu ---------- */
@@ -796,17 +706,17 @@ void places_device_added(Fm *fm, const char *name, const char *path)
     FmPlacesData *pd = fm->places_data;
     if (!pd)
         return;
-    PlaceSection *s = devices_section(pd);
-    if (!s)
-        return;
+
+    int ds, de;
+    devices_range(pd, &ds, &de);
 
     /* Check for duplicate */
-    for (int i = 0; i < s->nitems; i++) {
-        if (strcmp(pd->places[s->start_idx + i].label, name) == 0)
+    for (int i = ds; i < de; i++) {
+        if (strcmp(pd->places[i].label, name) == 0)
             return;
     }
 
-    int ins = s->start_idx + s->nitems;
+    int ins = de;
     if (pd->nplaces >= pd->places_cap) {
         pd->places_cap = pd->places_cap ? pd->places_cap * 2 : 32;
         pd->places = realloc(pd->places, pd->places_cap * sizeof(PlaceEntry));
@@ -821,11 +731,7 @@ void places_device_added(Fm *fm, const char *name, const char *path)
     p->icon_name = strdup("drive-removable-media");
     p->is_header = 0;
 
-    s->nitems++;
-    for (int i = 2; i < pd->nsections; i++)
-        pd->sections[i].start_idx++;
-
-    devices_update_list(s, pd);
+    rebuild_listbox_children(fm);
 }
 
 void places_device_removed(Fm *fm, const char *name)
@@ -833,14 +739,14 @@ void places_device_removed(Fm *fm, const char *name)
     FmPlacesData *pd = fm->places_data;
     if (!pd)
         return;
-    PlaceSection *s = devices_section(pd);
-    if (!s)
-        return;
+
+    int ds, de;
+    devices_range(pd, &ds, &de);
 
     int found = -1;
-    for (int i = 0; i < s->nitems; i++) {
-        if (strcmp(pd->places[s->start_idx + i].label, name) == 0) {
-            found = s->start_idx + i;
+    for (int i = ds; i < de; i++) {
+        if (strcmp(pd->places[i].label, name) == 0) {
+            found = i;
             break;
         }
     }
@@ -854,11 +760,7 @@ void places_device_removed(Fm *fm, const char *name)
             (pd->nplaces - found - 1) * sizeof(PlaceEntry));
     pd->nplaces--;
 
-    s->nitems--;
-    for (int i = 2; i < pd->nsections; i++)
-        pd->sections[i].start_idx--;
-
-    devices_update_list(s, pd);
+    rebuild_listbox_children(fm);
 }
 
 /* ---------- build and show device context menu ---------- */
@@ -993,7 +895,7 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 static void dev_list_ctx_handler(Widget w, IswPointer client_data,
                                  xcb_generic_event_t *event, Boolean *cont)
 {
-    (void)cont;
+    (void)w; (void)cont;
     if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
         return;
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
@@ -1005,16 +907,33 @@ static void dev_list_ctx_handler(Widget w, IswPointer client_data,
     if (!pd)
         return;
 
-    PlaceSection *s = devices_section(pd);
-    if (!s || s->list != w || s->nitems <= 0)
+    /* Hit-test click position against row widgets */
+    int wy = ev->event_y;
+    double sf = ISWScaleFactor(fm->toplevel);
+    wy = (int)(wy / sf + 0.5);
+
+    int hit = -1;
+    for (int i = 0; i < pd->nplaces; i++) {
+        Widget rw = pd->row_widgets[i];
+        if (!rw || !IswIsManaged(rw))
+            continue;
+        int cy = rw->core.y;
+        int ch = (int)rw->core.height + 2 * (int)rw->core.border_width;
+        if (wy >= cy && wy < cy + ch) {
+            hit = i;
+            break;
+        }
+    }
+    if (hit < 0)
         return;
 
-    int row = ev->event_y * s->nitems / (int)w->core.height;
-    if (row < 0) row = 0;
-    if (row >= s->nitems) row = s->nitems - 1;
+    /* Only show context menu for device items */
+    int ds, de;
+    devices_range(pd, &ds, &de);
+    if (hit < ds || hit >= de)
+        return;
 
-    int idx = s->start_idx + row;
-    dev_ctx_show(fm, idx, ev->root_x, ev->root_y);
+    dev_ctx_show(fm, hit, ev->root_x, ev->root_y);
 }
 
 void places_cleanup(Fm *fm)
@@ -1024,7 +943,7 @@ void places_cleanup(Fm *fm)
     if (!pd) {
         return;
     }
-    sections_free(pd);
+    free(pd->row_widgets);
     places_free_entries(pd);
     free(pd);
     fm->places_data = NULL;
