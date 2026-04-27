@@ -1043,16 +1043,9 @@ char **isde_theme_build_resources(void)
 
     /* Places sidebar — lighter background */
     res[i++] = fmt_color("*placesVp.background", s->bg_light);
-    res[i++] = fmt_color("*placesBox.background", s->bg_light);
-    res[i++] = fmt_color("*placeList0.background", s->bg_light);
-    res[i++] = fmt_color("*placeList1.background", s->bg_light);
-    res[i++] = fmt_color("*placeList2.background", s->bg_light);
-    res[i++] = fmt_color("*placeHdr0.background", s->bg_light);
-    res[i++] = fmt_color("*placeHdr1.background", s->bg_light);
-    res[i++] = fmt_color("*placeHdr2.background", s->bg_light);
-    res[i++] = fmt_color("*placeHdr0.foreground", s->fg_dim);
-    res[i++] = fmt_color("*placeHdr1.foreground", s->fg_dim);
-    res[i++] = fmt_color("*placeHdr2.foreground", s->fg_dim);
+    res[i++] = fmt_color("*placesListBox.background", s->bg_light);
+    res[i++] = fmt_color("*placesListBox*background", s->bg_light);
+    res[i++] = fmt_color("*placesListBox*foreground", s->fg);
 
     /* Navbar — lighter background, dark border */
     res[i++] = fmt_color("*navBar.background", s->bg_light);

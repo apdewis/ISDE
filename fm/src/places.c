@@ -44,6 +44,8 @@ struct FmPlacesData {
     int         nrow_widgets;
     char      **icon_paths;     /* resolved SVG paths, parallel to places[] */
     int         nicon_paths;
+    Widget     *spacers;
+    int         nspacers;
 };
 
 static void places_add(FmPlacesData *pd, const char *label, const char *path,
@@ -446,6 +448,12 @@ static void rebuild_listbox_children(Fm *fm)
     Widget listbox = fm->places_listbox;
 
     /* Destroy existing children */
+    for (int i = 0; i < pd->nspacers; i++)
+        IswDestroyWidget(pd->spacers[i]);
+    free(pd->spacers);
+    pd->spacers = NULL;
+    pd->nspacers = 0;
+
     if (pd->row_widgets) {
         for (int i = 0; i < pd->nrow_widgets; i++) {
             if (pd->row_widgets[i])
@@ -469,14 +477,34 @@ static void rebuild_listbox_children(Fm *fm)
 
         if (p->is_header) {
             IswArgBuilderReset(&ab);
+            IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)8);
+            IswArgBorderWidth(&ab, 0);
+            IswArgSelectable(&ab, False);
+            
+            pd->spacers = realloc(pd->spacers,
+                                  (pd->nspacers + 1) * sizeof(Widget));
+            pd->spacers[pd->nspacers++] =
+                IswCreateManagedWidget("spacer", listBoxRowWidgetClass,
+                                       listbox, ab.args, ab.count);
+
+            IswArgBuilderReset(&ab);
             snprintf(wname, sizeof(wname), "placeRow%d", i);
+            IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)24);
+            IswArgBorderWidth(&ab, 0);
+            IswArgSelectable(&ab, False);
+            IswArgSeparator(&ab, True);
+            IswArgRowPadding(&ab, 1);
+            pd->row_widgets[i] = IswCreateWidget(wname, listBoxRowWidgetClass,
+                                                  listbox, ab.args, ab.count);
+
+            IswArgBuilderReset(&ab);
             IswArgLabel(&ab, p->label);
             IswArgBorderWidth(&ab, 0);
-            IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)24);
             IswArgJustify(&ab, IswJustifyLeft);
-            IswArgSelectable(&ab, False);
-            pd->row_widgets[i] = IswCreateManagedWidget(wname, labelWidgetClass,
-                                                         listbox, ab.args, ab.count);
+            IswCreateManagedWidget("hdrLabel", labelWidgetClass,
+                                   pd->row_widgets[i], ab.args, ab.count);
+
+            IswManageChild(pd->row_widgets[i]);
         } else {
             IswArgBuilderReset(&ab);
             snprintf(wname, sizeof(wname), "placeRow%d", i);
@@ -484,7 +512,7 @@ static void rebuild_listbox_children(Fm *fm)
             IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)24);
             IswArgJustify(&ab, IswJustifyLeft);
             IswArgBorderWidth(&ab, 0);
-            IswArgRowPadding(&ab, 0);
+            IswArgRowPadding(&ab, 1);
             pd->row_widgets[i] = IswCreateWidget(wname, listBoxRowWidgetClass,
                                                   listbox, ab.args, ab.count);
 
@@ -532,7 +560,7 @@ void places_init(Fm *fm)
     IswArgBuilderReset(&ab);
     IswArgSelectionMode(&ab, IswListBoxSelectSingle);
     IswArgShowSeparators(&ab, True);
-    IswArgRowSpacing(&ab, 0);
+    IswArgRowSpacing(&ab, 1);
     IswArgBorderWidth(&ab, 0);
     fm->places_listbox = IswCreateManagedWidget("placesListBox",
                              listBoxWidgetClass, fm->places_vp,
@@ -1006,6 +1034,7 @@ void places_cleanup(Fm *fm)
         return;
     }
     free(pd->row_widgets);
+    free(pd->spacers);
     free_icon_paths(pd);
     places_free_entries(pd);
     free(pd);
