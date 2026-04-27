@@ -248,6 +248,10 @@ int tray_net_init(TrayNet *tn, int *argc, char **argv)
         fprintf(stderr, "isde-tray-net: D-Bus unavailable\n");
     }
 
+    /* Register agent for passphrase prompts */
+    if (tn->system_bus)
+        tn_agent_init(tn);
+
     /* Try initial ConnMan query */
     if (tn_connman_refresh(tn) == 0) {
         tn->connman_available = 1;
@@ -302,6 +306,7 @@ void tray_net_run(TrayNet *tn)
 void tray_net_cleanup(TrayNet *tn)
 {
     tn_menu_cleanup(tn);
+    tn_agent_cleanup(tn);
     tn_connman_cleanup(tn);
 
     if (tn->session_dbus) {

@@ -4,6 +4,7 @@ add_executable(isde-tray-net
     src/main.c
     src/tray-net.c
     src/connman.c
+    src/agent.c
     src/menu.c
 )
 

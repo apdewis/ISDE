@@ -24,6 +24,7 @@
 #include <dbus/dbus.h>
 
 #include "isde/isde-dbus.h"
+#include "isde/isde-dialog.h"
 #include "isde/isde-theme.h"
 
 /* ---------- D-Bus constants ---------- */
@@ -33,6 +34,8 @@
 #define CONNMAN_MANAGER_IFACE "net.connman.Manager"
 #define CONNMAN_SERVICE_IFACE "net.connman.Service"
 #define CONNMAN_TECH_IFACE    "net.connman.Technology"
+#define CONNMAN_AGENT_IFACE   "net.connman.Agent"
+#define CONNMAN_AGENT_PATH    "/org/isde/TrayNetAgent"
 
 /* ---------- limits ---------- */
 
@@ -105,6 +108,10 @@ typedef struct TrayNet {
     /* ConnMan availability */
     int                 connman_available;
 
+    /* Agent */
+    DBusMessage        *pending_agent_req;
+    Widget              agent_dialog;
+
     int                 running;
     int                 restart;
 } TrayNet;
@@ -126,6 +133,10 @@ int  tn_connman_service_connect(TrayNet *tn, const char *path);
 int  tn_connman_service_disconnect(TrayNet *tn, const char *path);
 int  tn_connman_tech_set_powered(TrayNet *tn, const char *path, int powered);
 int  tn_connman_scan(TrayNet *tn, const char *tech_path);
+
+/* ---------- agent.c ---------- */
+int  tn_agent_init(TrayNet *tn);
+void tn_agent_cleanup(TrayNet *tn);
 
 /* ---------- menu.c ---------- */
 void tn_menu_init(TrayNet *tn);
