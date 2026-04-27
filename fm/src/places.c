@@ -408,8 +408,8 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 }
 
 /* Forward declaration */
-static void dev_list_ctx_handler(Widget w, IswPointer client_data,
-                                 xcb_generic_event_t *event, Boolean *cont);
+static void places_row_button_handler(Widget w, IswPointer client_data,
+                                      xcb_generic_event_t *event, Boolean *cont);
 
 /* Determine if places[idx] is the last non-header item before the next
  * header or end-of-list — used to set the separator constraint. */
@@ -526,12 +526,13 @@ static void rebuild_listbox_children(Fm *fm)
                                                   listbox, ab.args, ab.count);
 
             pd->icon_paths[i] = resolve_place_icon(theme, p->icon_name);
+            Widget icon_w = NULL;
             if (pd->icon_paths[i]) {
                 IswArgBuilderReset(&ab);
                 IswArgImage(&ab, pd->icon_paths[i]);
                 IswArgBorderWidth(&ab, 0);
                 IswArgInternalWidth(&ab, 2);
-                IswCreateManagedWidget("icon", labelWidgetClass,
+                icon_w = IswCreateManagedWidget("icon", labelWidgetClass,
                                        pd->row_widgets[i], ab.args, ab.count);
             }
 
@@ -539,10 +540,19 @@ static void rebuild_listbox_children(Fm *fm)
             IswArgLabel(&ab, p->label);
             IswArgBorderWidth(&ab, 0);
             IswArgInternalWidth(&ab, 2);
-            IswCreateManagedWidget("label", labelWidgetClass,
+            Widget label_w = IswCreateManagedWidget("label", labelWidgetClass,
                                    pd->row_widgets[i], ab.args, ab.count);
 
             IswManageChild(pd->row_widgets[i]);
+
+            IswAddEventHandler(pd->row_widgets[i],
+                                  XCB_EVENT_MASK_BUTTON_PRESS,
+                                  False, places_row_button_handler, fm);
+            if (icon_w)
+                IswAddEventHandler(icon_w, XCB_EVENT_MASK_BUTTON_PRESS,
+                                      False, places_row_button_handler, fm);
+            IswAddEventHandler(label_w, XCB_EVENT_MASK_BUTTON_PRESS,
+                                  False, places_row_button_handler, fm);
         }
     }
 }
@@ -576,8 +586,6 @@ void places_init(Fm *fm)
                              ab.args, ab.count);
 
     IswAddCallback(fm->places_listbox, IswNselectCallback, place_list_cb, fm);
-    IswAddRawEventHandler(fm->places_listbox, XCB_EVENT_MASK_BUTTON_PRESS,
-                          False, dev_list_ctx_handler, fm);
 
     rebuild_listbox_children(fm);
 }
@@ -885,6 +893,15 @@ static void dev_ctx_show(Fm *fm, int places_idx,
             dev = fm_mountd_find_by_mount_point(app, path);
         if (!dev)
             dev = fm_mountd_find_by_label(app, label);
+        if (!dev) {
+            for (int di = 0; di < app->mountd_ndevices; di++) {
+                if (strcmp(device_display_name(&app->mountd_devices[di]),
+                           label) == 0) {
+                    dev = &app->mountd_devices[di];
+                    break;
+                }
+            }
+        }
     }
 
     /* Store context */
@@ -991,48 +1008,41 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 
 /* ---------- right-click handler for device list ---------- */
 
-static void dev_list_ctx_handler(Widget w, IswPointer client_data,
-                                 xcb_generic_event_t *event, Boolean *cont)
+static void places_row_button_handler(Widget w, IswPointer client_data,
+                                      xcb_generic_event_t *event, Boolean *cont)
 {
-    (void)w; (void)cont;
     if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
         return;
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3)
-        return;
 
     Fm *fm = (Fm *)client_data;
     FmPlacesData *pd = fm->places_data;
     if (!pd)
         return;
 
-    /* Hit-test click position against row widgets */
-    int wy = ev->event_y;
-    double sf = ISWScaleFactor(fm->toplevel);
-    wy = (int)(wy / sf + 0.5);
-
-    int hit = -1;
-    for (int i = 0; i < pd->nplaces; i++) {
-        Widget rw = pd->row_widgets[i];
-        if (!rw || !IswIsManaged(rw))
-            continue;
-        int cy = rw->core.y;
-        int ch = (int)rw->core.height + 2 * (int)rw->core.border_width;
-        if (wy >= cy && wy < cy + ch) {
-            hit = i;
-            break;
-        }
-    }
+    Widget row = w;
+    if (places_index_for_widget(pd, row) < 0)
+        row = IswParent(w);
+    int hit = places_index_for_widget(pd, row);
     if (hit < 0)
         return;
 
-    /* Only show context menu for device items */
-    int ds, de;
-    devices_range(pd, &ds, &de);
-    if (hit < ds || hit >= de)
-        return;
-
-    dev_ctx_show(fm, hit, ev->root_x, ev->root_y);
+    if (ev->detail == 1) {
+        if (pd->places[hit].is_header || !pd->places[hit].path)
+            return;
+        IswListBoxSelectChild(fm->places_listbox, pd->row_widgets[hit]);
+        struct stat st;
+        if (stat(pd->places[hit].path, &st) != 0)
+            mkdir(pd->places[hit].path, 0755);
+        fm_navigate(fm, pd->places[hit].path);
+    } else if (ev->detail == 3) {
+        int ds, de;
+        devices_range(pd, &ds, &de);
+        if (hit < ds || hit >= de)
+            return;
+        *cont = False;
+        dev_ctx_show(fm, hit, ev->root_x, ev->root_y);
+    }
 }
 
 void places_cleanup(Fm *fm)
