@@ -82,12 +82,6 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     /* Reparent new icon and position all icons left-to-right */
     xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box),
                         (p->ntray - 1) * phys_stride, 0);
-    for (int i = 0; i < p->ntray - 1; i++) {
-        uint32_t xy[] = { i * phys_stride, 0 };
-        xcb_configure_window(p->conn, p->tray_icons[i],
-                             XCB_CONFIG_WINDOW_X |
-                             XCB_CONFIG_WINDOW_Y, xy);
-    }
 
     /* Resize the icon to fit */
     uint32_t vals[] = { phys_icon, phys_icon };
@@ -143,6 +137,7 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
 
     for (int i = 0; i < p->ntray; i++) {
         uint32_t xy[] = { i * phys_stride, 0 };
+        //#FIXME stop using direct XCB calls to manipulate ISW widgets
         xcb_configure_window(p->conn, p->tray_icons[i],
                              XCB_CONFIG_WINDOW_X |
                              XCB_CONFIG_WINDOW_Y, xy);
@@ -378,6 +373,7 @@ void tray_check_icons(Panel *p)
 
         for (int i = 0; i < p->ntray; i++) {
             uint32_t xy[] = { i * phys_stride, 0 };
+            //#FIXME stop using direct XCB calls to manipulate ISW widgets
             xcb_configure_window(p->conn, p->tray_icons[i],
                                  XCB_CONFIG_WINDOW_X |
                                  XCB_CONFIG_WINDOW_Y, xy);
