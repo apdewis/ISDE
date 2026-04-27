@@ -951,9 +951,9 @@ char **isde_theme_build_resources(void)
 
     /* Text input — set both the widget and the TextSink sub-object so
        the sink's background/foreground match the widget's. */
-    res[i++] = fmt_color("*Text.background", s->bg_bright);
+    res[i++] = fmt_color("*Text.background", s->bg_light);
     res[i++] = fmt_color("*Text.foreground", s->fg);
-    res[i++] = fmt_color("*Text*textSink.background", s->bg_bright);
+    res[i++] = fmt_color("*Text*textSink.background", s->bg_light);
     res[i++] = fmt_color("*Text*textSink.foreground", s->fg);
 
     /* IconView */
