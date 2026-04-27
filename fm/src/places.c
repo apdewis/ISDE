@@ -236,6 +236,15 @@ static void build_places_list(FmPlacesData *pd, FmApp *app)
 
 /* ---------- Sidebar UI ---------- */
 
+static int places_index_for_widget(FmPlacesData *pd, Widget child)
+{
+    for (int i = 0; i < pd->nrow_widgets; i++) {
+        if (pd->row_widgets[i] == child)
+            return i;
+    }
+    return -1;
+}
+
 static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
@@ -243,7 +252,7 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
     FmPlacesData *pd = fm->places_data;
     IswListBoxCallbackData *cb = (IswListBoxCallbackData *)call;
 
-    int idx = cb->index;
+    int idx = places_index_for_widget(pd, cb->child);
     if (idx < 0 || idx >= pd->nplaces)
         return;
     if (pd->places[idx].is_header || !pd->places[idx].path)
