@@ -263,14 +263,12 @@ static void add_service_row(TrayNet *tn, Widget listbox,
     const char *suffix = state_suffix(s);
 
     if (strcmp(s->type, "wifi") == 0) {
-            snprintf(display, sizeof(display), "%s",
-                     s->name[0] ? s->name : "(hidden)");
+        snprintf(display, sizeof(display), "%s",
+                 s->name[0] ? s->name : "(hidden)");
+    } else if (strcmp(s->type, "ethernet") == 0 && s->interface[0]) {
+        snprintf(display, sizeof(display), "Wired (%s)", s->interface);
     } else {
-        if (suffix)
-            snprintf(display, sizeof(display), "%s (%s)",
-                     s->name[0] ? s->name : s->type, suffix);
-        else
-            snprintf(display, sizeof(display), "%s",
+        snprintf(display, sizeof(display), "%s",
                      s->name[0] ? s->name : s->type);
     }
 

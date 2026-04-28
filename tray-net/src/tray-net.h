@@ -60,6 +60,7 @@ typedef struct ServiceInfo {
     char    type[64];
     char    state[64];
     char    security[64];
+    char    interface[64];
     char    error[NAME_LEN];
     uint8_t strength;
     int     favorite;

@@ -81,6 +81,26 @@ static void parse_service_properties(ServiceInfo *s, DBusMessageIter *dict)
                 dbus_message_iter_get_basic(&arr, &v);
                 snprintf(s->security, sizeof(s->security), "%s", v);
             }
+        } else if (strcmp(key, "Ethernet") == 0 && vtype == DBUS_TYPE_ARRAY) {
+            DBusMessageIter eth_dict;
+            dbus_message_iter_recurse(&variant, &eth_dict);
+            while (dbus_message_iter_get_arg_type(&eth_dict) ==
+                   DBUS_TYPE_DICT_ENTRY) {
+                DBusMessageIter eth_entry, eth_var;
+                dbus_message_iter_recurse(&eth_dict, &eth_entry);
+                const char *ekey;
+                dbus_message_iter_get_basic(&eth_entry, &ekey);
+                dbus_message_iter_next(&eth_entry);
+                dbus_message_iter_recurse(&eth_entry, &eth_var);
+                if (strcmp(ekey, "Interface") == 0 &&
+                    dbus_message_iter_get_arg_type(&eth_var) ==
+                    DBUS_TYPE_STRING) {
+                    const char *v;
+                    dbus_message_iter_get_basic(&eth_var, &v);
+                    snprintf(s->interface, sizeof(s->interface), "%s", v);
+                }
+                dbus_message_iter_next(&eth_dict);
+            }
         } else if (strcmp(key, "Error") == 0 && vtype == DBUS_TYPE_STRING) {
             const char *v;
             dbus_message_iter_get_basic(&variant, &v);
