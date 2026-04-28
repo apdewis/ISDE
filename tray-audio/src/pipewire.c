@@ -65,25 +65,28 @@ DeviceInfo *ta_find_device(TrayAudio *ta, uint32_t id)
     return NULL;
 }
 
-/* Find sink by its device_id + card_profile_device.
- * If card_profile_device hasn't been resolved yet (still 0), match
- * any sink on that device — the Route event will fill it in. */
 static SinkInfo *find_sink_by_route(TrayAudio *ta, uint32_t device_id,
                                     int route_device)
 {
-    SinkInfo *fallback = NULL;
+    SinkInfo *unresolved = NULL;
+    int n_unresolved = 0;
+
     for (int i = 0; i < ta->nsinks; i++) {
         if (ta->sinks[i].device_id != device_id)
             continue;
         if (ta->sinks[i].card_profile_device == route_device)
             return &ta->sinks[i];
-        /* Unresolved sink on this device — candidate for assignment */
-        if (ta->sinks[i].card_profile_device == 0 && !fallback)
-            fallback = &ta->sinks[i];
+        if (ta->sinks[i].card_profile_device < 0) {
+            unresolved = &ta->sinks[i];
+            n_unresolved++;
+        }
     }
-    if (fallback)
-        fallback->card_profile_device = route_device;
-    return fallback;
+
+    if (n_unresolved == 1) {
+        unresolved->card_profile_device = route_device;
+        return unresolved;
+    }
+    return NULL;
 }
 
 static void remove_sink(TrayAudio *ta, uint32_t id)
@@ -299,12 +302,21 @@ static void sink_param_event(void *data, int seq,
                              uint32_t id, uint32_t index, uint32_t next,
                              const struct spa_pod *param)
 {
-    (void)seq; (void)index; (void)next; (void)data;
+    (void)seq; (void)index; (void)next;
+    SinkInfo *sink = data;
 
-    /* Sink volume is now tracked via device Route params, not node Props.
-     * We still subscribe to node Props for n_channels fallback, but
-     * the authoritative volume comes from the device Route. */
-    (void)id; (void)param;
+    if (id != SPA_PARAM_Props || param == NULL)
+        return;
+
+    TrayAudio *ta = *(TrayAudio **)pw_proxy_get_user_data(sink->proxy);
+
+    parse_props(param, sink->channel_volumes, &sink->n_channels,
+                &sink->volume, &sink->muted);
+
+    if (sink->is_default)
+        tray_audio_update_icon(ta);
+    if (ta->popup_visible)
+        ta_popup_update(ta);
 }
 
 static const struct pw_node_events sink_node_events = {
@@ -346,6 +358,9 @@ static int metadata_property(void *data, uint32_t subject,
     if (strcmp(key, "default.audio.sink") != 0)
         return 0;
 
+    fprintf(stderr, "isde-tray-audio: metadata default.audio.sink nsinks=%d value=%s\n",
+            ta->nsinks, value ? value : "(null)");
+
     for (int i = 0; i < ta->nsinks; i++)
         ta->sinks[i].is_default = 0;
 
@@ -374,13 +389,19 @@ static int metadata_property(void *data, uint32_t subject,
     }
 
     if (name[0]) {
+        int matched = 0;
         for (int i = 0; i < ta->nsinks; i++) {
             if (strcmp(ta->sinks[i].node_name, name) == 0) {
                 ta->sinks[i].is_default = 1;
                 ta->default_sink_id = ta->sinks[i].id;
+                matched = 1;
+                fprintf(stderr, "isde-tray-audio: metadata matched sink %u '%s'\n",
+                        ta->sinks[i].id, ta->sinks[i].node_name);
                 break;
             }
         }
+        if (!matched)
+            fprintf(stderr, "isde-tray-audio: metadata NO MATCH for '%s'\n", name);
     }
 
     tray_audio_update_icon(ta);
@@ -434,6 +455,7 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
     sink->id = id;
     sink->volume = 1.0f;
     sink->route_index = -1;
+    sink->card_profile_device = -1;
 
     const char *desc = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
     if (desc)
@@ -454,8 +476,8 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
     if (cpd_str)
         sink->card_profile_device = atoi(cpd_str);
 
-    fprintf(stderr, "isde-tray-audio: bind_sink id=%u device_id=%u card_profile_device=%d (from props: dev='%s' cpd='%s')\n",
-            id, sink->device_id, sink->card_profile_device,
+    fprintf(stderr, "isde-tray-audio: bind_sink id=%u device_id=%u card_profile_device=%d node_name='%s' (from props: dev='%s' cpd='%s')\n",
+            id, sink->device_id, sink->card_profile_device, sink->node_name,
             dev_id_str ? dev_id_str : "(null)", cpd_str ? cpd_str : "(null)");
 
     /* Bind node proxy (still useful for stream-like operations) */
@@ -466,13 +488,25 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
         *(TrayAudio **)pw_proxy_get_user_data(sink->proxy) = ta;
         pw_node_add_listener((struct pw_node *)sink->proxy,
                              &sink->listener, &sink_node_events, sink);
+
+        uint32_t params[] = { SPA_PARAM_Props };
+        pw_node_subscribe_params((struct pw_node *)sink->proxy, params, 1);
+        pw_node_enum_params((struct pw_node *)sink->proxy,
+                            0, SPA_PARAM_Props, 0, -1, NULL);
     }
 
     ta->nsinks++;
 
     /* Ensure the device is bound so we get Route params */
-    if (sink->device_id)
-        bind_device(ta, sink->device_id);
+    if (sink->device_id) {
+        DeviceInfo *existing = ta_find_device(ta, sink->device_id);
+        if (!existing) {
+            bind_device(ta, sink->device_id);
+        } else if (existing->proxy) {
+            pw_device_enum_params((struct pw_device *)existing->proxy,
+                                  0, SPA_PARAM_Route, 0, -1, NULL);
+        }
+    }
 }
 
 static void bind_stream(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
@@ -720,17 +754,11 @@ void ta_pw_cleanup(TrayAudio *ta)
 
 /* ---------- volume / mute control ---------- */
 
-/* Set volume on a sink via its Device's Route param */
 static void set_sink_volume(TrayAudio *ta, SinkInfo *sink, float volume)
 {
-    DeviceInfo *dev = ta_find_device(ta, sink->device_id);
-    if (!dev || !dev->proxy || sink->route_index < 0) {
-        fprintf(stderr, "isde-tray-audio: set_sink_volume BAIL dev=%p proxy=%p route_idx=%d device_id=%u\n",
-                (void *)dev, dev ? (void *)dev->proxy : NULL, sink->route_index, sink->device_id);
+    (void)ta;
+    if (!sink->proxy)
         return;
-    }
-    fprintf(stderr, "isde-tray-audio: set_sink_volume sink=%u vol=%.2f route_idx=%d card_dev=%d\n",
-            sink->id, volume, sink->route_index, sink->card_profile_device);
 
     float cubic = linear_to_cubic(volume);
     int nc = sink->n_channels > 0 ? sink->n_channels : 2;
@@ -740,57 +768,34 @@ static void set_sink_volume(TrayAudio *ta, SinkInfo *sink, float volume)
 
     uint8_t buf[1024];
     struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-    struct spa_pod_frame f[2];
+    struct spa_pod_frame f;
 
-    spa_pod_builder_push_object(&b, &f[0],
-                                SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_index, 0);
-    spa_pod_builder_int(&b, sink->route_index);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_device, 0);
-    spa_pod_builder_int(&b, sink->card_profile_device);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props, 0);
-
-    spa_pod_builder_push_object(&b, &f[1],
-                                SPA_TYPE_OBJECT_Props, SPA_PARAM_Route);
+    spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
     spa_pod_builder_prop(&b, SPA_PROP_channelVolumes, 0);
     spa_pod_builder_array(&b, sizeof(float), SPA_TYPE_Float, nc, vols);
-    spa_pod_builder_pop(&b, &f[1]);
+    struct spa_pod *pod = spa_pod_builder_pop(&b, &f);
 
-    struct spa_pod *pod = spa_pod_builder_pop(&b, &f[0]);
-
-    pw_device_set_param((struct pw_device *)dev->proxy,
-                        SPA_PARAM_Route, 0, pod);
+    pw_node_set_param((struct pw_node *)sink->proxy,
+                      SPA_PARAM_Props, 0, pod);
 }
 
-/* Set mute on a sink via its Device's Route param */
 static void set_sink_mute(TrayAudio *ta, SinkInfo *sink, int muted)
 {
-    DeviceInfo *dev = ta_find_device(ta, sink->device_id);
-    if (!dev || !dev->proxy || sink->route_index < 0)
+    (void)ta;
+    if (!sink->proxy)
         return;
 
-    uint8_t buf[512];
+    uint8_t buf[256];
     struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-    struct spa_pod_frame f[2];
+    struct spa_pod_frame f;
 
-    spa_pod_builder_push_object(&b, &f[0],
-                                SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_index, 0);
-    spa_pod_builder_int(&b, sink->route_index);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_device, 0);
-    spa_pod_builder_int(&b, sink->card_profile_device);
-    spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props, 0);
-
-    spa_pod_builder_push_object(&b, &f[1],
-                                SPA_TYPE_OBJECT_Props, SPA_PARAM_Route);
+    spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
     spa_pod_builder_prop(&b, SPA_PROP_mute, 0);
     spa_pod_builder_bool(&b, muted ? true : false);
-    spa_pod_builder_pop(&b, &f[1]);
+    struct spa_pod *pod = spa_pod_builder_pop(&b, &f);
 
-    struct spa_pod *pod = spa_pod_builder_pop(&b, &f[0]);
-
-    pw_device_set_param((struct pw_device *)dev->proxy,
-                        SPA_PARAM_Route, 0, pod);
+    pw_node_set_param((struct pw_node *)sink->proxy,
+                      SPA_PARAM_Props, 0, pod);
 }
 
 /* Set volume on a stream via pw_node_set_param (streams accept this) */

@@ -136,7 +136,9 @@ static void on_icon_click(IswTrayIcon icon, int button, IswPointer closure)
             float vol = def->volume + delta;
             if (vol < 0.0f) vol = 0.0f;
             if (vol > 1.0f) vol = 1.0f;
+            def->volume = vol;
             ta_pw_set_volume(ta, def->id, vol);
+            tray_audio_update_icon(ta);
         }
         break;
     }

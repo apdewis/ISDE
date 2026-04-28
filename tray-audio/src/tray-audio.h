@@ -95,6 +95,7 @@ typedef struct TrayAudio {
     Widget               output_page;
     Widget               app_page;
     int                  popup_visible;
+    int                  updating;      /* suppress widget callbacks during programmatic updates */
 
     /* Right-click menu */
     Widget               menu_shell;
