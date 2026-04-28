@@ -193,28 +193,26 @@ static void position_popup(TrayNet *tn)
         return;
 
     double sf = ISWScaleFactor(tn->toplevel);
-    int phys_w = (int)(tn->popup_shell->core.width * sf + 0.5);
-    int phys_h = (int)(tn->popup_shell->core.height * sf + 0.5);
-    int phys_bw = (int)(tn->popup_shell->core.border_width * sf + 0.5);
-    int total_w = phys_w + 2 * phys_bw;
-    int total_h = phys_h + 2 * phys_bw;
+    int icon_x = (int)(reply->dst_x / sf);
+    int icon_y = (int)(reply->dst_y / sf);
+    free(reply);
 
-    int scr_w = IswScreen(tn->toplevel)->width_in_pixels;
+    Dimension w = tn->popup_shell->core.width;
+    Dimension h = tn->popup_shell->core.height;
+    Dimension bw = tn->popup_shell->core.border_width;
+    int total_w = (int)(w + 2 * bw);
+    int total_h = (int)(h + 2 * bw);
+    int scr_w = (int)(IswScreen(tn->toplevel)->width_in_pixels / sf);
 
-    int x = reply->dst_x;
-    int y = reply->dst_y - total_h;
+    int x = icon_x;
+    int y = icon_y - total_h;
 
     if (x + total_w > scr_w)
         x = scr_w - total_w;
     if (x < 0) x = 0;
     if (y < 0) y = 0;
 
-    uint32_t vals[] = { (uint32_t)x, (uint32_t)y };
-    xcb_configure_window(conn, IswWindow(tn->popup_shell),
-                         XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                         vals);
-    xcb_flush(conn);
-    free(reply);
+    IswConfigureWidget(tn->popup_shell, x, y, w, h, bw);
 }
 
 /* ---------- clear listbox children ---------- */
@@ -455,6 +453,8 @@ void tn_menu_show(TrayNet *tn)
 
     build_content(tn);
 
+    IswRealizeWidget(tn->popup_shell);
+    position_popup(tn);
     IswPopup(tn->popup_shell, IswGrabNone);
 
     {
@@ -469,8 +469,6 @@ void tn_menu_show(TrayNet *tn)
 
     IswAddEventHandler(tn->popup_shell, POPUP_DISMISS_MASK, False,
                        popup_outside_handler, tn);
-
-    position_popup(tn);
     tn->popup_visible = 1;
 }
 
@@ -540,7 +538,7 @@ void tn_menu_rebuild(TrayNet *tn)
     clear_listbox(tn->popup_listbox);
     build_content(tn);
 
-    position_popup(tn);
+    //position_popup(tn);
 }
 
 void tn_menu_cleanup(TrayNet *tn)
