@@ -17,6 +17,8 @@
 #include <ISW/Label.h>
 #include <ISW/Form.h>
 #include <ISW/Box.h>
+#include <ISW/ListBox.h>
+#include <ISW/ListBoxRow.h>
 #include <ISW/IswTrayIcon.h>
 #include <ISW/ISWSVG.h>
 

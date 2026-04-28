@@ -99,128 +99,90 @@ static void on_radio_toggled(Widget w, IswPointer client_data,
 
 /* ---------- build a single volume row ---------- */
 
-/*
- * radio_peer:  if non-NULL, join this radio group
- * is_default:  initial radio state (ignored when radio_out is NULL)
- * radio_out:   if non-NULL, create a radio button and store it here;
- *              if NULL, no radio button is created (used for app rows)
- */
-static Widget build_volume_row(TrayAudio *ta, Widget parent,
-                               Widget above,
-                               const char *label_text,
-                               uint32_t node_id,
-                               float volume, int muted,
-                               Widget radio_peer, int is_default,
-                               Widget *radio_out)
+static void build_volume_row(TrayAudio *ta, Widget listbox,
+                             const char *label_text,
+                             uint32_t node_id,
+                             float volume, int muted,
+                             Widget radio_peer, int is_default,
+                             Widget *radio_out)
 {
     IswArgBuilder ab = IswArgBuilderInit();
     VolumeRow *row = alloc_row(ta, node_id);
 
-    Widget label_left = NULL;  /* widget to the left of the label */
+    /* First row: radio + label */
+    IswArgHeight(&ab, 40);
+    IswArgRowPadding(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    Widget top_row = IswCreateManagedWidget("volName", listBoxRowWidgetClass,
+                                            listbox, ab.args, ab.count);
 
-    /* Radio button for output selection */
     if (radio_out) {
+        IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "");
         IswArgBorderWidth(&ab, 0);
-        IswArgFromVert(&ab, above);
-        IswArgLeft(&ab, IswChainLeft);
-        IswArgRight(&ab, IswChainLeft);
         IswArgState(&ab, is_default ? True : False);
-        IswArgHorizDistance(&ab, 8);
-        IswArgVertDistance(&ab, 4);
         IswArgWidth(&ab, 16);
         IswArgHeight(&ab, 16);
         if (radio_peer)
             IswArgRadioGroup(&ab, radio_peer);
         Widget rb = IswCreateManagedWidget("outRadio", toggleWidgetClass,
-                                           parent, ab.args, ab.count);
+                                           top_row, ab.args, ab.count);
         IswAddCallback(rb, IswNcallback, on_radio_toggled, row);
         row->radio = rb;
         *radio_out = rb;
-        label_left = rb;
-        IswArgBuilderReset(&ab);
     }
 
-    /* Sink/stream name label — wrap long names */
-    char wrapped[512];
-    strncpy(wrapped, label_text, sizeof(wrapped) - 1);
-    wrapped[sizeof(wrapped) - 1] = '\0';
-    if (strlen(wrapped) > 40) {
-        for (int k = 40; wrapped[k]; k++) {
-            if (wrapped[k] == ' ') {
-                wrapped[k] = '\n';
-                break;
-            }
-        }
-    }
-    IswArgLabel(&ab, wrapped);
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, label_text);
     IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, above);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
     IswArgJustify(&ab, IswJustifyLeft);
-    if (label_left) {
-        IswArgFromHoriz(&ab, label_left);
-        IswArgHorizDistance(&ab, 4);
-    } else {
-        IswArgHorizDistance(&ab, 8);
-    }
-    IswArgVertDistance(&ab, 4);
     if (ta->small_font)
         IswArgFont(&ab, ta->small_font);
-    Widget lbl = IswCreateManagedWidget("volLabel", labelWidgetClass,
-                                        parent, ab.args, ab.count);
+    IswCreateManagedWidget("volLabel", labelWidgetClass, top_row,
+                           ab.args, ab.count);
 
-    /* Slider (below the label) */
+    /* Second row: slider + mute */
     IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, lbl);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
+    IswArgRowPadding(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    IswArgHeight(&ab, 40);
+    Widget ctl_row = IswCreateManagedWidget("volCtl", listBoxRowWidgetClass,
+                                            listbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgMinimumValue(&ab, 0);
     IswArgMaximumValue(&ab, 100);
     IswArgSliderValue(&ab, (int)(volume * 100.0f + 0.5f));
     IswArgShowValue(&ab, False);
-    IswArgHorizDistance(&ab, 8);
-    IswArgVertDistance(&ab, 2);
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
-                                       parent, ab.args, ab.count);
+                                       ctl_row, ab.args, ab.count);
     IswAddCallback(sl, IswNvalueChanged, on_slider_changed, row);
     row->slider = sl;
 
-    /* Mute toggle (right of slider, same row) */
     char *mute_icon = isde_icon_find("status", "audio-volume-muted");
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "");
     if (mute_icon)
-        { IswArgImage(&ab, mute_icon); }
-    IswArgFromVert(&ab, lbl);
-    IswArgFromHoriz(&ab, sl);
-    IswArgLeft(&ab, IswChainRight);
-    IswArgRight(&ab, IswChainRight);
+        IswArgImage(&ab, mute_icon);
     IswArgState(&ab, muted ? True : False);
     IswArgWidth(&ab, 24);
     IswArgHeight(&ab, 24);
-    IswArgHorizDistance(&ab, 4);
-    IswArgVertDistance(&ab, 2);
+    IswArgJustify(&ab, IswJustifyRight);
     Widget mb = IswCreateManagedWidget("volMute", toggleWidgetClass,
-                                       parent, ab.args, ab.count);
+                                       ctl_row, ab.args, ab.count);
     free(mute_icon);
     IswAddCallback(mb, IswNcallback, on_mute_toggled, row);
     row->mute_btn = mb;
-
-    return sl;  /* Return bottom widget of this row for fromVert chaining */
 }
 
-/* ---------- destroy all children of a Form ---------- */
-
-static void clear_form_children(Widget form)
+static void clear_children(Widget w)
 {
     WidgetList children;
     Cardinal num;
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgBuilderAdd(&ab, IswNchildren, (IswArgVal)&children);
     IswArgBuilderAdd(&ab, IswNnumChildren, (IswArgVal)&num);
-    IswGetValues(form, ab.args, ab.count);
+    IswGetValues(w, ab.args, ab.count);
 
     /* Destroy in reverse to avoid index shifting */
     for (int i = (int)num - 1; i >= 0; i--)
@@ -231,21 +193,18 @@ static void clear_form_children(Widget form)
 
 static void build_output_content(TrayAudio *ta)
 {
-    clear_form_children(ta->output_page);
-    Widget above = NULL;
+    clear_children(ta->output_page);
 
     if (ta->nsinks == 0) {
         IswArgBuilder ab = IswArgBuilderInit();
         const IsdeColorScheme *scheme = isde_theme_current();
         IswArgLabel(&ab, "No audio outputs");
         IswArgBorderWidth(&ab, 0);
-        if (scheme) {
+        IswArgSelectable(&ab, False);
+        if (scheme)
             IswArgForeground(&ab, scheme->fg_dim);
-        }
         if (ta->small_font)
             IswArgFont(&ab, ta->small_font);
-        IswArgHorizDistance(&ab, 8);
-        IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noOutputs", labelWidgetClass,
                               ta->output_page, ab.args, ab.count);
         return;
@@ -256,9 +215,9 @@ static void build_output_content(TrayAudio *ta)
         SinkInfo *s = &ta->sinks[i];
         Widget radio = NULL;
 
-        above = build_volume_row(ta, ta->output_page, above,
-                                 s->name, s->id, s->volume, s->muted,
-                                 first_radio, s->is_default, &radio);
+        build_volume_row(ta, ta->output_page,
+                         s->name, s->id, s->volume, s->muted,
+                         first_radio, s->is_default, &radio);
         if (!first_radio)
             first_radio = radio;
     }
@@ -266,21 +225,18 @@ static void build_output_content(TrayAudio *ta)
 
 static void build_app_content(TrayAudio *ta)
 {
-    clear_form_children(ta->app_page);
-    Widget above = NULL;
+    clear_children(ta->app_page);
 
     if (ta->nstreams == 0) {
         IswArgBuilder ab = IswArgBuilderInit();
         const IsdeColorScheme *scheme = isde_theme_current();
         IswArgLabel(&ab, "No applications playing");
         IswArgBorderWidth(&ab, 0);
-        if (scheme) {
+        IswArgSelectable(&ab, False);
+        if (scheme)
             IswArgForeground(&ab, scheme->fg_dim);
-        }
         if (ta->small_font)
             IswArgFont(&ab, ta->small_font);
-        IswArgHorizDistance(&ab, 8);
-        IswArgVertDistance(&ab, 8);
         IswCreateManagedWidget("noStreams", labelWidgetClass,
                               ta->app_page, ab.args, ab.count);
         return;
@@ -288,9 +244,9 @@ static void build_app_content(TrayAudio *ta)
 
     for (int i = 0; i < ta->nstreams; i++) {
         StreamInfo *s = &ta->streams[i];
-        above = build_volume_row(ta, ta->app_page, above,
-                                 s->name, s->id, s->volume, s->muted,
-                                 NULL, 0, NULL);
+        build_volume_row(ta, ta->app_page,
+                         s->name, s->id, s->volume, s->muted,
+                         NULL, 0, NULL);
     }
 }
 
@@ -433,21 +389,25 @@ void ta_popup_show(TrayAudio *ta)
     /* Outputs tab */
     IswArgBuilderReset(&ab);
     IswArgTabLabel(&ab, "Outputs");
-    IswArgDefaultDistance(&ab, 0);
+    IswArgSelectionMode(&ab, IswListBoxSelectNone);
+    IswArgBorderWidth(&ab, 0);
+    IswArgRowSpacing(&ab, 0);
     if (ta->small_font)
         IswArgFont(&ab, ta->small_font);
     ta->output_page = IswCreateManagedWidget("outputPage",
-                                             formWidgetClass,
+                                             listBoxWidgetClass,
                                              ta->tabs, ab.args, ab.count);
 
     /* Applications tab — created empty, populated on tab switch */
     IswArgBuilderReset(&ab);
     IswArgTabLabel(&ab, "Applications");
-    IswArgDefaultDistance(&ab, 0);
+    IswArgSelectionMode(&ab, IswListBoxSelectNone);
+    IswArgBorderWidth(&ab, 0);
+    IswArgRowSpacing(&ab, 0);
     if (ta->small_font)
         IswArgFont(&ab, ta->small_font);
     ta->app_page = IswCreateManagedWidget("appPage",
-                                          formWidgetClass,
+                                          listBoxWidgetClass,
                                           ta->tabs, ab.args, ab.count);
 
     /* Show the outputs tab by default */
