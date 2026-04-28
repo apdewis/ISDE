@@ -1695,6 +1695,11 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
             const char *home = getenv("HOME");
             path = home ? home : "/";
         }
+        if (strncmp(path, "file://", 7) == 0) {
+            path += 7;
+            if (path[0] == '\0')
+                path = "/";
+        }
         app->initial_path = strdup(path);
     }
 
@@ -1876,13 +1881,20 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fileview_init(fm);
     clipboard_init(fm);
 
-    /* Navigate to initial path */
-    fm->cwd = strdup(path);
-    fm->history[0] = strdup(path);
+    /* Navigate to initial path — fall back to home or / if path is invalid */
+    const char *start = path;
+    if (browser_read_dir(fm, start) != 0) {
+        const char *home = getenv("HOME");
+        start = (home && home[0]) ? home : "/";
+        if (browser_read_dir(fm, start) != 0)
+            start = "/";
+        browser_read_dir(fm, start);
+    }
+    fm->cwd = strdup(start);
+    fm->history[0] = strdup(start);
     fm->hist_pos = 0;
     fm->hist_count = 1;
 
-    browser_read_dir(fm, fm->cwd);
     cwd_watch_start(fm, fm->cwd);
 
     IswRealizeWidget(fm->toplevel);

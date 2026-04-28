@@ -60,7 +60,13 @@ static void instance_event_handler(Widget w, IswPointer closure,
         char *path = malloc(len + 1);
         memcpy(path, xcb_get_property_value(reply), len);
         path[len] = '\0';
-        fm_window_new(app, path);
+        const char *open_path = path;
+        if (strncmp(open_path, "file://", 7) == 0) {
+            open_path += 7;
+            if (open_path[0] == '\0')
+                open_path = "/";
+        }
+        fm_window_new(app, open_path);
         free(path);
     }
     free(reply);
