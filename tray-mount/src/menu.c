@@ -221,6 +221,44 @@ void tm_menu_show(TrayMount *tm)
         IswTrayIconSetMenu(tm->tray_icon, tm->menu_shell);
     }
 
+    IswRealizeWidget(tm->menu_shell);
+
+    /* Position before mapping to avoid flicker */
+    if (tm->tray_icon) {
+        xcb_connection_t *conn = IswDisplay(tm->toplevel);
+        xcb_window_t icon_win = IswTrayIconGetWindow(tm->tray_icon);
+        xcb_window_t root = IswScreen(tm->toplevel)->root;
+
+        xcb_translate_coordinates_cookie_t cookie =
+            xcb_translate_coordinates(conn, icon_win, root, 0, 0);
+        xcb_translate_coordinates_reply_t *reply =
+            xcb_translate_coordinates_reply(conn, cookie, NULL);
+
+        if (reply) {
+            double sf = ISWScaleFactor(tm->toplevel);
+            int icon_x = (int)(reply->dst_x / sf);
+            int icon_y = (int)(reply->dst_y / sf);
+            free(reply);
+
+            Dimension w = tm->menu_shell->core.width;
+            Dimension h = tm->menu_shell->core.height;
+            Dimension bw = tm->menu_shell->core.border_width;
+            int total_w = (int)(w + 2 * bw);
+            int total_h = (int)(h + 2 * bw);
+            int scr_w = (int)(IswScreen(tm->toplevel)->width_in_pixels / sf);
+
+            int x = icon_x;
+            int y = icon_y - total_h;
+
+            if (x + total_w > scr_w)
+                x = scr_w - total_w;
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+
+            IswConfigureWidget(tm->menu_shell, x, y, w, h, bw);
+        }
+    }
+
     IswPopup(tm->menu_shell, IswGrabExclusive);
 
     /* Grab pointer and register handler to dismiss on outside click */
@@ -237,49 +275,6 @@ void tm_menu_show(TrayMount *tm)
                           menu_grab_handler, NULL);
     IswAddCallback(tm->menu_shell, IswNpopdownCallback,
                    menu_popdown_cb, NULL);
-
-    /* Reposition above the tray icon now that the menu is realized
-     * and we can read its actual height. */
-    if (tm->tray_icon) {
-        xcb_connection_t *conn = IswDisplay(tm->toplevel);
-        xcb_window_t icon_win = IswTrayIconGetWindow(tm->tray_icon);
-        xcb_window_t root = IswScreen(tm->toplevel)->root;
-
-        xcb_translate_coordinates_cookie_t cookie =
-            xcb_translate_coordinates(conn, icon_win, root, 0, 0);
-        xcb_translate_coordinates_reply_t *reply =
-            xcb_translate_coordinates_reply(conn, cookie, NULL);
-
-        if (reply) {
-            /* core dimensions are logical; translate_coordinates
-             * returns physical.  Scale to match. */
-            double sf = ISWScaleFactor(tm->toplevel);
-            int phys_mw = (int)(tm->menu_shell->core.width * sf + 0.5);
-            int phys_mh = (int)(tm->menu_shell->core.height * sf + 0.5);
-            int phys_bw = (int)(tm->menu_shell->core.border_width * sf + 0.5);
-            int total_w = phys_mw + 2 * phys_bw;
-            int total_h = phys_mh + 2 * phys_bw;
-
-            int scr_w = IswScreen(tm->toplevel)->width_in_pixels;
-            int scr_h = IswScreen(tm->toplevel)->height_in_pixels;
-
-            int x = reply->dst_x;
-            int y = reply->dst_y - total_h;
-
-            /* Clamp to screen edges */
-            if (x + total_w > scr_w)
-                x = scr_w - total_w;
-            if (x < 0) x = 0;
-            if (y < 0) y = 0;
-
-            uint32_t vals[] = { (uint32_t)x, (uint32_t)y };
-            xcb_configure_window(conn, IswWindow(tm->menu_shell),
-                                 XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                                 vals);
-            xcb_flush(conn);
-            free(reply);
-        }
-    }
 }
 
 void tm_menu_cleanup(TrayMount *tm)
