@@ -61,7 +61,6 @@ static void on_slider_changed(Widget w, IswPointer client_data,
     IswSliderCallbackData *cd = (IswSliderCallbackData *)call_data;
 
     float vol = (float)cd->value / 100.0f;
-    fprintf(stderr, "isde-tray-audio: SLIDER node=%u vol=%.2f\n", r->node_id, vol);
     ta_pw_set_volume(r->ta, r->node_id, vol);
 }
 
@@ -94,8 +93,6 @@ static void on_radio_toggled(Widget w, IswPointer client_data,
     IswArgState(&ab, &state);
     IswGetValues(w, ab.args, ab.count);
 
-    fprintf(stderr, "isde-tray-audio: RADIO node=%u state=%d updating=%d\n",
-            r->node_id, state, r->ta->updating);
     if (state)
         ta_pw_set_default_sink(r->ta, r->node_id);
 }
@@ -174,7 +171,7 @@ static Widget build_volume_row(TrayAudio *ta, Widget parent,
     Widget lbl = IswCreateManagedWidget("volLabel", labelWidgetClass,
                                         parent, ab.args, ab.count);
 
-    /* Slider (below the label, indented past radio if present) */
+    /* Slider (below the label) */
     IswArgBuilderReset(&ab);
     IswArgFromVert(&ab, lbl);
     IswArgLeft(&ab, IswChainLeft);
@@ -183,12 +180,7 @@ static Widget build_volume_row(TrayAudio *ta, Widget parent,
     IswArgMaximumValue(&ab, 100);
     IswArgSliderValue(&ab, (int)(volume * 100.0f + 0.5f));
     IswArgShowValue(&ab, False);
-    if (label_left) {
-        IswArgFromHoriz(&ab, label_left);
-        IswArgHorizDistance(&ab, 4);
-    } else {
-        IswArgHorizDistance(&ab, 8);
-    }
+    IswArgHorizDistance(&ab, 8);
     IswArgVertDistance(&ab, 2);
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
                                        parent, ab.args, ab.count);
@@ -546,8 +538,6 @@ void ta_popup_update(TrayAudio *ta)
         }
 
         if (r->radio && sink) {
-            fprintf(stderr, "isde-tray-audio: popup_update radio sink=%u is_default=%d\n",
-                    sink->id, sink->is_default);
             IswArgBuilder ab = IswArgBuilderInit();
             IswArgState(&ab, sink->is_default ? True : False);
             IswSetValues(r->radio, ab.args, ab.count);

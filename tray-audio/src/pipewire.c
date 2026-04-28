@@ -236,9 +236,6 @@ static void device_param_event(void *data, int seq,
     DeviceInfo *dev = data;
     TrayAudio *ta = dev->ta;
 
-    fprintf(stderr, "isde-tray-audio: device_param_event dev=%u param_id=%u param=%p\n",
-            dev->id, id, (void *)param);
-
     if (id != SPA_PARAM_Route || param == NULL)
         return;
 
@@ -273,17 +270,12 @@ static void device_param_event(void *data, int seq,
         return;
 
     SinkInfo *sink = find_sink_by_route(ta, dev->id, route_device);
-    if (!sink) {
-        fprintf(stderr, "isde-tray-audio: route event dev=%u route_dev=%d — no matching sink\n",
-                dev->id, route_device);
+    if (!sink)
         return;
-    }
 
     sink->route_index = route_index;
     parse_props(props_pod, sink->channel_volumes, &sink->n_channels,
                 &sink->volume, &sink->muted);
-    fprintf(stderr, "isde-tray-audio: route event dev=%u sink=%u route_idx=%d vol=%.2f muted=%d\n",
-            dev->id, sink->id, route_index, sink->volume, sink->muted);
 
     if (sink->is_default)
         tray_audio_update_icon(ta);
@@ -358,9 +350,6 @@ static int metadata_property(void *data, uint32_t subject,
     if (strcmp(key, "default.audio.sink") != 0)
         return 0;
 
-    fprintf(stderr, "isde-tray-audio: metadata default.audio.sink nsinks=%d value=%s\n",
-            ta->nsinks, value ? value : "(null)");
-
     for (int i = 0; i < ta->nsinks; i++)
         ta->sinks[i].is_default = 0;
 
@@ -389,19 +378,13 @@ static int metadata_property(void *data, uint32_t subject,
     }
 
     if (name[0]) {
-        int matched = 0;
         for (int i = 0; i < ta->nsinks; i++) {
             if (strcmp(ta->sinks[i].node_name, name) == 0) {
                 ta->sinks[i].is_default = 1;
                 ta->default_sink_id = ta->sinks[i].id;
-                matched = 1;
-                fprintf(stderr, "isde-tray-audio: metadata matched sink %u '%s'\n",
-                        ta->sinks[i].id, ta->sinks[i].node_name);
                 break;
             }
         }
-        if (!matched)
-            fprintf(stderr, "isde-tray-audio: metadata NO MATCH for '%s'\n", name);
     }
 
     tray_audio_update_icon(ta);
@@ -476,9 +459,6 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
     if (cpd_str)
         sink->card_profile_device = atoi(cpd_str);
 
-    fprintf(stderr, "isde-tray-audio: bind_sink id=%u device_id=%u card_profile_device=%d node_name='%s' (from props: dev='%s' cpd='%s')\n",
-            id, sink->device_id, sink->card_profile_device, sink->node_name,
-            dev_id_str ? dev_id_str : "(null)", cpd_str ? cpd_str : "(null)");
 
     /* Bind node proxy (still useful for stream-like operations) */
     sink->proxy = pw_registry_bind(ta->pw_registry, id,
