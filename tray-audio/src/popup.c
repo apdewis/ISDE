@@ -11,6 +11,7 @@
 #include <ISW/IntrinsicP.h>
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
+#include <isde/isde-tray.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -380,42 +381,7 @@ static void popup_outside_handler(Widget w, IswPointer closure,
 
 static void position_popup(TrayAudio *ta)
 {
-    if (!ta->tray_icon)
-        return;
-
-    xcb_connection_t *conn = IswDisplay(ta->toplevel);
-    xcb_window_t icon_win = IswTrayIconGetWindow(ta->tray_icon);
-    xcb_window_t root = IswScreen(ta->toplevel)->root;
-
-    xcb_translate_coordinates_cookie_t cookie =
-        xcb_translate_coordinates(conn, icon_win, root, 0, 0);
-    xcb_translate_coordinates_reply_t *reply =
-        xcb_translate_coordinates_reply(conn, cookie, NULL);
-
-    if (!reply)
-        return;
-
-    double sf = ISWScaleFactor(ta->toplevel);
-    int icon_x = (int)(reply->dst_x / sf);
-    int icon_y = (int)(reply->dst_y / sf);
-    free(reply);
-
-    Dimension w = ta->popup_shell->core.width;
-    Dimension h = ta->popup_shell->core.height;
-    Dimension bw = ta->popup_shell->core.border_width;
-    int total_w = (int)(w + 2 * bw);
-    int total_h = (int)(h + 2 * bw);
-    int scr_w = (int)(IswScreen(ta->toplevel)->width_in_pixels / sf);
-
-    int x = icon_x;
-    int y = icon_y - total_h;
-
-    if (x + total_w > scr_w)
-        x = scr_w - total_w;
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-
-    IswConfigureWidget(ta->popup_shell, x, y, w, h, bw);
+    isde_tray_position_popup(ta->toplevel, ta->tray_icon, ta->popup_shell);
 }
 
 /* ---------- public popup API ---------- */

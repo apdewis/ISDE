@@ -34,6 +34,7 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_WM_DESKTOP,
         ewmh->_NET_WM_STATE_ABOVE,
         ewmh->_NET_WM_STATE_BELOW,
+        ewmh->_NET_WORKAREA,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);
@@ -75,4 +76,28 @@ void wm_ewmh_update_active(Wm *wm)
     xcb_window_t active = wm->focused ? wm->focused->client
                                       : XCB_WINDOW_NONE;
     isde_ewmh_set_active_window(wm->ewmh, active);
+}
+
+void wm_ewmh_update_workarea(Wm *wm)
+{
+    int wx, wy, ww, wh;
+    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    xcb_ewmh_geometry_t *areas = malloc(
+        wm->num_desktops * sizeof(xcb_ewmh_geometry_t));
+    if (!areas)
+        return;
+
+    for (int i = 0; i < wm->num_desktops; i++) {
+        areas[i].x      = wx;
+        areas[i].y      = wy;
+        areas[i].width   = ww;
+        areas[i].height  = wh;
+    }
+
+    xcb_ewmh_set_workarea(ewmh, wm->screen_num,
+                          wm->num_desktops, areas);
+    free(areas);
+    xcb_flush(wm->conn);
 }

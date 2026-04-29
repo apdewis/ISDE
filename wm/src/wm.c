@@ -833,6 +833,8 @@ static void wm_add_dock(Wm *wm, xcb_window_t win)
     uint32_t v[] = { XCB_STACK_MODE_ABOVE };
     xcb_configure_window(wm->conn, win,
                          XCB_CONFIG_WINDOW_STACK_MODE, v);
+
+    wm_ewmh_update_workarea(wm);
 }
 
 static void wm_remove_dock(Wm *wm, xcb_window_t win)
@@ -840,6 +842,7 @@ static void wm_remove_dock(Wm *wm, xcb_window_t win)
     for (int i = 0; i < wm->ndocks; i++) {
         if (wm->docks[i] == win) {
             wm->docks[i] = wm->docks[--wm->ndocks];
+            wm_ewmh_update_workarea(wm);
             return;
         }
     }

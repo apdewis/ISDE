@@ -10,6 +10,7 @@ add_library(isde SHARED
     src/isde-theme.c
     src/isde-dialog.c
     src/isde-filechooser.c
+    src/isde-tray.c
     vendor/tomlc99/toml.c
 )
 
