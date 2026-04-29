@@ -195,6 +195,8 @@ static void create_window_menu(Panel *p, TaskGroup *g)
     IswArgVerticalList(&ab, True);
     IswArgAllowShellResize(&ab, True);
     IswArgBorderWidth(&ab, 0);
+    IswArgInternalWidth(&ab, 2);
+    IswArgInternalHeight(&ab, 2);
     IswArgCursor(&ab, None);
     g->menu_list = IswCreateManagedWidget("winList", listWidgetClass,
                                          g->menu, ab.args, ab.count);
@@ -496,6 +498,9 @@ static void close_all_callback(Widget w, IswPointer client_data,
 static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
 {
     IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBorderWidth(&ab, 0);
+    IswArgTopMargin(&ab, 2);
+    IswArgBottomMargin(&ab, 2);
     g->ctx_menu = IswCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
                                      g->button, ab.args, ab.count);
 
@@ -510,6 +515,8 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
             }
             IswArgBuilderReset(&ab);
             IswArgLabel(&ab, a->name);
+            IswArgLeftMargin(&ab, 4);
+            IswArgRightMargin(&ab, 4);
             Widget entry = IswCreateManagedWidget("action", smeBSBObjectClass,
                                                   g->ctx_menu, ab.args, ab.count);
             ActionClosure *ac = malloc(sizeof(*ac));
@@ -528,6 +535,8 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     if (g->desktop_exec) {
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "New instance");
+        IswArgLeftMargin(&ab, 4);
+        IswArgRightMargin(&ab, 4);
         Widget ni = IswCreateManagedWidget("newInst", smeBSBObjectClass,
                                            g->ctx_menu, ab.args, ab.count);
         ActionClosure *ac = malloc(sizeof(*ac));
@@ -539,6 +548,8 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     /* Close all windows (dynamic — shown only when nwindows > 0) */
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Close all windows");
+    IswArgLeftMargin(&ab, 4);
+    IswArgRightMargin(&ab, 4);
     g->ctx_close_all = IswCreateManagedWidget("closeAll", smeBSBObjectClass,
                                               g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_close_all, IswNcallback, close_all_callback, closure);
@@ -549,6 +560,8 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     /* Pin/unpin (dynamic label) */
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Pin to taskbar");
+    IswArgLeftMargin(&ab, 4);
+    IswArgRightMargin(&ab, 4);
     g->ctx_pin = IswCreateManagedWidget("pinToggle", smeBSBObjectClass,
                                         g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
