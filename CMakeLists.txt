@@ -28,7 +28,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 # --- Core dependencies (all components) ---
-pkg_check_modules(ISW REQUIRED IMPORTED_TARGET isw>=0.5.0)
+pkg_check_modules(ISW REQUIRED IMPORTED_TARGET isw>=0.6.0)
 
 # If libISW is not installed, allow overriding its include/lib paths.
 # Usage: cmake -B build -DISW_LOCAL_DIR=/home/user/libISW

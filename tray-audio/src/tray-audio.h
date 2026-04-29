@@ -19,6 +19,7 @@
 #include <ISW/Box.h>
 #include <ISW/ListBox.h>
 #include <ISW/ListBoxRow.h>
+#include <ISW/ToggleButton.h>
 #include <ISW/IswTrayIcon.h>
 #include <ISW/ISWSVG.h>
 
