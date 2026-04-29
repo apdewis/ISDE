@@ -20,6 +20,7 @@
 
 #include "isde/isde-dbus.h"
 #include "isde/isde-theme.h"
+#include "isde/isde-xdg.h"
 
 /* ---------- D-Bus constants ---------- */
 

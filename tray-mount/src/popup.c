@@ -232,29 +232,38 @@ void tm_popup_show(TrayMount *tm)
                                   row, ab.args, ab.count);
 
             if (d->is_mounted) {
+                char *icon = isde_icon_find("actions", "media-unmount");
                 IswArgBuilderReset(&ab);
-                IswArgLabel(&ab, "U");
-                IswArgJustify(&ab, IswJustifyRight);
+                IswArgLabel(&ab, "");
+                if (icon)
+                    IswArgImage(&ab, icon);
                 Widget w = IswCreateManagedWidget("unmount",
                     commandWidgetClass, row, ab.args, ab.count);
+                free(icon);
                 MenuAction *a = alloc_action(tm, i, ACTION_UNMOUNT);
                 IswAddCallback(w, IswNcallback, on_action, a);
 
                 if (d->is_ejectable) {
+                    icon = isde_icon_find("actions", "media-eject");
                     IswArgBuilderReset(&ab);
-                    IswArgLabel(&ab, "Eject");
-                    IswArgJustify(&ab, IswJustifyRight);
+                    IswArgLabel(&ab, "");
+                    if (icon)
+                        IswArgImage(&ab, icon);
                     w = IswCreateManagedWidget("eject",
                         commandWidgetClass, row, ab.args, ab.count);
+                    free(icon);
                     a = alloc_action(tm, i, ACTION_EJECT);
                     IswAddCallback(w, IswNcallback, on_action, a);
                 }
             } else {
+                char *icon = isde_icon_find("actions", "media-mount");
                 IswArgBuilderReset(&ab);
-                IswArgLabel(&ab, "M");
-                IswArgJustify(&ab, IswJustifyRight);
+                IswArgLabel(&ab, "");
+                if (icon)
+                    IswArgImage(&ab, icon);
                 Widget w = IswCreateManagedWidget("mount",
                     commandWidgetClass, row, ab.args, ab.count);
+                free(icon);
                 MenuAction *a = alloc_action(tm, i, ACTION_MOUNT);
                 IswAddCallback(w, IswNcallback, on_action, a);
             }
