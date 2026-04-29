@@ -160,6 +160,15 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
         IswAddCallback(rb, IswNcallback, on_radio_toggled, row);
         row->radio = rb;
         *radio_out = rb;
+    } else {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, wrapped);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+        IswArgWidth(&ab, 300);
+        IswArgHeight(&ab, 60);
+        IswCreateManagedWidget("streamLabel", labelWidgetClass,
+                               top_row, ab.args, ab.count);
     }
 
     /* Second row: slider + mute */
