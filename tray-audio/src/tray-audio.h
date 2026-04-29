@@ -42,6 +42,7 @@
 /* ---------- limits ---------- */
 
 #define MAX_SINKS    32
+#define MAX_SOURCES  32
 #define MAX_STREAMS  64
 #define MAX_CHANNELS 16
 #define MAX_DEVICES  16
@@ -71,6 +72,22 @@ typedef struct SinkInfo {
     struct spa_hook  listener;
 } SinkInfo;
 
+typedef struct SourceInfo {
+    uint32_t    id;
+    char        name[256];
+    char        node_name[256];
+    float       channel_volumes[MAX_CHANNELS];
+    int         n_channels;
+    float       volume;
+    int         muted;
+    int         is_default;
+    uint32_t    device_id;
+    int         card_profile_device;
+    int         route_index;
+    struct pw_proxy *proxy;
+    struct spa_hook  listener;
+} SourceInfo;
+
 typedef struct StreamInfo {
     uint32_t    id;                         /* PipeWire node ID */
     char        name[256];                  /* application.name */
@@ -96,6 +113,7 @@ typedef struct TrayAudio {
     Widget               popup_shell;
     Widget               tabs;
     Widget               output_page;
+    Widget               input_page;
     Widget               app_page;
     int                  popup_visible;
     int                  updating;      /* suppress widget callbacks during programmatic updates */
@@ -106,7 +124,11 @@ typedef struct TrayAudio {
     /* Audio state */
     SinkInfo             sinks[MAX_SINKS];
     int                  nsinks;
-    uint32_t             default_sink_id;   /* PW node ID from metadata */
+    uint32_t             default_sink_id;
+
+    SourceInfo           sources[MAX_SOURCES];
+    int                  nsources;
+    uint32_t             default_source_id;
 
     StreamInfo           streams[MAX_STREAMS];
     int                  nstreams;
@@ -149,11 +171,14 @@ void ta_pw_cleanup(TrayAudio *ta);
 void ta_pw_set_volume(TrayAudio *ta, uint32_t node_id, float volume);
 void ta_pw_set_mute(TrayAudio *ta, uint32_t node_id, int muted);
 void ta_pw_set_default_sink(TrayAudio *ta, uint32_t node_id);
+void ta_pw_set_default_source(TrayAudio *ta, uint32_t node_id);
 
 /* Lookup helpers */
 SinkInfo   *ta_find_sink(TrayAudio *ta, uint32_t id);
+SourceInfo *ta_find_source(TrayAudio *ta, uint32_t id);
 StreamInfo *ta_find_stream(TrayAudio *ta, uint32_t id);
 SinkInfo   *ta_default_sink(TrayAudio *ta);
+SourceInfo *ta_default_source(TrayAudio *ta);
 DeviceInfo *ta_find_device(TrayAudio *ta, uint32_t id);
 
 /* ---------- popup.c ---------- */

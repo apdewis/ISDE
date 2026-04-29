@@ -28,6 +28,7 @@ typedef struct VolumeRow {
     Widget      slider;
     Widget      mute_btn;
     Widget      radio;
+    int         is_source;
 } VolumeRow;
 
 static VolumeRow *rows = NULL;
@@ -46,6 +47,7 @@ static VolumeRow *alloc_row(TrayAudio *ta, uint32_t node_id)
     r->slider = NULL;
     r->mute_btn = NULL;
     r->radio = NULL;
+    r->is_source = 0;
     return r;
 }
 
@@ -101,8 +103,12 @@ static void on_radio_toggled(Widget w, IswPointer client_data,
     IswArgState(&ab, &state);
     IswGetValues(w, ab.args, ab.count);
 
-    if (state)
-        ta_pw_set_default_sink(r->ta, r->node_id);
+    if (state) {
+        if (r->is_source)
+            ta_pw_set_default_source(r->ta, r->node_id);
+        else
+            ta_pw_set_default_sink(r->ta, r->node_id);
+    }
 }
 
 /* ---------- build a single volume row ---------- */
@@ -242,6 +248,46 @@ static void build_output_content(TrayAudio *ta)
     }
 }
 
+static void build_input_content(TrayAudio *ta)
+{
+    clear_children(ta->input_page);
+
+    if (ta->nsources == 0) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        const IsdeColorScheme *scheme = isde_theme_current();
+        IswArgLabel(&ab, "No audio inputs");
+        IswArgBorderWidth(&ab, 0);
+        IswArgSelectable(&ab, False);
+        if (scheme)
+            IswArgForeground(&ab, scheme->fg_dim);
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
+        IswCreateManagedWidget("noInputs", labelWidgetClass,
+                              ta->input_page, ab.args, ab.count);
+        return;
+    }
+
+    Widget first_radio = NULL;
+    for (int i = 0; i < ta->nsources; i++) {
+        SourceInfo *s = &ta->sources[i];
+        Widget radio = NULL;
+
+        build_volume_row(ta, ta->input_page,
+                         s->name, s->id, s->volume, s->muted,
+                         first_radio, s->is_default, &radio);
+        if (!first_radio)
+            first_radio = radio;
+
+        /* Tag rows just created as source rows */
+        for (int j = nrows - 1; j >= 0; j--) {
+            if (rows[j].node_id == s->id) {
+                rows[j].is_source = 1;
+                break;
+            }
+        }
+    }
+}
+
 static void build_app_content(TrayAudio *ta)
 {
     clear_children(ta->app_page);
@@ -283,6 +329,8 @@ static void on_tab_changed(Widget w, IswPointer client_data,
 
     if (tcs->child == ta->output_page)
         build_output_content(ta);
+    else if (tcs->child == ta->input_page)
+        build_input_content(ta);
     else if (tcs->child == ta->app_page)
         build_app_content(ta);
 }
@@ -372,6 +420,7 @@ void ta_popup_init(TrayAudio *ta)
     ta->popup_shell = NULL;
     ta->tabs = NULL;
     ta->output_page = NULL;
+    ta->input_page = NULL;
     ta->app_page = NULL;
     ta->popup_visible = 0;
 }
@@ -416,6 +465,18 @@ void ta_popup_show(TrayAudio *ta)
     ta->output_page = IswCreateManagedWidget("outputPage",
                                              listBoxWidgetClass,
                                              ta->tabs, ab.args, ab.count);
+
+    /* Inputs tab */
+    IswArgBuilderReset(&ab);
+    IswArgTabLabel(&ab, "Inputs");
+    IswArgSelectionMode(&ab, IswListBoxSelectNone);
+    IswArgBorderWidth(&ab, 0);
+    IswArgRowSpacing(&ab, 0);
+    if (ta->small_font)
+        IswArgFont(&ab, ta->small_font);
+    ta->input_page = IswCreateManagedWidget("inputPage",
+                                            listBoxWidgetClass,
+                                            ta->tabs, ab.args, ab.count);
 
     /* Applications tab — created empty, populated on tab switch */
     IswArgBuilderReset(&ab);
@@ -496,14 +557,21 @@ void ta_popup_update(TrayAudio *ta)
         int muted = 0;
 
         SinkInfo *sink = ta_find_sink(r->ta, r->node_id);
+        SourceInfo *source = NULL;
         if (sink) {
             vol = sink->volume;
             muted = sink->muted;
         } else {
-            StreamInfo *stream = ta_find_stream(r->ta, r->node_id);
-            if (stream) {
-                vol = stream->volume;
-                muted = stream->muted;
+            source = ta_find_source(r->ta, r->node_id);
+            if (source) {
+                vol = source->volume;
+                muted = source->muted;
+            } else {
+                StreamInfo *stream = ta_find_stream(r->ta, r->node_id);
+                if (stream) {
+                    vol = stream->volume;
+                    muted = stream->muted;
+                }
             }
         }
 
@@ -520,10 +588,16 @@ void ta_popup_update(TrayAudio *ta)
             free(vi);
         }
 
-        if (r->radio && sink) {
-            IswArgBuilder ab = IswArgBuilderInit();
-            IswArgState(&ab, sink->is_default ? True : False);
-            IswSetValues(r->radio, ab.args, ab.count);
+        if (r->radio) {
+            if (sink) {
+                IswArgBuilder ab = IswArgBuilderInit();
+                IswArgState(&ab, sink->is_default ? True : False);
+                IswSetValues(r->radio, ab.args, ab.count);
+            } else if (source) {
+                IswArgBuilder ab = IswArgBuilderInit();
+                IswArgState(&ab, source->is_default ? True : False);
+                IswSetValues(r->radio, ab.args, ab.count);
+            }
         }
     }
     ta->updating = 0;
@@ -537,6 +611,7 @@ void ta_popup_cleanup(TrayAudio *ta)
     }
     ta->tabs = NULL;
     ta->output_page = NULL;
+    ta->input_page = NULL;
     ta->app_page = NULL;
     ta->popup_visible = 0;
 

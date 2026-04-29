@@ -22,6 +22,7 @@
 
 /* Forward declarations */
 static const struct pw_node_events sink_node_events;
+static const struct pw_node_events source_node_events;
 static const struct pw_node_events stream_node_events;
 static const struct pw_device_events device_events;
 
@@ -56,6 +57,26 @@ SinkInfo *ta_default_sink(TrayAudio *ta)
     return NULL;
 }
 
+SourceInfo *ta_find_source(TrayAudio *ta, uint32_t id)
+{
+    for (int i = 0; i < ta->nsources; i++) {
+        if (ta->sources[i].id == id)
+            return &ta->sources[i];
+    }
+    return NULL;
+}
+
+SourceInfo *ta_default_source(TrayAudio *ta)
+{
+    for (int i = 0; i < ta->nsources; i++) {
+        if (ta->sources[i].is_default)
+            return &ta->sources[i];
+    }
+    if (ta->nsources > 0)
+        return &ta->sources[0];
+    return NULL;
+}
+
 DeviceInfo *ta_find_device(TrayAudio *ta, uint32_t id)
 {
     for (int i = 0; i < ta->ndevices; i++) {
@@ -87,6 +108,56 @@ static SinkInfo *find_sink_by_route(TrayAudio *ta, uint32_t device_id,
         return unresolved;
     }
     return NULL;
+}
+
+static SourceInfo *find_source_by_route(TrayAudio *ta, uint32_t device_id,
+                                        int route_device)
+{
+    SourceInfo *unresolved = NULL;
+    int n_unresolved = 0;
+
+    for (int i = 0; i < ta->nsources; i++) {
+        if (ta->sources[i].device_id != device_id)
+            continue;
+        if (ta->sources[i].card_profile_device == route_device)
+            return &ta->sources[i];
+        if (ta->sources[i].card_profile_device < 0) {
+            unresolved = &ta->sources[i];
+            n_unresolved++;
+        }
+    }
+
+    if (n_unresolved == 1) {
+        unresolved->card_profile_device = route_device;
+        return unresolved;
+    }
+    return NULL;
+}
+
+static void remove_source(TrayAudio *ta, uint32_t id)
+{
+    for (int i = 0; i < ta->nsources; i++) {
+        if (ta->sources[i].id == id) {
+            if (ta->sources[i].proxy) {
+                spa_hook_remove(&ta->sources[i].listener);
+                pw_proxy_destroy(ta->sources[i].proxy);
+            }
+            ta->nsources--;
+            if (i < ta->nsources) {
+                SourceInfo *moved = &ta->sources[ta->nsources];
+                if (moved->proxy)
+                    spa_hook_remove(&moved->listener);
+                ta->sources[i] = *moved;
+                if (ta->sources[i].proxy) {
+                    pw_node_add_listener(
+                        (struct pw_node *)ta->sources[i].proxy,
+                        &ta->sources[i].listener,
+                        &source_node_events, &ta->sources[i]);
+                }
+            }
+            return;
+        }
+    }
 }
 
 static void remove_sink(TrayAudio *ta, uint32_t id)
@@ -264,23 +335,30 @@ static void device_param_event(void *data, int seq,
         }
     }
 
-    if (direction != SPA_DIRECTION_OUTPUT)
-        return;
     if (route_device < 0 || !props_pod)
         return;
 
-    SinkInfo *sink = find_sink_by_route(ta, dev->id, route_device);
-    if (!sink)
-        return;
-
-    sink->route_index = route_index;
-    parse_props(props_pod, sink->channel_volumes, &sink->n_channels,
-                &sink->volume, &sink->muted);
-
-    if (sink->is_default)
-        tray_audio_update_icon(ta);
-    if (ta->popup_visible)
-        ta_popup_update(ta);
+    if (direction == SPA_DIRECTION_OUTPUT) {
+        SinkInfo *sink = find_sink_by_route(ta, dev->id, route_device);
+        if (!sink)
+            return;
+        sink->route_index = route_index;
+        parse_props(props_pod, sink->channel_volumes, &sink->n_channels,
+                    &sink->volume, &sink->muted);
+        if (sink->is_default)
+            tray_audio_update_icon(ta);
+        if (ta->popup_visible)
+            ta_popup_update(ta);
+    } else if (direction == SPA_DIRECTION_INPUT) {
+        SourceInfo *src = find_source_by_route(ta, dev->id, route_device);
+        if (!src)
+            return;
+        src->route_index = route_index;
+        parse_props(props_pod, src->channel_volumes, &src->n_channels,
+                    &src->volume, &src->muted);
+        if (ta->popup_visible)
+            ta_popup_update(ta);
+    }
 }
 
 static const struct pw_device_events device_events = {
@@ -316,6 +394,30 @@ static const struct pw_node_events sink_node_events = {
     .param = sink_param_event,
 };
 
+static void source_param_event(void *data, int seq,
+                               uint32_t id, uint32_t index, uint32_t next,
+                               const struct spa_pod *param)
+{
+    (void)seq; (void)index; (void)next;
+    SourceInfo *source = data;
+
+    if (id != SPA_PARAM_Props || param == NULL)
+        return;
+
+    TrayAudio *ta = *(TrayAudio **)pw_proxy_get_user_data(source->proxy);
+
+    parse_props(param, source->channel_volumes, &source->n_channels,
+                &source->volume, &source->muted);
+
+    if (ta->popup_visible)
+        ta_popup_update(ta);
+}
+
+static const struct pw_node_events source_node_events = {
+    PW_VERSION_NODE_EVENTS,
+    .param = source_param_event,
+};
+
 static void stream_param_event(void *data, int seq,
                                uint32_t id, uint32_t index, uint32_t next,
                                const struct spa_pod *param)
@@ -347,15 +449,26 @@ static int metadata_property(void *data, uint32_t subject,
     if (subject != 0 || key == NULL)
         return 0;
 
-    if (strcmp(key, "default.audio.sink") != 0)
+    int is_sink = (strcmp(key, "default.audio.sink") == 0);
+    int is_source = (strcmp(key, "default.audio.source") == 0);
+    if (!is_sink && !is_source)
         return 0;
 
-    for (int i = 0; i < ta->nsinks; i++)
-        ta->sinks[i].is_default = 0;
+    if (is_sink) {
+        for (int i = 0; i < ta->nsinks; i++)
+            ta->sinks[i].is_default = 0;
+    } else {
+        for (int i = 0; i < ta->nsources; i++)
+            ta->sources[i].is_default = 0;
+    }
 
     if (value == NULL) {
-        ta->default_sink_id = 0;
-        tray_audio_update_icon(ta);
+        if (is_sink) {
+            ta->default_sink_id = 0;
+            tray_audio_update_icon(ta);
+        } else {
+            ta->default_source_id = 0;
+        }
         return 0;
     }
 
@@ -378,16 +491,27 @@ static int metadata_property(void *data, uint32_t subject,
     }
 
     if (name[0]) {
-        for (int i = 0; i < ta->nsinks; i++) {
-            if (strcmp(ta->sinks[i].node_name, name) == 0) {
-                ta->sinks[i].is_default = 1;
-                ta->default_sink_id = ta->sinks[i].id;
-                break;
+        if (is_sink) {
+            for (int i = 0; i < ta->nsinks; i++) {
+                if (strcmp(ta->sinks[i].node_name, name) == 0) {
+                    ta->sinks[i].is_default = 1;
+                    ta->default_sink_id = ta->sinks[i].id;
+                    break;
+                }
+            }
+        } else {
+            for (int i = 0; i < ta->nsources; i++) {
+                if (strcmp(ta->sources[i].node_name, name) == 0) {
+                    ta->sources[i].is_default = 1;
+                    ta->default_source_id = ta->sources[i].id;
+                    break;
+                }
             }
         }
     }
 
-    tray_audio_update_icon(ta);
+    if (is_sink)
+        tray_audio_update_icon(ta);
     if (ta->popup_visible)
         ta_popup_update(ta);
     return 0;
@@ -489,6 +613,63 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
     }
 }
 
+static void bind_source(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
+{
+    if (ta->nsources >= MAX_SOURCES)
+        return;
+
+    SourceInfo *src = &ta->sources[ta->nsources];
+    memset(src, 0, sizeof(*src));
+    src->id = id;
+    src->volume = 1.0f;
+    src->route_index = -1;
+    src->card_profile_device = -1;
+
+    const char *desc = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
+    if (desc)
+        snprintf(src->name, sizeof(src->name), "%s", desc);
+    else
+        snprintf(src->name, sizeof(src->name), "Source %u", id);
+
+    const char *nname = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+    if (nname)
+        snprintf(src->node_name, sizeof(src->node_name), "%s", nname);
+
+    const char *dev_id_str = spa_dict_lookup(props, PW_KEY_DEVICE_ID);
+    if (dev_id_str)
+        src->device_id = (uint32_t)atoi(dev_id_str);
+
+    const char *cpd_str = spa_dict_lookup(props, "card.profile.device");
+    if (cpd_str)
+        src->card_profile_device = atoi(cpd_str);
+
+    src->proxy = pw_registry_bind(ta->pw_registry, id,
+                                  PW_TYPE_INTERFACE_Node,
+                                  PW_VERSION_NODE, sizeof(TrayAudio *));
+    if (src->proxy) {
+        *(TrayAudio **)pw_proxy_get_user_data(src->proxy) = ta;
+        pw_node_add_listener((struct pw_node *)src->proxy,
+                             &src->listener, &source_node_events, src);
+
+        uint32_t params[] = { SPA_PARAM_Props };
+        pw_node_subscribe_params((struct pw_node *)src->proxy, params, 1);
+        pw_node_enum_params((struct pw_node *)src->proxy,
+                            0, SPA_PARAM_Props, 0, -1, NULL);
+    }
+
+    ta->nsources++;
+
+    if (src->device_id) {
+        DeviceInfo *existing = ta_find_device(ta, src->device_id);
+        if (!existing) {
+            bind_device(ta, src->device_id);
+        } else if (existing->proxy) {
+            pw_device_enum_params((struct pw_device *)existing->proxy,
+                                  0, SPA_PARAM_Route, 0, -1, NULL);
+        }
+    }
+}
+
 static void bind_stream(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 {
     if (ta->nstreams >= MAX_STREAMS)
@@ -543,6 +724,8 @@ static void registry_global(void *data, uint32_t id, uint32_t permissions,
 
         if (strcmp(media_class, "Audio/Sink") == 0) {
             bind_sink(ta, id, props);
+        } else if (strcmp(media_class, "Audio/Source") == 0) {
+            bind_source(ta, id, props);
         } else if (strcmp(media_class, "Stream/Output/Audio") == 0) {
             bind_stream(ta, id, props);
         }
@@ -566,6 +749,7 @@ static void registry_global_remove(void *data, uint32_t id)
 {
     TrayAudio *ta = data;
     remove_sink(ta, id);
+    remove_source(ta, id);
     remove_stream(ta, id);
     remove_device(ta, id);
     tray_audio_update_icon(ta);
@@ -683,6 +867,13 @@ void ta_pw_cleanup(TrayAudio *ta)
             spa_hook_remove(&ta->sinks[i].listener);
             pw_proxy_destroy(ta->sinks[i].proxy);
             ta->sinks[i].proxy = NULL;
+        }
+    }
+    for (int i = 0; i < ta->nsources; i++) {
+        if (ta->sources[i].proxy) {
+            spa_hook_remove(&ta->sources[i].listener);
+            pw_proxy_destroy(ta->sources[i].proxy);
+            ta->sources[i].proxy = NULL;
         }
     }
     for (int i = 0; i < ta->nstreams; i++) {
@@ -821,6 +1012,50 @@ static void set_stream_mute(struct pw_proxy *proxy, int muted)
                       SPA_PARAM_Props, 0, pod);
 }
 
+static void set_source_volume(TrayAudio *ta, SourceInfo *src, float volume)
+{
+    (void)ta;
+    if (!src->proxy)
+        return;
+
+    float cubic = linear_to_cubic(volume);
+    int nc = src->n_channels > 0 ? src->n_channels : 2;
+    float vols[MAX_CHANNELS];
+    for (int i = 0; i < nc; i++)
+        vols[i] = cubic;
+
+    uint8_t buf[1024];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
+    struct spa_pod_frame f;
+
+    spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+    spa_pod_builder_prop(&b, SPA_PROP_channelVolumes, 0);
+    spa_pod_builder_array(&b, sizeof(float), SPA_TYPE_Float, nc, vols);
+    struct spa_pod *pod = spa_pod_builder_pop(&b, &f);
+
+    pw_node_set_param((struct pw_node *)src->proxy,
+                      SPA_PARAM_Props, 0, pod);
+}
+
+static void set_source_mute(TrayAudio *ta, SourceInfo *src, int muted)
+{
+    (void)ta;
+    if (!src->proxy)
+        return;
+
+    uint8_t buf[256];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
+    struct spa_pod_frame f;
+
+    spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+    spa_pod_builder_prop(&b, SPA_PROP_mute, 0);
+    spa_pod_builder_bool(&b, muted ? true : false);
+    struct spa_pod *pod = spa_pod_builder_pop(&b, &f);
+
+    pw_node_set_param((struct pw_node *)src->proxy,
+                      SPA_PARAM_Props, 0, pod);
+}
+
 void ta_pw_set_volume(TrayAudio *ta, uint32_t node_id, float volume)
 {
     if (volume < 0.0f) volume = 0.0f;
@@ -829,6 +1064,12 @@ void ta_pw_set_volume(TrayAudio *ta, uint32_t node_id, float volume)
     SinkInfo *sink = ta_find_sink(ta, node_id);
     if (sink) {
         set_sink_volume(ta, sink, volume);
+        return;
+    }
+
+    SourceInfo *src = ta_find_source(ta, node_id);
+    if (src) {
+        set_source_volume(ta, src, volume);
         return;
     }
 
@@ -844,6 +1085,12 @@ void ta_pw_set_mute(TrayAudio *ta, uint32_t node_id, int muted)
     SinkInfo *sink = ta_find_sink(ta, node_id);
     if (sink) {
         set_sink_mute(ta, sink, muted);
+        return;
+    }
+
+    SourceInfo *src = ta_find_source(ta, node_id);
+    if (src) {
+        set_source_mute(ta, src, muted);
         return;
     }
 
@@ -863,5 +1110,19 @@ void ta_pw_set_default_sink(TrayAudio *ta, uint32_t node_id)
 
     pw_metadata_set_property((struct pw_metadata *)ta->metadata,
                              0, "default.audio.sink",
+                             "Spa:String:JSON", json);
+}
+
+void ta_pw_set_default_source(TrayAudio *ta, uint32_t node_id)
+{
+    SourceInfo *src = ta_find_source(ta, node_id);
+    if (!src || !ta->metadata)
+        return;
+
+    char json[512];
+    snprintf(json, sizeof(json), "{\"name\":\"%s\"}", src->node_name);
+
+    pw_metadata_set_property((struct pw_metadata *)ta->metadata,
+                             0, "default.audio.source",
                              "Spa:String:JSON", json);
 }
