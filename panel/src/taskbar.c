@@ -374,15 +374,87 @@ static void load_pinned_file(Panel *p)
     fclose(fp);
 }
 
+/* Move a child widget to a target position in its parent's children array */
+static void move_child_to(Widget parent, Widget child, Cardinal target)
+{
+    CompositeWidget cw = (CompositeWidget)parent;
+    WidgetList children = cw->composite.children;
+    Cardinal n = cw->composite.num_children;
+
+    Cardinal cur;
+    for (cur = 0; cur < n; cur++) {
+        if (children[cur] == child)
+            break;
+    }
+    if (cur >= n || cur == target)
+        return;
+
+    if (cur < target) {
+        for (Cardinal i = cur; i < target; i++)
+            children[i] = children[i + 1];
+    } else {
+        for (Cardinal i = cur; i > target; i--)
+            children[i] = children[i - 1];
+    }
+    children[target] = child;
+
+    CompositeWidgetClass cc = (CompositeWidgetClass)IswClass(parent);
+    IswWidgetProc cm = cc->composite_class.change_managed;
+    if (cm)
+        cm(parent);
+}
+
+static int count_pinned(Panel *p)
+{
+    int n = 0;
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (g->pinned)
+            n++;
+    }
+    return n;
+}
+
 static void pin_callback(Widget w, IswPointer client_data,
                          IswPointer call_data)
 {
     (void)w;
     (void)call_data;
     TaskClosure *tc = (TaskClosure *)client_data;
-    tc->group->pinned = !tc->group->pinned;
-    save_pinned(tc->panel);
-    panel_dismiss_popup(tc->panel);
+    Panel *p = tc->panel;
+    TaskGroup *g = tc->group;
+
+    g->pinned = !g->pinned;
+
+    /* Unlink g from the list */
+    TaskGroup **pp = &p->groups;
+    while (*pp && *pp != g)
+        pp = &(*pp)->next;
+    if (*pp)
+        *pp = g->next;
+
+    if (g->pinned) {
+        /* Insert after the last pinned group */
+        TaskGroup **ins = &p->groups;
+        while (*ins && (*ins)->pinned)
+            ins = &(*ins)->next;
+        g->next = *ins;
+        *ins = g;
+
+        int target = count_pinned(p) - 1;
+        move_child_to(p->box, g->button, target);
+    } else {
+        /* Append after all pinned groups (first unpinned position) */
+        TaskGroup **ins = &p->groups;
+        while (*ins && (*ins)->pinned)
+            ins = &(*ins)->next;
+        g->next = *ins;
+        *ins = g;
+
+        move_child_to(p->box, g->button, count_pinned(p));
+    }
+
+    save_pinned(p);
+    panel_dismiss_popup(p);
 }
 
 typedef struct {
@@ -685,9 +757,13 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     create_window_menu(p, g);
     create_context_menu(p, g, tc);
 
-    /* Link into list */
-    g->next = p->groups;
-    p->groups = g;
+    /* Append to list tail — pinned groups are created first so they
+     * stay at the head; new groups for running apps follow after. */
+    g->next = NULL;
+    TaskGroup **tail = &p->groups;
+    while (*tail)
+        tail = &(*tail)->next;
+    *tail = g;
 
     return g;
 }
