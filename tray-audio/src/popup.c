@@ -125,9 +125,10 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
 
     /* First row: radio + label */
     IswArgBuilderReset(&ab);
-    IswArgRowPadding(&ab, 0);
     IswArgBorderWidth(&ab, 0);
+    IswArgInternalWidth(&ab, 16);
     IswArgHeight(&ab, 60);
+    IswArgRowPadding(&ab, 8);
     Widget top_row = IswCreateManagedWidget("volName", listBoxRowWidgetClass,
                                             listbox, ab.args, ab.count);
 
@@ -146,13 +147,9 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     if (radio_out) {
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, wrapped);
-        IswArgRowPadding(&ab, 0);
         IswArgBorderWidth(&ab, 0);
-        IswArgInternalWidth(&ab, 4);
         IswArgJustify(&ab, IswJustifyLeft);
         IswArgState(&ab, is_default ? True : False);
-        IswArgWidth(&ab, 300);
-        IswArgHeight(&ab, 60);
         if (radio_peer)
             IswArgRadioGroup(&ab, radio_peer);
         Widget rb = IswCreateManagedWidget("outRadio", toggleWidgetClass,
@@ -165,16 +162,15 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
         IswArgLabel(&ab, wrapped);
         IswArgBorderWidth(&ab, 0);
         IswArgJustify(&ab, IswJustifyLeft);
-        IswArgWidth(&ab, 300);
-        IswArgHeight(&ab, 60);
         IswCreateManagedWidget("streamLabel", labelWidgetClass,
                                top_row, ab.args, ab.count);
     }
 
     /* Second row: slider + mute */
     IswArgBuilderReset(&ab);
-    IswArgRowPadding(&ab, 0);
     IswArgBorderWidth(&ab, 0);
+    IswArgInternalWidth(&ab, 16);
+    IswArgRowPadding(&ab, 8);
     IswArgHeight(&ab, 40);
     Widget ctl_row = IswCreateManagedWidget("volCtl", listBoxRowWidgetClass,
                                             listbox, ab.args, ab.count);
@@ -183,6 +179,7 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     IswArgMinimumValue(&ab, 0);
     IswArgMaximumValue(&ab, 100);
     IswArgSliderValue(&ab, (int)(volume * 100.0f + 0.5f));
+    IswArgJustify(&ab, IswJustifyCenter);
     IswArgShowValue(&ab, False);
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
                                        ctl_row, ab.args, ab.count);
@@ -200,7 +197,7 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     IswArgState(&ab, muted ? True : False);
     IswArgWidth(&ab, 20);
     IswArgHeight(&ab, 20);
-    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgJustify(&ab, IswJustifyCenter);
     Widget mb = IswCreateManagedWidget("volMute", toggleButtonWidgetClass,
                                        ctl_row, ab.args, ab.count);
     free(muted_icon);
@@ -467,8 +464,8 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilderReset(&ab);
     IswArgTabLabel(&ab, "Outputs");
     IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgBorderWidth(&ab, 0);
     IswArgRowSpacing(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
     if (ta->small_font)
         IswArgFont(&ab, ta->small_font);
     ta->output_page = IswCreateManagedWidget("outputPage",
