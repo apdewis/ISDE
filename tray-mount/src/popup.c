@@ -161,11 +161,15 @@ static void position_popup(TrayMount *tm)
 void tm_popup_init(TrayMount *tm)
 {
     tm->popup_shell = NULL;
+    tm->popup_outer = NULL;
+    tm->popup_viewport = NULL;
     tm->popup_visible = 0;
 }
 
 void tm_popup_show(TrayMount *tm)
 {
+    const IsdeColorScheme *scheme = isde_theme_current();
+    
     if (tm->popup_visible) {
         tm_popup_hide(tm);
         return;
@@ -174,6 +178,8 @@ void tm_popup_show(TrayMount *tm)
     if (tm->popup_shell) {
         IswDestroyWidget(tm->popup_shell);
         tm->popup_shell = NULL;
+        tm->popup_outer = NULL;
+        tm->popup_viewport = NULL;
     }
 
     nactions = 0;
@@ -181,19 +187,51 @@ void tm_popup_show(TrayMount *tm)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell */
-    IswArgWidth(&ab, 450);
+    IswArgWidth(&ab, 400);
+    IswArgHeight(&ab, 400);
     tm->popup_shell = IswCreatePopupShell("mountPopup",
                                           overrideShellWidgetClass,
                                           tm->toplevel, ab.args, ab.count);
 
-    /* ListBox container */
+    /* Outer vertical FlexBox */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    tm->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                              tm->popup_shell,
+                                              ab.args, ab.count);
+
+    /* Toggle row: horizontal Box */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgFlexBasis(&ab, 50);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBackground(&ab, scheme->bg_light);
+    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                tm->popup_outer,
+                                                ab.args, ab.count);
+
+    /* Viewport — fills remaining space */
+    IswArgBuilderReset(&ab);
+    IswArgFlexGrow(&ab, 1);
+    IswArgForceBars(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+    tm->popup_viewport = IswCreateManagedWidget("viewport",
+                                                 viewportWidgetClass,
+                                                 tm->popup_outer,
+                                                 ab.args, ab.count);
+
+    /* ListBox inside viewport */
     IswArgBuilderReset(&ab);
     IswArgSelectionMode(&ab, IswListBoxSelectNone);
     IswArgRowSpacing(&ab, 0);
     IswArgBorderWidth(&ab, 0);
     Widget listbox = IswCreateManagedWidget("deviceList",
                                             listBoxWidgetClass,
-                                            tm->popup_shell,
+                                            tm->popup_viewport,
                                             ab.args, ab.count);
 
     if (tm->ndevices == 0) {
@@ -235,6 +273,7 @@ void tm_popup_show(TrayMount *tm)
                 char *icon = isde_icon_find("actions", "media-unmount");
                 IswArgBuilderReset(&ab);
                 IswArgLabel(&ab, "");
+                IswArgJustify(&ab, IswJustifyRight);
                 if (icon)
                     IswArgImage(&ab, icon);
                 Widget w = IswCreateManagedWidget("unmount",
@@ -247,6 +286,7 @@ void tm_popup_show(TrayMount *tm)
                     icon = isde_icon_find("actions", "media-eject");
                     IswArgBuilderReset(&ab);
                     IswArgLabel(&ab, "");
+                    IswArgJustify(&ab, IswJustifyRight);
                     if (icon)
                         IswArgImage(&ab, icon);
                     w = IswCreateManagedWidget("eject",
@@ -259,6 +299,7 @@ void tm_popup_show(TrayMount *tm)
                 char *icon = isde_icon_find("actions", "media-mount");
                 IswArgBuilderReset(&ab);
                 IswArgLabel(&ab, "");
+                IswArgJustify(&ab, IswJustifyRight);
                 if (icon)
                     IswArgImage(&ab, icon);
                 Widget w = IswCreateManagedWidget("mount",
@@ -312,6 +353,8 @@ void tm_popup_cleanup(TrayMount *tm)
     if (tm->popup_shell) {
         IswDestroyWidget(tm->popup_shell);
         tm->popup_shell = NULL;
+        tm->popup_outer = NULL;
+        tm->popup_viewport = NULL;
     }
     tm->popup_visible = 0;
 

@@ -424,6 +424,7 @@ void ta_popup_init(TrayAudio *ta)
 {
     /* Shell created fresh each time in ta_popup_show */
     ta->popup_shell = NULL;
+    ta->popup_outer = NULL;
     ta->tabs = NULL;
     ta->output_page = NULL;
     ta->input_page = NULL;
@@ -433,6 +434,8 @@ void ta_popup_init(TrayAudio *ta)
 
 void ta_popup_show(TrayAudio *ta)
 {
+    const IsdeColorScheme *scheme = isde_theme_current();
+
     if (ta->popup_visible) {
         ta_popup_hide(ta);
         return;
@@ -442,6 +445,7 @@ void ta_popup_show(TrayAudio *ta)
     if (ta->popup_shell) {
         IswDestroyWidget(ta->popup_shell);
         ta->popup_shell = NULL;
+        ta->popup_outer = NULL;
     }
 
     /* Reset row allocations */
@@ -450,15 +454,35 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell for popup — border via theme resources */
-    IswArgWidth(&ab, 350);
-    IswArgHeight(&ab, 250);
+    IswArgWidth(&ab, 400);
+    IswArgHeight(&ab, 400);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
                                           ta->toplevel, ab.args, ab.count);
 
+    /* Outer vertical FlexBox */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    ta->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                              ta->popup_shell,
+                                              ab.args, ab.count);
+
+    /* Toggle row: horizontal Box */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgFlexBasis(&ab, 50);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBackground(&ab, scheme->bg_light);
+    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                ta->popup_outer,
+                                                ab.args, ab.count);
+
     /* Tabs container */
+    IswArgBuilderReset(&ab);
+    IswArgFlexGrow(&ab, 1);
     ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
-                                      ta->popup_shell, NULL, 0);
+                                      ta->popup_outer, ab.args, ab.count);
 
     /* Outputs tab */
     IswArgBuilderReset(&ab);
@@ -614,6 +638,7 @@ void ta_popup_cleanup(TrayAudio *ta)
     if (ta->popup_shell) {
         IswDestroyWidget(ta->popup_shell);
         ta->popup_shell = NULL;
+        ta->popup_outer = NULL;
     }
     ta->tabs = NULL;
     ta->output_page = NULL;

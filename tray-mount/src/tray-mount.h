@@ -9,6 +9,8 @@
 #include <ISW/Shell.h>
 #include <ISW/Command.h>
 #include <ISW/Label.h>
+#include <ISW/FlexBox.h>
+#include <ISW/Viewport.h>
 #include <ISW/ListBox.h>
 #include <ISW/ListBoxRow.h>
 #include <ISW/IswTrayIcon.h>
@@ -58,6 +60,8 @@ typedef struct TrayMount {
 
     /* Popup */
     Widget              popup_shell;
+    Widget              popup_outer;
+    Widget              popup_viewport;
     int                 popup_visible;
 
     /* Device state */

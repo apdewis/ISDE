@@ -15,6 +15,7 @@
 #include <ISW/Command.h>
 #include <ISW/Toggle.h>
 #include <ISW/Label.h>
+#include <ISW/FlexBox.h>
 #include <ISW/Form.h>
 #include <ISW/Box.h>
 #include <ISW/ListBox.h>
@@ -111,6 +112,7 @@ typedef struct TrayAudio {
 
     /* Popup */
     Widget               popup_shell;
+    Widget               popup_outer;
     Widget               tabs;
     Widget               output_page;
     Widget               input_page;

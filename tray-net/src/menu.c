@@ -396,7 +396,7 @@ void tn_menu_show(TrayNet *tn)
     IswArgBorderWidth(&ab, 0);
     tn->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
                                               tn->popup_shell,
-                                              ab.args, ab.count);
+                                              ab.args, ab.count);    
 
     /* Toggle row: horizontal Box with WiFi power toggles */
     IswArgBuilderReset(&ab);
@@ -407,7 +407,7 @@ void tn_menu_show(TrayNet *tn)
     Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
                                                 tn->popup_outer,
                                                 ab.args, ab.count);
-
+    
     for (int i = 0; i < tn->ntechs; i++) {
         TechInfo *t = &tn->techs[i];
         if (strcmp(t->type, "wifi") != 0)
@@ -418,9 +418,7 @@ void tn_menu_show(TrayNet *tn)
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, t->name);
         IswArgState(&ab, t->powered ? True : False);
-        IswArgRight(&ab, IswChainLeft);
-        IswArgTop(&ab, IswChainTop);
-        IswArgBottom(&ab, IswChainBottom);
+        IswArgJustify(&ab, IswJustifyLeft);
         IswArgBackground(&ab, scheme->bg_light);
         Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
                                             toggle_area, ab.args, ab.count);
