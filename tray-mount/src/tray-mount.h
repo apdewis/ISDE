@@ -7,9 +7,10 @@
 #include <ISW/Intrinsic.h>
 #include <ISW/StringDefs.h>
 #include <ISW/Shell.h>
-#include <ISW/SimpleMenu.h>
-#include <ISW/SmeBSB.h>
-#include <ISW/SmeLine.h>
+#include <ISW/Command.h>
+#include <ISW/Label.h>
+#include <ISW/ListBox.h>
+#include <ISW/ListBoxRow.h>
 #include <ISW/IswTrayIcon.h>
 #include <ISW/ISWSVG.h>
 
@@ -54,8 +55,9 @@ typedef struct TrayMount {
     /* Tray icon (raw XCB window, managed by ISW) */
     IswTrayIcon         tray_icon;
 
-    /* Popup menu */
-    Widget              menu_shell;
+    /* Popup */
+    Widget              popup_shell;
+    int                 popup_visible;
 
     /* Device state */
     DeviceInfo          devices[MAX_DEVICES];
@@ -85,9 +87,10 @@ int  tm_dbus_unmount(TrayMount *tm, const char *dev_path,
 int  tm_dbus_eject(TrayMount *tm, const char *dev_path,
                    char *errbuf, size_t errlen);
 
-/* ---------- menu.c ---------- */
-void tm_menu_init(TrayMount *tm);
-void tm_menu_show(TrayMount *tm);
-void tm_menu_cleanup(TrayMount *tm);
+/* ---------- popup.c ---------- */
+void tm_popup_init(TrayMount *tm);
+void tm_popup_show(TrayMount *tm);
+void tm_popup_hide(TrayMount *tm);
+void tm_popup_cleanup(TrayMount *tm);
 
 #endif /* ISDE_TRAY_MOUNT_H */

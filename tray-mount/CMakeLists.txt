@@ -4,7 +4,7 @@ add_executable(isde-tray-mount
     src/main.c
     src/tray-mount.c
     src/dbus.c
-    src/menu.c
+    src/popup.c
 )
 
 target_compile_definitions(isde-tray-mount PRIVATE

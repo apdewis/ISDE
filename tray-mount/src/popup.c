@@ -1,0 +1,313 @@
+#define _POSIX_C_SOURCE 200809L
+/*
+ * popup.c — ListBox popup for the tray mount applet
+ *
+ * Builds a ListBox listing detected removable devices with
+ * Mount / Unmount / Eject action buttons per row.
+ */
+#include "tray-mount.h"
+
+#include <ISW/IntrinsicP.h>
+#include <ISW/ISWRender.h>
+#include <ISW/IswArgMacros.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ---------- callback data ---------- */
+
+typedef struct MenuAction {
+    TrayMount  *tm;
+    int         device_idx;
+    int         action;  /* 0 = mount, 1 = unmount, 2 = eject */
+} MenuAction;
+
+#define ACTION_MOUNT   0
+#define ACTION_UNMOUNT 1
+#define ACTION_EJECT   2
+
+static MenuAction *actions = NULL;
+static int nactions = 0;
+static int cap_actions = 0;
+
+static MenuAction *alloc_action(TrayMount *tm, int dev_idx, int action)
+{
+    if (nactions >= cap_actions) {
+        cap_actions = cap_actions ? cap_actions * 2 : 16;
+        actions = realloc(actions, cap_actions * sizeof(MenuAction));
+    }
+    MenuAction *a = &actions[nactions++];
+    a->tm = tm;
+    a->device_idx = dev_idx;
+    a->action = action;
+    return a;
+}
+
+/* ---------- action callback ---------- */
+
+static void on_action(Widget w, IswPointer client_data, IswPointer call_data)
+{
+    (void)w; (void)call_data;
+    MenuAction *a = (MenuAction *)client_data;
+    TrayMount *tm = a->tm;
+
+    if (a->device_idx < 0 || a->device_idx >= tm->ndevices)
+        return;
+
+    DeviceInfo *d = &tm->devices[a->device_idx];
+    char result[256];
+
+    switch (a->action) {
+    case ACTION_MOUNT:
+        if (tm_dbus_mount(tm, d->dev_path, result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-tray-mount: mounted %s at %s\n",
+                    d->dev_path, result);
+        else
+            fprintf(stderr, "isde-tray-mount: mount failed: %s\n", result);
+        break;
+
+    case ACTION_UNMOUNT:
+        if (tm_dbus_unmount(tm, d->dev_path, result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-tray-mount: unmounted %s\n", d->dev_path);
+        else
+            fprintf(stderr, "isde-tray-mount: unmount failed: %s\n", result);
+        break;
+
+    case ACTION_EJECT:
+        if (tm_dbus_eject(tm, d->dev_path, result, sizeof(result)) == 0)
+            fprintf(stderr, "isde-tray-mount: ejected %s\n", d->dev_path);
+        else
+            fprintf(stderr, "isde-tray-mount: eject failed: %s\n", result);
+        break;
+    }
+
+    tm_popup_hide(tm);
+    tm_dbus_list_devices(tm);
+}
+
+/* ---------- popup dismiss ---------- */
+
+#define POPUP_DISMISS_MASK (XCB_EVENT_MASK_BUTTON_PRESS)
+
+static void popup_outside_handler(Widget w, IswPointer closure,
+                                  xcb_generic_event_t *event,
+                                  Boolean *cont)
+{
+    (void)cont;
+    TrayMount *tm = (TrayMount *)closure;
+    uint8_t type = event->response_type & 0x7f;
+
+    if (type != XCB_BUTTON_PRESS)
+        return;
+    if (!tm->popup_visible || !tm->popup_shell)
+        return;
+
+    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
+    double sf = ISWScaleFactor(w);
+    int pw = (int)(w->core.width * sf + 0.5);
+    int ph = (int)(w->core.height * sf + 0.5);
+
+    if (ev->event_x < 0 || ev->event_y < 0 ||
+        ev->event_x >= pw || ev->event_y >= ph) {
+        tm_popup_hide(tm);
+    }
+}
+
+/* ---------- position popup above tray icon ---------- */
+
+static void position_popup(TrayMount *tm)
+{
+    if (!tm->tray_icon)
+        return;
+
+    xcb_connection_t *conn = IswDisplay(tm->toplevel);
+    xcb_window_t icon_win = IswTrayIconGetWindow(tm->tray_icon);
+    xcb_window_t root = IswScreen(tm->toplevel)->root;
+
+    xcb_translate_coordinates_cookie_t cookie =
+        xcb_translate_coordinates(conn, icon_win, root, 0, 0);
+    xcb_translate_coordinates_reply_t *reply =
+        xcb_translate_coordinates_reply(conn, cookie, NULL);
+
+    if (!reply)
+        return;
+
+    double sf = ISWScaleFactor(tm->toplevel);
+    int icon_x = (int)(reply->dst_x / sf);
+    int icon_y = (int)(reply->dst_y / sf);
+    free(reply);
+
+    Dimension w = tm->popup_shell->core.width;
+    Dimension h = tm->popup_shell->core.height;
+    Dimension bw = tm->popup_shell->core.border_width;
+    int total_w = (int)(w + 2 * bw);
+    int total_h = (int)(h + 2 * bw);
+    int scr_w = (int)(IswScreen(tm->toplevel)->width_in_pixels / sf);
+
+    int x = icon_x;
+    int y = icon_y - total_h;
+
+    if (x + total_w > scr_w)
+        x = scr_w - total_w;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+
+    IswConfigureWidget(tm->popup_shell, x, y, w, h, bw);
+}
+
+/* ---------- public API ---------- */
+
+void tm_popup_init(TrayMount *tm)
+{
+    tm->popup_shell = NULL;
+    tm->popup_visible = 0;
+}
+
+void tm_popup_show(TrayMount *tm)
+{
+    if (tm->popup_visible) {
+        tm_popup_hide(tm);
+        return;
+    }
+
+    if (tm->popup_shell) {
+        IswDestroyWidget(tm->popup_shell);
+        tm->popup_shell = NULL;
+    }
+
+    nactions = 0;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+
+    /* Override shell */
+    IswArgWidth(&ab, 450);
+    tm->popup_shell = IswCreatePopupShell("mountPopup",
+                                          overrideShellWidgetClass,
+                                          tm->toplevel, ab.args, ab.count);
+
+    /* ListBox container */
+    IswArgBuilderReset(&ab);
+    IswArgSelectionMode(&ab, IswListBoxSelectNone);
+    IswArgRowSpacing(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    Widget listbox = IswCreateManagedWidget("deviceList",
+                                            listBoxWidgetClass,
+                                            tm->popup_shell,
+                                            ab.args, ab.count);
+
+    if (tm->ndevices == 0) {
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "No removable devices");
+        IswArgBorderWidth(&ab, 0);
+        IswArgSelectable(&ab, False);
+        IswCreateManagedWidget("noDevices", labelWidgetClass,
+                              listbox, ab.args, ab.count);
+    } else {
+        for (int i = 0; i < tm->ndevices; i++) {
+            DeviceInfo *d = &tm->devices[i];
+
+            char label[384];
+            if (d->label[0])
+                snprintf(label, sizeof(label), "%s (%s)",
+                         d->label, d->dev_path);
+            else if (d->vendor[0])
+                snprintf(label, sizeof(label), "%s (%s)",
+                         d->vendor, d->dev_path);
+            else
+                snprintf(label, sizeof(label), "%s", d->dev_path);
+
+            IswArgBuilderReset(&ab);
+            IswArgBorderWidth(&ab, 0);
+            IswArgInternalWidth(&ab, 8);
+            IswArgRowPadding(&ab, 8);
+            Widget row = IswCreateManagedWidget("devRow",
+                listBoxRowWidgetClass, listbox, ab.args, ab.count);
+
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, label);
+            IswArgBorderWidth(&ab, 0);
+            IswArgJustify(&ab, IswJustifyLeft);
+            IswCreateManagedWidget("devLabel", labelWidgetClass,
+                                  row, ab.args, ab.count);
+
+            if (d->is_mounted) {
+                IswArgBuilderReset(&ab);
+                IswArgLabel(&ab, "U");
+                IswArgJustify(&ab, IswJustifyRight);
+                Widget w = IswCreateManagedWidget("unmount",
+                    commandWidgetClass, row, ab.args, ab.count);
+                MenuAction *a = alloc_action(tm, i, ACTION_UNMOUNT);
+                IswAddCallback(w, IswNcallback, on_action, a);
+
+                if (d->is_ejectable) {
+                    IswArgBuilderReset(&ab);
+                    IswArgLabel(&ab, "Eject");
+                    IswArgJustify(&ab, IswJustifyRight);
+                    w = IswCreateManagedWidget("eject",
+                        commandWidgetClass, row, ab.args, ab.count);
+                    a = alloc_action(tm, i, ACTION_EJECT);
+                    IswAddCallback(w, IswNcallback, on_action, a);
+                }
+            } else {
+                IswArgBuilderReset(&ab);
+                IswArgLabel(&ab, "M");
+                IswArgJustify(&ab, IswJustifyRight);
+                Widget w = IswCreateManagedWidget("mount",
+                    commandWidgetClass, row, ab.args, ab.count);
+                MenuAction *a = alloc_action(tm, i, ACTION_MOUNT);
+                IswAddCallback(w, IswNcallback, on_action, a);
+            }
+        }
+    }
+
+    IswRealizeWidget(tm->popup_shell);
+    position_popup(tm);
+    IswPopup(tm->popup_shell, IswGrabNone);
+
+    {
+        xcb_connection_t *conn = IswDisplay(tm->toplevel);
+        xcb_grab_pointer(conn, True, IswWindow(tm->popup_shell),
+                         XCB_EVENT_MASK_BUTTON_PRESS |
+                         XCB_EVENT_MASK_BUTTON_RELEASE,
+                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+        xcb_flush(conn);
+    }
+
+    IswAddEventHandler(tm->popup_shell, POPUP_DISMISS_MASK, False,
+                       popup_outside_handler, tm);
+    tm->popup_visible = 1;
+}
+
+void tm_popup_hide(TrayMount *tm)
+{
+    if (!tm->popup_visible)
+        return;
+
+    if (tm->popup_shell)
+        IswRemoveEventHandler(tm->popup_shell, POPUP_DISMISS_MASK, False,
+                              popup_outside_handler, tm);
+
+    xcb_ungrab_pointer(IswDisplay(tm->toplevel), XCB_CURRENT_TIME);
+    xcb_flush(IswDisplay(tm->toplevel));
+
+    if (tm->popup_shell)
+        IswPopdown(tm->popup_shell);
+
+    tm->popup_visible = 0;
+}
+
+void tm_popup_cleanup(TrayMount *tm)
+{
+    if (tm->popup_shell) {
+        IswDestroyWidget(tm->popup_shell);
+        tm->popup_shell = NULL;
+    }
+    tm->popup_visible = 0;
+
+    free(actions);
+    actions = NULL;
+    nactions = 0;
+    cap_actions = 0;
+}

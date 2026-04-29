@@ -80,7 +80,7 @@ static void on_icon_click(IswTrayIcon icon, int button, IswPointer closure)
 
     if (button == 1) {
         tm_dbus_list_devices(tm);
-        tm_menu_show(tm);
+        tm_popup_show(tm);
     }
 }
 
@@ -169,7 +169,7 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
     }
 
     /* Initialize popup menu */
-    tm_menu_init(tm);
+    tm_popup_init(tm);
 
 
     /* Initialize D-Bus */
@@ -225,7 +225,7 @@ void tray_mount_run(TrayMount *tm)
 
 void tray_mount_cleanup(TrayMount *tm)
 {
-    tm_menu_cleanup(tm);
+    tm_popup_cleanup(tm);
     tm_dbus_cleanup(tm);
 
     if (tm->session_dbus) {
