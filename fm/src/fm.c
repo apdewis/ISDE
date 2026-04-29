@@ -1700,7 +1700,8 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
             if (path[0] == '\0')
                 path = "/";
         }
-        app->initial_path = strdup(path);
+        char *resolved = realpath(path, NULL);
+        app->initial_path = resolved ? resolved : strdup(path);
     }
 
     /* Background file operations */
