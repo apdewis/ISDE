@@ -110,19 +110,35 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     VolumeRow *row = alloc_row(ta, node_id);
 
     /* First row: radio + label */
-    IswArgHeight(&ab, 40);
+    IswArgBuilderReset(&ab);
     IswArgRowPadding(&ab, 0);
     IswArgBorderWidth(&ab, 0);
+    IswArgHeight(&ab, 60);
     Widget top_row = IswCreateManagedWidget("volName", listBoxRowWidgetClass,
                                             listbox, ab.args, ab.count);
 
+    char wrapped[512];
+    strncpy(wrapped, label_text, sizeof(wrapped) - 1);
+    wrapped[sizeof(wrapped) - 1] = '\0';
+    if (strlen(wrapped) > 25) {
+        for (int k = 25; wrapped[k]; k++) {
+            if (wrapped[k] == ' ') {
+                wrapped[k] = '\n';
+                break;
+            }
+        }
+    }
+
     if (radio_out) {
         IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, "");
+        IswArgLabel(&ab, wrapped);
+        IswArgRowPadding(&ab, 0);
         IswArgBorderWidth(&ab, 0);
+        IswArgInternalWidth(&ab, 4);
+        IswArgJustify(&ab, IswJustifyLeft);
         IswArgState(&ab, is_default ? True : False);
-        IswArgWidth(&ab, 16);
-        IswArgHeight(&ab, 16);
+        IswArgWidth(&ab, 300);
+        IswArgHeight(&ab, 60);
         if (radio_peer)
             IswArgRadioGroup(&ab, radio_peer);
         Widget rb = IswCreateManagedWidget("outRadio", toggleWidgetClass,
@@ -131,15 +147,6 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
         row->radio = rb;
         *radio_out = rb;
     }
-
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, label_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgJustify(&ab, IswJustifyLeft);
-    if (ta->small_font)
-        IswArgFont(&ab, ta->small_font);
-    IswCreateManagedWidget("volLabel", labelWidgetClass, top_row,
-                           ab.args, ab.count);
 
     /* Second row: slider + mute */
     IswArgBuilderReset(&ab);
@@ -376,7 +383,7 @@ void ta_popup_show(TrayAudio *ta)
     IswArgBuilder ab = IswArgBuilderInit();
 
     /* Override shell for popup — border via theme resources */
-    IswArgWidth(&ab, 520);
+    IswArgWidth(&ab, 350);
     IswArgHeight(&ab, 200);
     ta->popup_shell = IswCreatePopupShell("audioPopup",
                                           overrideShellWidgetClass,
