@@ -793,10 +793,10 @@ static void handle_motion(TermWidget *t, xcb_motion_notify_event_t *mev)
     if (cy < 0) cy = 0;
     if (!t->sel_started) {
         if (cx == t->press_cx && cy == t->press_cy) return;
-        tsm_screen_selection_start(t->screen, t->press_cx, t->press_cy);
         t->sel_started = 1;
         t->sel_active  = 1;
     }
+    tsm_screen_selection_start(t->screen, t->press_cx, t->press_cy);
     tsm_screen_selection_target(t->screen, cx, cy);
     request_redraw(t);
 }
