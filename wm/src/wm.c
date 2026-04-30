@@ -180,7 +180,17 @@ int wm_init(Wm *wm, int *argc, char **argv)
                     }
                     WmClient *c = frame_create(wm, children[i]);
                     if (c) {
-                        c->desktop = wm->current_desktop;
+                        /* Restore desktop from previous session */
+                        uint32_t desk = isde_ewmh_get_wm_desktop(
+                            wm->ewmh, children[i]);
+                        if (desk != 0xFFFFFFFF &&
+                            desk >= (uint32_t)wm->num_desktops) {
+                            desk = wm->current_desktop;
+                        }
+                        c->desktop = desk;
+                        xcb_ewmh_set_wm_desktop(
+                            isde_ewmh_connection(wm->ewmh),
+                            c->client, c->desktop);
 
                         /* Restore maximize state from previous WM session.
                          * The client's _NET_WM_STATE survives WM restarts;
@@ -206,8 +216,6 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                             xcb_ewmh_get_atoms_reply_wipe(&state);
                             if (was_max) {
-                                /* Current geometry is the maximized size;
-                                 * use a centered default as restore target */
                                 int wx, wy, ww, wh;
                                 wm_get_work_area(wm, &wx, &wy, &ww, &wh);
                                 c->save_x = wx + ww / 4;
@@ -219,8 +227,15 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                         }
 
-                        IswPopup(c->shell, IswGrabNone);
-                        xcb_map_window(wm->conn, c->client);
+                        int visible = (c->desktop == wm->current_desktop ||
+                                       c->desktop == 0xFFFFFFFF);
+                        if (visible) {
+                            IswPopup(c->shell, IswGrabNone);
+                            xcb_map_window(wm->conn, c->client);
+                        } else {
+                            xcb_unmap_window(wm->conn,
+                                             IswWindow(c->shell));
+                        }
                     }
                 }
                 free(attr);

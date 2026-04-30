@@ -40,11 +40,14 @@ void wm_desktops_init(Wm *wm)
     }
 
     wm->num_desktops = wm->desk_rows * wm->desk_cols;
-    wm->current_desktop = 0;
+
+    /* Restore the active desktop from the previous session if valid */
+    uint32_t prev = isde_ewmh_get_current_desktop(wm->ewmh);
+    wm->current_desktop = (prev < (uint32_t)wm->num_desktops) ? prev : 0;
 
     /* Set EWMH properties */
     isde_ewmh_set_number_of_desktops(wm->ewmh, wm->num_desktops);
-    isde_ewmh_set_current_desktop(wm->ewmh, 0);
+    isde_ewmh_set_current_desktop(wm->ewmh, wm->current_desktop);
     xcb_flush(wm->conn);
 
     fprintf(stderr, "isde-wm: desktops: %dx%d grid (%d total)\n",
