@@ -65,6 +65,10 @@ int isde_ewmh_get_workarea(IsdeEwmh *e, int *x, int *y, int *w, int *h);
 void isde_clamp_to_workarea(xcb_connection_t *conn, int screen,
                             int *w, int *h);
 
+/* Get _NET_WM_DESKTOP for a window.  Returns the desktop index,
+ * or 0xFFFFFFFF if the window is sticky / property not set. */
+uint32_t isde_ewmh_get_wm_desktop(IsdeEwmh *e, xcb_window_t win);
+
 /* Send a _NET_ACTIVE_WINDOW client message to the root. */
 void isde_ewmh_request_active_window(IsdeEwmh *e, xcb_window_t win);
 

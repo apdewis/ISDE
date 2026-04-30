@@ -179,6 +179,16 @@ int isde_ewmh_get_wm_class(IsdeEwmh *e, xcb_window_t win,
     return 1;
 }
 
+uint32_t isde_ewmh_get_wm_desktop(IsdeEwmh *e, xcb_window_t win)
+{
+    uint32_t desk = 0xFFFFFFFF;
+    xcb_ewmh_get_wm_desktop_reply(
+        &e->ewmh,
+        xcb_ewmh_get_wm_desktop(&e->ewmh, win),
+        &desk, NULL);
+    return desk;
+}
+
 void isde_ewmh_request_active_window(IsdeEwmh *e, xcb_window_t win)
 {
     xcb_ewmh_request_change_active_window(

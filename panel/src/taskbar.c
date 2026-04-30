@@ -812,8 +812,13 @@ void taskbar_update(Panel *p)
     /* Get current client list from WM */
     xcb_window_t *wins = NULL;
     int nwins = isde_ewmh_get_client_list(p->ewmh, &wins);
+    uint32_t cur_desk = isde_ewmh_get_current_desktop(p->ewmh);
 
     for (int i = 0; i < nwins; i++) {
+        uint32_t win_desk = isde_ewmh_get_wm_desktop(p->ewmh, wins[i]);
+        if (win_desk != cur_desk && win_desk != 0xFFFFFFFF) {
+            continue;
+        }
         char *cls = get_wm_class(p, wins[i]);
         TaskGroup *g = taskbar_find_group(p, cls);
         if (!g) {
