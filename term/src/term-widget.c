@@ -834,6 +834,48 @@ static void input_cb(Widget w, IswPointer cd, IswPointer call)
     }
 }
 
+/* ---------- OSC (Operating System Command) ---------- */
+
+static Widget find_shell_ancestor(Widget w)
+{
+    while (w && !IswIsShell(w))
+        w = IswParent(w);
+    return w;
+}
+
+static void osc_cb(struct tsm_vte *vte, const char *u8, size_t len, void *data)
+{
+    (void)vte;
+    TermWidget *t = (TermWidget *)data;
+    if (!u8 || len < 2) return;
+
+    /* OSC payload is "<code>;<string>".  We handle 0 (title+icon) and 2 (title). */
+    const char *semi = memchr(u8, ';', len);
+    if (!semi) return;
+    int code = 0;
+    for (const char *p = u8; p < semi; p++) {
+        if (*p < '0' || *p > '9') return;
+        code = code * 10 + (*p - '0');
+    }
+    if (code != 0 && code != 2) return;
+
+    size_t title_len = len - (size_t)(semi + 1 - u8);
+    char *title = malloc(title_len + 1);
+    if (!title) return;
+    memcpy(title, semi + 1, title_len);
+    title[title_len] = '\0';
+
+    Widget shell = find_shell_ancestor(t->canvas);
+    if (shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgTitle(&ab, title);
+        if (code == 0)
+            IswArgIconName(&ab, title);
+        IswSetValues(shell, ab.args, ab.count);
+    }
+    free(title);
+}
+
 /* ---------- VTE write -> PTY ---------- */
 
 static void vte_write_cb(struct tsm_vte *vte, const char *u8, size_t len, void *data)
@@ -861,6 +903,7 @@ TermWidget *term_widget_create(Widget parent, const char *name,
         return NULL;
     }
     tsm_screen_set_max_sb(t->screen, cfg->scrollback);
+    tsm_vte_set_osc_cb(t->vte, osc_cb, t);
     term_tsm_apply_palette(t->vte, &cfg->palette);
 
     IswArgBuilder ab = IswArgBuilderInit();
