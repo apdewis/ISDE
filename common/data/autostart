@@ -4,3 +4,6 @@
 @isde-tray-mount
 @isde-tray-audio
 @isde-tray-net
+@pipewire
+@wireplumber
+@pipewire-pulse
