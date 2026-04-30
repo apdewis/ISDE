@@ -525,7 +525,6 @@ int session_init(Session *s)
 
 void session_run(Session *s)
 {
-    /* Phase 1: Start window manager and wait briefly for it to claim root */
     fprintf(stderr, "isde-session: starting WM: %s\n", s->wm_command);
     Child *wm = child_spawn(s, s->wm_command, 1, 1);
     if (!wm) {
@@ -535,7 +534,6 @@ void session_run(Session *s)
     /* Give the WM a moment to set SubstructureRedirect */
     usleep(500000);
 
-    /* Phase 2: Start panel if configured */
     if (s->panel_command) {
         fprintf(stderr, "isde-session: starting panel: %s\n",
                 s->panel_command);
@@ -543,14 +541,6 @@ void session_run(Session *s)
         if (panel) { panel->is_panel = 1; }
     }
 
-    /* Phase 3: Start file manager if configured */
-    if (s->fm_command) {
-        fprintf(stderr, "isde-session: starting file manager: %s\n",
-                s->fm_command);
-        child_spawn(s, s->fm_command, 1, 0);
-    }
-
-    /* Phase 4: Start autostart entries */
     for (int i = 0; i < s->autostart_count; i++) {
         fprintf(stderr, "isde-session: autostart: %s\n",
                 s->autostart_cmds[i]);
