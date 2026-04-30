@@ -973,6 +973,11 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*StatusBar.background", s->bg_light);
     res[i++] = fmt_color("*StatusBar.foreground", s->fg);
 
+    /* Tabs */
+    res[i++] = fmt_color("*Tabs.tabBackground", s->bg_light);
+    res[i++] = fmt_color("*Tabs.tabSelectBackground", s->bg_bright);
+    res[i++] = fmt_color("*Tabs.foreground", s->fg);
+
     /* Panel / Taskbar */
     res[i++] = fmt_color("*panelFlex.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelBox.background", s->taskbar.bg);
