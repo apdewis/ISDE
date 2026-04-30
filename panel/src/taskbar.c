@@ -16,6 +16,41 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <ISW/IswArgMacros.h>
+#include <xcb/xcb_keysyms.h>
+#include <X11/keysym.h>
+
+static xcb_key_symbols_t *tb_key_syms;
+
+static void popup_button_handler(Widget w, IswPointer client_data,
+                                 xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)cont;
+    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+        return;
+    }
+    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
+    if (bev->event == IswWindow(w)) {
+        panel_dismiss_popup((Panel *)client_data);
+    }
+}
+
+static void popup_key_handler(Widget w, IswPointer client_data,
+                              xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+        return;
+    }
+    Panel *p = (Panel *)client_data;
+    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
+    if (!tb_key_syms) {
+        tb_key_syms = xcb_key_symbols_alloc(p->conn);
+    }
+    xcb_keysym_t sym = xcb_key_symbols_get_keysym(tb_key_syms, kev->detail, 0);
+    if (sym == XK_Escape) {
+        panel_dismiss_popup(p);
+    }
+}
 
 /* Strip desktop field codes (%f, %F, %u, %U, etc.) from an Exec string.
  * Returns a malloc'd copy with codes removed. */
@@ -211,6 +246,12 @@ static void create_window_menu(Panel *p, TaskGroup *g)
 
     IswAddEventHandler(g->menu_list, XCB_EVENT_MASK_POINTER_MOTION, False,
                       wl_motion_handler, NULL);
+
+    IswAddEventHandler(g->menu,
+                      XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS,
+                      False, popup_button_handler, p);
+    IswAddEventHandler(g->menu, XCB_EVENT_MASK_KEY_PRESS,
+                      False, popup_key_handler, p);
 }
 
 static void show_window_menu(Panel *p, TaskGroup *g)
@@ -259,6 +300,16 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     }
 
     panel_show_popup(p, g->menu);
+
+    xcb_grab_keyboard(p->conn, 1, IswWindow(g->menu),
+                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
+                      XCB_GRAB_MODE_ASYNC);
+    xcb_grab_pointer(p->conn, 1, IswWindow(g->menu),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(p->conn);
 }
 
 static void taskbar_button_callback(Widget w, IswPointer client_data,
@@ -568,6 +619,12 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     g->ctx_pin = IswCreateManagedWidget("pinToggle", smeBSBObjectClass,
                                         g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
+
+    IswAddEventHandler(g->ctx_menu,
+                      XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS,
+                      False, popup_button_handler, p);
+    IswAddEventHandler(g->ctx_menu, XCB_EVENT_MASK_KEY_PRESS,
+                      False, popup_key_handler, p);
 }
 
 static void show_context_menu(Panel *p, TaskGroup *g)
@@ -615,6 +672,16 @@ static void show_context_menu(Panel *p, TaskGroup *g)
     }
 
     panel_show_popup(p, g->ctx_menu);
+
+    xcb_grab_keyboard(p->conn, 1, IswWindow(g->ctx_menu),
+                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
+                      XCB_GRAB_MODE_ASYNC);
+    xcb_grab_pointer(p->conn, 1, IswWindow(g->ctx_menu),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(p->conn);
 }
 
 static void context_menu_handler(Widget w, IswPointer client_data,

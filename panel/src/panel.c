@@ -509,11 +509,12 @@ void panel_dismiss_popup(Panel *p)
         return;
     }
 
-    /* Reset start button to inactive state and release keyboard grab */
+    xcb_ungrab_keyboard(p->conn, XCB_CURRENT_TIME);
+    xcb_ungrab_pointer(p->conn, XCB_CURRENT_TIME);
+    xcb_flush(p->conn);
+
+    /* Reset start button to inactive state */
     if (p->active_popup == p->start_shell) {
-        xcb_ungrab_keyboard(p->conn, XCB_CURRENT_TIME);
-        xcb_ungrab_pointer(p->conn, XCB_CURRENT_TIME);
-        xcb_flush(p->conn);
         const IsdeColorScheme *s = isde_theme_current();
         if (s) {
             Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
