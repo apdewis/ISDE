@@ -6,6 +6,8 @@
 #ifndef ISDE_DESKTOP_H
 #define ISDE_DESKTOP_H
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,6 +57,22 @@ int isde_desktop_should_show(const IsdeDesktopEntry *e, const char *desktop);
  * files may be NULL if no arguments.  Caller must free() the result. */
 char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
                               const char **files, int nfiles);
+
+/* Build the exec command, wrap with the terminal emulator if Terminal=true,
+ * fork and exec.  Returns the child pid, or -1 on failure. */
+pid_t isde_desktop_launch(const IsdeDesktopEntry *e,
+                          const char **files, int nfiles);
+
+/* Return the configured terminal emulator from [session] terminal in
+ * isde.toml, falling back to "xterm". */
+const char *isde_desktop_get_terminal(void);
+
+/* Fork and exec a shell command.  Returns the child pid, or -1 on failure. */
+pid_t isde_desktop_launch_cmd(const char *cmd);
+
+/* Launch an arbitrary command, wrapping it in a terminal emulator.
+ * Returns the child pid, or -1 on failure. */
+pid_t isde_desktop_launch_in_terminal(const char *cmd);
 
 /* Scan a directory for all .desktop files.  Returns an allocated array
  * of IsdeDesktopEntry pointers (caller must free the array and each entry).

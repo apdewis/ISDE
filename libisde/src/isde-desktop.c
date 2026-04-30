@@ -7,12 +7,14 @@
  * use their own INI-like format defined by freedesktop.org.
  */
 #include "isde/isde-desktop.h"
+#include "isde/isde-config.h"
 
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct {
     char *id;
@@ -398,6 +400,66 @@ char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
     }
     out[pos] = '\0';
     return out;
+}
+
+pid_t isde_desktop_launch_cmd(const char *cmd)
+{
+    if (!cmd) return -1;
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+    return pid;
+}
+
+const char *isde_desktop_get_terminal(void)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *session = isde_config_table(root, "session");
+        if (session) {
+            const char *term = isde_config_string(session, "terminal", NULL);
+            if (term) {
+                static char buf[256];
+                snprintf(buf, sizeof(buf), "%s", term);
+                isde_config_free(cfg);
+                return buf;
+            }
+        }
+        isde_config_free(cfg);
+    }
+    return "isde-term";
+}
+
+pid_t isde_desktop_launch_in_terminal(const char *cmd)
+{
+    if (!cmd) return -1;
+    const char *term = isde_desktop_get_terminal();
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp(term, term, "-e", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+    return pid;
+}
+
+pid_t isde_desktop_launch(const IsdeDesktopEntry *e,
+                          const char **files, int nfiles)
+{
+    char *cmd = isde_desktop_build_exec(e, files, nfiles);
+    if (!cmd) return -1;
+
+    pid_t pid;
+    if (isde_desktop_terminal(e)) {
+        pid = isde_desktop_launch_in_terminal(cmd);
+    } else {
+        pid = isde_desktop_launch_cmd(cmd);
+    }
+    free(cmd);
+    return pid;
 }
 
 IsdeDesktopEntry **isde_desktop_scan_dir(const char *dirpath, int *count)

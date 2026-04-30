@@ -115,12 +115,10 @@ static void focus_window(Panel *p, xcb_window_t win)
 
 static void launch_app(Panel *p, TaskGroup *g)
 {
-    if (g->desktop_exec) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            execl("/bin/sh", "sh", "-c", g->desktop_exec, (char *)NULL);
-            _exit(127);
-        }
+    if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
+        isde_desktop_launch(p->desktop_entries[g->desktop_index], NULL, 0);
+    } else if (g->desktop_exec) {
+        isde_desktop_launch_cmd(g->desktop_exec);
     }
 }
 
@@ -462,6 +460,7 @@ static void pin_callback(Widget w, IswPointer client_data,
 typedef struct {
     Panel      *panel;
     char       *exec;  /* expanded command (owned) */
+    int         terminal;
 } ActionClosure;
 
 static void action_callback(Widget w, IswPointer client_data,
@@ -471,10 +470,10 @@ static void action_callback(Widget w, IswPointer client_data,
     (void)call_data;
     ActionClosure *ac = (ActionClosure *)client_data;
     panel_dismiss_popup(ac->panel);
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl("/bin/sh", "sh", "-c", ac->exec, (char *)NULL);
-        _exit(127);
+    if (ac->terminal) {
+        isde_desktop_launch_in_terminal(ac->exec);
+    } else {
+        isde_desktop_launch_cmd(ac->exec);
     }
 }
 
@@ -522,6 +521,7 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
             ActionClosure *ac = malloc(sizeof(*ac));
             ac->panel = p;
             ac->exec = strip_field_codes(a->exec);
+            ac->terminal = isde_desktop_terminal(de);
             IswAddCallback(entry, IswNcallback, action_callback, ac);
         }
 
@@ -542,6 +542,9 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
         ActionClosure *ac = malloc(sizeof(*ac));
         ac->panel = p;
         ac->exec = g->desktop_exec;
+        ac->terminal = (g->desktop_index >= 0 && g->desktop_index < p->ndesktop)
+                       ? isde_desktop_terminal(p->desktop_entries[g->desktop_index])
+                       : 0;
         IswAddCallback(ni, IswNcallback, action_callback, ac);
     }
 

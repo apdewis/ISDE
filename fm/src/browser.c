@@ -158,15 +158,7 @@ void browser_open_entry(Fm *fm, int index)
 
     if (de) {
         const char *file = e->full_path;
-        char *cmd = isde_desktop_build_exec(de, &file, 1);
-        if (cmd) {
-            pid_t pid = fork();
-            if (pid == 0) {
-                execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-                _exit(127);
-            }
-            free(cmd);
-        }
+        isde_desktop_launch(de, &file, 1);
         if (!from_cache)
             isde_desktop_free(de);
     }

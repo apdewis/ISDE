@@ -199,15 +199,7 @@ static void launch_app(Panel *p, int index)
     IsdeDesktopEntry *de = c->apps[index].entry;
     panel_dismiss_popup(p);
 
-    char *cmd = isde_desktop_build_exec(de, NULL, 0);
-    if (cmd) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-            _exit(127);
-        }
-        free(cmd);
-    }
+    isde_desktop_launch(de, NULL, 0);
 }
 
 /* ---------- callbacks ---------- */

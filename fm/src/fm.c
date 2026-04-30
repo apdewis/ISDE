@@ -179,10 +179,10 @@ static void ctx_empty_trash(Fm *fm)
 
 static void ctx_open_terminal(Fm *fm)
 {
+    const char *term = isde_desktop_get_terminal();
     pid_t pid = fork();
     if (pid == 0) {
-        chdir(fm->cwd);
-        execlp("xterm", "xterm", (char *)NULL);
+        execlp(term, term, "--working-directory", fm->cwd, (char *)NULL);
         _exit(127);
     }
 }
@@ -628,15 +628,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         fm_dismiss_context(fm);
 
         if (file && de) {
-            char *cmd = isde_desktop_build_exec(de, (const char **)&file, 1);
-            if (cmd) {
-                pid_t pid = fork();
-                if (pid == 0) {
-                    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-                    _exit(127);
-                }
-                free(cmd);
-            }
+            isde_desktop_launch(de, (const char **)&file, 1);
             free(file);
         }
         fm->ctx_target_index = -1;
