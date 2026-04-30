@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ISDE VERSION 0.4.0 LANGUAGES C)
+project(ISDE VERSION 0.7.1 LANGUAGES C)
 
 # Default CMAKE_INSTALL_PREFIX to /usr unless the user overrides it.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
