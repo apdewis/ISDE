@@ -111,11 +111,11 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
     col += dx;
     row += dy;
 
-    /* Wrap */
-    if (col < 0) { col = wm->desk_cols - 1; }
-    if (col >= wm->desk_cols) { col = 0; }
-    if (row < 0) { row = wm->desk_rows - 1; }
-    if (row >= wm->desk_rows) { row = 0; }
+    /* Clamp to grid bounds */
+    if (col < 0) { col = 0; }
+    if (col >= wm->desk_cols) { col = wm->desk_cols - 1; }
+    if (row < 0) { row = 0; }
+    if (row >= wm->desk_rows) { row = wm->desk_rows - 1; }
 
     uint32_t target = row * wm->desk_cols + col;
     wm_desktops_switch(wm, target);
