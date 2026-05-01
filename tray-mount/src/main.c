@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 #include <signal.h>
-#include <unistd.h>
 
 static TrayMount tm;
 
@@ -21,22 +20,24 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (tray_mount_init(&tm, &argc, argv) != 0) {
-        fprintf(stderr, "isde-tray-mount: failed to initialize\n");
-        return 1;
-    }
+    do {
+        if (tray_mount_init(&tm, &argc, argv) != 0) {
+            fprintf(stderr, "isde-tray-mount: failed to initialize\n");
+            return 1;
+        }
 
-    fprintf(stderr, "isde-tray-mount: running\n");
-    tray_mount_run(&tm);
+        fprintf(stderr, "isde-tray-mount: running\n");
+        tray_mount_run(&tm);
 
-    int restart = tm.restart;
-    tray_mount_cleanup(&tm);
+        int restart = tm.restart;
+        tray_mount_cleanup(&tm);
 
-    if (restart) {
-        fprintf(stderr, "isde-tray-mount: restarting for theme change\n");
-        execvp(argv[0], argv);
-        perror("isde-tray-mount: execvp");
-    }
+        if (!restart) {
+            break;
+        }
+
+        fprintf(stderr, "isde-tray-mount: restarting\n");
+    } while (1);
 
     fprintf(stderr, "isde-tray-mount: exiting\n");
     return 0;

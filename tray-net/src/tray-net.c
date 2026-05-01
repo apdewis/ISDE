@@ -318,4 +318,5 @@ void tray_net_cleanup(TrayNet *tn)
 
     if (tn->toplevel)
         IswDestroyWidget(tn->toplevel);
+    IswDestroyApplicationContext(tn->app);
 }

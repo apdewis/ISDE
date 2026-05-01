@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 #include <signal.h>
-#include <unistd.h>
 
 static TrayNet tn;
 
@@ -21,22 +20,24 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (tray_net_init(&tn, &argc, argv) != 0) {
-        fprintf(stderr, "isde-tray-net: failed to initialize\n");
-        return 1;
-    }
+    do {
+        if (tray_net_init(&tn, &argc, argv) != 0) {
+            fprintf(stderr, "isde-tray-net: failed to initialize\n");
+            return 1;
+        }
 
-    fprintf(stderr, "isde-tray-net: running\n");
-    tray_net_run(&tn);
+        fprintf(stderr, "isde-tray-net: running\n");
+        tray_net_run(&tn);
 
-    int restart = tn.restart;
-    tray_net_cleanup(&tn);
+        int restart = tn.restart;
+        tray_net_cleanup(&tn);
 
-    if (restart) {
-        fprintf(stderr, "isde-tray-net: restarting for theme change\n");
-        execvp(argv[0], argv);
-        perror("isde-tray-net: execvp");
-    }
+        if (!restart) {
+            break;
+        }
+
+        fprintf(stderr, "isde-tray-net: restarting\n");
+    } while (1);
 
     fprintf(stderr, "isde-tray-net: exiting\n");
     return 0;

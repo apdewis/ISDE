@@ -284,4 +284,5 @@ void tray_audio_cleanup(TrayAudio *ta)
 
     if (ta->toplevel)
         IswDestroyWidget(ta->toplevel);
+    IswDestroyApplicationContext(ta->app);
 }

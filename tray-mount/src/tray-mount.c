@@ -235,7 +235,7 @@ void tray_mount_cleanup(TrayMount *tm)
 
     IswTrayIconDestroy(tm->tray_icon);
 
-    if (tm->toplevel) {
+    if (tm->toplevel)
         IswDestroyWidget(tm->toplevel);
-    }
+    IswDestroyApplicationContext(tm->app);
 }
