@@ -473,6 +473,78 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
     *wh = (int)((wm->screen->height_in_pixels - top - bottom) / sf + 0.5);
 }
 
+void wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh)
+{
+    double sf = wm->scale_factor;
+    *mx = 0;
+    *my = 0;
+    *mw = phys_to_log(sf, wm->screen->width_in_pixels);
+    *mh = phys_to_log(sf, wm->screen->height_in_pixels);
+
+    xcb_randr_get_output_primary_reply_t *pri =
+        xcb_randr_get_output_primary_reply(wm->conn,
+            xcb_randr_get_output_primary(wm->conn, wm->root), NULL);
+    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
+    free(pri);
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(wm->conn,
+            xcb_randr_get_screen_resources_current(wm->conn, wm->root), NULL);
+    if (!res) return;
+
+    xcb_timestamp_t ts = res->config_timestamp;
+    xcb_randr_output_t *outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
+
+    for (int i = 0; i < nouts; i++) {
+        xcb_randr_get_output_info_reply_t *oi =
+            xcb_randr_get_output_info_reply(wm->conn,
+                xcb_randr_get_output_info(wm->conn, outs[i], ts), NULL);
+        if (!oi) continue;
+        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
+            oi->crtc == XCB_NONE) {
+            free(oi);
+            continue;
+        }
+        if (fallback_crtc == XCB_NONE)
+            fallback_crtc = oi->crtc;
+        if (outs[i] == primary_id) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(wm->conn,
+                    xcb_randr_get_crtc_info(wm->conn, oi->crtc, ts), NULL);
+            if (ci) {
+                *mx = phys_to_log(sf, ci->x);
+                *my = phys_to_log(sf, ci->y);
+                *mw = phys_to_log(sf, ci->width);
+                *mh = phys_to_log(sf, ci->height);
+                free(ci);
+            }
+            free(oi);
+            free(res);
+            return;
+        }
+        free(oi);
+    }
+
+    if (fallback_crtc != XCB_NONE) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(wm->conn,
+                xcb_randr_get_crtc_info(wm->conn, fallback_crtc, ts), NULL);
+        if (ci) {
+            *mx = phys_to_log(sf, ci->x);
+            *my = phys_to_log(sf, ci->y);
+            *mw = phys_to_log(sf, ci->width);
+            *mh = phys_to_log(sf, ci->height);
+            free(ci);
+        }
+    }
+
+    free(res);
+}
+
 static void wm_get_monitor_work_area(Wm *wm, int monitor,
                                       int *wx, int *wy, int *ww, int *wh)
 {

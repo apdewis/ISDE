@@ -194,8 +194,9 @@ void      wm_set_below(Wm *wm, WmClient *c, int enable);
 void      wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop);
 void      wm_restack_above_below(Wm *wm);
 
-/* ---------- wm.c — work area ---------- */
+/* ---------- wm.c — work area / monitors ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
+void  wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh);
 
 /* ---------- wm.c — decoration checks ---------- */
 int   wm_client_wants_decorations(Wm *wm, xcb_window_t win);

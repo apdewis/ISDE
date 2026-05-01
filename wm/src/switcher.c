@@ -128,11 +128,10 @@ static void create_osd(Wm *wm)
 {
     const IsdeColorScheme *scheme = isde_theme_current();
 
-    double sf = ISWScaleFactor(wm->toplevel);
-    int log_sw = (int)(wm->screen->width_in_pixels / sf + 0.5);
-    int log_sh = (int)(wm->screen->height_in_pixels / sf + 0.5);
+    int pm_x, pm_y, pm_w, pm_h;
+    wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
 
-    int max_height = log_sh / 3;
+    int max_height = pm_h / 3;
     int row_h = isde_font_height("general", 4);
 
     int max_rows = (max_height - 2 * SWITCHER_PAD) / row_h;
@@ -144,8 +143,8 @@ static void create_osd(Wm *wm)
 
     int osd_h = visible * row_h + 2 * SWITCHER_PAD;
     int osd_w = SWITCHER_WIDTH;
-    int sx = (log_sw - osd_w) / 2;
-    int sy = (log_sh - osd_h) / 2;
+    int sx = pm_x + (pm_w - osd_w) / 2;
+    int sy = pm_y + (pm_h - osd_h) / 2;
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgX(&ab, sx);

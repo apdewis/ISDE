@@ -149,13 +149,11 @@ void wm_desktops_show_osd(Wm *wm)
     int w = 2 * OSD_PAD + cols * OSD_CELL + (cols - 1) * OSD_GAP;
     int h = 2 * OSD_PAD + rows * OSD_CELL + (rows - 1) * OSD_GAP;
 
-    /* Center on screen — all values logical since ISW scales shell
-     * geometry during creation. */
-    double sf = ISWScaleFactor(wm->toplevel);
-    int log_sw = (int)(wm->screen->width_in_pixels / sf + 0.5);
-    int log_sh = (int)(wm->screen->height_in_pixels / sf + 0.5);
-    int sx = (log_sw - w) / 2;
-    int sy = (log_sh - h) / 2;
+    /* Center on primary monitor */
+    int pm_x, pm_y, pm_w, pm_h;
+    wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
+    int sx = pm_x + (pm_w - w) / 2;
+    int sy = pm_y + (pm_h - h) / 2;
 
     /* Destroy and recreate each time for simplicity */
     if (wm->desk_osd) {
