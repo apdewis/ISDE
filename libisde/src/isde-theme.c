@@ -927,7 +927,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Label.foreground", s->fg);
 
     /* Lists */
-    res[i++] = fmt_color("*List.background", s->bg_bright);
+    res[i++] = fmt_color("*List.background", s->bg_light);
     res[i++] = fmt_color("*List.foreground", s->fg);
 
     /* Menus */
@@ -997,17 +997,11 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*startMenu.background", s->menu.bg);
     res[i++] = fmt_color("*startMenu.borderColor", s->menu.border);
     res[i++] = strdup("*startMenu.borderWidth: 1");
-    res[i++] = fmt_color("*catList.background", s->menu.bg);
-    res[i++] = fmt_color("*catList.foreground", s->menu.fg);
-    res[i++] = fmt_color("*appList.background", s->menu.bg);
-    res[i++] = fmt_color("*appList.foreground", s->menu.fg);
 
     /* Window list popup */
     res[i++] = fmt_color("*winListMenu.background", s->menu.bg);
     res[i++] = fmt_color("*winListMenu.borderColor", s->menu.border);
     res[i++] = strdup("*winListMenu.borderWidth: 1");
-    res[i++] = fmt_color("*winList.background", s->menu.bg);
-    res[i++] = fmt_color("*winList.foreground", s->menu.fg);
 
     /* Context menus */
     res[i++] = fmt_color("*ctxMenu.background", s->menu.bg);
@@ -1021,8 +1015,8 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*audioPopup.background", s->menu.bg);
     res[i++] = fmt_color("*audioPopup.borderColor", s->menu.border);
     res[i++] = strdup("*audioPopup.borderWidth: 1");
-    res[i++] = fmt_color("*ctxList.background", s->menu.bg);
-    res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
+    //res[i++] = fmt_color("*ctxList.background", s->menu.bg);
+    //res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
 
     /* Panel clock (scoped to clockBox so greeter clock is unaffected) */
     res[i++] = fmt_color("*clockBox.clockTime.background", s->taskbar.bg);
@@ -1057,22 +1051,12 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*navBar.borderColor", s->border);
     res[i++] = fmt_color("*pathLabel.background", s->bg_light);
     res[i++] = fmt_color("*placesVp.borderColor", s->border);
-
-    /* Settings sidebar — lighter background to match fm/startmenu convention */
-    res[i++] = fmt_color("*panelList.background", s->bg_light);
-
-    /* FontChooser list panes — match sidebar convention */
-    res[i++] = fmt_color("*familyList.background", s->bg_light);
-    res[i++] = fmt_color("*styleList.background", s->bg_light);
-    res[i++] = fmt_color("*sizeList.background", s->bg_light);
-
-    /* Settings panel list widgets — match sidebar background */
-    res[i++] = fmt_color("*schemeList.background", s->bg_light);
-    res[i++] = fmt_color("*cursorList.background", s->bg_light);
-    res[i++] = fmt_color("*iconList.background", s->bg_light);
-    res[i++] = fmt_color("*outputList.background", s->bg_light);
-    res[i++] = fmt_color("*termSchemeList.background", s->bg_light);
-    res[i++] = fmt_color("*termCursorList.background", s->bg_light);
+   
+    /* ComboBox (List subclass in dropdown mode) */
+    res[i++] = fmt_color("*ComboBox.background", s->bg_light);
+    res[i++] = fmt_color("*ComboBox.foreground", s->fg);
+    res[i++] = fmt_color("*ComboBox.borderColor", s->border);
+    res[i++] = strdup("*ComboBox.borderWidth: 1");
 
     /* Taskbar / start — square window-chrome buttons, no rounded stroke */
     res[i++] = strdup("*taskBtn.cornerRadius: 0");
