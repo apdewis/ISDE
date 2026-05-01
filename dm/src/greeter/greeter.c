@@ -8,93 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <xcb/randr.h>
 #include <ISW/IswArgMacros.h>
-
-static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
-                                 xcb_screen_t *scr,
-                                 int *ox, int *oy, int *ow, int *oh)
-{
-    *ox = 0; *oy = 0;
-    *ow = scr->width_in_pixels;
-    *oh = scr->height_in_pixels;
-
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(conn,
-            xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) return;
-
-    xcb_timestamp_t ts = res->config_timestamp;
-    xcb_randr_get_output_primary_reply_t *pri =
-        xcb_randr_get_output_primary_reply(conn,
-            xcb_randr_get_output_primary(conn, root), NULL);
-    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
-    free(pri);
-
-    xcb_randr_output_t *outs =
-        xcb_randr_get_screen_resources_current_outputs(res);
-    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
-
-    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
-
-    for (int i = 0; i < nouts; i++) {
-        xcb_randr_get_output_info_reply_t *oi =
-            xcb_randr_get_output_info_reply(conn,
-                xcb_randr_get_output_info(conn, outs[i], ts), NULL);
-        if (!oi) continue;
-        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
-            oi->crtc == XCB_NONE) {
-            free(oi);
-            continue;
-        }
-        if (fallback_crtc == XCB_NONE)
-            fallback_crtc = oi->crtc;
-        if (outs[i] == primary_id) {
-            xcb_randr_get_crtc_info_reply_t *ci =
-                xcb_randr_get_crtc_info_reply(conn,
-                    xcb_randr_get_crtc_info(conn, oi->crtc, ts), NULL);
-            if (ci) {
-                *ox = ci->x; *oy = ci->y;
-                *ow = ci->width; *oh = ci->height;
-                free(ci);
-            }
-            free(oi);
-            free(res);
-            return;
-        }
-        free(oi);
-    }
-
-    if (fallback_crtc != XCB_NONE) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, fallback_crtc, ts), NULL);
-        if (ci) {
-            *ox = ci->x; *oy = ci->y;
-            *ow = ci->width; *oh = ci->height;
-            free(ci);
-        }
-    }
-
-    free(res);
-}
+#include "isde/isde-randr.h"
 
 static void create_blank_screens(Greeter *g)
 {
     xcb_connection_t *conn = IswDisplay(g->toplevel);
     xcb_screen_t *scr = IswScreen(g->toplevel);
 
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(conn,
-            xcb_randr_get_screen_resources_current(conn, scr->root), NULL);
-    if (!res) return;
+    IsdeMonitor *mons = NULL;
+    int nmons = isde_randr_monitors(conn, scr->root, &mons);
+    if (nmons <= 0) { free(mons); return; }
 
-    xcb_timestamp_t ts = res->config_timestamp;
-    xcb_randr_crtc_t *crtcs =
-        xcb_randr_get_screen_resources_current_crtcs(res);
-    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
-
-    g->blanks = malloc(ncrtcs * sizeof(xcb_window_t));
+    g->blanks = malloc(nmons * sizeof(xcb_window_t));
     g->nblanks = 0;
 
     uint32_t bg_pixel = scr->black_pixel;
@@ -109,39 +35,26 @@ static void create_blank_screens(Greeter *g)
         if (ar) { bg_pixel = ar->pixel; free(ar); }
     }
 
-    for (int i = 0; i < ncrtcs; i++) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, crtcs[i], ts), NULL);
-        if (!ci) continue;
-        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
-            free(ci);
+    for (int i = 0; i < nmons; i++) {
+        if (mons[i].x == g->screen_x && mons[i].y == g->screen_y &&
+            mons[i].width == (uint16_t)g->screen_w &&
+            mons[i].height == (uint16_t)g->screen_h)
             continue;
-        }
-
-        if (ci->x == g->screen_x && ci->y == g->screen_y &&
-            ci->width == (uint16_t)g->screen_w &&
-            ci->height == (uint16_t)g->screen_h) {
-            free(ci);
-            continue;
-        }
 
         xcb_window_t win = xcb_generate_id(conn);
         uint32_t vals[] = { bg_pixel, 1, XCB_EVENT_MASK_NO_EVENT };
         xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, scr->root,
-                          ci->x, ci->y, ci->width, ci->height, 0,
-                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          mons[i].x, mons[i].y, mons[i].width, mons[i].height,
+                          0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
                           scr->root_visual,
                           XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
                           XCB_CW_EVENT_MASK, vals);
         xcb_map_window(conn, win);
         g->blanks[g->nblanks++] = win;
-
-        free(ci);
     }
 
     xcb_flush(conn);
-    free(res);
+    free(mons);
 }
 
 static void destroy_blank_screens(Greeter *g)
@@ -868,9 +781,12 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Get primary monitor geometry */
     xcb_connection_t *conn = IswDisplay(g->toplevel);
     xcb_screen_t *screen = IswScreen(g->toplevel);
-    get_primary_geometry(conn, screen->root, screen,
-                         &g->screen_x, &g->screen_y,
-                         &g->screen_w, &g->screen_h);
+    IsdeMonitor pm;
+    isde_randr_primary(conn, screen->root, screen, &pm);
+    g->screen_x = pm.x;
+    g->screen_y = pm.y;
+    g->screen_w = pm.width;
+    g->screen_h = pm.height;
 
     double sf = ISWScaleFactor(g->toplevel);
     if (sf < 1.0) {

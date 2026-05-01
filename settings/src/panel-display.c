@@ -20,6 +20,7 @@
 #include <xcb/randr.h>
 
 #include "isde/isde-config.h"
+#include "isde/isde-randr.h"
 
 typedef struct {
     xcb_randr_mode_t id;
@@ -55,9 +56,6 @@ typedef struct {
     int                  saved_enabled;
     int16_t              saved_x, saved_y;
     int                  saved_primary;
-
-    xcb_randr_crtc_t    *possible_crtcs;
-    int                  npossible_crtcs;
 } OutputInfo;
 
 static OutputInfo *outputs;
@@ -120,7 +118,6 @@ static void free_outputs(void)
         free(outputs[i].name);
         free(outputs[i].edid_hash);
         free(outputs[i].modes);
-        free(outputs[i].possible_crtcs);
     }
     free(outputs);
     free(output_names);
@@ -128,18 +125,6 @@ static void free_outputs(void)
     output_names = NULL;
     noutputs = 0;
     free_mode_strings();
-}
-
-static double compute_refresh(xcb_randr_mode_info_t *mi)
-{
-    if (mi->htotal == 0 || mi->vtotal == 0)
-        return 0.0;
-    double vt = mi->vtotal;
-    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_DOUBLE_SCAN)
-        vt *= 2;
-    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_INTERLACE)
-        vt /= 2;
-    return (double)mi->dot_clock / ((double)mi->htotal * vt);
 }
 
 static char *read_edid_hash(xcb_connection_t *conn, xcb_randr_output_t output)
@@ -178,23 +163,6 @@ static int mode_cmp(const void *a, const void *b)
     if (ma->refresh > mb->refresh) return -1;
     if (ma->refresh < mb->refresh) return 1;
     return 0;
-}
-
-static xcb_randr_crtc_t find_free_crtc(xcb_connection_t *conn,
-                                        OutputInfo *o,
-                                        xcb_timestamp_t cfg_ts)
-{
-    for (int i = 0; i < o->npossible_crtcs; i++) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, o->possible_crtcs[i], cfg_ts),
-                NULL);
-        if (!ci) continue;
-        int avail = (ci->num_outputs == 0 && ci->mode == XCB_NONE);
-        free(ci);
-        if (avail) return o->possible_crtcs[i];
-    }
-    return XCB_NONE;
 }
 
 static void normalize_positions(void)
@@ -275,13 +243,6 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
         o->is_primary = (outs[i] == primary_id);
         o->edid_hash = read_edid_hash(conn, outs[i]);
 
-        /* Store possible CRTCs for later allocation */
-        int npc = xcb_randr_get_output_info_crtcs_length(oinfo);
-        xcb_randr_crtc_t *pcrtcs = xcb_randr_get_output_info_crtcs(oinfo);
-        o->possible_crtcs = malloc(npc * sizeof(xcb_randr_crtc_t));
-        memcpy(o->possible_crtcs, pcrtcs, npc * sizeof(xcb_randr_crtc_t));
-        o->npossible_crtcs = npc;
-
         /* Build mode list for this output */
         xcb_randr_mode_t *out_modes = xcb_randr_get_output_info_modes(oinfo);
         int out_nmodes = xcb_randr_get_output_info_modes_length(oinfo);
@@ -304,7 +265,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
             me->id = mi->id;
             me->width = mi->width;
             me->height = mi->height;
-            me->refresh = compute_refresh(mi);
+            me->refresh = isde_randr_refresh(mi);
             me->preferred = (m < num_preferred);
         }
 
@@ -344,7 +305,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
         /* Find current refresh rate from mode info */
         for (int k = 0; k < nmi; k++) {
             if (mode_infos[k].id == o->cur_mode) {
-                o->cur_refresh = compute_refresh(&mode_infos[k]);
+                o->cur_refresh = isde_randr_refresh(&mode_infos[k]);
                 break;
             }
         }
@@ -927,120 +888,11 @@ static void primary_clicked_cb(Widget w, IswPointer cd, IswPointer call)
     request_canvas_redraw();
 }
 
-/* ---------- apply via xcb-randr ---------- */
+/* ---------- apply: save config and signal daemon ---------- */
 
 static void display_apply(void)
 {
-    if (!display_conn) return;
-
     normalize_positions();
-
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(display_conn,
-            xcb_randr_get_screen_resources_current(display_conn, display_root),
-            NULL);
-    if (!res) return;
-
-    xcb_timestamp_t cfg_ts = res->config_timestamp;
-
-    /* Phase 1: disable outputs being turned off */
-    int disabled_any = 0;
-    for (int i = 0; i < noutputs; i++) {
-        OutputInfo *o = &outputs[i];
-        if (o->saved_enabled && !o->sel_enabled && o->crtc_id != XCB_NONE) {
-            xcb_randr_set_crtc_config(display_conn, o->crtc_id,
-                XCB_CURRENT_TIME, cfg_ts,
-                0, 0, XCB_NONE,
-                XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
-            disabled_any = 1;
-        }
-    }
-
-    /* Re-fetch timestamp after disables */
-    if (disabled_any) {
-        free(res);
-        res = xcb_randr_get_screen_resources_current_reply(display_conn,
-            xcb_randr_get_screen_resources_current(display_conn, display_root),
-            NULL);
-        if (!res) return;
-        cfg_ts = res->config_timestamp;
-    }
-
-    /* Phase 2: allocate CRTCs for newly enabled outputs */
-    for (int i = 0; i < noutputs; i++) {
-        OutputInfo *o = &outputs[i];
-        if (o->sel_enabled && o->crtc_id == XCB_NONE) {
-            o->crtc_id = find_free_crtc(display_conn, o, cfg_ts);
-            if (o->crtc_id == XCB_NONE) {
-                fprintf(stderr, "isde-settings: no free CRTC for %s\n",
-                        o->name);
-                o->sel_enabled = 0;
-                update_enable_toggle();
-                update_controls_sensitivity();
-            }
-        }
-    }
-
-    /* Phase 3: compute bounding box */
-    int max_x = 0, max_y = 0;
-    for (int i = 0; i < noutputs; i++) {
-        OutputInfo *o = &outputs[i];
-        if (!o->sel_enabled || o->crtc_id == XCB_NONE || o->nmodes == 0)
-            continue;
-        ModeEntry *m = &o->modes[o->sel_mode_idx];
-        int right = o->sel_x + m->width;
-        int bottom = o->sel_y + m->height;
-        if (right > max_x) max_x = right;
-        if (bottom > max_y) max_y = bottom;
-    }
-
-    int scr_w = display_screen->width_in_pixels;
-    int scr_h = display_screen->height_in_pixels;
-    int scr_mm_w = display_screen->width_in_millimeters;
-    int scr_mm_h = display_screen->height_in_millimeters;
-
-    /* Expand screen if needed */
-    if (max_x > scr_w || max_y > scr_h) {
-        int new_w = max_x > scr_w ? max_x : scr_w;
-        int new_h = max_y > scr_h ? max_y : scr_h;
-        int mm_w = scr_w > 0 ? (new_w * scr_mm_w) / scr_w : new_w;
-        int mm_h = scr_h > 0 ? (new_h * scr_mm_h) / scr_h : new_h;
-        xcb_randr_set_screen_size(display_conn, display_root,
-                                  new_w, new_h, mm_w, mm_h);
-    }
-
-    /* Phase 4: apply each enabled output */
-    for (int i = 0; i < noutputs; i++) {
-        OutputInfo *o = &outputs[i];
-        if (!o->sel_enabled || o->crtc_id == XCB_NONE || o->nmodes == 0)
-            continue;
-        ModeEntry *m = &o->modes[o->sel_mode_idx];
-        xcb_randr_set_crtc_config(display_conn, o->crtc_id,
-            XCB_CURRENT_TIME, cfg_ts,
-            o->sel_x, o->sel_y, m->id,
-            XCB_RANDR_ROTATION_ROTATE_0,
-            1, &o->output_id);
-    }
-
-    /* Phase 5: set primary */
-    for (int i = 0; i < noutputs; i++) {
-        if (outputs[i].sel_primary && outputs[i].sel_enabled) {
-            xcb_randr_set_output_primary(display_conn, display_root,
-                                         outputs[i].output_id);
-            break;
-        }
-    }
-
-    /* Shrink screen if needed */
-    if (max_x > 0 && max_y > 0 && (max_x < scr_w || max_y < scr_h)) {
-        int mm_w = scr_w > 0 ? (max_x * scr_mm_w) / scr_w : max_x;
-        int mm_h = scr_h > 0 ? (max_y * scr_mm_h) / scr_h : max_y;
-        xcb_randr_set_screen_size(display_conn, display_root,
-                                  max_x, max_y, mm_w, mm_h);
-    }
-
-    xcb_flush(display_conn);
-    free(res);
 
     save_output_configs();
     for (int i = 0; i < noutputs; i++) {

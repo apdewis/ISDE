@@ -10,7 +10,7 @@
 #include <limits.h>
 #include <poll.h>
 #include <xcb/xcb_aux.h>
-#include <xcb/randr.h>
+
 #include <isde/isde-theme.h>
 #include <xcb/xcb_cursor.h>
 #include <ISW/ISWRender.h>
@@ -475,74 +475,13 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 
 void wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh)
 {
+    IsdeMonitor pm;
+    isde_randr_primary(wm->conn, wm->root, wm->screen, &pm);
     double sf = wm->scale_factor;
-    *mx = 0;
-    *my = 0;
-    *mw = phys_to_log(sf, wm->screen->width_in_pixels);
-    *mh = phys_to_log(sf, wm->screen->height_in_pixels);
-
-    xcb_randr_get_output_primary_reply_t *pri =
-        xcb_randr_get_output_primary_reply(wm->conn,
-            xcb_randr_get_output_primary(wm->conn, wm->root), NULL);
-    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
-    free(pri);
-
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(wm->conn,
-            xcb_randr_get_screen_resources_current(wm->conn, wm->root), NULL);
-    if (!res) return;
-
-    xcb_timestamp_t ts = res->config_timestamp;
-    xcb_randr_output_t *outs =
-        xcb_randr_get_screen_resources_current_outputs(res);
-    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
-
-    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
-
-    for (int i = 0; i < nouts; i++) {
-        xcb_randr_get_output_info_reply_t *oi =
-            xcb_randr_get_output_info_reply(wm->conn,
-                xcb_randr_get_output_info(wm->conn, outs[i], ts), NULL);
-        if (!oi) continue;
-        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
-            oi->crtc == XCB_NONE) {
-            free(oi);
-            continue;
-        }
-        if (fallback_crtc == XCB_NONE)
-            fallback_crtc = oi->crtc;
-        if (outs[i] == primary_id) {
-            xcb_randr_get_crtc_info_reply_t *ci =
-                xcb_randr_get_crtc_info_reply(wm->conn,
-                    xcb_randr_get_crtc_info(wm->conn, oi->crtc, ts), NULL);
-            if (ci) {
-                *mx = phys_to_log(sf, ci->x);
-                *my = phys_to_log(sf, ci->y);
-                *mw = phys_to_log(sf, ci->width);
-                *mh = phys_to_log(sf, ci->height);
-                free(ci);
-            }
-            free(oi);
-            free(res);
-            return;
-        }
-        free(oi);
-    }
-
-    if (fallback_crtc != XCB_NONE) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(wm->conn,
-                xcb_randr_get_crtc_info(wm->conn, fallback_crtc, ts), NULL);
-        if (ci) {
-            *mx = phys_to_log(sf, ci->x);
-            *my = phys_to_log(sf, ci->y);
-            *mw = phys_to_log(sf, ci->width);
-            *mh = phys_to_log(sf, ci->height);
-            free(ci);
-        }
-    }
-
-    free(res);
+    *mx = phys_to_log(sf, pm.x);
+    *my = phys_to_log(sf, pm.y);
+    *mw = phys_to_log(sf, pm.width);
+    *mh = phys_to_log(sf, pm.height);
 }
 
 static void wm_get_monitor_work_area(Wm *wm, int monitor,
@@ -579,63 +518,21 @@ static void query_monitors(Wm *wm)
     wm->monitors = NULL;
     wm->nmonitors = 0;
 
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(wm->conn,
-            xcb_randr_get_screen_resources_current(wm->conn, wm->root), NULL);
-    if (!res) goto fallback;
+    IsdeMonitor *phys = NULL;
+    int n = isde_randr_monitors(wm->conn, wm->root, &phys);
 
-    xcb_timestamp_t cfg_ts = res->config_timestamp;
-    xcb_randr_crtc_t *crtcs =
-        xcb_randr_get_screen_resources_current_crtcs(res);
-    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
-
-    wm->monitors = malloc(ncrtcs * sizeof(MonitorGeom));
-
-    for (int i = 0; i < ncrtcs; i++) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(wm->conn,
-                xcb_randr_get_crtc_info(wm->conn, crtcs[i], cfg_ts), NULL);
-        if (!ci) continue;
-        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
-            free(ci);
-            continue;
-        }
-
-        /* Skip CRTCs whose outputs are all physically disconnected */
-        xcb_randr_output_t *crtc_outs =
-            xcb_randr_get_crtc_info_outputs(ci);
-        int n_crtc_outs = xcb_randr_get_crtc_info_outputs_length(ci);
-        int has_connected = 0;
-        for (int j = 0; j < n_crtc_outs; j++) {
-            xcb_randr_get_output_info_reply_t *oi =
-                xcb_randr_get_output_info_reply(wm->conn,
-                    xcb_randr_get_output_info(wm->conn, crtc_outs[j],
-                                              cfg_ts), NULL);
-            if (oi) {
-                if (oi->connection == XCB_RANDR_CONNECTION_CONNECTED)
-                    has_connected = 1;
-                free(oi);
-                if (has_connected) break;
-            }
-        }
-        if (!has_connected) {
-            free(ci);
-            continue;
-        }
-
+    if (n > 0) {
         double sf = wm->scale_factor;
-        MonitorGeom *m = &wm->monitors[wm->nmonitors++];
-        m->x      = phys_to_log(sf, ci->x);
-        m->y      = phys_to_log(sf, ci->y);
-        m->width  = phys_to_log(sf, ci->width);
-        m->height = phys_to_log(sf, ci->height);
-        free(ci);
-    }
-
-    free(res);
-
-fallback:
-    if (wm->nmonitors == 0) {
+        wm->monitors = malloc(n * sizeof(MonitorGeom));
+        wm->nmonitors = n;
+        for (int i = 0; i < n; i++) {
+            wm->monitors[i].x      = phys_to_log(sf, phys[i].x);
+            wm->monitors[i].y      = phys_to_log(sf, phys[i].y);
+            wm->monitors[i].width  = phys_to_log(sf, phys[i].width);
+            wm->monitors[i].height = phys_to_log(sf, phys[i].height);
+        }
+        free(phys);
+    } else {
         double sf = wm->scale_factor;
         wm->monitors = malloc(sizeof(MonitorGeom));
         wm->monitors[0].x = 0;

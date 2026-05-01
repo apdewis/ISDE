@@ -2,10 +2,10 @@
 /*
  * isde-displayd — display auto-configuration daemon
  *
- * Subscribes to RandR output-change events and applies saved display
- * profiles from isde.toml when outputs are connected or disconnected.
- * Handles CRTC allocation, positioning, and primary assignment with
- * fallback.  SIGHUP re-reads the config file.
+ * Subscribes to RandR output-change events and D-Bus settings
+ * notifications.  Applies saved display profiles from isde.toml
+ * when outputs change or the settings panel writes new config.
+ * SIGHUP re-reads the config file.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,42 +18,22 @@
 
 #include "isde/isde-config.h"
 #include "isde/isde-xdg.h"
+#include "isde/isde-dbus.h"
+#include "isde/isde-randr.h"
 
 static volatile sig_atomic_t reload_flag;
 static volatile sig_atomic_t quit_flag;
+static volatile sig_atomic_t dbus_reload_flag;
 
 static void on_sighup(int sig)  { (void)sig; reload_flag = 1; }
 static void on_sigterm(int sig) { (void)sig; quit_flag = 1; }
 
-static double compute_refresh(xcb_randr_mode_info_t *mi)
+static void on_settings_changed(const char *section, const char *key,
+                                 void *user_data)
 {
-    if (mi->htotal == 0 || mi->vtotal == 0)
-        return 0.0;
-    double vt = mi->vtotal;
-    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_DOUBLE_SCAN)
-        vt *= 2;
-    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_INTERLACE)
-        vt /= 2;
-    return (double)mi->dot_clock / ((double)mi->htotal * vt);
-}
-
-static xcb_randr_crtc_t find_free_crtc(xcb_connection_t *conn,
-                                        xcb_randr_get_output_info_reply_t *oinfo,
-                                        xcb_timestamp_t cfg_ts)
-{
-    xcb_randr_crtc_t *crtcs = xcb_randr_get_output_info_crtcs(oinfo);
-    int ncrtcs = xcb_randr_get_output_info_crtcs_length(oinfo);
-
-    for (int i = 0; i < ncrtcs; i++) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, crtcs[i], cfg_ts), NULL);
-        if (!ci) continue;
-        int avail = (ci->num_outputs == 0 && ci->mode == XCB_NONE);
-        free(ci);
-        if (avail) return crtcs[i];
-    }
-    return XCB_NONE;
+    (void)key; (void)user_data;
+    if (strcmp(section, "display") == 0 || strcmp(section, "*") == 0)
+        dbus_reload_flag = 1;
 }
 
 static void apply_config(xcb_connection_t *conn, xcb_window_t root,
@@ -176,7 +156,6 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
 
         IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
         if (!mon || !isde_config_bool(mon, "enabled", 1)) {
-            /* No config or disabled — track first active for primary fallback */
             if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
                 first_enabled = randr_outs[i];
             free(name);
@@ -201,7 +180,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         /* Find or allocate CRTC */
         xcb_randr_crtc_t crtc = oinfo->crtc;
         if (crtc == XCB_NONE) {
-            crtc = find_free_crtc(conn, oinfo, cfg_ts);
+            crtc = isde_randr_find_free_crtc(conn, oinfo, cfg_ts);
             if (crtc == XCB_NONE) {
                 fprintf(stderr, "isde-displayd: no free CRTC for %s\n", name);
                 free(name);
@@ -246,7 +225,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                 if (mode_infos[k].id != out_modes[m]) continue;
                 if (mode_infos[k].width == (uint16_t)want_w &&
                     mode_infos[k].height == (uint16_t)want_h) {
-                    double r = compute_refresh(&mode_infos[k]);
+                    double r = isde_randr_refresh(&mode_infos[k]);
                     if (r > best_refresh) {
                         best_refresh = r;
                         best_mode = mode_infos[k].id;
@@ -357,6 +336,12 @@ int main(int argc, char *argv[])
         XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE);
     xcb_flush(conn);
 
+    /* D-Bus: listen for settings panel notifications */
+    IsdeDBus *dbus = isde_dbus_init();
+    if (dbus)
+        isde_dbus_settings_subscribe(dbus, on_settings_changed, NULL);
+    int dbus_fd = dbus ? isde_dbus_get_fd(dbus) : -1;
+
     /* Apply saved config at startup */
     apply_config(conn, root, scr);
 
@@ -365,8 +350,16 @@ int main(int argc, char *argv[])
     int xcb_fd = xcb_get_file_descriptor(conn);
 
     while (!quit_flag) {
-        struct pollfd pfd = { .fd = xcb_fd, .events = POLLIN };
-        int ret = poll(&pfd, 1, 1000);
+        struct pollfd pfds[2];
+        int nfds = 0;
+        pfds[nfds++] = (struct pollfd){ .fd = xcb_fd, .events = POLLIN };
+        if (dbus_fd >= 0)
+            pfds[nfds++] = (struct pollfd){ .fd = dbus_fd, .events = POLLIN };
+
+        poll(pfds, nfds, 1000);
+
+        if (dbus)
+            isde_dbus_dispatch(dbus);
 
         if (reload_flag) {
             reload_flag = 0;
@@ -374,7 +367,11 @@ int main(int argc, char *argv[])
             apply_config(conn, root, scr);
         }
 
-        if (ret <= 0) continue;
+        if (dbus_reload_flag) {
+            dbus_reload_flag = 0;
+            fprintf(stderr, "isde-displayd: settings changed, applying\n");
+            apply_config(conn, root, scr);
+        }
 
         int got_randr = 0;
         xcb_generic_event_t *ev;
@@ -392,7 +389,6 @@ int main(int argc, char *argv[])
         }
 
         if (got_randr) {
-            /* Debounce: let event storm settle */
             usleep(200000);
             while ((ev = xcb_poll_for_event(conn)))
                 free(ev);
@@ -400,6 +396,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    isde_dbus_free(dbus);
     xcb_disconnect(conn);
     return 0;
 }

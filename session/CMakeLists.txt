@@ -12,7 +12,6 @@ target_link_libraries(isde-session
     PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_XKB
-    PkgConfig::XCB_RANDR
     PkgConfig::XCB_KEYSYMS
     PkgConfig::DBUS
 )
@@ -28,7 +27,6 @@ target_link_libraries(isde-confirm
     PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_KEYSYMS
-    PkgConfig::XCB_RANDR
 )
 
 install(TARGETS isde-session isde-confirm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

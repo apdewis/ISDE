@@ -11,6 +11,7 @@ add_library(isde SHARED
     src/isde-dialog.c
     src/isde-filechooser.c
     src/isde-tray.c
+    src/isde-randr.c
     vendor/tomlc99/toml.c
 )
 
@@ -30,10 +31,10 @@ target_link_libraries(isde
         PkgConfig::XCB_EWMH
         PkgConfig::XCB_ICCCM
         PkgConfig::XCB_UTIL
+        PkgConfig::XCB_RANDR
         PkgConfig::ISW
     PRIVATE
         PkgConfig::DBUS
-        PkgConfig::XCB_RANDR
 )
 
 set_target_properties(isde PROPERTIES

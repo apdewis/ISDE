@@ -15,10 +15,10 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
-#include <xcb/randr.h>
 #include <X11/keysym.h>
 
 #include "isde/isde-theme.h"
+#include "isde/isde-randr.h"
 #include "isde/isde-xdg.h"
 
 #include <ISW/Shell.h>
@@ -30,128 +30,39 @@
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
 
-static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
-                                 xcb_screen_t *scr,
-                                 int *ox, int *oy, int *ow, int *oh)
-{
-    *ox = 0; *oy = 0;
-    *ow = scr->width_in_pixels;
-    *oh = scr->height_in_pixels;
-
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(conn,
-            xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) return;
-
-    xcb_timestamp_t ts = res->config_timestamp;
-    xcb_randr_get_output_primary_reply_t *pri =
-        xcb_randr_get_output_primary_reply(conn,
-            xcb_randr_get_output_primary(conn, root), NULL);
-    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
-    free(pri);
-
-    xcb_randr_output_t *outs =
-        xcb_randr_get_screen_resources_current_outputs(res);
-    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
-
-    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
-
-    for (int i = 0; i < nouts; i++) {
-        xcb_randr_get_output_info_reply_t *oi =
-            xcb_randr_get_output_info_reply(conn,
-                xcb_randr_get_output_info(conn, outs[i], ts), NULL);
-        if (!oi) continue;
-        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
-            oi->crtc == XCB_NONE) {
-            free(oi);
-            continue;
-        }
-        if (fallback_crtc == XCB_NONE)
-            fallback_crtc = oi->crtc;
-        if (outs[i] == primary_id) {
-            xcb_randr_get_crtc_info_reply_t *ci =
-                xcb_randr_get_crtc_info_reply(conn,
-                    xcb_randr_get_crtc_info(conn, oi->crtc, ts), NULL);
-            if (ci) {
-                *ox = ci->x; *oy = ci->y;
-                *ow = ci->width; *oh = ci->height;
-                free(ci);
-            }
-            free(oi);
-            free(res);
-            return;
-        }
-        free(oi);
-    }
-
-    if (fallback_crtc != XCB_NONE) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, fallback_crtc, ts), NULL);
-        if (ci) {
-            *ox = ci->x; *oy = ci->y;
-            *ow = ci->width; *oh = ci->height;
-            free(ci);
-        }
-    }
-
-    free(res);
-}
-
 static int create_blank_screens(xcb_connection_t *conn, xcb_screen_t *scr,
-                                 int prim_x, int prim_y,
-                                 int prim_w, int prim_h,
-                                 uint32_t bg_pixel,
+                                 IsdeMonitor *primary, uint32_t bg_pixel,
                                  xcb_window_t **out_wins)
 {
     *out_wins = NULL;
 
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(conn,
-            xcb_randr_get_screen_resources_current(conn, scr->root), NULL);
-    if (!res) return 0;
+    IsdeMonitor *mons = NULL;
+    int nmons = isde_randr_monitors(conn, scr->root, &mons);
+    if (nmons <= 0) { free(mons); return 0; }
 
-    xcb_timestamp_t ts = res->config_timestamp;
-    xcb_randr_crtc_t *crtcs =
-        xcb_randr_get_screen_resources_current_crtcs(res);
-    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
-
-    *out_wins = malloc(ncrtcs * sizeof(xcb_window_t));
+    *out_wins = malloc(nmons * sizeof(xcb_window_t));
     int count = 0;
 
-    for (int i = 0; i < ncrtcs; i++) {
-        xcb_randr_get_crtc_info_reply_t *ci =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, crtcs[i], ts), NULL);
-        if (!ci) continue;
-        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
-            free(ci);
+    for (int i = 0; i < nmons; i++) {
+        if (mons[i].x == primary->x && mons[i].y == primary->y &&
+            mons[i].width == primary->width &&
+            mons[i].height == primary->height)
             continue;
-        }
-
-        if (ci->x == prim_x && ci->y == prim_y &&
-            ci->width == (uint16_t)prim_w &&
-            ci->height == (uint16_t)prim_h) {
-            free(ci);
-            continue;
-        }
 
         xcb_window_t win = xcb_generate_id(conn);
         uint32_t vals[] = { bg_pixel, 1, XCB_EVENT_MASK_NO_EVENT };
         xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, scr->root,
-                          ci->x, ci->y, ci->width, ci->height, 0,
-                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          mons[i].x, mons[i].y, mons[i].width, mons[i].height,
+                          0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
                           scr->root_visual,
                           XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
                           XCB_CW_EVENT_MASK, vals);
         xcb_map_window(conn, win);
         (*out_wins)[count++] = win;
-
-        free(ci);
     }
 
     xcb_flush(conn);
-    free(res);
+    free(mons);
     return count;
 }
 
@@ -263,13 +174,12 @@ int main(int argc, char **argv)
     double sf = ISWScaleFactor(toplevel);
     if (sf < 1.0) { sf = 1.0; }
 
-    int prim_x, prim_y, prim_w, prim_h;
-    get_primary_geometry(xconn, scr->root, scr, &prim_x, &prim_y,
-                         &prim_w, &prim_h);
-    int scr_x = (int)(prim_x / sf + 0.5);
-    int scr_y = (int)(prim_y / sf + 0.5);
-    int scr_w = (int)(prim_w / sf + 0.5);
-    int scr_h = (int)(prim_h / sf + 0.5);
+    IsdeMonitor primary;
+    isde_randr_primary(xconn, scr->root, scr, &primary);
+    int scr_x = (int)(primary.x / sf + 0.5);
+    int scr_y = (int)(primary.y / sf + 0.5);
+    int scr_w = (int)(primary.width / sf + 0.5);
+    int scr_h = (int)(primary.height / sf + 0.5);
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
@@ -389,8 +299,7 @@ int main(int argc, char **argv)
                       key_handler, NULL);
 
     xcb_window_t *blank_wins = NULL;
-    int nblanks = create_blank_screens(conn, scr, prim_x, prim_y,
-                                       prim_w, prim_h, overlay_bg,
+    int nblanks = create_blank_screens(conn, scr, &primary, overlay_bg,
                                        &blank_wins);
 
     IswPopup(shell, IswGrabExclusive);

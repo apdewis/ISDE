@@ -16,7 +16,6 @@ target_link_libraries(isde-panel
     PkgConfig::XCB_EWMH
     PkgConfig::XCB_ICCCM
     PkgConfig::XCB_UTIL
-    PkgConfig::XCB_RANDR
     PkgConfig::XCB_KEYSYMS
 )
 
