@@ -64,6 +64,14 @@ static IsdeDBus *display_dbus;
 static xcb_connection_t *display_conn;
 static xcb_window_t      display_root;
 
+static IswAppContext     display_app;
+static IswIntervalId      randr_poll_id;
+static xcb_timestamp_t   last_config_ts;
+
+#define RANDR_POLL_MS 2000
+
+static void randr_poll_cb(IswPointer, IswIntervalId *);
+
 #define LABEL_W 150
 #define LIST_W  300
 #define SLIDER_W 300
@@ -421,6 +429,64 @@ static void update_scale_slider(void)
     IswSetValues(scale_slider, ab.args, ab.count);
 }
 
+/* ---------- randr hotplug polling ---------- */
+
+static void refresh_display_list(void)
+{
+    IswListChange(output_list, NULL, 0, 0, False);
+    IswListChange(res_combo, NULL, 0, 0, False);
+
+    char *sel_name = NULL;
+    if (selected_output >= 0 && selected_output < noutputs)
+        sel_name = strdup(outputs[selected_output].name);
+
+    query_outputs(display_conn, display_root);
+    load_output_configs();
+
+    IswListChange(output_list, output_names, noutputs, 0, True);
+
+    selected_output = 0;
+    if (sel_name) {
+        for (int i = 0; i < noutputs; i++) {
+            if (strcmp(outputs[i].name, sel_name) == 0) {
+                selected_output = i;
+                break;
+            }
+        }
+        free(sel_name);
+    }
+    if (selected_output == 0) {
+        for (int i = 0; i < noutputs; i++) {
+            if (outputs[i].is_primary) { selected_output = i; break; }
+        }
+    }
+
+    IswListHighlight(output_list, selected_output);
+    update_mode_combo();
+    update_scale_slider();
+}
+
+static void randr_poll_cb(IswPointer client_data, IswIntervalId *id)
+{
+    (void)client_data;
+    (void)id;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(display_conn,
+            xcb_randr_get_screen_resources_current(display_conn, display_root),
+            NULL);
+    if (res) {
+        if (res->config_timestamp != last_config_ts) {
+            last_config_ts = res->config_timestamp;
+            refresh_display_list();
+        }
+        free(res);
+    }
+
+    randr_poll_id = IswAppAddTimeOut(display_app, RANDR_POLL_MS,
+                                    randr_poll_cb, NULL);
+}
+
 /* ---------- callbacks ---------- */
 
 static void output_select_cb(Widget w, IswPointer cd, IswPointer call)
@@ -543,7 +609,6 @@ static void display_revert(void)
 
 static Widget display_create(Widget parent, IswAppContext app)
 {
-    (void)app;
 
     Dimension pw, ph;
     IswArgBuilder qb = IswArgBuilderInit();
@@ -657,6 +722,23 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswAddCallback(scale_slider, IswNvalueChanged, scale_changed_cb, NULL);
     prev = scale_slider;
 
+    display_app = app;
+    xcb_randr_select_input(display_conn, display_root,
+        XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE |
+        XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+    xcb_flush(display_conn);
+
+    xcb_randr_get_screen_resources_current_reply_t *ts_res =
+        xcb_randr_get_screen_resources_current_reply(display_conn,
+            xcb_randr_get_screen_resources_current(display_conn, display_root),
+            NULL);
+    if (ts_res) {
+        last_config_ts = ts_res->config_timestamp;
+        free(ts_res);
+    }
+    randr_poll_id = IswAppAddTimeOut(display_app, RANDR_POLL_MS,
+                                    randr_poll_cb, NULL);
+
     return form;
 }
 
@@ -671,6 +753,10 @@ static int display_has_changes(void)
 
 static void display_destroy(void)
 {
+    if (randr_poll_id) {
+        IswRemoveTimeOut(randr_poll_id);
+        randr_poll_id = 0;
+    }
     output_list = NULL;
     res_combo = NULL;
     scale_slider = NULL;
