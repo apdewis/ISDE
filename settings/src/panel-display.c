@@ -127,6 +127,7 @@ static void free_outputs(void)
     free_mode_strings();
 }
 
+/* #FIXME this really doesn't belong in the settings panel code*/
 static char *read_edid_hash(xcb_connection_t *conn, xcb_randr_output_t output)
 {
     xcb_intern_atom_reply_t *atom_reply =
@@ -190,6 +191,7 @@ static void request_canvas_redraw(void)
 
 static xcb_screen_t *display_screen;
 
+/* #FIXME this also belongs in display handling libs rather than the config panel */
 static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
 {
     free_outputs();
@@ -938,6 +940,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgDefaultDistance(&ab, 8);
     IswArgBorderWidth(&ab, 0);
+    IswArgResizable(&ab, 1);
     Widget form = IswCreateWidget("displayForm", formWidgetClass,
                                  parent, ab.args, ab.count);
 
