@@ -1,6 +1,7 @@
 # ISDE autostart file
 # Lines starting with @ are respawned if they exit
 # Lines starting with # are comments
+@isde-displayd
 @isde-tray-mount
 @isde-tray-audio
 @isde-tray-net

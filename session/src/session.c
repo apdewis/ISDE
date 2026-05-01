@@ -119,14 +119,32 @@ static double randr_compute_refresh(xcb_randr_mode_info_t *mi)
     return (double)mi->dot_clock / ((double)mi->htotal * vt);
 }
 
+static xcb_randr_crtc_t session_find_free_crtc(xcb_connection_t *conn,
+                                                xcb_randr_get_output_info_reply_t *oinfo,
+                                                xcb_timestamp_t cfg_ts)
+{
+    xcb_randr_crtc_t *crtcs = xcb_randr_get_output_info_crtcs(oinfo);
+    int ncrtcs = xcb_randr_get_output_info_crtcs_length(oinfo);
+    for (int i = 0; i < ncrtcs; i++) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, crtcs[i], cfg_ts), NULL);
+        if (!ci) continue;
+        int avail = (ci->num_outputs == 0 && ci->mode == XCB_NONE);
+        free(ci);
+        if (avail) return crtcs[i];
+    }
+    return XCB_NONE;
+}
+
 static void apply_display_settings(void)
 {
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (!cfg) return;
 
-    IsdeConfigTable *root = isde_config_root(cfg);
-    IsdeConfigTable *disp = isde_config_table(root, "display");
+    IsdeConfigTable *cfg_root = isde_config_root(cfg);
+    IsdeConfigTable *disp = isde_config_table(cfg_root, "display");
     if (!disp) { isde_config_free(cfg); return; }
     IsdeConfigTable *outs_tbl = isde_config_table(disp, "outputs");
     if (!outs_tbl) { isde_config_free(cfg); return; }
@@ -164,16 +182,14 @@ static void apply_display_settings(void)
     int n_randr_outs =
         xcb_randr_get_screen_resources_current_outputs_length(res);
 
-    int applied = 0;
-    int max_x = 0, max_y = 0;
-
+    /* Phase 1: disable outputs that config says should be off */
+    int disabled_any = 0;
     for (int i = 0; i < n_randr_outs; i++) {
         xcb_randr_get_output_info_reply_t *oinfo =
             xcb_randr_get_output_info_reply(conn,
                 xcb_randr_get_output_info(conn, randr_outs[i], cfg_ts), NULL);
         if (!oinfo) continue;
-        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED ||
-            oinfo->crtc == XCB_NONE) {
+        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED) {
             free(oinfo);
             continue;
         }
@@ -183,7 +199,61 @@ static void apply_display_settings(void)
         char *name = strndup((char *)namedata, namelen);
 
         IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
-        if (!mon) {
+        if (mon && !isde_config_bool(mon, "enabled", 1) &&
+            oinfo->crtc != XCB_NONE) {
+            xcb_randr_set_crtc_config(conn, oinfo->crtc,
+                XCB_CURRENT_TIME, cfg_ts,
+                0, 0, XCB_NONE,
+                XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
+            fprintf(stderr, "isde-session: disabled %s\n", name);
+            disabled_any = 1;
+        }
+
+        free(name);
+        free(oinfo);
+    }
+
+    /* Re-fetch after disables */
+    if (disabled_any) {
+        free(res);
+        res = xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root_win), NULL);
+        if (!res) {
+            xcb_disconnect(conn);
+            isde_config_free(cfg);
+            return;
+        }
+        mode_infos = xcb_randr_get_screen_resources_current_modes(res);
+        nmi = xcb_randr_get_screen_resources_current_modes_length(res);
+        cfg_ts = res->config_timestamp;
+        randr_outs = xcb_randr_get_screen_resources_current_outputs(res);
+        n_randr_outs = xcb_randr_get_screen_resources_current_outputs_length(res);
+    }
+
+    /* Phase 2: enable and configure outputs */
+    int applied = 0;
+    int max_x = 0, max_y = 0;
+    xcb_randr_output_t primary_out = XCB_NONE;
+    xcb_randr_output_t first_enabled = XCB_NONE;
+
+    for (int i = 0; i < n_randr_outs; i++) {
+        xcb_randr_get_output_info_reply_t *oinfo =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, randr_outs[i], cfg_ts), NULL);
+        if (!oinfo) continue;
+        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED) {
+            free(oinfo);
+            continue;
+        }
+
+        int namelen = xcb_randr_get_output_info_name_length(oinfo);
+        uint8_t *namedata = xcb_randr_get_output_info_name(oinfo);
+        char *name = strndup((char *)namedata, namelen);
+
+        IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
+        if (!mon || !isde_config_bool(mon, "enabled", 1)) {
+            if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
+                first_enabled = randr_outs[i];
             free(name);
             free(oinfo);
             continue;
@@ -191,10 +261,28 @@ static void apply_display_settings(void)
 
         int want_w = (int)isde_config_int(mon, "width", 0);
         int want_h = (int)isde_config_int(mon, "height", 0);
+        int want_x = (int)isde_config_int(mon, "x", 0);
+        int want_y = (int)isde_config_int(mon, "y", 0);
+        int is_primary = isde_config_bool(mon, "primary", 0);
+
         if (want_w <= 0 || want_h <= 0) {
+            if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
+                first_enabled = randr_outs[i];
             free(name);
             free(oinfo);
             continue;
+        }
+
+        /* Find or allocate CRTC */
+        xcb_randr_crtc_t crtc = oinfo->crtc;
+        if (crtc == XCB_NONE) {
+            crtc = session_find_free_crtc(conn, oinfo, cfg_ts);
+            if (crtc == XCB_NONE) {
+                fprintf(stderr, "isde-session: no free CRTC for %s\n", name);
+                free(name);
+                free(oinfo);
+                continue;
+            }
         }
 
         /* Find matching mode */
@@ -225,17 +313,8 @@ static void apply_display_settings(void)
             continue;
         }
 
-        /* Get current CRTC position */
-        xcb_randr_get_crtc_info_reply_t *cinfo =
-            xcb_randr_get_crtc_info_reply(conn,
-                xcb_randr_get_crtc_info(conn, oinfo->crtc, cfg_ts), NULL);
-        int16_t cx = 0, cy = 0;
-        if (cinfo) {
-            cx = cinfo->x;
-            cy = cinfo->y;
-            free(cinfo);
-        }
-
+        int16_t cx = (int16_t)want_x;
+        int16_t cy = (int16_t)want_y;
         int right = cx + want_w;
         int bottom = cy + want_h;
         if (right > max_x) max_x = right;
@@ -253,18 +332,29 @@ static void apply_display_settings(void)
             xcb_randr_set_screen_size(conn, root_win, nw, nh, mm_w, mm_h);
         }
 
-        xcb_randr_set_crtc_config(conn, oinfo->crtc,
+        xcb_randr_set_crtc_config(conn, crtc,
             XCB_CURRENT_TIME, cfg_ts,
             cx, cy, best_mode,
             XCB_RANDR_ROTATION_ROTATE_0,
             1, &randr_outs[i]);
         applied++;
-        fprintf(stderr, "isde-session: display %s -> %dx%d @ %.0f Hz\n",
-                name, want_w, want_h, best_refresh);
+        fprintf(stderr, "isde-session: display %s -> %dx%d+%d+%d @ %.0f Hz\n",
+                name, want_w, want_h, want_x, want_y, best_refresh);
+
+        if (first_enabled == XCB_NONE)
+            first_enabled = randr_outs[i];
+        if (is_primary)
+            primary_out = randr_outs[i];
 
         free(name);
         free(oinfo);
     }
+
+    /* Set primary (with fallback to first enabled) */
+    xcb_randr_output_t new_primary =
+        primary_out != XCB_NONE ? primary_out : first_enabled;
+    if (new_primary != XCB_NONE)
+        xcb_randr_set_output_primary(conn, root_win, new_primary);
 
     if (applied > 0)
         xcb_flush(conn);
