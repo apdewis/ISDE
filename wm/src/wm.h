@@ -34,6 +34,12 @@
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
 
+/* ---------- Monitor geometry (logical pixels) ---------- */
+typedef struct {
+    int16_t  x, y;
+    uint16_t width, height;
+} MonitorGeom;
+
 /* ---------- Client (managed window) ---------- */
 typedef struct WmClient {
     xcb_window_t client;       /* The application window */
@@ -139,6 +145,12 @@ typedef struct Wm {
     /* Snap preview */
     xcb_window_t           snap_preview;   /* overlay window (0 = none) */
     int                    snap_pending;   /* pending snap zone */
+    int                    snap_monitor;   /* monitor index for pending snap */
+
+    /* Per-monitor geometry (logical pixels) */
+    MonitorGeom           *monitors;
+    int                    nmonitors;
+    uint8_t                randr_event_base;
 
     /* Resize cursors */
     xcb_cursor_t           cursors[8];

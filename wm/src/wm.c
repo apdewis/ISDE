@@ -9,6 +9,7 @@
 #include <string.h>
 #include <poll.h>
 #include <xcb/xcb_aux.h>
+#include <xcb/randr.h>
 #include <isde/isde-theme.h>
 #include <xcb/xcb_cursor.h>
 #include <ISW/ISWRender.h>
@@ -47,6 +48,13 @@ static void wm_on_settings_changed(const char *section, const char *key,
 /* ---------- dock window tracking ---------- */
 static void wm_add_dock(Wm *wm, xcb_window_t win);
 static void wm_remove_dock(Wm *wm, xcb_window_t win);
+
+/* ---------- monitor geometry ---------- */
+static void query_monitors(Wm *wm);
+static int  monitor_at_point(Wm *wm, int rx, int ry);
+static int  monitor_for_client(Wm *wm, WmClient *c);
+static void wm_get_monitor_work_area(Wm *wm, int monitor,
+                                      int *wx, int *wy, int *ww, int *wh);
 
 /* ---------- initialization ---------- */
 
@@ -148,6 +156,19 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* EWMH setup (advertise _NET_SUPPORTED, etc.) */
     wm_ewmh_setup(wm);
 
+    /* Monitor geometry (RandR) */
+    {
+        const xcb_query_extension_reply_t *ext =
+            xcb_get_extension_data(wm->conn, &xcb_randr_id);
+        if (ext && ext->present) {
+            wm->randr_event_base = ext->first_event;
+            xcb_randr_select_input(wm->conn, wm->root,
+                XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE |
+                XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+        }
+    }
+    query_monitors(wm);
+
     /* Virtual desktops */
     wm_desktops_init(wm);
 
@@ -216,8 +237,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                             xcb_ewmh_get_atoms_reply_wipe(&state);
                             if (was_max) {
+                                int mon = monitor_for_client(wm, c);
                                 int wx, wy, ww, wh;
-                                wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+                                wm_get_monitor_work_area(wm, mon, &wx, &wy, &ww, &wh);
                                 c->save_x = wx + ww / 4;
                                 c->save_y = wy + wh / 4;
                                 c->save_w = ww / 2;
@@ -450,6 +472,96 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
     *wh = (int)((wm->screen->height_in_pixels - top - bottom) / sf + 0.5);
 }
 
+static void wm_get_monitor_work_area(Wm *wm, int monitor,
+                                      int *wx, int *wy, int *ww, int *wh)
+{
+    int gwx, gwy, gww, gwh;
+    wm_get_work_area(wm, &gwx, &gwy, &gww, &gwh);
+
+    MonitorGeom *m = &wm->monitors[monitor];
+    int x0 = m->x > gwx ? m->x : gwx;
+    int y0 = m->y > gwy ? m->y : gwy;
+    int x1 = (m->x + m->width) < (gwx + gww) ?
+             (m->x + m->width) : (gwx + gww);
+    int y1 = (m->y + m->height) < (gwy + gwh) ?
+             (m->y + m->height) : (gwy + gwh);
+    *wx = x0;
+    *wy = y0;
+    *ww = x1 - x0 > 0 ? x1 - x0 : 0;
+    *wh = y1 - y0 > 0 ? y1 - y0 : 0;
+}
+
+static int monitor_for_client(Wm *wm, WmClient *c)
+{
+    int cx = c->x + c->width / 2;
+    int cy = c->y + c->height / 2;
+    return monitor_at_point(wm, cx, cy);
+}
+
+/* ---------- monitor geometry ---------- */
+
+static void query_monitors(Wm *wm)
+{
+    free(wm->monitors);
+    wm->monitors = NULL;
+    wm->nmonitors = 0;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(wm->conn,
+            xcb_randr_get_screen_resources_current(wm->conn, wm->root), NULL);
+    if (!res) goto fallback;
+
+    xcb_randr_crtc_t *crtcs =
+        xcb_randr_get_screen_resources_current_crtcs(res);
+    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
+
+    wm->monitors = malloc(ncrtcs * sizeof(MonitorGeom));
+
+    for (int i = 0; i < ncrtcs; i++) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(wm->conn,
+                xcb_randr_get_crtc_info(wm->conn, crtcs[i],
+                                        res->config_timestamp), NULL);
+        if (!ci) continue;
+        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
+            free(ci);
+            continue;
+        }
+
+        double sf = wm->scale_factor;
+        MonitorGeom *m = &wm->monitors[wm->nmonitors++];
+        m->x      = phys_to_log(sf, ci->x);
+        m->y      = phys_to_log(sf, ci->y);
+        m->width  = phys_to_log(sf, ci->width);
+        m->height = phys_to_log(sf, ci->height);
+        free(ci);
+    }
+
+    free(res);
+
+fallback:
+    if (wm->nmonitors == 0) {
+        double sf = wm->scale_factor;
+        wm->monitors = malloc(sizeof(MonitorGeom));
+        wm->monitors[0].x = 0;
+        wm->monitors[0].y = 0;
+        wm->monitors[0].width  = phys_to_log(sf, wm->screen->width_in_pixels);
+        wm->monitors[0].height = phys_to_log(sf, wm->screen->height_in_pixels);
+        wm->nmonitors = 1;
+    }
+}
+
+static int monitor_at_point(Wm *wm, int rx, int ry)
+{
+    for (int i = 0; i < wm->nmonitors; i++) {
+        MonitorGeom *m = &wm->monitors[i];
+        if (rx >= m->x && rx < m->x + m->width &&
+            ry >= m->y && ry < m->y + m->height)
+            return i;
+    }
+    return 0;
+}
+
 /* ---------- snap detection ---------- */
 
 enum {
@@ -462,30 +574,35 @@ enum {
 
 static int detect_snap_zone(Wm *wm, int rx, int ry)
 {
-    double sf = wm->scale_factor;
-    int sw = phys_to_log(sf, wm->screen->width_in_pixels);
-    int sh = phys_to_log(sf, wm->screen->height_in_pixels);
+    int mi = monitor_at_point(wm, rx, ry);
+    MonitorGeom *m = &wm->monitors[mi];
     int t = SNAP_THRESHOLD;
 
-    int at_left   = (rx <= t);
-    int at_right  = (rx >= sw - t - 1);
-    int at_top    = (ry <= t);
-    int at_bottom = (ry >= sh - t - 1);
+    int at_left   = (rx <= m->x + t);
+    int at_right  = (rx >= m->x + m->width - t - 1);
+    int at_top    = (ry <= m->y + t);
+    int at_bottom = (ry >= m->y + m->height - t - 1);
 
-    if (at_left  && at_top)    { return SNAP_TL; }
-    if (at_right && at_top)    { return SNAP_TR; }
-    if (at_left  && at_bottom) { return SNAP_BL; }
-    if (at_right && at_bottom) { return SNAP_BR; }
-    if (at_left)               { return SNAP_LEFT; }
-    if (at_right)              { return SNAP_RIGHT; }
+    if (at_left  && at_top)    return SNAP_TL;
+    if (at_right && at_top)    return SNAP_TR;
+    if (at_left  && at_bottom) return SNAP_BL;
+    if (at_right && at_bottom) return SNAP_BR;
+    if (at_left)               return SNAP_LEFT;
+    if (at_right)              return SNAP_RIGHT;
     return SNAP_NONE;
 }
 
-/* Compute the snap target geometry for a zone (does not modify client) */
-static void snap_geometry(Wm *wm, int zone, int *sx, int *sy, int *sw, int *sh)
+/* Compute the snap target geometry for a zone on a given monitor */
+static void snap_geometry(Wm *wm, int zone, int monitor,
+                           int *sx, int *sy, int *sw, int *sh)
 {
     int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+    wm_get_monitor_work_area(wm, monitor, &wx, &wy, &ww, &wh);
+
+    if (ww <= 0 || wh <= 0) {
+        *sx = *sy = *sw = *sh = 0;
+        return;
+    }
 
     switch (zone) {
     case SNAP_LEFT:
@@ -506,11 +623,11 @@ static void snap_geometry(Wm *wm, int zone, int *sx, int *sy, int *sw, int *sh)
         break;
     case SNAP_BL:
         *sx = wx; *sy = wy + wh / 2;
-        *sw = ww / 2; *sh = wh / 2;
+        *sw = ww / 2; *sh = wh - wh / 2;
         break;
     case SNAP_BR:
         *sx = wx + ww / 2; *sy = wy + wh / 2;
-        *sw = ww - ww / 2; *sh = wh / 2;
+        *sw = ww - ww / 2; *sh = wh - wh / 2;
         break;
     default:
         *sx = *sy = *sw = *sh = 0;
@@ -519,10 +636,10 @@ static void snap_geometry(Wm *wm, int zone, int *sx, int *sy, int *sw, int *sh)
 }
 
 /* Show or reposition the snap preview overlay */
-static void snap_preview_show(Wm *wm, int zone)
+static void snap_preview_show(Wm *wm, int zone, int monitor)
 {
     int lx, ly, lw, lh;
-    snap_geometry(wm, zone, &lx, &ly, &lw, &lh);
+    snap_geometry(wm, zone, monitor, &lx, &ly, &lw, &lh);
     if (lw <= 0 || lh <= 0) { return; }
 
     /* Inset by 2 logical px for a border-like appearance */
@@ -598,10 +715,10 @@ static void snap_preview_hide(Wm *wm)
     wm->snap_pending = SNAP_NONE;
 }
 
-static void apply_snap(Wm *wm, WmClient *c, int zone)
+static void apply_snap(Wm *wm, WmClient *c, int zone, int monitor)
 {
     int sx, sy, sw, sh;
-    snap_geometry(wm, zone, &sx, &sy, &sw, &sh);
+    snap_geometry(wm, zone, monitor, &sx, &sy, &sw, &sh);
 
     int th = wm->title_height;
 
@@ -656,8 +773,9 @@ void wm_maximize_client(Wm *wm, WmClient *c)
         c->save_w = c->width;
         c->save_h = c->height;
 
+        int mon = monitor_for_client(wm, c);
         int wx, wy, ww, wh;
-        wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+        wm_get_monitor_work_area(wm, mon, &wx, &wy, &ww, &wh);
         c->x = wx;
         c->y = wy;
         int title = c->decorated ? wm->title_height : 0;
@@ -1026,10 +1144,12 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         c->y = wm->drag_orig_y + dy;
         IswMoveWidget(c->shell, c->x, c->y);
         int zone = detect_snap_zone(wm, rx, ry);
+        int mon  = monitor_at_point(wm, rx, ry);
         if (zone != SNAP_NONE) {
-            if (wm->snap_pending != zone) {
-                snap_preview_show(wm, zone);
+            if (wm->snap_pending != zone || wm->snap_monitor != mon) {
+                snap_preview_show(wm, zone, mon);
                 wm->snap_pending = zone;
+                wm->snap_monitor = mon;
             }
         } else if (wm->snap_pending != SNAP_NONE) {
             snap_preview_hide(wm);
@@ -1075,7 +1195,7 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
         WmClient *c = wm->drag_client;
 
         if (wm->drag_mode == DRAG_MOVE && wm->snap_pending != SNAP_NONE && c) {
-            apply_snap(wm, c, wm->snap_pending);
+            apply_snap(wm, c, wm->snap_pending, wm->snap_monitor);
         }
         snap_preview_hide(wm);
 
@@ -1307,7 +1427,13 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         wm_keys_handle_release(wm, (xcb_key_release_event_t *)ev);
         break;
     default:
-        IswDispatchEvent(ev, wm->conn);
+        if (wm->randr_event_base &&
+            (type == wm->randr_event_base + XCB_RANDR_SCREEN_CHANGE_NOTIFY ||
+             type == wm->randr_event_base + XCB_RANDR_NOTIFY)) {
+            query_monitors(wm);
+        } else {
+            IswDispatchEvent(ev, wm->conn);
+        }
         break;
     }
 }
@@ -1368,6 +1494,9 @@ void wm_cleanup(Wm *wm)
     free(wm->docks);
     wm->docks = NULL;
     wm->ndocks = wm->cap_docks = 0;
+    free(wm->monitors);
+    wm->monitors = NULL;
+    wm->nmonitors = 0;
     xcb_flush(wm->conn);
 
     if (wm->keysyms) {
