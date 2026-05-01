@@ -88,6 +88,34 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
     xcb_randr_output_t first_enabled = XCB_NONE;
     int changed = 0;
 
+    /* Phase 0: release CRTCs for physically disconnected outputs */
+    for (int i = 0; i < n_randr_outs; i++) {
+        xcb_randr_get_output_info_reply_t *oinfo =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, randr_outs[i], cfg_ts), NULL);
+        if (!oinfo) continue;
+        if (oinfo->connection == XCB_RANDR_CONNECTION_CONNECTED ||
+            oinfo->crtc == XCB_NONE) {
+            free(oinfo);
+            continue;
+        }
+
+        int namelen = xcb_randr_get_output_info_name_length(oinfo);
+        uint8_t *namedata = xcb_randr_get_output_info_name(oinfo);
+        char *name = strndup((char *)namedata, namelen);
+
+        xcb_randr_set_crtc_config(conn, oinfo->crtc,
+            XCB_CURRENT_TIME, cfg_ts,
+            0, 0, XCB_NONE,
+            XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
+        fprintf(stderr, "isde-displayd: released CRTC for disconnected %s\n",
+                name);
+        changed = 1;
+
+        free(name);
+        free(oinfo);
+    }
+
     /* Phase 1: disable outputs that config says should be off */
     for (int i = 0; i < n_randr_outs; i++) {
         xcb_randr_get_output_info_reply_t *oinfo =

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <poll.h>
 #include <xcb/xcb_aux.h>
 #include <xcb/randr.h>
@@ -511,6 +512,7 @@ static void query_monitors(Wm *wm)
             xcb_randr_get_screen_resources_current(wm->conn, wm->root), NULL);
     if (!res) goto fallback;
 
+    xcb_timestamp_t cfg_ts = res->config_timestamp;
     xcb_randr_crtc_t *crtcs =
         xcb_randr_get_screen_resources_current_crtcs(res);
     int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
@@ -520,10 +522,31 @@ static void query_monitors(Wm *wm)
     for (int i = 0; i < ncrtcs; i++) {
         xcb_randr_get_crtc_info_reply_t *ci =
             xcb_randr_get_crtc_info_reply(wm->conn,
-                xcb_randr_get_crtc_info(wm->conn, crtcs[i],
-                                        res->config_timestamp), NULL);
+                xcb_randr_get_crtc_info(wm->conn, crtcs[i], cfg_ts), NULL);
         if (!ci) continue;
         if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
+            free(ci);
+            continue;
+        }
+
+        /* Skip CRTCs whose outputs are all physically disconnected */
+        xcb_randr_output_t *crtc_outs =
+            xcb_randr_get_crtc_info_outputs(ci);
+        int n_crtc_outs = xcb_randr_get_crtc_info_outputs_length(ci);
+        int has_connected = 0;
+        for (int j = 0; j < n_crtc_outs; j++) {
+            xcb_randr_get_output_info_reply_t *oi =
+                xcb_randr_get_output_info_reply(wm->conn,
+                    xcb_randr_get_output_info(wm->conn, crtc_outs[j],
+                                              cfg_ts), NULL);
+            if (oi) {
+                if (oi->connection == XCB_RANDR_CONNECTION_CONNECTED)
+                    has_connected = 1;
+                free(oi);
+                if (has_connected) break;
+            }
+        }
+        if (!has_connected) {
             free(ci);
             continue;
         }
@@ -560,6 +583,62 @@ static int monitor_at_point(Wm *wm, int rx, int ry)
             return i;
     }
     return 0;
+}
+
+static void rescue_orphaned_clients(Wm *wm)
+{
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        int cx = c->x + c->width / 2;
+        int cy = c->y + c->height / 2;
+
+        int on_monitor = 0;
+        for (int i = 0; i < wm->nmonitors; i++) {
+            MonitorGeom *m = &wm->monitors[i];
+            if (cx >= m->x && cx < m->x + m->width &&
+                cy >= m->y && cy < m->y + m->height) {
+                on_monitor = 1;
+                break;
+            }
+        }
+        if (on_monitor) continue;
+
+        /* Window center is not on any active monitor — move it */
+        int mon = 0;
+        int best_dist = INT_MAX;
+        for (int i = 0; i < wm->nmonitors; i++) {
+            MonitorGeom *m = &wm->monitors[i];
+            int mx = m->x + m->width / 2;
+            int my = m->y + m->height / 2;
+            int d = (cx - mx) * (cx - mx) + (cy - my) * (cy - my);
+            if (d < best_dist) { best_dist = d; mon = i; }
+        }
+
+        MonitorGeom *target = &wm->monitors[mon];
+        if (c->maximized) {
+            int wx, wy, ww, wh;
+            wm_get_monitor_work_area(wm, mon, &wx, &wy, &ww, &wh);
+            c->x = wx;
+            c->y = wy;
+            int title = c->decorated ? wm->title_height : 0;
+            c->width  = ww - 2 * WM_BORDER_WIDTH;
+            c->height = wh - title - 2 * WM_BORDER_WIDTH;
+        } else {
+            /* Clamp into target monitor */
+            int fw = frame_total_width(c);
+            int fh = frame_total_height(wm, c);
+            if (c->x + fw > target->x + target->width)
+                c->x = target->x + target->width - fw;
+            if (c->y + fh > target->y + target->height)
+                c->y = target->y + target->height - fh;
+            if (c->x < target->x)
+                c->x = target->x;
+            if (c->y < target->y)
+                c->y = target->y;
+        }
+
+        frame_configure(wm, c);
+    }
+    xcb_flush(wm->conn);
 }
 
 /* ---------- snap detection ---------- */
@@ -1431,6 +1510,7 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
             (type == wm->randr_event_base + XCB_RANDR_SCREEN_CHANGE_NOTIFY ||
              type == wm->randr_event_base + XCB_RANDR_NOTIFY)) {
             query_monitors(wm);
+            rescue_orphaned_clients(wm);
         } else {
             IswDispatchEvent(ev, wm->conn);
         }
