@@ -11,6 +11,74 @@
 #include <xcb/randr.h>
 #include <ISW/IswArgMacros.h>
 
+static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
+                                 xcb_screen_t *scr,
+                                 int *ox, int *oy, int *ow, int *oh)
+{
+    *ox = 0; *oy = 0;
+    *ow = scr->width_in_pixels;
+    *oh = scr->height_in_pixels;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root), NULL);
+    if (!res) return;
+
+    xcb_timestamp_t ts = res->config_timestamp;
+    xcb_randr_get_output_primary_reply_t *pri =
+        xcb_randr_get_output_primary_reply(conn,
+            xcb_randr_get_output_primary(conn, root), NULL);
+    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
+    free(pri);
+
+    xcb_randr_output_t *outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
+
+    for (int i = 0; i < nouts; i++) {
+        xcb_randr_get_output_info_reply_t *oi =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, outs[i], ts), NULL);
+        if (!oi) continue;
+        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
+            oi->crtc == XCB_NONE) {
+            free(oi);
+            continue;
+        }
+        if (fallback_crtc == XCB_NONE)
+            fallback_crtc = oi->crtc;
+        if (outs[i] == primary_id) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(conn,
+                    xcb_randr_get_crtc_info(conn, oi->crtc, ts), NULL);
+            if (ci) {
+                *ox = ci->x; *oy = ci->y;
+                *ow = ci->width; *oh = ci->height;
+                free(ci);
+            }
+            free(oi);
+            free(res);
+            return;
+        }
+        free(oi);
+    }
+
+    if (fallback_crtc != XCB_NONE) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, fallback_crtc, ts), NULL);
+        if (ci) {
+            *ox = ci->x; *oy = ci->y;
+            *ow = ci->width; *oh = ci->height;
+            free(ci);
+        }
+    }
+
+    free(res);
+}
+
 /* ---------- Geometry ---------- */
 
 #define LABEL_W          100
@@ -242,9 +310,9 @@ static void build_ui(Greeter *g)
 {
     IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Fullscreen OverrideShell */
-    IswArgX(&ab, 0);
-    IswArgY(&ab, 0);
+    /* OverrideShell covering primary monitor */
+    IswArgX(&ab, g->logical_x);
+    IswArgY(&ab, g->logical_y);
     IswArgWidth(&ab, g->logical_w);
     IswArgHeight(&ab, g->logical_h);
     IswArgOverrideRedirect(&ab, True);
@@ -720,19 +788,19 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     IswAppAddActions(g->app, greeter_actions,
                     sizeof(greeter_actions) / sizeof(greeter_actions[0]));
 
-    /* Get screen size */
+    /* Get primary monitor geometry */
     xcb_connection_t *conn = IswDisplay(g->toplevel);
     xcb_screen_t *screen = IswScreen(g->toplevel);
-    g->screen_w = screen->width_in_pixels;
-    g->screen_h = screen->height_in_pixels;
+    get_primary_geometry(conn, screen->root, screen,
+                         &g->screen_x, &g->screen_y,
+                         &g->screen_w, &g->screen_h);
 
-    /* Compute logical screen dimensions — ISW scales widget dimensions
-       and Form constraints internally, so all layout math must use logical
-       pixels.  The shell gets physical pixels (Shells are not scaled). */
     double sf = ISWScaleFactor(g->toplevel);
     if (sf < 1.0) {
         sf = 1.0;
     }
+    g->logical_x = (int)(g->screen_x / sf + 0.5);
+    g->logical_y = (int)(g->screen_y / sf + 0.5);
     g->logical_w = (int)(g->screen_w / sf + 0.5);
     g->logical_h = (int)(g->screen_h / sf + 0.5);
 

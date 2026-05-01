@@ -68,9 +68,13 @@ typedef struct Greeter {
     char            ipc_buf[4096];
     int             ipc_buf_len;
 
-    /* Screen geometry (physical pixels and logical pixels) */
+    /* Primary monitor geometry (physical pixels and logical pixels) */
+    int             screen_x;
+    int             screen_y;
     int             screen_w;
     int             screen_h;
+    int             logical_x;
+    int             logical_y;
     int             logical_w;
     int             logical_h;
 

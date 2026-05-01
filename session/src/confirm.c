@@ -15,6 +15,7 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
+#include <xcb/randr.h>
 #include <X11/keysym.h>
 
 #include "isde/isde-theme.h"
@@ -28,6 +29,74 @@
 #include <ISW/Command.h>
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
+
+static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
+                                 xcb_screen_t *scr,
+                                 int *ox, int *oy, int *ow, int *oh)
+{
+    *ox = 0; *oy = 0;
+    *ow = scr->width_in_pixels;
+    *oh = scr->height_in_pixels;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root), NULL);
+    if (!res) return;
+
+    xcb_timestamp_t ts = res->config_timestamp;
+    xcb_randr_get_output_primary_reply_t *pri =
+        xcb_randr_get_output_primary_reply(conn,
+            xcb_randr_get_output_primary(conn, root), NULL);
+    xcb_randr_output_t primary_id = pri ? pri->output : XCB_NONE;
+    free(pri);
+
+    xcb_randr_output_t *outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    xcb_randr_crtc_t fallback_crtc = XCB_NONE;
+
+    for (int i = 0; i < nouts; i++) {
+        xcb_randr_get_output_info_reply_t *oi =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, outs[i], ts), NULL);
+        if (!oi) continue;
+        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED ||
+            oi->crtc == XCB_NONE) {
+            free(oi);
+            continue;
+        }
+        if (fallback_crtc == XCB_NONE)
+            fallback_crtc = oi->crtc;
+        if (outs[i] == primary_id) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(conn,
+                    xcb_randr_get_crtc_info(conn, oi->crtc, ts), NULL);
+            if (ci) {
+                *ox = ci->x; *oy = ci->y;
+                *ow = ci->width; *oh = ci->height;
+                free(ci);
+            }
+            free(oi);
+            free(res);
+            return;
+        }
+        free(oi);
+    }
+
+    if (fallback_crtc != XCB_NONE) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, fallback_crtc, ts), NULL);
+        if (ci) {
+            *ox = ci->x; *oy = ci->y;
+            *ow = ci->width; *oh = ci->height;
+            free(ci);
+        }
+    }
+
+    free(res);
+}
 
 static int result = 1;  /* default: cancelled */
 static IswAppContext app;
@@ -133,10 +202,17 @@ int main(int argc, char **argv)
     IswRealizeWidget(toplevel);
 
     xcb_screen_t *scr = IswScreen(toplevel);
+    xcb_connection_t *xconn = IswDisplay(toplevel);
     double sf = ISWScaleFactor(toplevel);
     if (sf < 1.0) { sf = 1.0; }
-    int scr_w = (int)(scr->width_in_pixels / sf + 0.5);
-    int scr_h = (int)(scr->height_in_pixels / sf + 0.5);
+
+    int prim_x, prim_y, prim_w, prim_h;
+    get_primary_geometry(xconn, scr->root, scr, &prim_x, &prim_y,
+                         &prim_w, &prim_h);
+    int scr_x = (int)(prim_x / sf + 0.5);
+    int scr_y = (int)(prim_y / sf + 0.5);
+    int scr_w = (int)(prim_w / sf + 0.5);
+    int scr_h = (int)(prim_h / sf + 0.5);
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
@@ -169,10 +245,10 @@ int main(int argc, char **argv)
         if (r) { form_fg = r->pixel; free(r); }
     }
 
-    /* Fullscreen override-redirect shell */
+    /* Override-redirect shell covering primary monitor */
     IswArgBuilderReset(&ab);
-    IswArgX(&ab, 0);
-    IswArgY(&ab, 0);
+    IswArgX(&ab, scr_x);
+    IswArgY(&ab, scr_y);
     IswArgWidth(&ab, scr_w);
     IswArgHeight(&ab, scr_h);
     IswArgOverrideRedirect(&ab, True);
