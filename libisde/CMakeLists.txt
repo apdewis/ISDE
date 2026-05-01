@@ -33,6 +33,7 @@ target_link_libraries(isde
         PkgConfig::ISW
     PRIVATE
         PkgConfig::DBUS
+        PkgConfig::XCB_RANDR
 )
 
 set_target_properties(isde PROPERTIES
