@@ -79,6 +79,83 @@ static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
     free(res);
 }
 
+static void create_blank_screens(Greeter *g)
+{
+    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    xcb_screen_t *scr = IswScreen(g->toplevel);
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, scr->root), NULL);
+    if (!res) return;
+
+    xcb_timestamp_t ts = res->config_timestamp;
+    xcb_randr_crtc_t *crtcs =
+        xcb_randr_get_screen_resources_current_crtcs(res);
+    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
+
+    g->blanks = malloc(ncrtcs * sizeof(xcb_window_t));
+    g->nblanks = 0;
+
+    uint32_t bg_pixel = scr->black_pixel;
+    const IsdeColorScheme *scheme = isde_theme_current();
+    if (scheme) {
+        unsigned int bgc = scheme->bg;
+        xcb_alloc_color_reply_t *ar = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, scr->default_colormap,
+                            ((bgc >> 16) & 0xFF) * 257,
+                            ((bgc >> 8)  & 0xFF) * 257,
+                            ( bgc        & 0xFF) * 257), NULL);
+        if (ar) { bg_pixel = ar->pixel; free(ar); }
+    }
+
+    for (int i = 0; i < ncrtcs; i++) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, crtcs[i], ts), NULL);
+        if (!ci) continue;
+        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
+            free(ci);
+            continue;
+        }
+
+        if (ci->x == g->screen_x && ci->y == g->screen_y &&
+            ci->width == (uint16_t)g->screen_w &&
+            ci->height == (uint16_t)g->screen_h) {
+            free(ci);
+            continue;
+        }
+
+        xcb_window_t win = xcb_generate_id(conn);
+        uint32_t vals[] = { bg_pixel, 1, XCB_EVENT_MASK_NO_EVENT };
+        xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, scr->root,
+                          ci->x, ci->y, ci->width, ci->height, 0,
+                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          scr->root_visual,
+                          XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
+                          XCB_CW_EVENT_MASK, vals);
+        xcb_map_window(conn, win);
+        g->blanks[g->nblanks++] = win;
+
+        free(ci);
+    }
+
+    xcb_flush(conn);
+    free(res);
+}
+
+static void destroy_blank_screens(Greeter *g)
+{
+    if (!g->blanks) return;
+    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    for (int i = 0; i < g->nblanks; i++)
+        xcb_destroy_window(conn, g->blanks[i]);
+    xcb_flush(conn);
+    free(g->blanks);
+    g->blanks = NULL;
+    g->nblanks = 0;
+}
+
 /* ---------- Geometry ---------- */
 
 #define LABEL_W          100
@@ -812,6 +889,7 @@ int greeter_init(Greeter *g, int *argc, char **argv)
 
     /* Realize and show */
     IswRealizeWidget(g->shell);
+    create_blank_screens(g);
     IswPopup(g->shell, IswGrabNone);
 
     /* Override-redirect windows don't receive X focus automatically.
@@ -849,6 +927,7 @@ void greeter_run(Greeter *g)
 
 void greeter_cleanup(Greeter *g)
 {
+    destroy_blank_screens(g);
     greeter_clock_cleanup(g);
 
     if (g->ipc_input) {

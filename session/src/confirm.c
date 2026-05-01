@@ -98,6 +98,63 @@ static void get_primary_geometry(xcb_connection_t *conn, xcb_window_t root,
     free(res);
 }
 
+static int create_blank_screens(xcb_connection_t *conn, xcb_screen_t *scr,
+                                 int prim_x, int prim_y,
+                                 int prim_w, int prim_h,
+                                 uint32_t bg_pixel,
+                                 xcb_window_t **out_wins)
+{
+    *out_wins = NULL;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, scr->root), NULL);
+    if (!res) return 0;
+
+    xcb_timestamp_t ts = res->config_timestamp;
+    xcb_randr_crtc_t *crtcs =
+        xcb_randr_get_screen_resources_current_crtcs(res);
+    int ncrtcs = xcb_randr_get_screen_resources_current_crtcs_length(res);
+
+    *out_wins = malloc(ncrtcs * sizeof(xcb_window_t));
+    int count = 0;
+
+    for (int i = 0; i < ncrtcs; i++) {
+        xcb_randr_get_crtc_info_reply_t *ci =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, crtcs[i], ts), NULL);
+        if (!ci) continue;
+        if (ci->mode == XCB_NONE || ci->num_outputs == 0) {
+            free(ci);
+            continue;
+        }
+
+        if (ci->x == prim_x && ci->y == prim_y &&
+            ci->width == (uint16_t)prim_w &&
+            ci->height == (uint16_t)prim_h) {
+            free(ci);
+            continue;
+        }
+
+        xcb_window_t win = xcb_generate_id(conn);
+        uint32_t vals[] = { bg_pixel, 1, XCB_EVENT_MASK_NO_EVENT };
+        xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, scr->root,
+                          ci->x, ci->y, ci->width, ci->height, 0,
+                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          scr->root_visual,
+                          XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
+                          XCB_CW_EVENT_MASK, vals);
+        xcb_map_window(conn, win);
+        (*out_wins)[count++] = win;
+
+        free(ci);
+    }
+
+    xcb_flush(conn);
+    free(res);
+    return count;
+}
+
 static int result = 1;  /* default: cancelled */
 static IswAppContext app;
 
@@ -331,6 +388,11 @@ int main(int argc, char **argv)
     IswAddEventHandler(shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       key_handler, NULL);
 
+    xcb_window_t *blank_wins = NULL;
+    int nblanks = create_blank_screens(conn, scr, prim_x, prim_y,
+                                       prim_w, prim_h, overlay_bg,
+                                       &blank_wins);
+
     IswPopup(shell, IswGrabExclusive);
 
     /* Center dialog — all values logical; ISW scales to physical internally */
@@ -376,6 +438,10 @@ int main(int argc, char **argv)
     xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
     xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
     xcb_flush(conn);
+
+    for (int i = 0; i < nblanks; i++)
+        xcb_destroy_window(conn, blank_wins[i]);
+    free(blank_wins);
 
     IswDestroyWidget(shell);
     IswDestroyWidget(toplevel);

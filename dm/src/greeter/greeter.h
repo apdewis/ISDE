@@ -78,6 +78,10 @@ typedef struct Greeter {
     int             logical_w;
     int             logical_h;
 
+    /* Blank windows on non-primary monitors */
+    xcb_window_t   *blanks;
+    int             nblanks;
+
     /* Config */
     char           *color_scheme;    /* colour scheme name from DM config */
     double          scale;           /* explicit scale factor (0 = auto) */
