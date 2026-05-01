@@ -468,7 +468,7 @@ int session_init(Session *s)
     /* Also load XDG autostart .desktop files */
     autostart_load_xdg(s);
 
-    /* Apply settings from config before starting components.
+    /* Apply settings from config before starting components */
     apply_appearance_settings();
     apply_input_settings();
 
