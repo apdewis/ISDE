@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
+#include <xcb/randr.h>
 #include <ISW/IswArgMacros.h>
 #include <dbus/dbus.h>
 
@@ -106,6 +107,173 @@ static void apply_appearance_settings(void)
     isde_config_free(cfg);
 }
 
+static double randr_compute_refresh(xcb_randr_mode_info_t *mi)
+{
+    if (mi->htotal == 0 || mi->vtotal == 0)
+        return 0.0;
+    double vt = mi->vtotal;
+    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_DOUBLE_SCAN)
+        vt *= 2;
+    if (mi->mode_flags & XCB_RANDR_MODE_FLAG_INTERLACE)
+        vt /= 2;
+    return (double)mi->dot_clock / ((double)mi->htotal * vt);
+}
+
+static void apply_display_settings(void)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (!cfg) return;
+
+    IsdeConfigTable *root = isde_config_root(cfg);
+    IsdeConfigTable *disp = isde_config_table(root, "display");
+    if (!disp) { isde_config_free(cfg); return; }
+    IsdeConfigTable *outs_tbl = isde_config_table(disp, "outputs");
+    if (!outs_tbl) { isde_config_free(cfg); return; }
+
+    const char *display = getenv("DISPLAY");
+    int screen_num;
+    xcb_connection_t *conn = xcb_connect(display, &screen_num);
+    if (xcb_connection_has_error(conn)) {
+        xcb_disconnect(conn);
+        isde_config_free(cfg);
+        return;
+    }
+
+    xcb_screen_iterator_t sit = xcb_setup_roots_iterator(xcb_get_setup(conn));
+    for (int i = 0; i < screen_num; i++) xcb_screen_next(&sit);
+    xcb_screen_t *scr = sit.data;
+    xcb_window_t root_win = scr->root;
+
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root_win), NULL);
+    if (!res) {
+        xcb_disconnect(conn);
+        isde_config_free(cfg);
+        return;
+    }
+
+    xcb_randr_mode_info_t *mode_infos =
+        xcb_randr_get_screen_resources_current_modes(res);
+    int nmi = xcb_randr_get_screen_resources_current_modes_length(res);
+    xcb_timestamp_t cfg_ts = res->config_timestamp;
+
+    xcb_randr_output_t *randr_outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int n_randr_outs =
+        xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    int applied = 0;
+    int max_x = 0, max_y = 0;
+
+    for (int i = 0; i < n_randr_outs; i++) {
+        xcb_randr_get_output_info_reply_t *oinfo =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, randr_outs[i], cfg_ts), NULL);
+        if (!oinfo) continue;
+        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED ||
+            oinfo->crtc == XCB_NONE) {
+            free(oinfo);
+            continue;
+        }
+
+        int namelen = xcb_randr_get_output_info_name_length(oinfo);
+        uint8_t *namedata = xcb_randr_get_output_info_name(oinfo);
+        char *name = strndup((char *)namedata, namelen);
+
+        IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
+        if (!mon) {
+            free(name);
+            free(oinfo);
+            continue;
+        }
+
+        int want_w = (int)isde_config_int(mon, "width", 0);
+        int want_h = (int)isde_config_int(mon, "height", 0);
+        if (want_w <= 0 || want_h <= 0) {
+            free(name);
+            free(oinfo);
+            continue;
+        }
+
+        /* Find matching mode */
+        xcb_randr_mode_t *out_modes = xcb_randr_get_output_info_modes(oinfo);
+        int out_nmodes = xcb_randr_get_output_info_modes_length(oinfo);
+        xcb_randr_mode_t best_mode = XCB_NONE;
+        double best_refresh = 0;
+
+        for (int m = 0; m < out_nmodes; m++) {
+            for (int k = 0; k < nmi; k++) {
+                if (mode_infos[k].id != out_modes[m]) continue;
+                if (mode_infos[k].width == (uint16_t)want_w &&
+                    mode_infos[k].height == (uint16_t)want_h) {
+                    double r = randr_compute_refresh(&mode_infos[k]);
+                    if (r > best_refresh) {
+                        best_refresh = r;
+                        best_mode = mode_infos[k].id;
+                    }
+                }
+            }
+        }
+
+        if (best_mode == XCB_NONE) {
+            fprintf(stderr, "isde-session: no mode %dx%d for %s\n",
+                    want_w, want_h, name);
+            free(name);
+            free(oinfo);
+            continue;
+        }
+
+        /* Get current CRTC position */
+        xcb_randr_get_crtc_info_reply_t *cinfo =
+            xcb_randr_get_crtc_info_reply(conn,
+                xcb_randr_get_crtc_info(conn, oinfo->crtc, cfg_ts), NULL);
+        int16_t cx = 0, cy = 0;
+        if (cinfo) {
+            cx = cinfo->x;
+            cy = cinfo->y;
+            free(cinfo);
+        }
+
+        int right = cx + want_w;
+        int bottom = cy + want_h;
+        if (right > max_x) max_x = right;
+        if (bottom > max_y) max_y = bottom;
+
+        /* Expand screen size first if needed */
+        if (right > (int)scr->width_in_pixels ||
+            bottom > (int)scr->height_in_pixels) {
+            int nw = right > (int)scr->width_in_pixels ? right : scr->width_in_pixels;
+            int nh = bottom > (int)scr->height_in_pixels ? bottom : scr->height_in_pixels;
+            int mm_w = scr->width_in_pixels > 0 ?
+                (nw * scr->width_in_millimeters) / scr->width_in_pixels : nw;
+            int mm_h = scr->height_in_pixels > 0 ?
+                (nh * scr->height_in_millimeters) / scr->height_in_pixels : nh;
+            xcb_randr_set_screen_size(conn, root_win, nw, nh, mm_w, mm_h);
+        }
+
+        xcb_randr_set_crtc_config(conn, oinfo->crtc,
+            XCB_CURRENT_TIME, cfg_ts,
+            cx, cy, best_mode,
+            XCB_RANDR_ROTATION_ROTATE_0,
+            1, &randr_outs[i]);
+        applied++;
+        fprintf(stderr, "isde-session: display %s -> %dx%d @ %.0f Hz\n",
+                name, want_w, want_h, best_refresh);
+
+        free(name);
+        free(oinfo);
+    }
+
+    if (applied > 0)
+        xcb_flush(conn);
+
+    free(res);
+    xcb_disconnect(conn);
+    isde_config_free(cfg);
+}
+
 static void apply_input_settings(void)
 {
     char errbuf[256];
@@ -177,8 +345,11 @@ static void on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Session *s = (Session *)user_data;
+    if (strcmp(section, "display") == 0 ||
+        strcmp(section, "*") == 0) {
+        s->reload_display = 1;
+    }
     if (strcmp(section, "appearance") == 0 ||
-        strcmp(section, "display") == 0 ||
         strcmp(section, "*") == 0) {
         s->reload_appearance = 1;
     }
@@ -398,6 +569,13 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
     (void)id;
     Session *s = (Session *)client_data;
 
+    if (s->reload_display) {
+        s->reload_display = 0;
+        fprintf(stderr, "isde-session: display config changed, applying\n");
+        apply_display_settings();
+        apply_appearance_settings();
+    }
+
     if (s->reload_appearance) {
         s->reload_appearance = 0;
         fprintf(stderr, "isde-session: appearance changed, "
@@ -456,6 +634,7 @@ int session_init(Session *s)
     autostart_load_xdg(s);
 
     /* Apply settings from config before starting components */
+    apply_display_settings();
     apply_appearance_settings();
     apply_input_settings();
 

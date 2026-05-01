@@ -64,6 +64,7 @@ typedef struct Session {
 
     /* Flags set from D-Bus callbacks */
     volatile sig_atomic_t reload_appearance;
+    volatile sig_atomic_t reload_display;
 
     /* Pending confirmation action from ConfirmationRequested signal */
     char              confirm_action[16];

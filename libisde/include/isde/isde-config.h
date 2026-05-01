@@ -74,6 +74,8 @@ int isde_config_write_int(const char *path, const char *section,
                            const char *key, int64_t value);
 int isde_config_write_bool(const char *path, const char *section,
                             const char *key, int value);
+int isde_config_write_double(const char *path, const char *section,
+                              const char *key, double value);
 
 #ifdef __cplusplus
 }

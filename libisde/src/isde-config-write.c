@@ -169,3 +169,11 @@ int isde_config_write_bool(const char *path, const char *section,
 {
     return write_value(path, section, key, value ? "true" : "false");
 }
+
+int isde_config_write_double(const char *path, const char *section,
+                              const char *key, double value)
+{
+    char val_str[32];
+    snprintf(val_str, sizeof(val_str), "%.2f", value);
+    return write_value(path, section, key, val_str);
+}
