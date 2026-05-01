@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ISDE VERSION 0.7.1 LANGUAGES C)
+project(ISDE VERSION 0.8.0 LANGUAGES C)
 
 # Default CMAKE_INSTALL_PREFIX to /usr unless the user overrides it.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -28,7 +28,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 # --- Core dependencies (all components) ---
-pkg_check_modules(ISW REQUIRED IMPORTED_TARGET isw>=0.6.0)
+pkg_check_modules(ISW REQUIRED IMPORTED_TARGET isw>=0.6.1)
 
 # If libISW is not installed, allow overriding its include/lib paths.
 # Usage: cmake -B build -DISW_LOCAL_DIR=/home/user/libISW
