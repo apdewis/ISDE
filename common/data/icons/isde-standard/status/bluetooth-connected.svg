@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<!-- Bluetooth rune -->
+<path d="M24,6 L24,42 L34,32 L14,16 M24,6 L34,16 L14,32 L24,42" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<!-- Connection dots -->
+<circle cx="8" cy="20" r="2.5" fill="currentColor"/>
+<circle cx="8" cy="28" r="2.5" fill="currentColor"/>
+<circle cx="40" cy="20" r="2.5" fill="currentColor"/>
+<circle cx="40" cy="28" r="2.5" fill="currentColor"/>
+</svg>
