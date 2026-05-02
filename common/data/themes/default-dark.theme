@@ -6,7 +6,7 @@ Author=ISDE Project
 Background=#151525
 BackgroundLight=#252535
 BackgroundBright=#4A4A6A
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 ForegroundDim=#B0B0C0
 ForegroundLight=#E8E8F0
 Border=#585870
@@ -48,49 +48,49 @@ HoverForeground=#D8D8E8
 
 [Menu]
 Background=#2E2E3E
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Border=#585870
 HoverBackground=#2E2E3E
 HoverForeground=#D8D8E8
 
 [MenuItem]
 Background=#2E2E3E
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Border=#2E2E3E
 HoverBackground=#3E3E5E
 HoverForeground=#E8E8F0
 
 [Taskbar]
 Background=#252535
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Border=#585870
 HoverBackground=#2E2E3E
 HoverForeground=#D8D8E8
 
 [TaskbarButton]
 Background=#252535
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Border=#252535
 HoverBackground=#3E3E5E
 HoverForeground=#E8E8F0
 
 [TaskbarButtonActive]
 Background=#3E3E5E
-Foreground=#E8E8F0
+Foreground=#D0D0D0
 Border=#585870
 HoverBackground=#3E3E5E
 HoverForeground=#E8E8F0
 
 [TaskbarButtonFocus]
 Background=#1d638f
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Border=#1976D2
 HoverBackground=#64B5F6
 HoverForeground=#D8D8E8
 
 [Terminal]
 Background=#151525
-Foreground=#D8D8E8
+Foreground=#D0D0D0
 Cursor=#D8D8E8
 Color0=#2E2E3E
 Color1=#EF5350
