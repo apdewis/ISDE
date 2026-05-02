@@ -196,8 +196,8 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     if (vol_icon)
         IswArgImageOff(&ab, vol_icon);
     IswArgState(&ab, muted ? True : False);
-    IswArgWidth(&ab, 20);
-    IswArgHeight(&ab, 20);
+    IswArgWidth(&ab, 24);
+    IswArgHeight(&ab, 24);
     IswArgJustify(&ab, IswJustifyCenter);
     Widget mb = IswCreateManagedWidget("volMute", toggleButtonWidgetClass,
                                        ctl_row, ab.args, ab.count);
