@@ -9,6 +9,7 @@
 #include "tray-bt.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* ---------- helpers: extract properties from variant iterators ---------- */
@@ -89,11 +90,13 @@ static void parse_device_properties(DeviceInfo *d, DBusMessageIter *dict)
             dbus_bool_t v;
             dbus_message_iter_get_basic(&variant, &v);
             d->paired = v;
+            d->busy = 0;
         } else if (strcmp(key, "Connected") == 0 &&
                    vtype == DBUS_TYPE_BOOLEAN) {
             dbus_bool_t v;
             dbus_message_iter_get_basic(&variant, &v);
             d->connected = v;
+            d->busy = 0;
         } else if (strcmp(key, "Trusted") == 0 && vtype == DBUS_TYPE_BOOLEAN) {
             dbus_bool_t v;
             dbus_message_iter_get_basic(&variant, &v);
@@ -110,7 +113,7 @@ static void parse_device_properties(DeviceInfo *d, DBusMessageIter *dict)
 
 /* ---------- signal filter ---------- */
 
-static DeviceInfo *find_device_by_path(TrayBt *tb, const char *path)
+DeviceInfo *tb_bluez_find_device(TrayBt *tb, const char *path)
 {
     for (int i = 0; i < tb->ndevices; i++) {
         if (strcmp(tb->devices[i].path, path) == 0)
@@ -152,7 +155,7 @@ static void handle_properties_changed(TrayBt *tb, DBusMessage *msg)
     }
 
     if (strcmp(iface, BLUEZ_DEVICE_IFACE) == 0) {
-        DeviceInfo *dev = find_device_by_path(tb, path);
+        DeviceInfo *dev = tb_bluez_find_device(tb, path);
         if (dev && dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_ARRAY) {
             DBusMessageIter dict;
             dbus_message_iter_recurse(&iter, &dict);
@@ -190,7 +193,7 @@ static void handle_interfaces_added(TrayBt *tb, DBusMessage *msg)
 
         if (strcmp(iface, BLUEZ_DEVICE_IFACE) == 0 && path_is_device(path)) {
             if (tb->ndevices < MAX_DEVICES &&
-                !find_device_by_path(tb, path)) {
+                !tb_bluez_find_device(tb, path)) {
                 DeviceInfo *d = &tb->devices[tb->ndevices];
                 memset(d, 0, sizeof(*d));
                 snprintf(d->path, sizeof(d->path), "%s", path);
@@ -630,6 +633,49 @@ int tb_bluez_stop_discovery(TrayBt *tb)
 
 /* ---------- Device methods ---------- */
 
+typedef struct {
+    TrayBt *tb;
+    char    path[PATH_LEN];
+    char    name[NAME_LEN];
+} DeviceOpData;
+
+static void device_op_reply_cb(DBusPendingCall *pending, void *user_data)
+{
+    DeviceOpData *op = (DeviceOpData *)user_data;
+    TrayBt *tb = op->tb;
+    DBusMessage *reply = dbus_pending_call_steal_reply(pending);
+
+    if (reply) {
+        if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+            DeviceInfo *dev = tb_bluez_find_device(tb, op->path);
+            if (dev)
+                dev->busy = 0;
+
+            const char *err_msg = NULL;
+            dbus_message_get_args(reply, NULL,
+                                  DBUS_TYPE_STRING, &err_msg,
+                                  DBUS_TYPE_INVALID);
+
+            char buf[512];
+            snprintf(buf, sizeof(buf), "%s: %s",
+                     op->name[0] ? op->name : "Device",
+                     err_msg ? err_msg : "Operation failed");
+
+            isde_dialog_message(tb->toplevel, "Bluetooth", buf, NULL, NULL);
+            tb_menu_rebuild(tb);
+        }
+        dbus_message_unref(reply);
+    } else {
+        DeviceInfo *dev = tb_bluez_find_device(tb, op->path);
+        if (dev)
+            dev->busy = 0;
+        tb_menu_rebuild(tb);
+    }
+
+    free(op);
+    dbus_pending_call_unref(pending);
+}
+
 static int send_device_method(TrayBt *tb, const char *path,
                               const char *method)
 {
@@ -649,9 +695,23 @@ static int send_device_method(TrayBt *tb, const char *path,
     }
     dbus_message_unref(msg);
 
-    if (pending)
-        dbus_pending_call_set_notify(pending, async_reply_cb,
-                                     (void *)method, NULL);
+    if (pending) {
+        DeviceOpData *op = malloc(sizeof(*op));
+        if (op) {
+            op->tb = tb;
+            snprintf(op->path, sizeof(op->path), "%s", path);
+            DeviceInfo *dev = tb_bluez_find_device(tb, path);
+            if (dev && dev->name[0])
+                snprintf(op->name, sizeof(op->name), "%s", dev->name);
+            else
+                op->name[0] = '\0';
+            dbus_pending_call_set_notify(pending, device_op_reply_cb,
+                                         op, NULL);
+        } else {
+            dbus_pending_call_set_notify(pending, async_reply_cb,
+                                         (void *)method, NULL);
+        }
+    }
     return 0;
 }
 

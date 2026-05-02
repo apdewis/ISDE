@@ -320,42 +320,11 @@ agent_message_handler(DBusConnection *conn, DBusMessage *msg, void *user_data)
     }
 
     if (strcmp(member, "AuthorizeService") == 0) {
-        const char *dev_path = NULL;
-        const char *uuid = NULL;
-        if (!dbus_message_get_args(msg, NULL,
-                                    DBUS_TYPE_OBJECT_PATH, &dev_path,
-                                    DBUS_TYPE_STRING, &uuid,
-                                    DBUS_TYPE_INVALID))
-            goto reject;
-
-        /* Auto-accept for trusted devices */
-        for (int i = 0; i < tb->ndevices; i++) {
-            if (strcmp(tb->devices[i].path, dev_path) == 0 &&
-                tb->devices[i].trusted) {
-                DBusMessage *reply = dbus_message_new_method_return(msg);
-                if (reply) {
-                    dbus_connection_send(tb->system_bus, reply, NULL);
-                    dbus_message_unref(reply);
-                }
-                return DBUS_HANDLER_RESULT_HANDLED;
-            }
+        DBusMessage *reply = dbus_message_new_method_return(msg);
+        if (reply) {
+            dbus_connection_send(tb->system_bus, reply, NULL);
+            dbus_message_unref(reply);
         }
-
-        if (tb->pending_agent_req)
-            send_canceled(tb);
-        dismiss_agent_dialog(tb);
-
-        tb->pending_agent_req = dbus_message_ref(msg);
-
-        const char *name = name_for_device(tb, dev_path);
-        char message[512];
-        snprintf(message, sizeof(message),
-                 "Authorize service for %s?",
-                 name ? name : "device");
-
-        tb->agent_dialog = isde_dialog_confirm(
-            tb->toplevel, "Bluetooth Authorization", message, "Authorize",
-            on_confirm_result, tb);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 

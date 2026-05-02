@@ -38,6 +38,7 @@ typedef struct MenuAction {
 static MenuAction *actions = NULL;
 static int nactions = 0;
 static int cap_actions = 0;
+static int in_action = 0;
 
 static MenuAction *alloc_action(TrayBt *tb, const char *path)
 {
@@ -80,25 +81,53 @@ static void on_scan(Widget w, IswPointer client_data, IswPointer call_data)
 
 static void on_connect(Widget w, IswPointer client_data, IswPointer call_data)
 {
-    (void)w; (void)call_data;
+    (void)call_data;
     MenuAction *a = (MenuAction *)client_data;
+    DeviceInfo *dev = tb_bluez_find_device(a->tb, a->path);
+    if (dev)
+        dev->busy = 1;
+    in_action = 1;
+    if (tb_bluez_device_trust(a->tb, a->path) == 0 && dev)
+        dev->trusted = 1;
     tb_bluez_device_connect(a->tb, a->path);
+    in_action = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, "Connecting...");
+    IswArgBuilderAdd(&ab, IswNsensitive, (IswArgVal)False);
+    IswSetValues(w, ab.args, ab.count);
 }
 
 static void on_disconnect(Widget w, IswPointer client_data,
                           IswPointer call_data)
 {
-    (void)w; (void)call_data;
+    (void)call_data;
     MenuAction *a = (MenuAction *)client_data;
+    DeviceInfo *dev = tb_bluez_find_device(a->tb, a->path);
+    if (dev)
+        dev->busy = 1;
     tb_bluez_device_disconnect(a->tb, a->path);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, "Disconnecting...");
+    IswArgBuilderAdd(&ab, IswNsensitive, (IswArgVal)False);
+    IswSetValues(w, ab.args, ab.count);
 }
 
 static void on_pair(Widget w, IswPointer client_data, IswPointer call_data)
 {
-    (void)w; (void)call_data;
+    (void)call_data;
     MenuAction *a = (MenuAction *)client_data;
-    tb_bluez_device_trust(a->tb, a->path);
+    DeviceInfo *dev = tb_bluez_find_device(a->tb, a->path);
+    if (dev)
+        dev->busy = 1;
+    in_action = 1;
+    if (tb_bluez_device_trust(a->tb, a->path) == 0 && dev)
+        dev->trusted = 1;
     tb_bluez_device_pair(a->tb, a->path);
+    in_action = 0;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, "Pairing...");
+    IswArgBuilderAdd(&ab, IswNsensitive, (IswArgVal)False);
+    IswSetValues(w, ab.args, ab.count);
 }
 
 /* ---------- popup dismiss ---------- */
@@ -244,10 +273,14 @@ static void add_device_row(TrayBt *tb, Widget listbox,
     IswArgLabel(&ab, btn_label);
     IswArgBorderWidth(&ab, 1);
     IswArgJustify(&ab, IswJustifyRight);
+    if (!btn_cb)
+        IswArgBuilderAdd(&ab, IswNsensitive, (IswArgVal)False);
     Widget btn = IswCreateManagedWidget("btBtn", commandWidgetClass,
                                          row, ab.args, ab.count);
-    MenuAction *a = alloc_action(tb, d->path);
-    IswAddCallback(btn, IswNcallback, btn_cb, a);
+    if (btn_cb) {
+        MenuAction *a = alloc_action(tb, d->path);
+        IswAddCallback(btn, IswNcallback, btn_cb, a);
+    }
 
     IswManageChild(row);
 }
@@ -275,8 +308,12 @@ static void build_content(TrayBt *tb)
             if (!has_connected)
                 add_heading(listbox, "Connected");
             has_connected = 1;
-            add_device_row(tb, listbox, &tb->devices[i],
-                           "Disconnect", on_disconnect);
+            if (tb->devices[i].busy)
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Disconnecting...", NULL);
+            else
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Disconnect", on_disconnect);
         }
     }
 
@@ -290,8 +327,12 @@ static void build_content(TrayBt *tb)
             if (!has_paired)
                 add_heading(listbox, "Paired");
             has_paired = 1;
-            add_device_row(tb, listbox, &tb->devices[i],
-                           "Connect", on_connect);
+            if (tb->devices[i].busy)
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Connecting...", NULL);
+            else
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Connect", on_connect);
         }
     }
 
@@ -305,8 +346,12 @@ static void build_content(TrayBt *tb)
             if (!has_available)
                 add_heading(listbox, "Available");
             has_available = 1;
-            add_device_row(tb, listbox, &tb->devices[i],
-                           "Pair", on_pair);
+            if (tb->devices[i].busy)
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Pairing...", NULL);
+            else
+                add_device_row(tb, listbox, &tb->devices[i],
+                               "Pair", on_pair);
         }
     }
 
@@ -464,7 +509,7 @@ void tb_menu_hide(TrayBt *tb)
 
 void tb_menu_rebuild(TrayBt *tb)
 {
-    if (!tb->popup_visible || !tb->popup_listbox)
+    if (in_action || !tb->popup_visible || !tb->popup_listbox)
         return;
 
     nactions = 0;

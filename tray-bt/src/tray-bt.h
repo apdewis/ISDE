@@ -64,6 +64,7 @@ typedef struct DeviceInfo {
     int      connected;
     int      trusted;
     int16_t  rssi;
+    int      busy;
 } DeviceInfo;
 
 /* ---------- Icon states ---------- */
@@ -130,6 +131,7 @@ int  tb_bluez_device_disconnect(TrayBt *tb, const char *path);
 int  tb_bluez_device_pair(TrayBt *tb, const char *path);
 int  tb_bluez_device_trust(TrayBt *tb, const char *path);
 int  tb_bluez_device_remove(TrayBt *tb, const char *path);
+DeviceInfo *tb_bluez_find_device(TrayBt *tb, const char *path);
 
 /* ---------- agent.c ---------- */
 int  tb_agent_init(TrayBt *tb);
