@@ -274,8 +274,10 @@ static void linux_monitor_dispatch(MountDaemon *md)
     } else if (strcmp(action, "remove") == 0) {
         Device *d = mountd_find_device(md, devnode);
         if (d) {
-            /* If still mounted, the kernel already removed it;
-             * just update our state */
+            if (d->is_luks && d->is_unlocked && d->luks_opened_by_us) {
+                char closeerr[256];
+                mountd_luks_close(d->dm_name, closeerr, sizeof(closeerr));
+            }
             d->is_mounted = 0;
             d->mount_point[0] = '\0';
             mountd_dbus_emit_device_removed(md, devnode);

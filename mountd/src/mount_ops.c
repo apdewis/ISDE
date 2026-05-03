@@ -268,6 +268,18 @@ int mountd_do_eject(MountDaemon *md, const char *dev_path,
         }
     }
 
+    /* Close LUKS if still open (unmount may have already closed it,
+     * but the device could be unlocked without being mounted) */
+    if (dev->is_luks && dev->is_unlocked && dev->luks_opened_by_us) {
+        char closeerr[256];
+        if (mountd_luks_close(dev->dm_name, closeerr,
+                              sizeof(closeerr)) == 0) {
+            dev->is_unlocked = 0;
+            dev->luks_opened_by_us = 0;
+            dev->inner_fs_type[0] = '\0';
+        }
+    }
+
     /* Platform-specific eject */
     if (md->plat->eject(dev_path) != 0) {
         snprintf(errbuf, errlen, "Eject failed for %s", dev_path);

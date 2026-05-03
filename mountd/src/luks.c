@@ -9,6 +9,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #ifdef __linux__
 
@@ -84,6 +86,11 @@ int mountd_luks_is_active(const char *dm_name)
 int mountd_luks_probe_fs(const char *dm_path,
                          char *fs_type, size_t fs_len)
 {
+    /* Wait for udev to create the device node */
+    struct stat st;
+    for (int i = 0; i < 50 && stat(dm_path, &st) != 0; i++)
+        usleep(100000);
+
     blkid_probe pr = blkid_new_probe_from_filename(dm_path);
     if (!pr) {
         return -1;
