@@ -24,23 +24,12 @@ static void on_input_result(IsdeDialogResult result, const char *text,
     if (result == ISDE_DIALOG_OK && text && text[0]) {
         char passphrase[256];
         snprintf(passphrase, sizeof(passphrase), "%s", text);
-
-        char mount_result[256];
-        if (tm_dbus_mount(tm, tm->pw_dev_path, passphrase,
-                          mount_result, sizeof(mount_result)) == 0) {
-            fprintf(stderr, "isde-tray-mount: unlocked+mounted %s at %s\n",
-                    tm->pw_dev_path, mount_result);
-        } else {
-            fprintf(stderr, "isde-tray-mount: unlock failed: %s\n",
-                    mount_result);
-        }
-
+        tm_dbus_mount(tm, tm->pw_dev_path, passphrase);
         memset(passphrase, 0, sizeof(passphrase));
     }
 
     tm->pw_shell = NULL;
     memset(tm->pw_dev_path, 0, sizeof(tm->pw_dev_path));
-    tm_dbus_list_devices(tm);
 }
 
 /* ---------- public API ---------- */

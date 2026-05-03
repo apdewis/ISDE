@@ -91,13 +91,10 @@ void tray_mount_cleanup(TrayMount *tm);
 int  tm_dbus_init(TrayMount *tm);
 void tm_dbus_cleanup(TrayMount *tm);
 int  tm_dbus_list_devices(TrayMount *tm);
-int  tm_dbus_mount(TrayMount *tm, const char *dev_path,
-                   const char *passphrase,
-                   char *result, size_t result_len);
-int  tm_dbus_unmount(TrayMount *tm, const char *dev_path,
-                     char *errbuf, size_t errlen);
-int  tm_dbus_eject(TrayMount *tm, const char *dev_path,
-                   char *errbuf, size_t errlen);
+void tm_dbus_mount(TrayMount *tm, const char *dev_path,
+                   const char *passphrase);
+void tm_dbus_unmount(TrayMount *tm, const char *dev_path);
+void tm_dbus_eject(TrayMount *tm, const char *dev_path);
 
 /* ---------- popup.c ---------- */
 void tm_popup_init(TrayMount *tm);

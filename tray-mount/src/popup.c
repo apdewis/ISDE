@@ -57,7 +57,6 @@ static void on_action(Widget w, IswPointer client_data, IswPointer call_data)
         return;
 
     DeviceInfo *d = &tm->devices[a->device_idx];
-    char result[256];
 
     switch (a->action) {
     case ACTION_MOUNT:
@@ -66,30 +65,19 @@ static void on_action(Widget w, IswPointer client_data, IswPointer call_data)
             tm_password_dialog_show(tm, a->device_idx);
             return;
         }
-        if (tm_dbus_mount(tm, d->dev_path, "", result, sizeof(result)) == 0)
-            fprintf(stderr, "isde-tray-mount: mounted %s at %s\n",
-                    d->dev_path, result);
-        else
-            fprintf(stderr, "isde-tray-mount: mount failed: %s\n", result);
+        tm_dbus_mount(tm, d->dev_path, "");
         break;
 
     case ACTION_UNMOUNT:
-        if (tm_dbus_unmount(tm, d->dev_path, result, sizeof(result)) == 0)
-            fprintf(stderr, "isde-tray-mount: unmounted %s\n", d->dev_path);
-        else
-            fprintf(stderr, "isde-tray-mount: unmount failed: %s\n", result);
+        tm_dbus_unmount(tm, d->dev_path);
         break;
 
     case ACTION_EJECT:
-        if (tm_dbus_eject(tm, d->dev_path, result, sizeof(result)) == 0)
-            fprintf(stderr, "isde-tray-mount: ejected %s\n", d->dev_path);
-        else
-            fprintf(stderr, "isde-tray-mount: eject failed: %s\n", result);
+        tm_dbus_eject(tm, d->dev_path);
         break;
     }
 
     tm_popup_hide(tm);
-    tm_dbus_list_devices(tm);
 }
 
 /* ---------- popup dismiss ---------- */

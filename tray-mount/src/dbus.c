@@ -261,43 +261,28 @@ int tm_dbus_list_devices(TrayMount *tm)
     return 0;
 }
 
-/* ---------- Mount / Unmount / Eject ---------- */
+/* ---------- async Mount / Unmount / Eject ---------- */
 
-static int call_device_method(TrayMount *tm, const char *method,
-                              const char *dev_path,
-                              char *result, size_t result_len)
+#define OP_MOUNT   0
+#define OP_UNMOUNT 1
+#define OP_EJECT   2
+
+typedef struct {
+    TrayMount *tm;
+    char       dev_path[DEV_PATH_LEN];
+    int        op;
+} MountOpCtx;
+
+static void on_op_reply(DBusPendingCall *pending, void *user_data)
 {
-    if (!tm->system_bus) {
-        snprintf(result, result_len, "D-Bus not connected");
-        return -1;
-    }
+    MountOpCtx *ctx = (MountOpCtx *)user_data;
+    TrayMount *tm = ctx->tm;
 
-    DBusMessage *msg = dbus_message_new_method_call(
-        MOUNTD_DBUS_SERVICE, MOUNTD_DBUS_PATH,
-        MOUNTD_DBUS_INTERFACE, method);
-    if (!msg) {
-        snprintf(result, result_len, "Cannot create D-Bus message");
-        return -1;
-    }
-
-    dbus_message_append_args(msg,
-                             DBUS_TYPE_STRING, &dev_path,
-                             DBUS_TYPE_INVALID);
-
-    DBusError err;
-    dbus_error_init(&err);
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(
-        tm->system_bus, msg, 5000, &err);
-    dbus_message_unref(msg);
-
+    DBusMessage *reply = dbus_pending_call_steal_reply(pending);
     if (!reply) {
-        if (dbus_error_is_set(&err)) {
-            snprintf(result, result_len, "%s", err.message);
-            dbus_error_free(&err);
-        } else {
-            snprintf(result, result_len, "No reply");
-        }
-        return -1;
+        fprintf(stderr, "isde-tray-mount: no reply for %s\n", ctx->dev_path);
+        tm_dbus_list_devices(tm);
+        return;
     }
 
     dbus_bool_t success = FALSE;
@@ -307,28 +292,67 @@ static int call_device_method(TrayMount *tm, const char *method,
                           DBUS_TYPE_STRING, &res_str,
                           DBUS_TYPE_INVALID);
 
-    snprintf(result, result_len, "%s", res_str);
+    const char *op_name = ctx->op == OP_MOUNT ? "mount"
+                        : ctx->op == OP_UNMOUNT ? "unmount" : "eject";
+
+    if (success) {
+        fprintf(stderr, "isde-tray-mount: %s OK: %s %s\n",
+                op_name, ctx->dev_path, res_str);
+    } else {
+        fprintf(stderr, "isde-tray-mount: %s failed: %s\n",
+                op_name, res_str);
+        isde_dialog_message(tm->toplevel, "Error", res_str, NULL, NULL);
+    }
+
     dbus_message_unref(reply);
-    dbus_error_free(&err);
-    return success ? 0 : -1;
+    tm_dbus_list_devices(tm);
 }
 
-int tm_dbus_mount(TrayMount *tm, const char *dev_path,
-                  const char *passphrase,
-                  char *result, size_t result_len)
+static int send_device_op(TrayMount *tm, const char *method,
+                          const char *dev_path, int op, int timeout)
 {
-    if (!tm->system_bus) {
-        snprintf(result, result_len, "D-Bus not connected");
+    if (!tm->system_bus)
+        return -1;
+
+    DBusMessage *msg = dbus_message_new_method_call(
+        MOUNTD_DBUS_SERVICE, MOUNTD_DBUS_PATH,
+        MOUNTD_DBUS_INTERFACE, method);
+    if (!msg)
+        return -1;
+
+    dbus_message_append_args(msg,
+                             DBUS_TYPE_STRING, &dev_path,
+                             DBUS_TYPE_INVALID);
+
+    DBusPendingCall *pending = NULL;
+    if (!dbus_connection_send_with_reply(tm->system_bus, msg, &pending,
+                                         timeout) || !pending) {
+        dbus_message_unref(msg);
         return -1;
     }
+    dbus_message_unref(msg);
+
+    MountOpCtx *ctx = malloc(sizeof(*ctx));
+    ctx->tm = tm;
+    snprintf(ctx->dev_path, sizeof(ctx->dev_path), "%s", dev_path);
+    ctx->op = op;
+
+    dbus_pending_call_set_notify(pending, on_op_reply, ctx, free);
+    dbus_pending_call_unref(pending);
+    return 0;
+}
+
+void tm_dbus_mount(TrayMount *tm, const char *dev_path,
+                   const char *passphrase)
+{
+    if (!tm->system_bus)
+        return;
 
     DBusMessage *msg = dbus_message_new_method_call(
         MOUNTD_DBUS_SERVICE, MOUNTD_DBUS_PATH,
         MOUNTD_DBUS_INTERFACE, "Mount");
-    if (!msg) {
-        snprintf(result, result_len, "Cannot create D-Bus message");
-        return -1;
-    }
+    if (!msg)
+        return;
 
     const char *pw = passphrase ? passphrase : "";
     dbus_message_append_args(msg,
@@ -336,43 +360,29 @@ int tm_dbus_mount(TrayMount *tm, const char *dev_path,
                              DBUS_TYPE_STRING, &pw,
                              DBUS_TYPE_INVALID);
 
-    DBusError err;
-    dbus_error_init(&err);
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block(
-        tm->system_bus, msg, 10000, &err);
+    DBusPendingCall *pending = NULL;
+    if (!dbus_connection_send_with_reply(tm->system_bus, msg, &pending,
+                                         30000) || !pending) {
+        dbus_message_unref(msg);
+        return;
+    }
     dbus_message_unref(msg);
 
-    if (!reply) {
-        if (dbus_error_is_set(&err)) {
-            snprintf(result, result_len, "%s", err.message);
-            dbus_error_free(&err);
-        } else {
-            snprintf(result, result_len, "No reply");
-        }
-        return -1;
-    }
+    MountOpCtx *ctx = malloc(sizeof(*ctx));
+    ctx->tm = tm;
+    snprintf(ctx->dev_path, sizeof(ctx->dev_path), "%s", dev_path);
+    ctx->op = OP_MOUNT;
 
-    dbus_bool_t success = FALSE;
-    const char *res_str = "";
-    dbus_message_get_args(reply, NULL,
-                          DBUS_TYPE_BOOLEAN, &success,
-                          DBUS_TYPE_STRING, &res_str,
-                          DBUS_TYPE_INVALID);
-
-    snprintf(result, result_len, "%s", res_str);
-    dbus_message_unref(reply);
-    dbus_error_free(&err);
-    return success ? 0 : -1;
+    dbus_pending_call_set_notify(pending, on_op_reply, ctx, free);
+    dbus_pending_call_unref(pending);
 }
 
-int tm_dbus_unmount(TrayMount *tm, const char *dev_path,
-                    char *errbuf, size_t errlen)
+void tm_dbus_unmount(TrayMount *tm, const char *dev_path)
 {
-    return call_device_method(tm, "Unmount", dev_path, errbuf, errlen);
+    send_device_op(tm, "Unmount", dev_path, OP_UNMOUNT, 5000);
 }
 
-int tm_dbus_eject(TrayMount *tm, const char *dev_path,
-                  char *errbuf, size_t errlen)
+void tm_dbus_eject(TrayMount *tm, const char *dev_path)
 {
-    return call_device_method(tm, "Eject", dev_path, errbuf, errlen);
+    send_device_op(tm, "Eject", dev_path, OP_EJECT, 5000);
 }
