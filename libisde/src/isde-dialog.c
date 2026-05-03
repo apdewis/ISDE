@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include <xcb/xcb.h>
-#include <xcb/xcb_icccm.h>
 #include <ISW/StringDefs.h>
 #include <ISW/Shell.h>
 #include <ISW/Command.h>
@@ -94,45 +93,38 @@ Widget isde_dialog_create_shell(Widget parent, const char *name,
 
 void isde_dialog_popup(Widget shell, IswGrabKind grab)
 {
-    if (!shell)
+    if (!shell) {
         return;
+    }
 
+    /* Set _NET_WM_STATE_ABOVE before mapping so the WM sees it */
     IswRealizeWidget(shell);
-
     xcb_connection_t *conn = IswDisplay(shell);
-    xcb_window_t win = IswWindow(shell);
-    double sf = ISWScaleFactor(shell);
-
     IsdeEwmh *ewmh = isde_ewmh_init(conn, 0);
     if (ewmh) {
-        /* Center on workarea */
+        xcb_ewmh_connection_t *ec = isde_ewmh_connection(ewmh);
+        xcb_atom_t above = ec->_NET_WM_STATE_ABOVE;
+        xcb_ewmh_set_wm_state(ec, IswWindow(shell), 1, &above);
+        xcb_flush(conn);
+    }
+
+    IswPopup(shell, grab);
+
+    /* Center on workarea — WM honors the ConfigureRequest */
+    if (ewmh) {
         int wa_x, wa_y, wa_w, wa_h;
         if (isde_ewmh_get_workarea(ewmh, &wa_x, &wa_y, &wa_w, &wa_h)) {
             Dimension w = shell->core.width;
             Dimension h = shell->core.height;
             Dimension bw = shell->core.border_width;
-            int total_w = (int)((w + 2 * bw) * sf);
-            int total_h = (int)((h + 2 * bw) * sf);
-
-            int px = wa_x + (wa_w - total_w) / 2;
-            int py = wa_y + (wa_h - total_h) / 2;
-
-            xcb_size_hints_t hints;
-            memset(&hints, 0, sizeof(hints));
-            xcb_icccm_size_hints_set_position(&hints, 0, px, py);
-            xcb_icccm_set_wm_normal_hints(conn, win, &hints);
+            int total_w = (int)((w + 2 * bw));
+            int total_h = (int)((h + 2 * bw));
+            int lx = (int)((wa_x + (wa_w - total_w) / 2));
+            int ly = (int)((wa_y + (wa_h - total_h) / 2));
+            IswConfigureWidget(shell, lx, ly, w, h, bw);
         }
-
-        /* Keep above other windows */
-        xcb_ewmh_connection_t *ec = isde_ewmh_connection(ewmh);
-        xcb_atom_t above = ec->_NET_WM_STATE_ABOVE;
-        xcb_ewmh_set_wm_state(ec, win, 1, &above);
-
-        xcb_flush(conn);
         isde_ewmh_free(ewmh);
     }
-
-    IswPopup(shell, grab);
 }
 
 void isde_dialog_dismiss(Widget shell)
