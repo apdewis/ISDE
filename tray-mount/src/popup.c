@@ -224,7 +224,7 @@ void tm_popup_show(TrayMount *tm)
                 snprintf(label, sizeof(label), "%s (%s)",
                          d->vendor, d->dev_path);
             else
-                snprintf(label, sizeof(label), "%s%s", d->dev_path);
+                snprintf(label, sizeof(label), "%s", d->dev_path);
 
             IswArgBuilderReset(&ab);
             IswArgBorderWidth(&ab, 0);
@@ -286,16 +286,14 @@ void tm_popup_show(TrayMount *tm)
     position_popup(tm);
     IswPopup(tm->popup_shell, IswGrabNone);
 
-    {
-        xcb_connection_t *conn = IswDisplay(tm->toplevel);
-        xcb_grab_pointer(conn, True, IswWindow(tm->popup_shell),
-                         XCB_EVENT_MASK_BUTTON_PRESS |
-                         XCB_EVENT_MASK_BUTTON_RELEASE,
-                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-        xcb_flush(conn);
-    }
-
+    xcb_connection_t *conn = IswDisplay(tm->toplevel);
+    xcb_grab_pointer(conn, True, IswWindow(tm->popup_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
+    
     IswAddEventHandler(tm->popup_shell, POPUP_DISMISS_MASK, False,
                        popup_outside_handler, tm);
     tm->popup_visible = 1;
