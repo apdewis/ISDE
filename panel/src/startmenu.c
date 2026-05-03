@@ -20,7 +20,9 @@
 #endif
 
 #include <xcb/xcb_keysyms.h>
+#include <xkbcommon/xkbcommon.h>
 #include <X11/keysym.h>
+#include <ctype.h>
 
 static char *start_icon_path;
 static char *shutdown_icon_path;
@@ -228,6 +230,130 @@ static void app_selected(Widget w, IswPointer client_data,
     launch_app(p, ret->list_index);
 }
 
+/* ---------- type-ahead search ---------- */
+
+static void search_run_filter(Panel *p)
+{
+    if (p->search_len == 0) {
+        p->nsearch_results = 0;
+        static String empty[] = { NULL };
+        IswListChange(p->search_list, empty, 0, 0, True);
+        return;
+    }
+
+    if (!p->search_results) {
+        p->cap_search_results = 64;
+        p->search_results = malloc(p->cap_search_results * sizeof(StartMenuApp *));
+    }
+    p->nsearch_results = 0;
+
+    for (int i = 0; i < p->ncategories; i++) {
+        StartMenuCategory *c = &p->categories[i];
+        for (int j = 0; j < c->napps; j++) {
+            StartMenuApp *app = &c->apps[j];
+            if (strcasestr(app->name, p->search_buf)) {
+                goto match;
+            }
+            const char *gn = isde_desktop_generic_name(app->entry);
+            if (gn && strcasestr(gn, p->search_buf)) {
+                goto match;
+            }
+            continue;
+match:
+            if (p->nsearch_results >= p->cap_search_results) {
+                p->cap_search_results *= 2;
+                p->search_results = realloc(p->search_results,
+                    p->cap_search_results * sizeof(StartMenuApp *));
+            }
+            p->search_results[p->nsearch_results++] = app;
+        }
+    }
+
+    free(p->search_names);
+    p->search_names = malloc((p->nsearch_results + 1) * sizeof(String));
+    for (int i = 0; i < p->nsearch_results; i++) {
+        p->search_names[i] = (String)p->search_results[i]->name;
+    }
+    p->search_names[p->nsearch_results] = NULL;
+
+    IswListChange(p->search_list, p->search_names, p->nsearch_results, 0, True);
+    IswViewportSetLocation(p->search_viewport, 0.0, 0.0);
+    if (p->nsearch_results > 0) {
+        p->app_highlight = 0;
+        IswListHighlight(p->search_list, 0);
+    } else {
+        p->app_highlight = -1;
+    }
+}
+
+static void search_activate(Panel *p)
+{
+    p->search_active = 1;
+    p->menu_focus = 2;
+    p->app_highlight = -1;
+    IswUnmapWidget(p->cat_viewport);
+    IswUnmapWidget(p->app_viewport);
+    IswMapWidget(p->search_input);
+    IswMapWidget(p->search_viewport);
+}
+
+static void search_deactivate(Panel *p)
+{
+    p->search_active = 0;
+    p->search_buf[0] = '\0';
+    p->search_len = 0;
+    p->menu_focus = 0;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, "");
+    IswSetValues(p->search_input, ab.args, ab.count);
+
+    IswUnmapWidget(p->search_input);
+    IswUnmapWidget(p->search_viewport);
+    IswMapWidget(p->cat_viewport);
+
+    if (p->active_cat >= 0) {
+        IswMapWidget(p->app_viewport);
+    }
+
+    p->cat_highlight = 0;
+    IswListHighlight(p->cat_box, 0);
+}
+
+static void search_update_display(Panel *p)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, p->search_buf);
+    IswSetValues(p->search_input, ab.args, ab.count);
+    IswTextSetInsertionPoint(p->search_input, (ISWTextPosition)p->search_len);
+    search_run_filter(p);
+}
+
+static void search_selected(Widget w, IswPointer client_data,
+                            IswPointer call_data)
+{
+    (void)w;
+    Panel *p = (Panel *)client_data;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
+    if (ret->list_index == XAW_LIST_NONE ||
+        ret->list_index >= p->nsearch_results) {
+        return;
+    }
+    IsdeDesktopEntry *de = p->search_results[ret->list_index]->entry;
+    panel_dismiss_popup(p);
+    isde_desktop_launch(de, NULL, 0);
+}
+
+static void launch_search_result(Panel *p, int index)
+{
+    if (index < 0 || index >= p->nsearch_results) {
+        return;
+    }
+    IsdeDesktopEntry *de = p->search_results[index]->entry;
+    panel_dismiss_popup(p);
+    isde_desktop_launch(de, NULL, 0);
+}
+
 /* ---------- keyboard navigation ---------- */
 
 static xcb_key_symbols_t *key_syms;
@@ -267,6 +393,72 @@ static void menu_key_handler(Widget w, IswPointer client_data,
     xcb_keysym_t sym = xcb_key_symbols_get_keysym(key_syms,
                                                    kev->detail, 0);
 
+    /* Super always dismisses */
+    if (sym == XK_Super_L || sym == XK_Super_R) {
+        panel_dismiss_popup(p);
+        return;
+    }
+
+    /* Escape: exit search mode first, then dismiss */
+    if (sym == XK_Escape) {
+        if (p->search_active) {
+            search_deactivate(p);
+        } else {
+            panel_dismiss_popup(p);
+        }
+        return;
+    }
+
+    /* Backspace in search mode */
+    if (sym == XK_BackSpace) {
+        if (p->search_active) {
+            if (p->search_len > 0) {
+                /* Remove one UTF-8 character from the end */
+                int i = p->search_len - 1;
+                while (i > 0 && (p->search_buf[i] & 0xC0) == 0x80) {
+                    i--;
+                }
+                p->search_buf[i] = '\0';
+                p->search_len = i;
+                if (p->search_len == 0) {
+                    search_deactivate(p);
+                } else {
+                    search_update_display(p);
+                }
+            }
+        }
+        return;
+    }
+
+    /* Up/Down navigate in search mode */
+    if (p->search_active) {
+        if (sym == XK_Down) {
+            int next = p->app_highlight + 1;
+            if (next >= p->nsearch_results) {
+                next = p->nsearch_results - 1;
+            }
+            if (next >= 0) {
+                p->app_highlight = next;
+                IswListHighlight(p->search_list, next);
+            }
+            return;
+        }
+        if (sym == XK_Up) {
+            int next = p->app_highlight - 1;
+            if (next < 0) {
+                next = 0;
+            }
+            p->app_highlight = next;
+            IswListHighlight(p->search_list, next);
+            return;
+        }
+        if (sym == XK_Return || sym == XK_KP_Enter) {
+            launch_search_result(p, p->app_highlight);
+            return;
+        }
+    }
+
+    /* Normal category/app navigation */
     switch (sym) {
     case XK_Down:
         if (p->menu_focus == 0) {
@@ -346,11 +538,25 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         }
         break;
 
-    case XK_Escape:
-    case XK_Super_L:
-    case XK_Super_R:
-        panel_dismiss_popup(p);
+    default: {
+        /* Printable character — activate search */
+        char utf8[8];
+        int len = xkb_keysym_to_utf8(sym, utf8, sizeof(utf8));
+        if (len > 1 && (unsigned char)utf8[0] >= 0x20) {
+            /* len includes null terminator from xkb_keysym_to_utf8 */
+            int charlen = len - 1;
+            if (p->search_len + charlen < (int)sizeof(p->search_buf) - 1) {
+                if (!p->search_active) {
+                    search_activate(p);
+                }
+                memcpy(p->search_buf + p->search_len, utf8, charlen);
+                p->search_len += charlen;
+                p->search_buf[p->search_len] = '\0';
+                search_update_display(p);
+            }
+        }
         break;
+    }
     }
 }
 
@@ -425,6 +631,14 @@ void startmenu_toggle(Panel *p)
     p->cat_highlight = 0;
     p->app_highlight = -1;
     p->menu_focus = 0;
+
+    /* Reset search state */
+    p->search_active = 0;
+    p->search_buf[0] = '\0';
+    p->search_len = 0;
+    IswUnmapWidget(p->search_input);
+    IswUnmapWidget(p->search_viewport);
+    IswMapWidget(p->cat_viewport);
     IswUnmapWidget(p->app_viewport);
 
     /* Highlight first category and grab keyboard */
@@ -485,6 +699,13 @@ static void startmenu_refresh(Panel *p)
     static String empty[] = { NULL };
     IswListChange(p->app_box, empty, 0, 0, True);
     IswUnmapWidget(p->app_viewport);
+
+    /* Search results point into freed category data */
+    p->nsearch_results = 0;
+    p->search_active = 0;
+    p->search_buf[0] = '\0';
+    p->search_len = 0;
+    IswListChange(p->search_list, empty, 0, 0, True);
 
     p->active_cat = -1;
     p->cat_highlight = -1;
@@ -744,6 +965,61 @@ void startmenu_init(Panel *p)
     IswOverrideTranslations(p->app_box,
                            IswParseTranslationTable(appTranslations));
 
+    /* Search input — single-line text entry, overlaps cat/app viewports */
+    #define SEARCH_BAR_HEIGHT 28
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, MENU_WIDTH - 2);
+    IswArgHeight(&ab, SEARCH_BAR_HEIGHT);
+    IswArgBorderWidth(&ab, 1);
+    IswArgString(&ab, "");
+    IswArgType(&ab, IswEstring);
+    ISW_ARG(&ab, IswNeditType, IswtextEdit);
+    ISW_ARG(&ab, IswNdisplayCaret, True);
+    IswArgBackground(&ab, app_bg);
+    p->search_input = IswCreateManagedWidget("searchInput", textWidgetClass,
+                                            form, ab.args, ab.count);
+
+    /* Search results list — full width, below search bar */
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, p->search_input);
+    IswArgVertDistance(&ab, 0);
+    IswArgWidth(&ab, MENU_WIDTH);
+    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT - SEARCH_BAR_HEIGHT);
+    IswArgBorderWidth(&ab, 1);
+    IswArgAllowVert(&ab, True);
+    IswArgAllowHoriz(&ab, False);
+    IswArgBackground(&ab, app_bg);
+    p->search_viewport = IswCreateManagedWidget("searchViewport",
+                                               viewportWidgetClass,
+                                               form, ab.args, ab.count);
+
+    static String search_initial[] = { NULL };
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, search_initial);
+    IswArgNumberStrings(&ab, 0);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgCursor(&ab, None);
+    IswArgBackground(&ab, app_bg);
+    p->search_list = IswCreateManagedWidget("searchList", listWidgetClass,
+                                           p->search_viewport, ab.args, ab.count);
+    IswAddCallback(p->search_list, IswNcallback, search_selected, p);
+
+    static char searchTranslations[] =
+        "<EnterWindow>: Set()\n"
+        "<LeaveWindow>: Unset()\n"
+        "<Motion>:      Set()\n"
+        "<BtnDown>:     Set() Notify()\n"
+        "<BtnUp>:       Notify()";
+    IswOverrideTranslations(p->search_list,
+                           IswParseTranslationTable(searchTranslations));
+
+    /* Search widgets hidden until typing starts */
+    IswUnmapWidget(p->search_input);
+    IswUnmapWidget(p->search_viewport);
+
     /* Keyboard navigation via event handler on the shell */
     IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
                       menu_key_handler, p);
@@ -841,6 +1117,11 @@ void startmenu_cleanup(Panel *p)
     free_categories(p);
     free(cat_names_backing);
     cat_names_backing = NULL;
+
+    free(p->search_results);
+    p->search_results = NULL;
+    free(p->search_names);
+    p->search_names = NULL;
 
     free(shutdown_icon_path);
     shutdown_icon_path = NULL;

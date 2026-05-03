@@ -19,6 +19,7 @@
 #include <ISW/SmeLine.h>
 #include <ISW/MenuButton.h>
 #include <ISW/Viewport.h>
+#include <ISW/Text.h>
 #include <ISW/ISWSVG.h>
 #include <ISW/ISWRender.h>
 
@@ -121,7 +122,19 @@ typedef struct Panel {
     int                active_cat;  /* Currently displayed category index */
     int                cat_highlight; /* Keyboard-highlighted category */
     int                app_highlight; /* Keyboard-highlighted app */
-    int                menu_focus;    /* 0 = category pane, 1 = app pane */
+    int                menu_focus;    /* 0 = category, 1 = app, 2 = search */
+
+    /* Type-ahead search */
+    Widget             search_input;
+    Widget             search_viewport;
+    Widget             search_list;
+    char               search_buf[128];
+    int                search_len;
+    int                search_active;
+    StartMenuApp     **search_results;
+    int                nsearch_results;
+    int                cap_search_results;
+    String            *search_names;
 
     /* Taskbar */
     TaskGroup         *groups;
