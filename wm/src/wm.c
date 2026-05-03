@@ -1073,6 +1073,8 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         xcb_map_window(wm->conn, ev->window);
         IswPopup(c->shell, IswGrabNone);
         wm_focus_client(wm, c);
+        if (c->above || c->below)
+            wm_restack_above_below(wm);
         wm_ewmh_update_client_list(wm);
         xcb_flush(wm->conn);
     }

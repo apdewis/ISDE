@@ -458,7 +458,23 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
 
     c->title = fetch_title(wm, client);
 
-    /* Smart placement: center transients over parent, cascade others */
+    /* Read initial _NET_WM_STATE before placement so flags like
+     * above/below can influence positioning. */
+    xcb_ewmh_get_atoms_reply_t init_state;
+    if (xcb_ewmh_get_wm_state_reply(
+            isde_ewmh_connection(wm->ewmh),
+            xcb_ewmh_get_wm_state(isde_ewmh_connection(wm->ewmh), client),
+            &init_state, NULL)) {
+        xcb_ewmh_connection_t *ec = isde_ewmh_connection(wm->ewmh);
+        for (uint32_t s = 0; s < init_state.atoms_len; s++) {
+            if (init_state.atoms[s] == ec->_NET_WM_STATE_ABOVE)
+                c->above = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_BELOW)
+                c->below = 1;
+        }
+        xcb_ewmh_get_atoms_reply_wipe(&init_state);
+    }
+
     wm_place_client(wm, c);
 
     int fw = frame_total_width(c);
