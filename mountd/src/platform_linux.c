@@ -22,6 +22,13 @@ static int is_removable(struct udev_device *dev)
         return 1;
     }
 
+    /* USB HDDs behind UAS/usb-storage bridges report ID_BUS=ata
+     * but still have ID_USB_DRIVER set */
+    const char *usb_drv = udev_device_get_property_value(dev, "ID_USB_DRIVER");
+    if (usb_drv) {
+        return 1;
+    }
+
     /* Find the parent disk to check the removable sysattr.
      * udev_device_get_parent_with_subsystem_devtype skips the device
      * itself, so for a whole-disk device (no partitions) there is no
@@ -50,6 +57,11 @@ static int is_ejectable(struct udev_device *dev)
 {
     const char *id_bus = udev_device_get_property_value(dev, "ID_BUS");
     if (id_bus && strcmp(id_bus, "usb") == 0) {
+        return 1;
+    }
+
+    const char *usb_drv = udev_device_get_property_value(dev, "ID_USB_DRIVER");
+    if (usb_drv) {
         return 1;
     }
 
