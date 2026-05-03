@@ -155,7 +155,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         char *name = strndup((char *)namedata, namelen);
 
         IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
-        if (!mon || !isde_config_bool(mon, "enabled", 1)) {
+        if (mon && !isde_config_bool(mon, "enabled", 1)) {
             if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
                 first_enabled = randr_outs[i];
             free(name);
@@ -163,11 +163,27 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
             continue;
         }
 
-        int want_w = (int)isde_config_int(mon, "width", 0);
-        int want_h = (int)isde_config_int(mon, "height", 0);
-        int want_x = (int)isde_config_int(mon, "x", 0);
-        int want_y = (int)isde_config_int(mon, "y", 0);
-        int is_primary = isde_config_bool(mon, "primary", 0);
+        int want_w = mon ? (int)isde_config_int(mon, "width", 0) : 0;
+        int want_h = mon ? (int)isde_config_int(mon, "height", 0) : 0;
+        int want_x = mon ? (int)isde_config_int(mon, "x", 0) : 0;
+        int want_y = mon ? (int)isde_config_int(mon, "y", 0) : 0;
+        int is_primary = mon ? isde_config_bool(mon, "primary", 0) : 0;
+
+        /* Fallback to preferred mode for unconfigured outputs */
+        if (want_w <= 0 || want_h <= 0) {
+            xcb_randr_mode_t *pref_modes =
+                xcb_randr_get_output_info_modes(oinfo);
+            if (xcb_randr_get_output_info_modes_length(oinfo) > 0 &&
+                oinfo->num_preferred > 0) {
+                for (int k = 0; k < nmi; k++) {
+                    if (mode_infos[k].id == pref_modes[0]) {
+                        want_w = mode_infos[k].width;
+                        want_h = mode_infos[k].height;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (want_w <= 0 || want_h <= 0) {
             if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
@@ -242,15 +258,18 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
             continue;
         }
 
-        /* Expand screen if needed */
+        /* Expand screen if needed (query actual size, not stale scr) */
+        xcb_get_geometry_reply_t *rg =
+            xcb_get_geometry_reply(conn,
+                xcb_get_geometry(conn, root), NULL);
+        uint16_t cur_sw = rg ? rg->width  : scr->width_in_pixels;
+        uint16_t cur_sh = rg ? rg->height : scr->height_in_pixels;
+        free(rg);
         int right = want_x + want_w;
         int bottom = want_y + want_h;
-        if (right > (int)scr->width_in_pixels ||
-            bottom > (int)scr->height_in_pixels) {
-            int nw = right > (int)scr->width_in_pixels ?
-                right : (int)scr->width_in_pixels;
-            int nh = bottom > (int)scr->height_in_pixels ?
-                bottom : (int)scr->height_in_pixels;
+        if (right > (int)cur_sw || bottom > (int)cur_sh) {
+            int nw = right  > (int)cur_sw ? right  : (int)cur_sw;
+            int nh = bottom > (int)cur_sh ? bottom : (int)cur_sh;
             int mm_w = scr->width_in_pixels > 0 ?
                 (nw * scr->width_in_millimeters) / scr->width_in_pixels : nw;
             int mm_h = scr->height_in_pixels > 0 ?
@@ -258,11 +277,34 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
             xcb_randr_set_screen_size(conn, root, nw, nh, mm_w, mm_h);
         }
 
-        xcb_randr_set_crtc_config(conn, crtc,
-            XCB_CURRENT_TIME, cfg_ts,
-            (int16_t)want_x, (int16_t)want_y, best_mode,
-            XCB_RANDR_ROTATION_ROTATE_0,
-            1, &randr_outs[i]);
+        /* Refresh config timestamp to avoid races with X hotplug */
+        {
+            xcb_randr_get_screen_resources_current_reply_t *fresh =
+                xcb_randr_get_screen_resources_current_reply(conn,
+                    xcb_randr_get_screen_resources_current(conn, root),
+                    NULL);
+            if (fresh) {
+                cfg_ts = fresh->config_timestamp;
+                free(fresh);
+            }
+        }
+        xcb_randr_set_crtc_config_cookie_t ck =
+            xcb_randr_set_crtc_config(conn, crtc,
+                XCB_CURRENT_TIME, cfg_ts,
+                (int16_t)want_x, (int16_t)want_y, best_mode,
+                XCB_RANDR_ROTATION_ROTATE_0,
+                1, &randr_outs[i]);
+        xcb_randr_set_crtc_config_reply_t *cr =
+            xcb_randr_set_crtc_config_reply(conn, ck, NULL);
+        if (!cr || cr->status != XCB_RANDR_SET_CONFIG_SUCCESS) {
+            fprintf(stderr, "isde-displayd: set_crtc_config failed for %s"
+                    " (status %d)\n", name, cr ? cr->status : -1);
+            free(cr);
+            free(name);
+            free(oinfo);
+            continue;
+        }
+        free(cr);
         fprintf(stderr, "isde-displayd: %s -> %dx%d+%d+%d @ %.0f Hz\n",
                 name, want_w, want_h, want_x, want_y, best_refresh);
 
