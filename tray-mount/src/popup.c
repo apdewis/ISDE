@@ -218,16 +218,13 @@ void tm_popup_show(TrayMount *tm)
 
             char label[384];
             if (d->label[0])
-                snprintf(label, sizeof(label), "%s (%s)%s",
-                         d->label, d->dev_path,
-                         d->is_luks ? " [encrypted]" : "");
+                snprintf(label, sizeof(label), "%s (%s)",
+                         d->label, d->dev_path);
             else if (d->vendor[0])
-                snprintf(label, sizeof(label), "%s (%s)%s",
-                         d->vendor, d->dev_path,
-                         d->is_luks ? " [encrypted]" : "");
+                snprintf(label, sizeof(label), "%s (%s)",
+                         d->vendor, d->dev_path);
             else
-                snprintf(label, sizeof(label), "%s%s", d->dev_path,
-                         d->is_luks ? " [encrypted]" : "");
+                snprintf(label, sizeof(label), "%s%s", d->dev_path);
 
             IswArgBuilderReset(&ab);
             IswArgBorderWidth(&ab, 0);
