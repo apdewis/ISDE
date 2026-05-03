@@ -225,6 +225,7 @@ void tray_mount_run(TrayMount *tm)
 
 void tray_mount_cleanup(TrayMount *tm)
 {
+    tm_password_dialog_cleanup(tm);
     tm_popup_cleanup(tm);
     tm_dbus_cleanup(tm);
 

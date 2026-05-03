@@ -21,6 +21,7 @@
 #include <dbus/dbus.h>
 
 #include "isde/isde-dbus.h"
+#include "isde/isde-dialog.h"
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 
@@ -47,6 +48,7 @@ typedef struct DeviceInfo {
     char    mount_point[MOUNT_POINT_LEN];
     int     is_mounted;
     int     is_ejectable;
+    int     is_luks;
 } DeviceInfo;
 
 /* ---------- Tray applet state ---------- */
@@ -74,6 +76,10 @@ typedef struct TrayMount {
 
     int                 running;
     int                 restart;
+
+    /* Password dialog */
+    Widget              pw_shell;
+    char                pw_dev_path[DEV_PATH_LEN];
 } TrayMount;
 
 /* ---------- tray-mount.c ---------- */
@@ -86,6 +92,7 @@ int  tm_dbus_init(TrayMount *tm);
 void tm_dbus_cleanup(TrayMount *tm);
 int  tm_dbus_list_devices(TrayMount *tm);
 int  tm_dbus_mount(TrayMount *tm, const char *dev_path,
+                   const char *passphrase,
                    char *result, size_t result_len);
 int  tm_dbus_unmount(TrayMount *tm, const char *dev_path,
                      char *errbuf, size_t errlen);
@@ -97,5 +104,9 @@ void tm_popup_init(TrayMount *tm);
 void tm_popup_show(TrayMount *tm);
 void tm_popup_hide(TrayMount *tm);
 void tm_popup_cleanup(TrayMount *tm);
+
+/* ---------- password_dialog.c ---------- */
+void tm_password_dialog_show(TrayMount *tm, int device_idx);
+void tm_password_dialog_cleanup(TrayMount *tm);
 
 #endif /* ISDE_TRAY_MOUNT_H */

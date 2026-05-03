@@ -247,6 +247,12 @@ int tm_dbus_list_devices(TrayMount *tm)
         dbus_message_iter_get_basic(&st, &b);
         d->is_ejectable = b;
 
+        if (dbus_message_iter_next(&st) &&
+            dbus_message_iter_get_arg_type(&st) == DBUS_TYPE_BOOLEAN) {
+            dbus_message_iter_get_basic(&st, &b);
+            d->is_luks = b;
+        }
+
         tm->ndevices++;
         dbus_message_iter_next(&array);
     }
@@ -308,9 +314,55 @@ static int call_device_method(TrayMount *tm, const char *method,
 }
 
 int tm_dbus_mount(TrayMount *tm, const char *dev_path,
+                  const char *passphrase,
                   char *result, size_t result_len)
 {
-    return call_device_method(tm, "Mount", dev_path, result, result_len);
+    if (!tm->system_bus) {
+        snprintf(result, result_len, "D-Bus not connected");
+        return -1;
+    }
+
+    DBusMessage *msg = dbus_message_new_method_call(
+        MOUNTD_DBUS_SERVICE, MOUNTD_DBUS_PATH,
+        MOUNTD_DBUS_INTERFACE, "Mount");
+    if (!msg) {
+        snprintf(result, result_len, "Cannot create D-Bus message");
+        return -1;
+    }
+
+    const char *pw = passphrase ? passphrase : "";
+    dbus_message_append_args(msg,
+                             DBUS_TYPE_STRING, &dev_path,
+                             DBUS_TYPE_STRING, &pw,
+                             DBUS_TYPE_INVALID);
+
+    DBusError err;
+    dbus_error_init(&err);
+    DBusMessage *reply = dbus_connection_send_with_reply_and_block(
+        tm->system_bus, msg, 10000, &err);
+    dbus_message_unref(msg);
+
+    if (!reply) {
+        if (dbus_error_is_set(&err)) {
+            snprintf(result, result_len, "%s", err.message);
+            dbus_error_free(&err);
+        } else {
+            snprintf(result, result_len, "No reply");
+        }
+        return -1;
+    }
+
+    dbus_bool_t success = FALSE;
+    const char *res_str = "";
+    dbus_message_get_args(reply, NULL,
+                          DBUS_TYPE_BOOLEAN, &success,
+                          DBUS_TYPE_STRING, &res_str,
+                          DBUS_TYPE_INVALID);
+
+    snprintf(result, result_len, "%s", res_str);
+    dbus_message_unref(reply);
+    dbus_error_free(&err);
+    return success ? 0 : -1;
 }
 
 int tm_dbus_unmount(TrayMount *tm, const char *dev_path,

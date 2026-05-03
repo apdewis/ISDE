@@ -24,10 +24,11 @@ static const char *introspect_xml =
     "<node>\n"
     "  <interface name=\"" MOUNTD_DBUS_INTERFACE "\">\n"
     "    <method name=\"ListDevices\">\n"
-    "      <arg name=\"devices\" type=\"a(sssssbb)\" direction=\"out\"/>\n"
+    "      <arg name=\"devices\" type=\"a(sssssbbb)\" direction=\"out\"/>\n"
     "    </method>\n"
     "    <method name=\"Mount\">\n"
     "      <arg name=\"device_path\" type=\"s\" direction=\"in\"/>\n"
+    "      <arg name=\"passphrase\" type=\"s\" direction=\"in\"/>\n"
     "      <arg name=\"success\" type=\"b\" direction=\"out\"/>\n"
     "      <arg name=\"result\" type=\"s\" direction=\"out\"/>\n"
     "    </method>\n"
@@ -87,7 +88,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
     DBusMessageIter iter, array;
 
     dbus_message_iter_init_append(reply, &iter);
-    dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(sssssbb)",
+    dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(sssssbbb)",
                                      &array);
 
     for (int i = 0; i < md->ndevices; i++) {
@@ -102,6 +103,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
         const char *mp       = d->mount_point;
         dbus_bool_t mounted  = d->is_mounted;
         dbus_bool_t eject    = d->is_ejectable;
+        dbus_bool_t luks     = d->is_luks;
 
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &dev_path);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &label);
@@ -110,6 +112,7 @@ static DBusMessage *handle_list_devices(MountDaemon *md, DBusMessage *msg)
         dbus_message_iter_append_basic(&st, DBUS_TYPE_STRING, &mp);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_BOOLEAN, &mounted);
         dbus_message_iter_append_basic(&st, DBUS_TYPE_BOOLEAN, &eject);
+        dbus_message_iter_append_basic(&st, DBUS_TYPE_BOOLEAN, &luks);
 
         dbus_message_iter_close_container(&array, &st);
     }
@@ -124,11 +127,25 @@ static DBusMessage *handle_mount(MountDaemon *md, DBusConnection *conn,
                                  DBusMessage *msg)
 {
     const char *dev_path = NULL;
-    if (!dbus_message_get_args(msg, NULL,
-                               DBUS_TYPE_STRING, &dev_path,
-                               DBUS_TYPE_INVALID) || !dev_path) {
-        return dbus_message_new_error(msg, DBUS_ERROR_INVALID_ARGS,
-                                      "Expected (device_path: s)");
+    const char *passphrase = "";
+
+    const char *sig = dbus_message_get_signature(msg);
+    if (sig && strcmp(sig, "ss") == 0) {
+        if (!dbus_message_get_args(msg, NULL,
+                                   DBUS_TYPE_STRING, &dev_path,
+                                   DBUS_TYPE_STRING, &passphrase,
+                                   DBUS_TYPE_INVALID) || !dev_path) {
+            return dbus_message_new_error(msg, DBUS_ERROR_INVALID_ARGS,
+                                          "Expected (device_path: s, "
+                                          "passphrase: s)");
+        }
+    } else {
+        if (!dbus_message_get_args(msg, NULL,
+                                   DBUS_TYPE_STRING, &dev_path,
+                                   DBUS_TYPE_INVALID) || !dev_path) {
+            return dbus_message_new_error(msg, DBUS_ERROR_INVALID_ARGS,
+                                          "Expected (device_path: s)");
+        }
     }
 
     unsigned long uid = 0;
@@ -139,8 +156,8 @@ static DBusMessage *handle_mount(MountDaemon *md, DBusConnection *conn,
 
     char mp[MOUNT_POINT_LEN];
     char errbuf[256];
-    int ok = mountd_do_mount(md, dev_path, uid, mp, sizeof(mp),
-                             errbuf, sizeof(errbuf));
+    int ok = mountd_do_mount(md, dev_path, uid, passphrase,
+                             mp, sizeof(mp), errbuf, sizeof(errbuf));
 
     DBusMessage *reply = dbus_message_new_method_return(msg);
     dbus_bool_t success = (ok == 0);

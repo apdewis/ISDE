@@ -6,6 +6,7 @@ add_executable(isde-mountd
     src/dbus.c
     src/devices.c
     src/mount_ops.c
+    src/luks.c
 )
 
 target_compile_definitions(isde-mountd PRIVATE
@@ -15,7 +16,8 @@ target_compile_definitions(isde-mountd PRIVATE
 # Platform-specific source selection
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(isde-mountd PRIVATE src/platform_linux.c)
-    target_link_libraries(isde-mountd PkgConfig::UDEV)
+    target_link_libraries(isde-mountd
+        PkgConfig::UDEV PkgConfig::CRYPTSETUP PkgConfig::BLKID)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     target_sources(isde-mountd PRIVATE src/platform_freebsd.c)
 else()

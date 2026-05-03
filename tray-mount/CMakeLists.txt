@@ -5,6 +5,7 @@ add_executable(isde-tray-mount
     src/tray-mount.c
     src/dbus.c
     src/popup.c
+    src/password_dialog.c
 )
 
 target_compile_definitions(isde-tray-mount PRIVATE

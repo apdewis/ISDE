@@ -68,6 +68,14 @@ void mountd_refresh_mount_state(MountDaemon *md)
         md->devices[i].mount_point[0] = '\0';
     }
 
+    /* Check LUKS unlock state */
+    for (int i = 0; i < md->ndevices; i++) {
+        Device *d = &md->devices[i];
+        if (d->is_luks && d->dm_name[0]) {
+            d->is_unlocked = mountd_luks_is_active(d->dm_name);
+        }
+    }
+
     /* Scan /proc/mounts for our tracked devices */
     FILE *fp = fopen("/proc/mounts", "r");
     if (!fp) {
@@ -78,10 +86,23 @@ void mountd_refresh_mount_state(MountDaemon *md)
     while (fgets(line, sizeof(line), fp)) {
         char dev[256], mp[512], fs[64];
         if (sscanf(line, "%255s %511s %63s", dev, mp, fs) >= 2) {
+            /* Direct device match */
             Device *d = mountd_find_device(md, dev);
             if (d) {
                 d->is_mounted = 1;
                 snprintf(d->mount_point, sizeof(d->mount_point), "%s", mp);
+                continue;
+            }
+            /* Match dm device for LUKS volumes */
+            for (int i = 0; i < md->ndevices; i++) {
+                d = &md->devices[i];
+                if (d->is_luks && d->dm_path[0] &&
+                    strcmp(d->dm_path, dev) == 0) {
+                    d->is_mounted = 1;
+                    snprintf(d->mount_point, sizeof(d->mount_point),
+                             "%s", mp);
+                    break;
+                }
             }
         }
     }

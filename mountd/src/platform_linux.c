@@ -17,23 +17,30 @@
 
 static int is_removable(struct udev_device *dev)
 {
-    /* Walk up to the parent disk device and check removable flag */
-    struct udev_device *parent = udev_device_get_parent_with_subsystem_devtype(
-        dev, "block", "disk");
-    if (!parent) {
-        return 0;
-    }
-
-    /* Check if USB bus */
     const char *id_bus = udev_device_get_property_value(dev, "ID_BUS");
     if (id_bus && strcmp(id_bus, "usb") == 0) {
         return 1;
     }
 
-    /* Check removable sysattr on parent disk */
-    const char *removable = udev_device_get_sysattr_value(parent, "removable");
-    if (removable && strcmp(removable, "1") == 0) {
-        return 1;
+    /* Find the parent disk to check the removable sysattr.
+     * udev_device_get_parent_with_subsystem_devtype skips the device
+     * itself, so for a whole-disk device (no partitions) there is no
+     * parent disk — check the device's own sysattr in that case. */
+    struct udev_device *disk =
+        udev_device_get_parent_with_subsystem_devtype(
+            dev, "block", "disk");
+
+    if (!disk) {
+        const char *devtype = udev_device_get_devtype(dev);
+        if (devtype && strcmp(devtype, "disk") == 0)
+            disk = dev;
+    }
+
+    if (disk) {
+        const char *removable = udev_device_get_sysattr_value(
+            disk, "removable");
+        if (removable && strcmp(removable, "1") == 0)
+            return 1;
     }
 
     return 0;
@@ -95,6 +102,22 @@ static void get_vendor_model(struct udev_device *dev, char *buf, size_t len)
     }
 }
 
+static void setup_luks_fields(Device *d, struct udev_device *dev,
+                              const char *devnode)
+{
+    d->is_luks = 1;
+    const char *uuid = udev_device_get_property_value(dev, "ID_FS_UUID");
+    if (uuid && uuid[0]) {
+        snprintf(d->luks_uuid, sizeof(d->luks_uuid), "%s", uuid);
+        snprintf(d->dm_name, sizeof(d->dm_name), "luks-%s", uuid);
+    } else {
+        const char *base = strrchr(devnode, '/');
+        base = base ? base + 1 : devnode;
+        snprintf(d->dm_name, sizeof(d->dm_name), "luks-%s", base);
+    }
+    snprintf(d->dm_path, sizeof(d->dm_path), "/dev/mapper/%s", d->dm_name);
+}
+
 /* ---------- enumeration ---------- */
 
 static void linux_enumerate_devices(MountDaemon *md)
@@ -108,7 +131,6 @@ static void linux_enumerate_devices(MountDaemon *md)
 
     struct udev_enumerate *en = udev_enumerate_new(udev);
     udev_enumerate_add_match_subsystem(en, "block");
-    udev_enumerate_add_match_property(en, "DEVTYPE", "partition");
     udev_enumerate_scan_devices(en);
 
     struct udev_list_entry *entry;
@@ -116,6 +138,17 @@ static void linux_enumerate_devices(MountDaemon *md)
         const char *path = udev_list_entry_get_name(entry);
         struct udev_device *dev = udev_device_new_from_syspath(udev, path);
         if (!dev) {
+            continue;
+        }
+
+        const char *devtype = udev_device_get_devtype(dev);
+        int is_part = devtype && strcmp(devtype, "partition") == 0;
+        int is_disk = devtype && strcmp(devtype, "disk") == 0;
+
+        /* Accept partitions, and whole disks that have a filesystem
+         * directly on them (e.g. LUKS on unpartitioned USB) */
+        if (!is_part && !(is_disk && get_fs_type(dev))) {
+            udev_device_unref(dev);
             continue;
         }
 
@@ -130,8 +163,8 @@ static void linux_enumerate_devices(MountDaemon *md)
                 Device *d = mountd_add_device(md, devnode,
                                               label, vendor, fs_type,
                                               is_ejectable(dev));
-                /* If fs_type was unknown from udev, it stays empty */
-                (void)d;
+                if (d && fs_type && strcmp(fs_type, "crypto_LUKS") == 0)
+                    setup_luks_fields(d, dev, devnode);
             }
         }
 
@@ -192,8 +225,12 @@ static void linux_monitor_dispatch(MountDaemon *md)
         return;
     }
 
-    /* Only handle partitions (not whole disks) */
-    if (!devtype || strcmp(devtype, "partition") != 0) {
+    int is_part = devtype && strcmp(devtype, "partition") == 0;
+    int is_disk = devtype && strcmp(devtype, "disk") == 0;
+
+    /* Accept partitions, and whole disks that carry a filesystem
+     * directly (e.g. LUKS on unpartitioned USB) */
+    if (!is_part && !(is_disk && get_fs_type(dev))) {
         udev_device_unref(dev);
         return;
     }
@@ -210,13 +247,15 @@ static void linux_monitor_dispatch(MountDaemon *md)
             Device *d = mountd_add_device(md, devnode, label, vendor,
                                           fs_type, is_ejectable(dev));
             if (d) {
+                if (fs_type && strcmp(fs_type, "crypto_LUKS") == 0)
+                    setup_luks_fields(d, dev, devnode);
+
                 mountd_dbus_emit_device_added(md, d);
 
-                if (md->auto_mount) {
-                    /* Auto-mount as root (uid 0) — user can remount later */
+                if (md->auto_mount && !d->is_luks) {
                     char mp[MOUNT_POINT_LEN], err[256];
-                    mountd_do_mount(md, devnode, 0, mp, sizeof(mp),
-                                    err, sizeof(err));
+                    mountd_do_mount(md, devnode, 0, "",
+                                    mp, sizeof(mp), err, sizeof(err));
                 }
             }
         }
@@ -242,6 +281,9 @@ static void linux_monitor_dispatch(MountDaemon *md)
                 d = mountd_add_device(md, devnode, label, vendor,
                                       fs_type, is_ejectable(dev));
                 if (d) {
+                    if (fs_type &&
+                        strcmp(fs_type, "crypto_LUKS") == 0)
+                        setup_luks_fields(d, dev, devnode);
                     mountd_dbus_emit_device_added(md, d);
                 }
             }

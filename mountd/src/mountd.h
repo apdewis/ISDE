@@ -32,6 +32,11 @@ static const char *const allowed_fs_types[] = {
     "ntfs", "ntfs3", "iso9660", "udf", NULL
 };
 
+/* ---------- LUKS ---------- */
+
+#define LUKS_UUID_LEN   64
+#define DM_NAME_LEN     256
+
 /* ---------- Device tracking ---------- */
 
 typedef struct Device {
@@ -42,6 +47,13 @@ typedef struct Device {
     char    mount_point[MOUNT_POINT_LEN];
     int     is_mounted;
     int     is_ejectable;
+    int     is_luks;
+    int     is_unlocked;
+    int     luks_opened_by_us;
+    char    luks_uuid[LUKS_UUID_LEN];
+    char    dm_name[DM_NAME_LEN];
+    char    dm_path[DEV_PATH_LEN];
+    char    inner_fs_type[FS_TYPE_LEN];
 } Device;
 
 /* ---------- Daemon state ---------- */
@@ -96,12 +108,22 @@ void    mountd_refresh_mount_state(MountDaemon *md);
 
 /* ---------- mount_ops.c ---------- */
 int  mountd_do_mount(MountDaemon *md, const char *dev_path,
-                     unsigned long caller_uid,
+                     unsigned long caller_uid, const char *passphrase,
                      char *mount_point_out, size_t mp_len,
                      char *errbuf, size_t errlen);
 int  mountd_do_unmount(MountDaemon *md, const char *dev_path,
                        char *errbuf, size_t errlen);
 int  mountd_do_eject(MountDaemon *md, const char *dev_path,
                      char *errbuf, size_t errlen);
+
+/* ---------- luks.c ---------- */
+int  mountd_luks_open(const char *dev_path, const char *dm_name,
+                      const char *passphrase, size_t passphrase_len,
+                      char *errbuf, size_t errlen);
+int  mountd_luks_close(const char *dm_name,
+                       char *errbuf, size_t errlen);
+int  mountd_luks_is_active(const char *dm_name);
+int  mountd_luks_probe_fs(const char *dm_path,
+                          char *fs_type, size_t fs_len);
 
 #endif /* ISDE_MOUNTD_H */

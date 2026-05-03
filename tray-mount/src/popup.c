@@ -61,7 +61,12 @@ static void on_action(Widget w, IswPointer client_data, IswPointer call_data)
 
     switch (a->action) {
     case ACTION_MOUNT:
-        if (tm_dbus_mount(tm, d->dev_path, result, sizeof(result)) == 0)
+        if (d->is_luks) {
+            tm_popup_hide(tm);
+            tm_password_dialog_show(tm, a->device_idx);
+            return;
+        }
+        if (tm_dbus_mount(tm, d->dev_path, "", result, sizeof(result)) == 0)
             fprintf(stderr, "isde-tray-mount: mounted %s at %s\n",
                     d->dev_path, result);
         else
@@ -213,13 +218,16 @@ void tm_popup_show(TrayMount *tm)
 
             char label[384];
             if (d->label[0])
-                snprintf(label, sizeof(label), "%s (%s)",
-                         d->label, d->dev_path);
+                snprintf(label, sizeof(label), "%s (%s)%s",
+                         d->label, d->dev_path,
+                         d->is_luks ? " [encrypted]" : "");
             else if (d->vendor[0])
-                snprintf(label, sizeof(label), "%s (%s)",
-                         d->vendor, d->dev_path);
+                snprintf(label, sizeof(label), "%s (%s)%s",
+                         d->vendor, d->dev_path,
+                         d->is_luks ? " [encrypted]" : "");
             else
-                snprintf(label, sizeof(label), "%s", d->dev_path);
+                snprintf(label, sizeof(label), "%s%s", d->dev_path,
+                         d->is_luks ? " [encrypted]" : "");
 
             IswArgBuilderReset(&ab);
             IswArgBorderWidth(&ab, 0);
