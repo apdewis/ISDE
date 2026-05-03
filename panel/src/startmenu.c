@@ -22,7 +22,6 @@
 #include <xcb/xcb_keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 #include <X11/keysym.h>
-#include <ctype.h>
 
 static char *start_icon_path;
 static char *shutdown_icon_path;
@@ -305,7 +304,7 @@ static void search_deactivate(Panel *p)
     p->menu_focus = 0;
 
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgString(&ab, "");
+    IswArgLabel(&ab, "");
     IswSetValues(p->search_input, ab.args, ab.count);
 
     IswUnmapWidget(p->search_input);
@@ -323,9 +322,8 @@ static void search_deactivate(Panel *p)
 static void search_update_display(Panel *p)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgString(&ab, p->search_buf);
+    IswArgLabel(&ab, p->search_buf);
     IswSetValues(p->search_input, ab.args, ab.count);
-    IswTextSetInsertionPoint(p->search_input, (ISWTextPosition)p->search_len);
     search_run_filter(p);
 }
 
@@ -965,18 +963,17 @@ void startmenu_init(Panel *p)
     IswOverrideTranslations(p->app_box,
                            IswParseTranslationTable(appTranslations));
 
-    /* Search input — single-line text entry, overlaps cat/app viewports */
+    /* Search bar — label showing typed query, overlaps cat/app viewports */
     #define SEARCH_BAR_HEIGHT 28
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, MENU_WIDTH - 2);
     IswArgHeight(&ab, SEARCH_BAR_HEIGHT);
     IswArgBorderWidth(&ab, 1);
-    IswArgString(&ab, "");
-    IswArgType(&ab, IswEstring);
-    ISW_ARG(&ab, IswNeditType, IswtextEdit);
-    ISW_ARG(&ab, IswNdisplayCaret, True);
+    IswArgLabel(&ab, "");
+    ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
+    IswArgInternalWidth(&ab, 6);
     IswArgBackground(&ab, app_bg);
-    p->search_input = IswCreateManagedWidget("searchInput", textWidgetClass,
+    p->search_input = IswCreateManagedWidget("searchInput", labelWidgetClass,
                                             form, ab.args, ab.count);
 
     /* Search results list — full width, below search bar */

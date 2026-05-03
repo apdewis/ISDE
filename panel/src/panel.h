@@ -19,7 +19,6 @@
 #include <ISW/SmeLine.h>
 #include <ISW/MenuButton.h>
 #include <ISW/Viewport.h>
-#include <ISW/Text.h>
 #include <ISW/ISWSVG.h>
 #include <ISW/ISWRender.h>
 
