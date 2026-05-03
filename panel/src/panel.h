@@ -108,6 +108,13 @@ typedef struct Panel {
     char              *clock_time_fmt; /* strftime format for time */
     char              *clock_date_fmt; /* strftime format for date */
 
+    /* Calendar popup */
+    Widget             cal_shell;
+    Widget             cal_title;
+    Widget             cal_days[42];   /* 6 rows x 7 cols */
+    int                cal_year;
+    int                cal_month;       /* 0-based (tm_mon) */
+
     /* Start menu data */
     StartMenuCategory *categories;
     int                ncategories;
@@ -207,5 +214,10 @@ void  tray_cleanup(Panel *p);
 /* ---------- clock.c ---------- */
 void  clock_init(Panel *p);
 void  clock_cleanup(Panel *p);
+
+/* ---------- calendar.c ---------- */
+void  calendar_init(Panel *p);
+void  calendar_toggle(Panel *p);
+void  calendar_cleanup(Panel *p);
 
 #endif /* ISDE_PANEL_H */

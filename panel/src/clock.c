@@ -10,6 +10,14 @@
 #include <time.h>
 #include <ISW/IswArgMacros.h>
 
+static void clock_clicked(Widget w, IswPointer client_data,
+                           xcb_generic_event_t *xev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS)
+        return;
+    calendar_toggle((Panel *)client_data);
+}
 
 static void update_clock(IswPointer client_data, IswIntervalId *id)
 {
@@ -127,12 +135,20 @@ void clock_init(Panel *p)
         IswVaTypedArg, IswNfont, IswRString, date_font, strlen(date_font) + 1,
         NULL);
 
+    /* Click on clock area opens calendar popup */
+    IswAddEventHandler(p->clock_box, XCB_EVENT_MASK_BUTTON_PRESS, False,
+                       clock_clicked, p);
+
+    /* Calendar popup (created once, shown on click) */
+    calendar_init(p);
+
     /* Trigger first update immediately */
     p->clock_timer = IswAppAddTimeOut(p->app, 0, update_clock, p);
 }
 
 void clock_cleanup(Panel *p)
 {
+    calendar_cleanup(p);
     if (p->clock_timer) {
         IswRemoveTimeOut(p->clock_timer);
     }

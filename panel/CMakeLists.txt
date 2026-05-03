@@ -5,6 +5,7 @@ add_executable(isde-panel
     src/startmenu.c
     src/tray.c
     src/clock.c
+    src/calendar.c
 )
 
 target_compile_definitions(isde-panel PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
