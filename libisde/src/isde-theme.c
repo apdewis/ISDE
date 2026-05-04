@@ -1149,6 +1149,70 @@ void isde_theme_merge_xrm(Widget toplevel)
     isde_theme_free_resources(resources);
 }
 
+void isde_theme_set_resource_manager(xcb_connection_t *conn,
+                                     xcb_window_t root)
+{
+    char **resources = isde_theme_build_resources();
+    if (!resources) return;
+
+    /* Compute total length */
+    size_t total = 0;
+    for (int i = 0; resources[i]; i++)
+        total += strlen(resources[i]) + 1; /* +1 for newline */
+
+    /* Append cursor resources */
+    const char *cursor_theme = isde_cursor_theme_configured();
+    const char *cursor_size  = isde_cursor_size_configured();
+    char cursor_buf[256];
+    int cursor_len = 0;
+    if (cursor_theme)
+        cursor_len += snprintf(cursor_buf + cursor_len,
+                               sizeof(cursor_buf) - cursor_len,
+                               "Xcursor.theme:\t%s\n", cursor_theme);
+    if (cursor_size)
+        cursor_len += snprintf(cursor_buf + cursor_len,
+                               sizeof(cursor_buf) - cursor_len,
+                               "Xcursor.size:\t%s\n", cursor_size);
+    total += cursor_len;
+
+    /* Build concatenated string */
+    char *rdb = malloc(total + 1);
+    if (!rdb) {
+        isde_theme_free_resources(resources);
+        return;
+    }
+
+    char *p = rdb;
+    for (int i = 0; resources[i]; i++) {
+        size_t len = strlen(resources[i]);
+        memcpy(p, resources[i], len);
+        p += len;
+        *p++ = '\n';
+    }
+    if (cursor_len > 0) {
+        memcpy(p, cursor_buf, cursor_len);
+        p += cursor_len;
+    }
+    *p = '\0';
+
+    isde_theme_free_resources(resources);
+
+    /* Write to root window RESOURCE_MANAGER property */
+    xcb_intern_atom_cookie_t ck =
+        xcb_intern_atom(conn, 0, strlen("RESOURCE_MANAGER"),
+                        "RESOURCE_MANAGER");
+    xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(conn, ck, NULL);
+    if (reply) {
+        xcb_change_property(conn, XCB_PROP_MODE_REPLACE, root,
+                            reply->atom, XCB_ATOM_STRING, 8,
+                            (uint32_t)(p - rdb), rdb);
+        xcb_flush(conn);
+        free(reply);
+    }
+
+    free(rdb);
+}
+
 void isde_xrm_put_line(Widget toplevel, const char *line)
 {
     xcb_xrm_database_t *db = IswDatabase(IswDisplay(toplevel));

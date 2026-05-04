@@ -8,6 +8,7 @@
 #ifndef ISDE_THEME_H
 #define ISDE_THEME_H
 
+#include <xcb/xcb.h>
 #include <ISW/Intrinsic.h>
 
 #ifdef __cplusplus
@@ -134,6 +135,12 @@ void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
  * attached to the given toplevel widget.  Call after IswAppInitialize()
  * and before creating child widgets. */
 void isde_theme_merge_xrm(Widget toplevel);
+
+/* Write the full theme (colours, fonts, cursor) to the root window
+ * RESOURCE_MANAGER property so all Xt/libISW clients inherit the theme.
+ * Call from the session manager at startup and on appearance changes. */
+void isde_theme_set_resource_manager(xcb_connection_t *conn,
+                                     xcb_window_t root);
 
 /* Put a single "resource: value" line into the per-screen Xrm database. */
 void isde_xrm_put_line(Widget toplevel, const char *line);

@@ -413,6 +413,14 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
 
     if (s->reload_appearance) {
         s->reload_appearance = 0;
+        isde_theme_reload();
+        isde_theme_merge_xrm(s->toplevel);
+        if (s->conn) {
+            xcb_screen_iterator_t it =
+                xcb_setup_roots_iterator(xcb_get_setup(s->conn));
+            for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
+            isde_theme_set_resource_manager(s->conn, it.data->root);
+        }
         fprintf(stderr, "isde-session: appearance changed, "
                 "restarting WM and panel\n");
         restart_ui_children(s);
@@ -520,6 +528,10 @@ int session_init(Session *s)
         uint32_t ev_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
         xcb_change_window_attributes(s->conn, it.data->root,
                                      XCB_CW_EVENT_MASK, &ev_mask);
+
+        /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
+        isde_theme_set_resource_manager(s->conn, it.data->root);
+
         xcb_flush(s->conn);
     } else {
         xcb_disconnect(s->conn);

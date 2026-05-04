@@ -122,26 +122,6 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* Load initial colour scheme */
     isde_theme_current();
 
-    /* Load cursor theme into RESOURCE_MANAGER so all X clients use it */
-    {
-        const char *theme = isde_cursor_theme_configured();
-        const char *size  = isde_cursor_size_configured();
-        if (theme || size) {
-            char rdb[256];
-            int rlen = 0;
-            if (theme)
-                rlen += snprintf(rdb + rlen, sizeof(rdb) - rlen,
-                                 "Xcursor.theme:\t%s\n", theme);
-            if (size)
-                rlen += snprintf(rdb + rlen, sizeof(rdb) - rlen,
-                                 "Xcursor.size:\t%s\n", size);
-            xcb_change_property(wm->conn, XCB_PROP_MODE_REPLACE, wm->root,
-                                intern(wm->conn, "RESOURCE_MANAGER"),
-                                XCB_ATOM_STRING, 8, rlen, rdb);
-            xcb_flush(wm->conn);
-        }
-    }
-
     /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
