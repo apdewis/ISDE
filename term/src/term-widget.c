@@ -306,10 +306,16 @@ static int draw_cell_cb(struct tsm_screen *con, uint64_t id,
         bg_ = t->cfg.palette.rgb[i][1];
         bb = t->cfg.palette.rgb[i][2];
     }
-    if (attr->inverse) {
-        uint8_t tr=fr,tg=fg,tb=fb;
-        fr=br; fg=bg_; fb=bb;
-        br=tr; bg_=tg; bb=tb;
+    {
+        bool is_cursor = (posx == tsm_screen_get_cursor_x(t->screen) &&
+                          posy == tsm_screen_get_cursor_y(t->screen));
+        bool do_inverse = attr->inverse &&
+                          !(is_cursor && strcmp(t->cfg.cursor_shape, "block") != 0);
+        if (do_inverse) {
+            uint8_t tr=fr,tg=fg,tb=fb;
+            fr=br; fg=bg_; fb=bb;
+            br=tr; bg_=tg; bb=tb;
+        }
     }
 
     cairo_set_source_rgb(cr, br/255.0, bg_/255.0, bb/255.0);
