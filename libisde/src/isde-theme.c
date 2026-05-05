@@ -912,6 +912,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Form.background", s->bg);
     res[i++] = fmt_color("*Box.background", s->bg);
     res[i++] = fmt_color("*Paned.background", s->bg);
+    res[i++] = fmt_color("*Paned.internalBorderColor", s->border);
     res[i++] = fmt_color("*Viewport.background", s->bg);
     res[i++] = fmt_color("*MainWindow.background", s->bg);
 
