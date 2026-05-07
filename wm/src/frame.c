@@ -467,7 +467,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
             &init_state, NULL)) {
         xcb_ewmh_connection_t *ec = isde_ewmh_connection(wm->ewmh);
         for (uint32_t s = 0; s < init_state.atoms_len; s++) {
-            if (init_state.atoms[s] == ec->_NET_WM_STATE_ABOVE)
+            if (init_state.atoms[s] == ec->_NET_WM_STATE_FULLSCREEN)
+                c->fullscreen = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_ABOVE)
                 c->above = 1;
             else if (init_state.atoms[s] == ec->_NET_WM_STATE_BELOW)
                 c->below = 1;

@@ -777,6 +777,8 @@ static void wm_update_net_wm_state(Wm *wm, WmClient *c)
         states[n++] = ewmh->_NET_WM_STATE_MAXIMIZED_VERT;
         states[n++] = ewmh->_NET_WM_STATE_MAXIMIZED_HORZ;
     }
+    if (c->fullscreen)
+        states[n++] = ewmh->_NET_WM_STATE_FULLSCREEN;
     if (c->above)
         states[n++] = ewmh->_NET_WM_STATE_ABOVE;
     if (c->below)
@@ -815,6 +817,58 @@ void wm_maximize_client(Wm *wm, WmClient *c)
 
     wm_update_net_wm_state(wm, c);
 
+    xcb_flush(wm->conn);
+}
+
+void wm_fullscreen_client(Wm *wm, WmClient *c, int enable)
+{
+    if (enable && !c->fullscreen) {
+        c->save_x = c->x;
+        c->save_y = c->y;
+        c->save_w = c->width;
+        c->save_h = c->height;
+
+        int mon = monitor_for_client(wm, c);
+        MonitorGeom *m = &wm->monitors[mon];
+        c->x = m->x;
+        c->y = m->y;
+        c->width = m->width;
+        c->height = m->height;
+        c->fullscreen = 1;
+
+        /* Remove frame border and raise above docks */
+        IswConfigureWidget(c->shell, c->x, c->y, c->width, c->height, 0);
+        uint32_t bw0 = 0;
+        xcb_configure_window(wm->conn, IswWindow(c->shell),
+                             XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw0);
+
+        /* Position client at 0,0 within frame (no title bar) */
+        uint32_t cpos[] = { 0, 0 };
+        xcb_configure_window(wm->conn, c->client,
+                             XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, cpos);
+
+        /* Size client to full monitor (physical) */
+        double sf = wm->scale_factor;
+        uint32_t cvals[] = { (uint32_t)(c->width * sf + 0.5),
+                             (uint32_t)(c->height * sf + 0.5) };
+        xcb_configure_window(wm->conn, c->client,
+                             XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                             cvals);
+
+        /* Raise above everything including docks */
+        uint32_t above[] = { XCB_STACK_MODE_ABOVE };
+        xcb_configure_window(wm->conn, IswWindow(c->shell),
+                             XCB_CONFIG_WINDOW_STACK_MODE, above);
+    } else if (!enable && c->fullscreen) {
+        c->x      = c->save_x;
+        c->y      = c->save_y;
+        c->width  = c->save_w;
+        c->height = c->save_h;
+        c->fullscreen = 0;
+        frame_configure(wm, c);
+    }
+
+    wm_update_net_wm_state(wm, c);
     xcb_flush(wm->conn);
 }
 
@@ -1052,6 +1106,10 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
                                 c->client, c->desktop);
         xcb_map_window(wm->conn, ev->window);
         IswPopup(c->shell, IswGrabNone);
+        if (c->fullscreen) {
+            c->fullscreen = 0;
+            wm_fullscreen_client(wm, c, 1);
+        }
         wm_focus_client(wm, c);
         if (c->above || c->below)
             wm_restack_above_below(wm);
@@ -1284,6 +1342,14 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         xcb_atom_t a1 = ev->data.data32[1];
         xcb_atom_t a2 = ev->data.data32[2];
 
+        /* Fullscreen */
+        if (a1 == ewmh->_NET_WM_STATE_FULLSCREEN ||
+            a2 == ewmh->_NET_WM_STATE_FULLSCREEN) {
+            int want = (action == 1) || (action == 2 && !c->fullscreen);
+            if (want != c->fullscreen) {
+                wm_fullscreen_client(wm, c, want);
+            }
+        }
         /* Check if either atom requests maximize */
         if (a1 == ewmh->_NET_WM_STATE_MAXIMIZED_VERT ||
             a1 == ewmh->_NET_WM_STATE_MAXIMIZED_HORZ ||

@@ -32,6 +32,7 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_CURRENT_DESKTOP,
         ewmh->_NET_WM_STRUT_PARTIAL,
         ewmh->_NET_WM_DESKTOP,
+        ewmh->_NET_WM_STATE_FULLSCREEN,
         ewmh->_NET_WM_STATE_ABOVE,
         ewmh->_NET_WM_STATE_BELOW,
         ewmh->_NET_WORKAREA,
@@ -80,10 +81,47 @@ void wm_ewmh_update_active(Wm *wm)
 
 void wm_ewmh_update_workarea(Wm *wm)
 {
-    int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
-
+    /* _NET_WORKAREA must be in physical (root window) pixels per EWMH.
+     * Compute struts directly without the logical conversion. */
+    int top = 0, bottom = 0, left = 0, right = 0;
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        xcb_ewmh_wm_strut_partial_t strut;
+        if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+                xcb_ewmh_get_wm_strut_partial(ewmh, c->client),
+                &strut, NULL)) {
+            if ((int)strut.top > top)       { top = strut.top; }
+            if ((int)strut.bottom > bottom) { bottom = strut.bottom; }
+            if ((int)strut.left > left)     { left = strut.left; }
+            if ((int)strut.right > right)   { right = strut.right; }
+        }
+    }
+
+    xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+        wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+    if (tree) {
+        xcb_window_t *children = xcb_query_tree_children(tree);
+        int nchildren = xcb_query_tree_children_length(tree);
+        for (int i = 0; i < nchildren; i++) {
+            xcb_ewmh_wm_strut_partial_t strut;
+            if (xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+                    xcb_ewmh_get_wm_strut_partial(ewmh, children[i]),
+                    &strut, NULL)) {
+                if ((int)strut.top > top)       { top = strut.top; }
+                if ((int)strut.bottom > bottom) { bottom = strut.bottom; }
+                if ((int)strut.left > left)     { left = strut.left; }
+                if ((int)strut.right > right)   { right = strut.right; }
+            }
+        }
+        free(tree);
+    }
+
+    int wx = left;
+    int wy = top;
+    int ww = wm->screen->width_in_pixels - left - right;
+    int wh = wm->screen->height_in_pixels - top - bottom;
+
     xcb_ewmh_geometry_t *areas = malloc(
         wm->num_desktops * sizeof(xcb_ewmh_geometry_t));
     if (!areas)

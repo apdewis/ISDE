@@ -57,6 +57,7 @@ typedef struct WmClient {
     uint16_t     width, height;/* Client area size (excludes frame) */
     int          focused;
     int          maximized;
+    int          fullscreen;   /* _NET_WM_STATE_FULLSCREEN */
     int          minimized;
     int          above;        /* _NET_WM_STATE_ABOVE */
     int          below;        /* _NET_WM_STATE_BELOW */
@@ -187,6 +188,7 @@ void      wm_focus_client(Wm *wm, WmClient *c);
 void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);
+void      wm_fullscreen_client(Wm *wm, WmClient *c, int enable);
 void      wm_minimize_client(Wm *wm, WmClient *c);
 void      wm_restore_client(Wm *wm, WmClient *c);
 void      wm_set_above(Wm *wm, WmClient *c, int enable);
