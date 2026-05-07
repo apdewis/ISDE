@@ -648,6 +648,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
                     XCB_NONE, XCB_NONE,
                     XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
 
+    /* Set _NET_FRAME_EXTENTS so CSD clients know the frame geometry */
+    frame_set_extents(wm, c);
+
     /* Append to list tail — _NET_CLIENT_LIST must be in initial mapping order */
     c->next = NULL;
     if (!wm->clients) {
@@ -687,6 +690,26 @@ void frame_destroy(Wm *wm, WmClient *c)
 
     free(c->title);
     free(c);
+}
+
+/* ---------- _NET_FRAME_EXTENTS ---------- */
+
+void frame_set_extents(Wm *wm, WmClient *c)
+{
+    if (!c->decorated) {
+        xcb_ewmh_set_frame_extents(isde_ewmh_connection(wm->ewmh),
+                                   c->client, 0, 0, 0, 0);
+        return;
+    }
+    double sf = wm->scale_factor;
+    int bw = c->maximized ? 0 : 1;
+    int title = wm->title_height;
+    uint32_t left   = log_to_phys(sf, WM_BORDER_WIDTH + bw);
+    uint32_t right  = left;
+    uint32_t top    = log_to_phys(sf, WM_BORDER_WIDTH + title + bw);
+    uint32_t bottom = log_to_phys(sf, WM_BORDER_WIDTH + bw);
+    xcb_ewmh_set_frame_extents(isde_ewmh_connection(wm->ewmh),
+                               c->client, left, right, top, bottom);
 }
 
 /* ---------- frame geometry ---------- */
@@ -763,6 +786,7 @@ void frame_configure(Wm *wm, WmClient *c)
         frame_update_grips(wm, c);
     }
 
+    frame_set_extents(wm, c);
     xcb_flush(wm->conn);
 }
 

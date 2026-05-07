@@ -153,7 +153,10 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* Virtual desktops */
     wm_desktops_init(wm);
 
-    /* Manage any pre-existing windows */
+    /* Manage any pre-existing windows.  Grab the server so clients
+       don't see intermediate unmap/reparent/map and react to them
+       (CSD apps like Electron send _NET_ACTIVE_WINDOW on UnmapNotify). */
+    xcb_grab_server(wm->conn);
     xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
         wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
     if (tree) {
@@ -182,6 +185,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
                     }
                     WmClient *c = frame_create(wm, children[i]);
                     if (c) {
+                        c->focus_seq = ++wm->focus_seq;
                         /* Restore desktop from previous session */
                         uint32_t desk = isde_ewmh_get_wm_desktop(
                             wm->ewmh, children[i]);
@@ -230,6 +234,11 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                         }
 
+                        if (c->fullscreen) {
+                            c->fullscreen = 0;
+                            wm_fullscreen_client(wm, c, 1);
+                        }
+
                         int visible = (c->desktop == wm->current_desktop ||
                                        c->desktop == 0xFFFFFFFF);
                         if (visible) {
@@ -246,7 +255,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
         }
         free(tree);
     }
+    xcb_ungrab_server(wm->conn);
 
+    wm_restack_above_below(wm);
     wm_ewmh_update_client_list(wm);
     xcb_flush(wm->conn);
     wm->running = 1;
@@ -316,16 +327,16 @@ void wm_focus_client(Wm *wm, WmClient *c)
            restack docks (which triggers ConfigureNotify on them) */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)IswWindow(c->shell));
-        if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
-            uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
-            xcb_configure_window(wm->conn, IswWindow(c->shell),
-                                 XCB_CONFIG_WINDOW_SIBLING |
-                                 XCB_CONFIG_WINDOW_STACK_MODE, vals);
-        } else {
+        //if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
+        //    uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
+        //    xcb_configure_window(wm->conn, IswWindow(c->shell),
+        //                         XCB_CONFIG_WINDOW_SIBLING |
+        //                         XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        //} else {
             uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
-        }
+        //}
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
     }
@@ -866,6 +877,9 @@ void wm_fullscreen_client(Wm *wm, WmClient *c, int enable)
         uint32_t above[] = { XCB_STACK_MODE_ABOVE };
         xcb_configure_window(wm->conn, IswWindow(c->shell),
                              XCB_CONFIG_WINDOW_STACK_MODE, above);
+
+        xcb_ewmh_set_frame_extents(isde_ewmh_connection(wm->ewmh),
+                                   c->client, 0, 0, 0, 0);
     } else if (!enable && c->fullscreen) {
         c->x      = c->save_x;
         c->y      = c->save_y;

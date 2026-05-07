@@ -213,6 +213,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client);
 void      frame_destroy(Wm *wm, WmClient *c);
 void      frame_update_title(Wm *wm, WmClient *c);
 void      frame_configure(Wm *wm, WmClient *c);
+void      frame_set_extents(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
