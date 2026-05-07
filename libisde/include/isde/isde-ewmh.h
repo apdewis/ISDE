@@ -75,6 +75,22 @@ void isde_ewmh_request_active_window(IsdeEwmh *e, xcb_window_t win);
 /* Send a _NET_CLOSE_WINDOW client message. */
 void isde_ewmh_request_close_window(IsdeEwmh *e, xcb_window_t win);
 
+/* Send a _NET_CURRENT_DESKTOP client message to request a desktop switch. */
+void isde_ewmh_request_current_desktop(IsdeEwmh *e, uint32_t desktop);
+
+/* Send a _NET_WM_DESKTOP client message to move a window to a desktop. */
+void isde_ewmh_request_wm_desktop(IsdeEwmh *e, xcb_window_t win,
+                                  uint32_t desktop);
+
+/* Set _NET_DESKTOP_LAYOUT on the root window. */
+void isde_ewmh_set_desktop_layout(IsdeEwmh *e, int orientation,
+                                  int cols, int rows, int starting_corner);
+
+/* Get _NET_DESKTOP_LAYOUT from the root window.
+ * Returns 1 on success, 0 if property not set. */
+int isde_ewmh_get_desktop_layout(IsdeEwmh *e, int *orientation,
+                                 int *cols, int *rows, int *starting_corner);
+
 #ifdef __cplusplus
 }
 #endif

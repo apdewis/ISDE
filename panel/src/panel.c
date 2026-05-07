@@ -302,6 +302,7 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* Initialize applets — they create widgets inside p->form */
     startmenu_init(p);
+    pager_init(p);
 
     /* Taskbar box — flexGrow=1 fills remaining space */
     IswArgBuilderReset(&ab);
@@ -482,6 +483,7 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     tray_check_icons(p);
     taskbar_update(p);
     taskbar_highlight_active(p);
+    pager_update(p);
 
     /* Dismiss popups when focus moves to a managed window */
     if (p->active_popup) {
@@ -552,6 +554,7 @@ void panel_cleanup(Panel *p)
     clock_cleanup(p);
     tray_cleanup(p);
     taskbar_cleanup(p);
+    pager_cleanup(p);
     startmenu_cleanup(p);
 
     for (int i = 0; i < p->ndesktop; i++) {

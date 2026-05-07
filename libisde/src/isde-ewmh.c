@@ -238,6 +238,47 @@ int isde_ewmh_get_workarea(IsdeEwmh *e, int *x, int *y, int *w, int *h)
     return 1;
 }
 
+void isde_ewmh_request_current_desktop(IsdeEwmh *e, uint32_t desktop)
+{
+    xcb_ewmh_request_change_current_desktop(&e->ewmh, e->screen_num,
+                                            desktop, XCB_CURRENT_TIME);
+    xcb_flush(e->conn);
+}
+
+void isde_ewmh_request_wm_desktop(IsdeEwmh *e, xcb_window_t win,
+                                  uint32_t desktop)
+{
+    xcb_ewmh_request_change_wm_desktop(&e->ewmh, e->screen_num, win,
+                                       desktop,
+                                       XCB_EWMH_CLIENT_SOURCE_TYPE_OTHER);
+    xcb_flush(e->conn);
+}
+
+void isde_ewmh_set_desktop_layout(IsdeEwmh *e, int orientation,
+                                  int cols, int rows, int starting_corner)
+{
+    xcb_ewmh_set_desktop_layout(&e->ewmh, e->screen_num,
+                                orientation, cols, rows, starting_corner);
+    xcb_flush(e->conn);
+}
+
+int isde_ewmh_get_desktop_layout(IsdeEwmh *e, int *orientation,
+                                 int *cols, int *rows, int *starting_corner)
+{
+    xcb_ewmh_get_desktop_layout_reply_t layout;
+    if (!xcb_ewmh_get_desktop_layout_reply(
+            &e->ewmh,
+            xcb_ewmh_get_desktop_layout(&e->ewmh, e->screen_num),
+            &layout, NULL)) {
+        return 0;
+    }
+    *orientation = layout.orientation;
+    *cols = layout.columns;
+    *rows = layout.rows;
+    *starting_corner = layout.starting_corner;
+    return 1;
+}
+
 void isde_clamp_to_workarea(xcb_connection_t *conn, int screen,
                             int *w, int *h)
 {

@@ -6,6 +6,7 @@ add_executable(isde-panel
     src/tray.c
     src/clock.c
     src/calendar.c
+    src/pager.c
 )
 
 target_compile_definitions(isde-panel PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
@@ -19,6 +20,7 @@ target_link_libraries(isde-panel
     PkgConfig::XCB_UTIL
     PkgConfig::XCB_KEYSYMS
     PkgConfig::XKBCOMMON
+    PkgConfig::CAIRO
 )
 
 install(TARGETS isde-panel RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

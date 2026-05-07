@@ -23,20 +23,28 @@ void wm_desktops_init(Wm *wm)
     wm->desk_rows = 1;
     wm->desk_cols = 2;
 
-    /* Read from config */
-    char errbuf[256];
-    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (cfg) {
-        IsdeConfigTable *root = isde_config_root(cfg);
-        IsdeConfigTable *wm_tbl = isde_config_table(root, "wm");
-        IsdeConfigTable *desk = wm_tbl ? isde_config_table(wm_tbl, "desktops") : NULL;
-        if (desk) {
-            int r = (int)isde_config_int(desk, "rows", 0);
-            int c = (int)isde_config_int(desk, "columns", 0);
-            if (r > 0) { wm->desk_rows = r; }
-            if (c > 0) { wm->desk_cols = c; }
+    /* Prefer _NET_DESKTOP_LAYOUT if a pager has set it */
+    int lo, lc, lr, lsc;
+    if (isde_ewmh_get_desktop_layout(wm->ewmh, &lo, &lc, &lr, &lsc) &&
+        lc > 0 && lr > 0) {
+        wm->desk_cols = lc;
+        wm->desk_rows = lr;
+    } else {
+        /* Fall back to config */
+        char errbuf[256];
+        IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+        if (cfg) {
+            IsdeConfigTable *root = isde_config_root(cfg);
+            IsdeConfigTable *wm_tbl = isde_config_table(root, "wm");
+            IsdeConfigTable *desk = wm_tbl ? isde_config_table(wm_tbl, "desktops") : NULL;
+            if (desk) {
+                int r = (int)isde_config_int(desk, "rows", 0);
+                int c = (int)isde_config_int(desk, "columns", 0);
+                if (r > 0) { wm->desk_rows = r; }
+                if (c > 0) { wm->desk_cols = c; }
+            }
+            isde_config_free(cfg);
         }
-        isde_config_free(cfg);
     }
 
     wm->num_desktops = wm->desk_rows * wm->desk_cols;

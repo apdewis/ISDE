@@ -1455,6 +1455,42 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
             wm_minimize_client(wm, c);
         }
         return 1;
+    } else if (ev->type == ewmh->_NET_CURRENT_DESKTOP) {
+        uint32_t desk = ev->data.data32[0];
+        wm_desktops_switch(wm, desk);
+        return 1;
+    } else if (ev->type == ewmh->_NET_WM_DESKTOP) {
+        WmClient *c = wm_find_client_by_window(wm, ev->window);
+        if (c) {
+            uint32_t desk = ev->data.data32[0];
+            if (desk < (uint32_t)wm->num_desktops || desk == 0xFFFFFFFF) {
+                int was_visible = (c->desktop == wm->current_desktop ||
+                                   c->desktop == 0xFFFFFFFF);
+                c->desktop = desk;
+                xcb_ewmh_set_wm_desktop(ewmh, c->client, desk);
+                int is_visible = (desk == wm->current_desktop ||
+                                  desk == 0xFFFFFFFF);
+                if (was_visible && !is_visible) {
+                    c->hidden = 1;
+                    xcb_unmap_window(wm->conn, c->client);
+                    if (c->shell && IswIsRealized(c->shell)) {
+                        xcb_unmap_window(wm->conn, IswWindow(c->shell));
+                    }
+                    if (wm->focused == c) {
+                        wm->focused = NULL;
+                        wm_ewmh_update_active(wm);
+                    }
+                } else if (!was_visible && is_visible) {
+                    c->hidden = 0;
+                    xcb_map_window(wm->conn, c->client);
+                    if (c->shell && IswIsRealized(c->shell)) {
+                        xcb_map_window(wm->conn, IswWindow(c->shell));
+                    }
+                }
+                xcb_flush(wm->conn);
+            }
+        }
+        return 1;
     }
 
     /* Not an EWMH message — let Xt handle (WM_PROTOCOLS, etc.) */

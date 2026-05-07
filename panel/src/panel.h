@@ -21,6 +21,7 @@
 #include <ISW/Viewport.h>
 #include <ISW/ISWSVG.h>
 #include <ISW/ISWRender.h>
+#include <ISW/DrawingArea.h>
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
@@ -135,6 +136,22 @@ typedef struct Panel {
     int                cap_search_results;
     String            *search_names;
 
+    /* Desktop pager */
+    Widget             pager_canvas;     /* DrawingArea for grid rendering */
+    int                pager_rows;
+    int                pager_cols;
+    int                pager_ndesktops;
+    uint32_t           pager_current;    /* cached current desktop */
+    xcb_window_t      *pager_wins;       /* cached client list */
+    int                pager_nwins;
+
+    /* Pager drag state */
+    int                pager_dragging;
+    xcb_window_t       pager_drag_win;   /* window being dragged */
+    int                pager_drag_x;     /* current pointer x in canvas */
+    int                pager_drag_y;     /* current pointer y in canvas */
+    uint32_t           pager_drag_src;   /* source desktop */
+
     /* Taskbar */
     TaskGroup         *groups;
 
@@ -231,5 +248,10 @@ void  clock_cleanup(Panel *p);
 void  calendar_init(Panel *p);
 void  calendar_toggle(Panel *p);
 void  calendar_cleanup(Panel *p);
+
+/* ---------- pager.c ---------- */
+void  pager_init(Panel *p);
+void  pager_update(Panel *p);
+void  pager_cleanup(Panel *p);
 
 #endif /* ISDE_PANEL_H */
