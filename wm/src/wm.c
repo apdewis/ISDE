@@ -975,6 +975,8 @@ void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
                           old == 0xFFFFFFFF);
 
     if (visible_before && !visible_now) {
+        c->hidden = 1;
+        xcb_unmap_window(wm->conn, c->client);
         if (c->shell && IswIsRealized(c->shell))
             xcb_unmap_window(wm->conn, IswWindow(c->shell));
         if (wm->focused == c) {
@@ -982,6 +984,8 @@ void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
             wm_ewmh_update_active(wm);
         }
     } else if (!visible_before && visible_now) {
+        c->hidden = 0;
+        xcb_map_window(wm->conn, c->client);
         if (c->shell && IswIsRealized(c->shell))
             xcb_map_window(wm->conn, IswWindow(c->shell));
     }
@@ -1204,6 +1208,9 @@ static void on_unmap_notify(Wm *wm, xcb_unmap_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c && c->shell && ev->event == IswWindow(c->shell)) {
+        if (c->hidden) {
+            return;
+        }
         wm_remove_client(wm, c);
     }
 }

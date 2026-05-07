@@ -61,6 +61,7 @@ typedef struct WmClient {
     int          minimized;
     int          above;        /* _NET_WM_STATE_ABOVE */
     int          below;        /* _NET_WM_STATE_BELOW */
+    int          hidden;       /* WM-initiated unmap (desktop switch) */
     int          decorated;     /* 0 = CSD/no frame chrome */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
     xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */

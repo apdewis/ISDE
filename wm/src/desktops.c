@@ -76,12 +76,16 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
         }
 
         if (c->desktop == old && c->desktop != desktop) {
-            /* Hide: unmap the frame */
+            /* Hide: unmap client and frame */
+            c->hidden = 1;
+            xcb_unmap_window(wm->conn, c->client);
             if (c->shell && IswIsRealized(c->shell)) {
                 xcb_unmap_window(wm->conn, IswWindow(c->shell));
             }
         } else if (c->desktop == desktop && c->desktop != old) {
-            /* Show: map the frame */
+            /* Show: map client and frame */
+            c->hidden = 0;
+            xcb_map_window(wm->conn, c->client);
             if (c->shell && IswIsRealized(c->shell)) {
                 xcb_map_window(wm->conn, IswWindow(c->shell));
             }
