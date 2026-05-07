@@ -233,7 +233,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
                         int visible = (c->desktop == wm->current_desktop ||
                                        c->desktop == 0xFFFFFFFF);
                         if (visible) {
-                            IswPopup(c->shell, IswGrabNone);
+                            xcb_map_window(wm->conn, IswWindow(c->shell));
                             xcb_map_window(wm->conn, c->client);
                         } else {
                             xcb_unmap_window(wm->conn,
@@ -885,8 +885,10 @@ void wm_minimize_client(Wm *wm, WmClient *c)
      * add the window to a taskbar/dock list for restoring later. */
     c->minimized = 1;
     if (c->shell) {
-        IswPopdown(c->shell);
+        //IswPopdown(c->shell);
+        xcb_unmap_window(wm->conn, IswWindow(c->shell));
     }
+    
     xcb_unmap_window(wm->conn, c->client);
     xcb_flush(wm->conn);
 
@@ -909,7 +911,7 @@ void wm_restore_client(Wm *wm, WmClient *c)
     c->minimized = 0;
     xcb_map_window(wm->conn, c->client);
     if (c->shell) {
-        IswPopup(c->shell, IswGrabNone);
+        xcb_map_window(wm->conn, IswWindow(c->shell));
     }
     xcb_flush(wm->conn);
 }
@@ -1116,7 +1118,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
                                 c->client, c->desktop);
         xcb_map_window(wm->conn, ev->window);
-        IswPopup(c->shell, IswGrabNone);
+        xcb_map_window(wm->conn, IswWindow(c->shell));
         if (c->fullscreen) {
             c->fullscreen = 0;
             wm_fullscreen_client(wm, c, 1);
@@ -1338,7 +1340,7 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         if (c->shell && !IswIsRealized(c->shell)) {
             IswRealizeWidget(c->shell);
         }
-        IswPopup(c->shell, IswGrabNone);
+        xcb_map_window(wm->conn, IswWindow(c->shell));
         xcb_map_window(wm->conn, c->client);
         wm_focus_client(wm, c);
         return 1;
