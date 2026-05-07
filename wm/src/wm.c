@@ -257,6 +257,11 @@ int wm_init(Wm *wm, int *argc, char **argv)
     }
     xcb_ungrab_server(wm->conn);
 
+    for (int i = 0; i < wm->ndocks; i++) {
+        uint32_t v[] = { XCB_STACK_MODE_ABOVE };
+        xcb_configure_window(wm->conn, wm->docks[i],
+                             XCB_CONFIG_WINDOW_STACK_MODE, v);
+    }
     wm_restack_above_below(wm);
     wm_ewmh_update_client_list(wm);
     xcb_flush(wm->conn);
@@ -327,16 +332,16 @@ void wm_focus_client(Wm *wm, WmClient *c)
            restack docks (which triggers ConfigureNotify on them) */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)IswWindow(c->shell));
-        //if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
-        //    uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
-        //    xcb_configure_window(wm->conn, IswWindow(c->shell),
-        //                         XCB_CONFIG_WINDOW_SIBLING |
-        //                         XCB_CONFIG_WINDOW_STACK_MODE, vals);
-        //} else {
+        if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
+            uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
+            xcb_configure_window(wm->conn, IswWindow(c->shell),
+                                 XCB_CONFIG_WINDOW_SIBLING |
+                                 XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        } else {
             uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
-        //}
+        }
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
     }
@@ -1348,8 +1353,13 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
 
     if (ev->type == ewmh->_NET_ACTIVE_WINDOW) {
+        uint32_t source = ev->data.data32[0];
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (!c) { return 1; }
+
+        if (source != 2 && wm->focused && wm->focused != c) {
+            return 1;
+        }
 
         if (c->shell && !IswIsRealized(c->shell)) {
             IswRealizeWidget(c->shell);
