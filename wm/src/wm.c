@@ -296,6 +296,13 @@ void wm_focus_client(Wm *wm, WmClient *c)
 
     if (prev && prev != c) {
         prev->focused = 0;
+        /* Lower fullscreen windows when they lose focus so the new
+           window is visible */
+        if (prev->fullscreen) {
+            uint32_t vals[] = { XCB_STACK_MODE_BELOW };
+            xcb_configure_window(wm->conn, IswWindow(prev->shell),
+                                 XCB_CONFIG_WINDOW_STACK_MODE, vals);
+        }
         frame_apply_theme(wm, prev);
         frame_update_title(wm, prev);
     }
@@ -309,7 +316,7 @@ void wm_focus_client(Wm *wm, WmClient *c)
            restack docks (which triggers ConfigureNotify on them) */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)IswWindow(c->shell));
-        if (wm->ndocks > 0 && !c->above) {
+        if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
             uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_SIBLING |
