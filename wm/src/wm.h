@@ -209,7 +209,7 @@ int   wm_window_type_wants_decorations(Wm *wm, xcb_window_t win);
 void  wm_place_client(Wm *wm, WmClient *c);
 
 /* ---------- frame.c — frame decoration ---------- */
-WmClient *frame_create(Wm *wm, xcb_window_t client);
+WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt);
 void      frame_destroy(Wm *wm, WmClient *c);
 void      frame_update_title(Wm *wm, WmClient *c);
 void      frame_configure(Wm *wm, WmClient *c);

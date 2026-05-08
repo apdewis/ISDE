@@ -424,7 +424,7 @@ static void menu_button_callback(Widget w, IswPointer client_data,
 
 /* ---------- frame creation ---------- */
 
-WmClient *frame_create(Wm *wm, xcb_window_t client)
+WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 {
     frame_init_icons();
 
@@ -477,7 +477,18 @@ WmClient *frame_create(Wm *wm, xcb_window_t client)
         xcb_ewmh_get_atoms_reply_wipe(&init_state);
     }
 
-    wm_place_client(wm, c);
+    if (adopt) {
+        int title = c->decorated ? wm->title_height : 0;
+        int bw = 1;
+        c->x -= WM_BORDER_WIDTH + bw;
+        c->y -= WM_BORDER_WIDTH + title + bw;
+        xcb_icccm_get_wm_transient_for_reply(
+            wm->conn,
+            xcb_icccm_get_wm_transient_for(wm->conn, c->client),
+            &c->transient_for, NULL);
+    } else {
+        wm_place_client(wm, c);
+    }
 
     int fw = frame_total_width(c);
     int fh = frame_total_height(wm, c);
@@ -675,10 +686,16 @@ void frame_destroy(Wm *wm, WmClient *c)
      * X auto-unmaps a mapped window during reparent, so we re-map it
      * unless it was intentionally minimized. */
     xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);
-    /* Reparent back to root — xcb needs physical pixel coords */
+    /* Reparent back to root at the client content position (frame
+       origin + decoration offset).  This matches what save-set
+       produces on a crash, so adoption works identically either way. */
     double sf = wm->scale_factor;
+    int title = c->decorated ? wm->title_height : 0;
+    int bw = 1;
+    int cx = c->x + WM_BORDER_WIDTH + bw;
+    int cy = c->y + WM_BORDER_WIDTH + title + bw;
     xcb_reparent_window(wm->conn, c->client, wm->root,
-                        (int)(c->x * sf + 0.5), (int)(c->y * sf + 0.5));
+                        (int)(cx * sf + 0.5), (int)(cy * sf + 0.5));
     if (!c->minimized) {
         xcb_map_window(wm->conn, c->client);
     }

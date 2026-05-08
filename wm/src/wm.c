@@ -183,7 +183,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
                         free(attr);
                         continue;
                     }
-                    WmClient *c = frame_create(wm, children[i]);
+                    WmClient *c = frame_create(wm, children[i], 1);
                     if (c) {
                         c->focus_seq = ++wm->focus_seq;
                         /* Restore desktop from previous session */
@@ -1131,7 +1131,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         return;
     }
 
-    WmClient *c = frame_create(wm, ev->window);
+    WmClient *c = frame_create(wm, ev->window, 0);
     if (c) {
         c->desktop = wm->current_desktop;
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
