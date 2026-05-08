@@ -89,6 +89,9 @@ See [ISW_LAYOUT.md](ISW_LAYOUT.md) for layout container selection (Box vs Form v
 
 See [DESIGN.md](DESIGN.md) for HIG rules — scrollbar placement, widget conventions, and other UI standards. Follow it when creating or modifying any user-facing interface.
 
+## C Coding rules
+- never use bare scoping brace blocks
+
 ## Communication Style
 
 - No sycophantic behaviour.
