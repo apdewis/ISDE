@@ -13,6 +13,8 @@ target_link_libraries(isde-session
     PkgConfig::XCB
     PkgConfig::XCB_XKB
     PkgConfig::XCB_KEYSYMS
+    PkgConfig::XCB_DPMS
+    PkgConfig::XCB_SCREENSAVER
     PkgConfig::DBUS
 )
 

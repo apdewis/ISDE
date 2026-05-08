@@ -14,10 +14,13 @@
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <xcb/randr.h>
+#include <xcb/dpms.h>
+#include <xcb/screensaver.h>
 #include <ISW/IswArgMacros.h>
 #include <dbus/dbus.h>
 
 #include "isde/isde-theme.h"
+#include "isde/isde-dpms.h"
 
 #include <ISW/Shell.h>
 #include <ISW/StringDefs.h>
@@ -172,6 +175,70 @@ static void apply_input_settings(void)
     xcb_disconnect(conn);
 }
 
+/* ---------- apply power settings from config ---------- */
+
+static LidAction parse_lid_action(const char *s)
+{
+    if (strcmp(s, "hibernate") == 0) { return LID_ACTION_HIBERNATE; }
+    if (strcmp(s, "lock") == 0)      { return LID_ACTION_LOCK; }
+    if (strcmp(s, "nothing") == 0)   { return LID_ACTION_NOTHING; }
+    return LID_ACTION_SUSPEND;
+}
+
+static void apply_power_settings(Session *s)
+{
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (!cfg) { return; }
+
+    IsdeConfigTable *root = isde_config_root(cfg);
+    IsdeConfigTable *power = isde_config_table(root, "power");
+    if (!power) { isde_config_free(cfg); return; }
+
+    int screen_off = (int)isde_config_int(power, "screen_off_sec", 600);
+    s->idle_suspend_sec = (int)isde_config_int(power, "idle_suspend_sec", 0);
+    const char *la = isde_config_string(power, "lid_action", "suspend");
+    s->lid_action = parse_lid_action(la);
+
+    isde_config_free(cfg);
+
+    /* Apply DPMS timeouts on the session's XCB connection */
+    if (s->conn) {
+        isde_dpms_set_timeouts(s->conn, screen_off, screen_off, screen_off);
+    }
+
+    fprintf(stderr, "isde-session: power: screen_off=%d idle_suspend=%d "
+            "lid_action=%d\n", screen_off, s->idle_suspend_sec,
+            (int)s->lid_action);
+}
+
+/* ---------- idle suspend timer ---------- */
+
+static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    Session *s = (Session *)client_data;
+
+    if (s->idle_suspend_sec > 0 && s->conn) {
+        xcb_screensaver_query_info_cookie_t cookie =
+            xcb_screensaver_query_info(s->conn,
+                IswScreen(s->toplevel)->root);
+        xcb_screensaver_query_info_reply_t *reply =
+            xcb_screensaver_query_info_reply(s->conn, cookie, NULL);
+        if (reply) {
+            int idle_sec = reply->ms_since_user_input / 1000;
+            free(reply);
+            if (idle_sec >= s->idle_suspend_sec) {
+                fprintf(stderr, "isde-session: idle %ds >= %ds, suspending\n",
+                        idle_sec, s->idle_suspend_sec);
+                dm_dbus_call("Suspend");
+            }
+        }
+    }
+
+    s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
+}
+
 /* ---------- D-Bus settings callback ---------- */
 
 static void on_settings_changed(const char *section, const char *key,
@@ -186,6 +253,10 @@ static void on_settings_changed(const char *section, const char *key,
     if (strcmp(section, "appearance") == 0 ||
         strcmp(section, "*") == 0) {
         s->reload_appearance = 1;
+    }
+    if (strcmp(section, "power") == 0 ||
+        strcmp(section, "*") == 0) {
+        s->reload_power = 1;
     }
 }
 
@@ -310,6 +381,31 @@ system_bus_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    if (dbus_message_is_signal(msg, "org.isde.DisplayManager",
+                               "LidSwitchChanged")) {
+        dbus_bool_t closed = FALSE;
+        if (dbus_message_get_args(msg, NULL,
+                                  DBUS_TYPE_BOOLEAN, &closed,
+                                  DBUS_TYPE_INVALID) && closed) {
+            fprintf(stderr, "isde-session: lid closed, action=%d\n",
+                    (int)s->lid_action);
+            switch (s->lid_action) {
+            case LID_ACTION_SUSPEND:
+                dm_dbus_call("Suspend");
+                break;
+            case LID_ACTION_HIBERNATE:
+                dm_dbus_call("Suspend");
+                break;
+            case LID_ACTION_LOCK:
+                dm_dbus_call("Lock");
+                break;
+            case LID_ACTION_NOTHING:
+                break;
+            }
+        }
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
@@ -335,6 +431,17 @@ static void init_system_bus(Session *s)
         &err);
     if (dbus_error_is_set(&err)) {
         fprintf(stderr, "isde-session: D-Bus match: %s\n", err.message);
+        dbus_error_free(&err);
+    }
+
+    /* Subscribe to LidSwitchChanged signals from the DM */
+    dbus_bus_add_match(s->system_bus,
+        "type='signal',"
+        "interface='org.isde.DisplayManager',"
+        "member='LidSwitchChanged'",
+        &err);
+    if (dbus_error_is_set(&err)) {
+        fprintf(stderr, "isde-session: D-Bus match (lid): %s\n", err.message);
         dbus_error_free(&err);
     }
 
@@ -426,6 +533,11 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
         restart_ui_children(s);
     }
 
+    if (s->reload_power) {
+        s->reload_power = 0;
+        apply_power_settings(s);
+    }
+
     /* Re-arm the timer */
     s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
 }
@@ -479,6 +591,7 @@ int session_init(Session *s)
     /* Apply settings from config before starting components */
     apply_appearance_settings();
     apply_input_settings();
+    apply_power_settings(s);
 
     /* Initialize Xt for confirmation dialogs */
     int argc = 1;
@@ -597,6 +710,11 @@ void session_run(Session *s)
 
     /* Periodic timer for WM-alive check and appearance reload */
     s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
+
+    /* Idle suspend timer (polls every 10s) */
+    if (s->idle_suspend_sec > 0) {
+        s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
+    }
 
     /* Xt event loop */
     while (s->running) {

@@ -77,6 +77,9 @@ handle_method(DBusConnection *conn, DBusMessage *msg, void *userdata)
             "    <signal name=\"ConfirmationRequested\">\n"
             "      <arg name=\"action\" type=\"s\"/>\n"
             "    </signal>\n"
+            "    <signal name=\"LidSwitchChanged\">\n"
+            "      <arg name=\"closed\" type=\"b\"/>\n"
+            "    </signal>\n"
             "    <signal name=\"GreeterConfigChanged\">\n"
             "      <arg name=\"key\" type=\"s\"/>\n"
             "    </signal>\n"
@@ -351,4 +354,23 @@ void dm_dbus_emit_locked(Dm *dm)
 void dm_dbus_emit_unlocked(Dm *dm)
 {
     emit_signal(dm, "Unlocked");
+}
+
+void dm_dbus_emit_lid_switch(Dm *dm, int closed)
+{
+    if (!dm->dbus) {
+        return;
+    }
+    DBusMessage *sig = dbus_message_new_signal(DM_DBUS_PATH,
+                                                DM_DBUS_INTERFACE,
+                                                "LidSwitchChanged");
+    if (sig) {
+        dbus_bool_t val = closed ? TRUE : FALSE;
+        dbus_message_append_args(sig,
+                                 DBUS_TYPE_BOOLEAN, &val,
+                                 DBUS_TYPE_INVALID);
+        dbus_connection_send(dm->dbus, sig, NULL);
+        dbus_message_unref(sig);
+        dbus_connection_flush(dm->dbus);
+    }
 }

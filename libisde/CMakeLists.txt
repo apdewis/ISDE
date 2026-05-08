@@ -12,6 +12,9 @@ add_library(isde SHARED
     src/isde-filechooser.c
     src/isde-tray.c
     src/isde-randr.c
+    src/isde-power.c
+    src/isde-dpms.c
+    src/isde-cpufreq.c
     vendor/tomlc99/toml.c
 )
 
@@ -35,6 +38,7 @@ target_link_libraries(isde
         PkgConfig::ISW
     PRIVATE
         PkgConfig::DBUS
+        PkgConfig::XCB_DPMS
 )
 
 set_target_properties(isde PROPERTIES

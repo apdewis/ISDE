@@ -81,6 +81,10 @@ struct Dm {
     /* D-Bus (system bus) */
     DBusConnection *dbus;
 
+    /* Lid switch monitoring */
+    int         lid_fd;            /* /dev/input fd for lid switch, or -1 */
+    int         lid_closed;        /* last known lid state */
+
     /* Signal self-pipe */
     int         sig_pipe[2];       /* [0] = read, [1] = write */
 
@@ -148,6 +152,7 @@ void dm_dbus_emit_session_started(Dm *dm, const char *username,
 void dm_dbus_emit_session_ended(Dm *dm, const char *username);
 void dm_dbus_emit_locked(Dm *dm);
 void dm_dbus_emit_unlocked(Dm *dm);
+void dm_dbus_emit_lid_switch(Dm *dm, int closed);
 
 /* ---------- lock ---------- */
 void dm_lock_session(Dm *dm);

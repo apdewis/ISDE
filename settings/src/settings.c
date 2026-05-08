@@ -288,6 +288,7 @@ int settings_init(Settings *s, int *argc, char **argv)
     register_panel(s, &panel_display, NULL);
     register_panel(s, &panel_desktops, NULL);
     register_panel(s, &panel_dm, NULL);
+    register_panel(s, &panel_power, NULL);
     load_plugins(s);
 
     /* Left pane: panel name list */
@@ -415,6 +416,7 @@ int settings_init(Settings *s, int *argc, char **argv)
         panel_terminal_set_dbus(s->dbus);
         panel_display_set_dbus(s->dbus);
         panel_desktops_set_dbus(s->dbus);
+        panel_power_set_dbus(s->dbus);
     }
 
     IswRealizeWidget(s->toplevel);

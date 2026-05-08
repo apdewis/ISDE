@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <dirent.h>
+#include <linux/input.h>
 
 /* ---------- signal self-pipe ---------- */
 
@@ -48,6 +50,60 @@ static int setup_signal_pipe(Dm *dm)
     sigaction(SIGCHLD, &sa, NULL);
 
     return 0;
+}
+
+/* ---------- lid switch detection ---------- */
+
+static int open_lid_switch(void)
+{
+    DIR *d = opendir("/dev/input");
+    if (!d) {
+        return -1;
+    }
+
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        if (strncmp(de->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        char path[256];
+        snprintf(path, sizeof(path), "/dev/input/%s", de->d_name);
+
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) {
+            continue;
+        }
+
+        /* Check if this device has EV_SW with SW_LID */
+        unsigned long sw_bits[(SW_MAX + 7) / 8] = {0};
+        if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(sw_bits)), sw_bits) >= 0) {
+            if (sw_bits[SW_LID / 8] & (1 << (SW_LID % 8))) {
+                closedir(d);
+                fprintf(stderr, "isde-dm: lid switch found: %s\n", path);
+                return fd;
+            }
+        }
+        close(fd);
+    }
+    closedir(d);
+    return -1;
+}
+
+static void handle_lid_events(Dm *dm)
+{
+    struct input_event ev;
+    while (read(dm->lid_fd, &ev, sizeof(ev)) == (ssize_t)sizeof(ev)) {
+        if (ev.type == EV_SW && ev.code == SW_LID) {
+            int closed = ev.value ? 1 : 0;
+            if (closed != dm->lid_closed) {
+                dm->lid_closed = closed;
+                fprintf(stderr, "isde-dm: lid %s\n",
+                        closed ? "closed" : "opened");
+                dm_dbus_emit_lid_switch(dm, closed);
+            }
+        }
+    }
 }
 
 /* ---------- config loading ---------- */
@@ -154,6 +210,7 @@ int dm_init(Dm *dm)
     dm->sig_pipe[0] = -1;
     dm->sig_pipe[1] = -1;
     dm->seat_fd = -1;
+    dm->lid_fd = -1;
     dm->display_num = 0;
 
     /* Defaults */
@@ -208,6 +265,14 @@ int dm_init(Dm *dm)
         }
     }
 
+    /* Lid switch monitoring */
+    if (!dm->dev_mode) {
+        dm->lid_fd = open_lid_switch();
+        if (dm->lid_fd < 0) {
+            fprintf(stderr, "isde-dm: no lid switch found (non-fatal)\n");
+        }
+    }
+
     if (dm_ipc_init(dm) != 0) {
         fprintf(stderr, "isde-dm: cannot create IPC socket\n");
         return -1;
@@ -245,7 +310,7 @@ int dm_init(Dm *dm)
 void dm_run(Dm *dm)
 {
     while (dm->running) {
-        struct pollfd pfds[5];
+        struct pollfd pfds[6];
         int nfds = 0;
 
         /* Signal self-pipe */
@@ -283,6 +348,15 @@ void dm_run(Dm *dm)
         if (dbus_fd >= 0) {
             dbus_idx = nfds;
             pfds[nfds].fd = dbus_fd;
+            pfds[nfds].events = POLLIN;
+            nfds++;
+        }
+
+        /* Lid switch */
+        int lid_idx = -1;
+        if (dm->lid_fd >= 0) {
+            lid_idx = nfds;
+            pfds[nfds].fd = dm->lid_fd;
             pfds[nfds].events = POLLIN;
             nfds++;
         }
@@ -326,6 +400,11 @@ void dm_run(Dm *dm)
             dm_dbus_dispatch(dm);
         }
 
+        /* Handle lid switch events */
+        if (lid_idx >= 0 && (pfds[lid_idx].revents & POLLIN)) {
+            handle_lid_events(dm);
+        }
+
         /* Idle timeout lock check */
         if (dm->lock_timeout > 0 && dm->session_pid > 0 &&
             !dm->locked && dm->session_active_since > 0) {
@@ -362,6 +441,7 @@ void dm_cleanup(Dm *dm)
     dm_dbus_cleanup(dm);
     dm_seat_cleanup(dm);
 
+    if (dm->lid_fd >= 0) { close(dm->lid_fd); dm->lid_fd = -1; }
     if (dm->sig_pipe[0] >= 0) { close(dm->sig_pipe[0]); }
     if (dm->sig_pipe[1] >= 0) { close(dm->sig_pipe[1]); }
     sig_write_fd = -1;

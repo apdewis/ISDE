@@ -24,6 +24,12 @@ icon_theme = "isde-standard"
 mount_base = "/media"
 auto_mount = false
 
+[power]
+screen_off_sec = 600
+idle_suspend_sec = 0
+lid_action = "suspend"
+profile = "balanced"
+
 [wm.desktops]
 rows = 1
 columns = 2

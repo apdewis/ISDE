@@ -9,6 +9,7 @@ add_executable(isde-settings
     src/panel-fonts.c
     src/panel-terminal.c
     src/panel-dm.c
+    src/panel-power.c
 )
 
 target_compile_definitions(isde-settings PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

@@ -15,6 +15,14 @@
 #include <ISW/Intrinsic.h>
 #include <dbus/dbus.h>
 
+/* Lid close action */
+typedef enum LidAction {
+    LID_ACTION_SUSPEND,
+    LID_ACTION_HIBERNATE,
+    LID_ACTION_LOCK,
+    LID_ACTION_NOTHING
+} LidAction;
+
 /* ---------- Child process ---------- */
 typedef struct Child {
     pid_t       pid;
@@ -50,6 +58,11 @@ typedef struct Session {
     Widget            toplevel;
     IswSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
     IswIntervalId      check_timer;    /* periodic appearance check */
+    IswIntervalId      idle_timer;     /* idle suspend check */
+
+    /* Power settings (cached from [power] config) */
+    int               idle_suspend_sec;
+    LidAction         lid_action;
 
     /* Confirmation overlay process */
     pid_t             confirm_pid;    /* isde-confirm child, or 0 */
@@ -65,6 +78,7 @@ typedef struct Session {
     /* Flags set from D-Bus callbacks */
     volatile sig_atomic_t reload_appearance;
     volatile sig_atomic_t reload_display;
+    volatile sig_atomic_t reload_power;
 
     /* Pending confirmation action from ConfirmationRequested signal */
     char              confirm_action[16];
