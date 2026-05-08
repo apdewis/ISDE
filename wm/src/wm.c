@@ -257,6 +257,23 @@ int wm_init(Wm *wm, int *argc, char **argv)
     }
     xcb_ungrab_server(wm->conn);
 
+    /* Restore stacking order: the client list is in QueryTree order
+       (bottom-to-top).  Frame creation/map order is not guaranteed to
+       preserve this, so explicitly restack using raw window IDs. */
+    {
+        xcb_window_t prev = XCB_WINDOW_NONE;
+        for (WmClient *c = wm->clients; c; c = c->next) {
+            xcb_window_t fw = IswWindow(c->shell);
+            if (prev != XCB_WINDOW_NONE) {
+                uint32_t v[] = { prev, XCB_STACK_MODE_ABOVE };
+                xcb_configure_window(wm->conn, fw,
+                    XCB_CONFIG_WINDOW_SIBLING |
+                    XCB_CONFIG_WINDOW_STACK_MODE, v);
+            }
+            prev = fw;
+        }
+    }
+
     for (int i = 0; i < wm->ndocks; i++) {
         uint32_t v[] = { XCB_STACK_MODE_ABOVE };
         xcb_configure_window(wm->conn, wm->docks[i],
