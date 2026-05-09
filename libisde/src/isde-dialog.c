@@ -114,13 +114,18 @@ void isde_dialog_popup(Widget shell, IswGrabKind grab)
     if (ewmh) {
         int wa_x, wa_y, wa_w, wa_h;
         if (isde_ewmh_get_workarea(ewmh, &wa_x, &wa_y, &wa_w, &wa_h)) {
+            double sf = ISWScaleFactor(shell);
+            int lwa_x = (int)(wa_x / sf);
+            int lwa_y = (int)(wa_y / sf);
+            int lwa_w = (int)(wa_w / sf);
+            int lwa_h = (int)(wa_h / sf);
             Dimension w = shell->core.width;
             Dimension h = shell->core.height;
             Dimension bw = shell->core.border_width;
-            int total_w = (int)((w + 2 * bw));
-            int total_h = (int)((h + 2 * bw));
-            int lx = (int)((wa_x + (wa_w - total_w) / 2));
-            int ly = (int)((wa_y + (wa_h - total_h) / 2));
+            int total_w = (int)(w + 2 * bw);
+            int total_h = (int)(h + 2 * bw);
+            int lx = lwa_x + (lwa_w - total_w) / 2;
+            int ly = lwa_y + (lwa_h - total_h) / 2;
             IswConfigureWidget(shell, lx, ly, w, h, bw);
         }
         isde_ewmh_free(ewmh);
