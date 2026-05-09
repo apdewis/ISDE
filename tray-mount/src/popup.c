@@ -115,86 +115,22 @@ static void position_popup(TrayMount *tm)
     isde_tray_position_popup(tm->toplevel, tm->tray_icon, tm->popup_shell);
 }
 
-/* ---------- public API ---------- */
+/* ---------- device list population ---------- */
 
-void tm_popup_init(TrayMount *tm)
+static void populate_device_list(TrayMount *tm)
 {
-    tm->popup_shell = NULL;
-    tm->popup_outer = NULL;
-    tm->popup_viewport = NULL;
-    tm->popup_visible = 0;
-}
-
-void tm_popup_show(TrayMount *tm)
-{
-    const IsdeColorScheme *scheme = isde_theme_current();
-    
-    if (tm->popup_visible) {
-        tm_popup_hide(tm);
-        return;
-    }
-
-    if (tm->popup_shell) {
-        IswDestroyWidget(tm->popup_shell);
-        tm->popup_shell = NULL;
-        tm->popup_outer = NULL;
-        tm->popup_viewport = NULL;
-    }
+    Widget listbox = tm->popup_listbox;
+    CompositeWidget cw = (CompositeWidget)listbox;
 
     nactions = 0;
 
+    while (cw->composite.num_children > 0) {
+        IswDestroyWidget(cw->composite.children[0]);
+    }
+
     IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell */
-    IswArgWidth(&ab, 400);
-    IswArgHeight(&ab, 400);
-    tm->popup_shell = IswCreatePopupShell("mountPopup",
-                                          overrideShellWidgetClass,
-                                          tm->toplevel, ab.args, ab.count);
-
-    /* Outer vertical FlexBox */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
-    IswArgBorderWidth(&ab, 0);
-    tm->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
-                                              tm->popup_shell,
-                                              ab.args, ab.count);
-
-    /* Toggle row: horizontal Box */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgFlexBasis(&ab, 50);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
-                                                tm->popup_outer,
-                                                ab.args, ab.count);
-
-    /* Viewport — fills remaining space */
-    IswArgBuilderReset(&ab);
-    IswArgFlexGrow(&ab, 1);
-    IswArgForceBars(&ab, True);
-    IswArgBorderWidth(&ab, 0);
-    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
-    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
-    tm->popup_viewport = IswCreateManagedWidget("viewport",
-                                                 viewportWidgetClass,
-                                                 tm->popup_outer,
-                                                 ab.args, ab.count);
-
-    /* ListBox inside viewport */
-    IswArgBuilderReset(&ab);
-    IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgRowSpacing(&ab, 0);
-    IswArgBorderWidth(&ab, 0);
-    Widget listbox = IswCreateManagedWidget("deviceList",
-                                            listBoxWidgetClass,
-                                            tm->popup_viewport,
-                                            ab.args, ab.count);
-
     if (tm->ndevices == 0) {
-        IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "No removable devices");
         IswArgBorderWidth(&ab, 0);
         IswArgSelectable(&ab, False);
@@ -269,6 +205,88 @@ void tm_popup_show(TrayMount *tm)
             }
         }
     }
+}
+
+/* ---------- public API ---------- */
+
+void tm_popup_init(TrayMount *tm)
+{
+    tm->popup_shell = NULL;
+    tm->popup_outer = NULL;
+    tm->popup_viewport = NULL;
+    tm->popup_listbox = NULL;
+    tm->popup_visible = 0;
+}
+
+void tm_popup_show(TrayMount *tm)
+{
+    const IsdeColorScheme *scheme = isde_theme_current();
+    
+    if (tm->popup_visible) {
+        tm_popup_hide(tm);
+        return;
+    }
+
+    if (tm->popup_shell) {
+        IswDestroyWidget(tm->popup_shell);
+        tm->popup_shell = NULL;
+        tm->popup_outer = NULL;
+        tm->popup_viewport = NULL;
+    }
+
+    nactions = 0;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+
+    /* Override shell */
+    IswArgWidth(&ab, 400);
+    IswArgHeight(&ab, 400);
+    tm->popup_shell = IswCreatePopupShell("mountPopup",
+                                          overrideShellWidgetClass,
+                                          tm->toplevel, ab.args, ab.count);
+
+    /* Outer vertical FlexBox */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    tm->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                              tm->popup_shell,
+                                              ab.args, ab.count);
+
+    /* Toggle row: horizontal Box */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgFlexBasis(&ab, 50);
+    IswArgBorderWidth(&ab, 1);
+    IswArgBackground(&ab, scheme->bg_light);
+    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                tm->popup_outer,
+                                                ab.args, ab.count);
+
+    /* Viewport — fills remaining space */
+    IswArgBuilderReset(&ab);
+    IswArgFlexGrow(&ab, 1);
+    IswArgForceBars(&ab, True);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+    tm->popup_viewport = IswCreateManagedWidget("viewport",
+                                                 viewportWidgetClass,
+                                                 tm->popup_outer,
+                                                 ab.args, ab.count);
+
+    /* ListBox inside viewport */
+    IswArgBuilderReset(&ab);
+    IswArgSelectionMode(&ab, IswListBoxSelectNone);
+    IswArgRowSpacing(&ab, 0);
+    IswArgBorderWidth(&ab, 0);
+    tm->popup_listbox = IswCreateManagedWidget("deviceList",
+                                               listBoxWidgetClass,
+                                               tm->popup_viewport,
+                                               ab.args, ab.count);
+
+    populate_device_list(tm);
 
     IswRealizeWidget(tm->popup_shell);
     position_popup(tm);
@@ -285,6 +303,14 @@ void tm_popup_show(TrayMount *tm)
     IswAddEventHandler(tm->popup_shell, POPUP_DISMISS_MASK, False,
                        popup_outside_handler, tm);
     tm->popup_visible = 1;
+}
+
+void tm_popup_refresh(TrayMount *tm)
+{
+    if (!tm->popup_visible) {
+        return;
+    }
+    populate_device_list(tm);
 }
 
 void tm_popup_hide(TrayMount *tm)
@@ -312,6 +338,7 @@ void tm_popup_cleanup(TrayMount *tm)
         tm->popup_shell = NULL;
         tm->popup_outer = NULL;
         tm->popup_viewport = NULL;
+        tm->popup_listbox = NULL;
     }
     tm->popup_visible = 0;
 

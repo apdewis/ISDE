@@ -64,6 +64,7 @@ typedef struct TrayMount {
     Widget              popup_shell;
     Widget              popup_outer;
     Widget              popup_viewport;
+    Widget              popup_listbox;
     int                 popup_visible;
 
     /* Device state */
@@ -99,6 +100,7 @@ void tm_dbus_eject(TrayMount *tm, const char *dev_path);
 /* ---------- popup.c ---------- */
 void tm_popup_init(TrayMount *tm);
 void tm_popup_show(TrayMount *tm);
+void tm_popup_refresh(TrayMount *tm);
 void tm_popup_hide(TrayMount *tm);
 void tm_popup_cleanup(TrayMount *tm);
 

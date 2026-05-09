@@ -97,6 +97,8 @@ signal_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
         }
     }
 
+    tm_popup_refresh(tm);
+
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
