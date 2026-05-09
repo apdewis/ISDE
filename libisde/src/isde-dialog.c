@@ -18,6 +18,7 @@
 #include <ISW/Form.h>
 #include <ISW/FlexBox.h>
 #include <ISW/Dialog.h>
+#include <ISW/Text.h>
 #include <ISW/FontChooser.h>
 #include <ISW/ProgressBar.h>
 #include <ISW/IswArgMacros.h>
@@ -354,6 +355,11 @@ Widget isde_dialog_input(Widget parent, const char *title,
                                                ctx->shell, ab.args, ab.count);
 
     Widget value_w = IswNameToWidget(ctx->dialog_widget, "value");
+    if (value_w) {
+        IswArgBuilder vab = IswArgBuilderInit();
+        IswArgResize(&vab, IswtextResizeNever);
+        IswSetValues(value_w, vab.args, vab.count);
+    }
     Widget anchor = value_w ? value_w :
                     IswNameToWidget(ctx->dialog_widget, "label");
 
