@@ -182,11 +182,8 @@ static void pager_expose_cb(Widget w, IswPointer client_data,
         CellRect cell = cell_rect(p, desk);
         int is_current = ((uint32_t)desk == p->pager_current);
 
-        /* Cell fill */
-        unsigned int fill = is_current
-            ? (scheme ? scheme->active : 0x4488CC)
-            : (scheme ? scheme->bg_light : 0x555555);
-        isde_color_to_rgb(fill, &r, &g, &b);
+        /* Cell fill — uniform base; active tint applied after mini-windows */
+        isde_color_to_rgb(scheme ? scheme->bg_light : 0x555555, &r, &g, &b);
         cairo_set_source_rgb(cr, r, g, b);
         cairo_rectangle(cr, cell.x, cell.y, cell.w, cell.h);
         cairo_fill(cr);
@@ -240,6 +237,14 @@ static void pager_expose_cb(Widget w, IswPointer client_data,
             cairo_set_line_width(cr, 1.0);
             cairo_rectangle(cr, mx + 0.5, my + 0.5, mw - 1, mh - 1);
             cairo_stroke(cr);
+        }
+
+        /* Active desktop tint — drawn over mini-windows so it's always visible */
+        if (is_current) {
+            isde_color_to_rgb(scheme ? scheme->active : 0x4488CC, &r, &g, &b);
+            cairo_set_source_rgba(cr, r, g, b, 0.3);
+            cairo_rectangle(cr, cell.x, cell.y, cell.w, cell.h);
+            cairo_fill(cr);
         }
     }
 
