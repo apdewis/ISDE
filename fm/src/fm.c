@@ -1099,7 +1099,7 @@ void fm_register_context_menu(Fm *fm, Widget w)
 
 #ifdef __linux__
 #define CWD_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | \
-                        IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF)
+                        IN_ATTRIB | IN_CLOSE_WRITE | IN_MOVE_SELF | IN_DELETE_SELF)
 #define CWD_REFRESH_DEBOUNCE_MS 150
 
 static void cwd_refresh_timer_cb(IswPointer cd, IswIntervalId *id)
