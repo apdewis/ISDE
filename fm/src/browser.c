@@ -127,41 +127,56 @@ void browser_open_entry(Fm *fm, int index)
         return;
     }
 
-    /* Look up default app via mimeapps.list */
     const char *mime = isde_mime_type_for_file(e->name);
-    char *desktop_id = mime ? isde_mime_default_app(mime) : NULL;
-    if (!desktop_id)
+    if (!mime || strcmp(mime, "application/octet-stream") == 0) {
         return;
+    }
 
-    /* Try the app cache first */
     FmApp *app = fm->app_state;
     IsdeDesktopEntry *de = NULL;
     int from_cache = 0;
 
-    for (int i = 0; i < app->ndesktop; i++) {
-        const char *id = isde_desktop_id(app->desktop_entries[i]);
-        if (id && strcmp(id, desktop_id) == 0) {
-            de = app->desktop_entries[i];
-            from_cache = 1;
-            break;
+    /* Look up explicit default via mimeapps.list */
+    char *desktop_id = isde_mime_default_app(mime);
+    if (desktop_id) {
+        for (int i = 0; i < app->ndesktop; i++) {
+            const char *id = isde_desktop_id(app->desktop_entries[i]);
+            if (id && strcmp(id, desktop_id) == 0) {
+                de = app->desktop_entries[i];
+                from_cache = 1;
+                break;
+            }
         }
+
+        if (!de) {
+            char *desktop_path = isde_mime_find_desktop(desktop_id);
+            if (desktop_path) {
+                de = isde_desktop_load(desktop_path);
+                free(desktop_path);
+            }
+        }
+        free(desktop_id);
     }
 
-    /* Fall back to loading from disk */
+    /* No explicit default — use first app that handles this MIME type */
     if (!de) {
-        char *desktop_path = isde_mime_find_desktop(desktop_id);
-        if (desktop_path) {
-            de = isde_desktop_load(desktop_path);
-            free(desktop_path);
+        for (int i = 0; i < app->ndesktop; i++) {
+            IsdeDesktopEntry *candidate = app->desktop_entries[i];
+            if (!candidate) { continue; }
+            if (isde_desktop_hidden(candidate) ||
+                isde_desktop_no_display(candidate)) { continue; }
+            if (!isde_desktop_handles_mime(candidate, mime)) { continue; }
+            de = candidate;
+            from_cache = 1;
+            break;
         }
     }
 
     if (de) {
         const char *file = e->full_path;
         isde_desktop_launch(de, &file, 1);
-        if (!from_cache)
+        if (!from_cache) {
             isde_desktop_free(de);
+        }
     }
-
-    free(desktop_id);
 }
