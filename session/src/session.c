@@ -219,7 +219,7 @@ static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
     (void)id;
     Session *s = (Session *)client_data;
 
-    if (s->idle_suspend_sec > 0 && s->conn) {
+    if ((s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) && s->conn) {
         xcb_screensaver_query_info_cookie_t cookie =
             xcb_screensaver_query_info(s->conn,
                 IswScreen(s->toplevel)->root);
@@ -228,7 +228,10 @@ static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
         if (reply) {
             int idle_sec = reply->ms_since_user_input / 1000;
             free(reply);
-            if (idle_sec >= s->idle_suspend_sec) {
+            if (s->idle_lock_sec > 0 && idle_sec >= s->idle_lock_sec) {
+                dm_dbus_call("Lock");
+            }
+            if (s->idle_suspend_sec > 0 && idle_sec >= s->idle_suspend_sec) {
                 fprintf(stderr, "isde-session: idle %ds >= %ds, suspending\n",
                         idle_sec, s->idle_suspend_sec);
                 dm_dbus_call("Suspend");
@@ -564,6 +567,8 @@ int session_init(Session *s)
 
             const char *fm = isde_config_string(sess, "file_manager", NULL);
             if (fm) { s->fm_command = strdup(fm); }
+
+            s->idle_lock_sec = (int)isde_config_int(sess, "lock_timeout", 0);
         }
         isde_config_free(cfg);
     } else {
@@ -711,8 +716,8 @@ void session_run(Session *s)
     /* Periodic timer for WM-alive check and appearance reload */
     s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
 
-    /* Idle suspend timer (polls every 10s) */
-    if (s->idle_suspend_sec > 0) {
+    /* Idle timer (polls every 10s) — lock and/or suspend */
+    if (s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) {
         s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
     }
 

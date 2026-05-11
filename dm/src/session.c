@@ -362,8 +362,6 @@ int dm_session_start(Dm *dm, const char *username,
 
     free(exec_cmd);
 
-    dm->session_active_since = time(NULL);
-
     const char *session_name = saved_desktop ? saved_desktop : "";
     fprintf(stderr, "isde-dm: session started for '%s' (pid %d)\n",
             username, pid);

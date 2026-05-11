@@ -69,8 +69,6 @@ struct Dm {
 
     /* Lock state */
     int         locked;            /* 1 if session is locked */
-    int         lock_timeout;      /* idle seconds before auto-lock (0=disabled) */
-    time_t      session_active_since; /* monotonic time of last unlock/session start */
 
     /* IPC socket */
     int         ipc_listen_fd;     /* listening socket */

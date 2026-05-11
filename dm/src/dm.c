@@ -140,7 +140,7 @@ static void load_config(Dm *dm)
     }
 
     dm->dev_mode = isde_config_bool(root, "dev_mode", 0);
-    dm->lock_timeout = isde_config_int(root, "lock_timeout", 0);
+
 
     /* In dev mode, default to Xephyr if xserver wasn't explicitly set */
     if (dm->dev_mode && !xsrv) {
@@ -405,15 +405,6 @@ void dm_run(Dm *dm)
             handle_lid_events(dm);
         }
 
-        /* Idle timeout lock check */
-        if (dm->lock_timeout > 0 && dm->session_pid > 0 &&
-            !dm->locked && dm->session_active_since > 0) {
-            time_t now = time(NULL);
-            if (now - dm->session_active_since >= dm->lock_timeout) {
-                dm_lock_session(dm);
-            }
-        }
-
         /* If the greeter died and no session is running, restart it */
         if (dm->greeter_pid == 0 && dm->session_pid == 0 &&
             dm->xserver_pid != 0) {
@@ -506,7 +497,6 @@ void dm_unlock_session(Dm *dm)
 
     fprintf(stderr, "isde-dm: unlocking session\n");
     dm->locked = 0;
-    dm->session_active_since = time(NULL);  /* reset idle timer */
 
     /* Stop greeter and switch back to session VT */
     dm_greeter_stop(dm);

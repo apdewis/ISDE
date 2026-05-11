@@ -64,6 +64,9 @@ typedef struct Session {
     int               idle_suspend_sec;
     LidAction         lid_action;
 
+    /* Session settings */
+    int               idle_lock_sec;
+
     /* Confirmation overlay process */
     pid_t             confirm_pid;    /* isde-confirm child, or 0 */
 
