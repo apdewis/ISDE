@@ -605,7 +605,7 @@ static void progress_create_dialog(IsdeProgress *p)
 
     IswArgBuilderReset(&ab);
     IswArgValue(&ab, 0);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgFlexGrow(&ab, 1);
     p->bar = IswCreateManagedWidget("progressBar", progressBarWidgetClass,
                                     vbox, ab.args, ab.count);
@@ -620,7 +620,7 @@ static void progress_create_dialog(IsdeProgress *p)
 
     IswArgBuilderReset(&ab);
     IswArgValue(&ab, 0);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgFlexGrow(&ab, 1);
     p->file_bar = IswCreateManagedWidget("fileBar", progressBarWidgetClass,
                                          vbox, ab.args, ab.count);
