@@ -12,9 +12,12 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include <time.h>
+
 #include <ISW/IswArgMacros.h>
 #include <ISW/Toggle.h>
 #include <ISW/ProgressBar.h>
+#include <isw-graph/GraphLine.h>
 #include "isde/isde-dialog.h"
 
 /* ---------- rename dialog ---------- */
@@ -572,6 +575,13 @@ typedef struct IsdeProgress {
     Widget       label;
     Widget       file_bar;
     Widget       file_label;
+    Widget       rate_label;
+    Widget       graph;
+    struct kdata *graph_data;
+    struct timespec start_time;
+    long long    prev_bytes;
+    double       prev_time;
+    double       smooth_rate;
     IswIntervalId show_timer;
     IswAppContext app;
     Widget       parent;
@@ -582,12 +592,13 @@ typedef struct IsdeProgress {
     int          last_file_pct;
     char         last_msg[128];
     char         last_file_msg[128];
+    char         last_rate_msg[64];
 } IsdeProgress;
 
 static void progress_create_dialog(IsdeProgress *p)
 {
     p->shell = isde_dialog_create_shell(p->parent, "progressShell",
-                                        p->title, 350, 190);
+                                        p->title, 350, 320);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientVertical);
@@ -626,6 +637,44 @@ static void progress_create_dialog(IsdeProgress *p)
                                          vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgResize(&ab, False);
+    p->rate_label = IswCreateManagedWidget("rateLabel", labelWidgetClass,
+                                           vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, 320);
+    IswArgHeight(&ab, 100);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 2);
+    ISW_ARG(&ab, IswGraphNshowGrid, True);
+    ISW_ARG(&ab, IswGraphNyAxisLabel, "MB/s");
+    ISW_ARG(&ab, IswGraphNshowTicLabels, True);
+    ISW_ARG(&ab, IswGraphNyTics, 4);
+    ISW_ARG(&ab, IswGraphNxTics, 0);
+    ISW_ARG(&ab, IswGraphNshowBorder, False);
+    p->graph = IswCreateManagedWidget("rateGraph", graphLineWidgetClass,
+                                      vbox, ab.args, ab.count);
+
+    struct kplotcfg *pcfg = IswGraphGetPlotCfg(p->graph);
+    pcfg->extrema |= EXTREMA_YMIN;
+    pcfg->extrema_ymin = 0.0;
+    pcfg->ticlabel = TICLABEL_LEFT;
+
+    p->graph_data = kdata_vector_alloc(64);
+    struct kdatacfg dcfg;
+    kdatacfg_defaults(&dcfg);
+    dcfg.line.clr.type = KPLOTCTYPE_RGBA;
+    dcfg.line.clr.rgba[0] = 0.2;
+    dcfg.line.clr.rgba[1] = 0.5;
+    dcfg.line.clr.rgba[2] = 0.8;
+    dcfg.line.clr.rgba[3] = 1.0;
+    dcfg.line.sz = 2.0;
+    IswGraphAttachData(p->graph, p->graph_data, KPLOT_LINES, &dcfg);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Cancel");
     IswArgWidth(&ab, 80);
     IswArgInternalWidth(&ab, 8);
@@ -635,6 +684,9 @@ static void progress_create_dialog(IsdeProgress *p)
                                            vbox, ab.args, ab.count);
     if (p->cancel_cb)
         IswAddCallback(cancel, IswNcallback, p->cancel_cb, p->cancel_data);
+
+    clock_gettime(CLOCK_MONOTONIC, &p->start_time);
+    p->prev_time = -1.0;
 
     isde_dialog_popup(p->shell, IswGrabNone);
 }
@@ -724,6 +776,12 @@ static void progress_dialog_destroy(IsdeProgress *p)
         p->label = NULL;
         p->file_bar = NULL;
         p->file_label = NULL;
+        p->rate_label = NULL;
+        p->graph = NULL;
+    }
+    if (p->graph_data) {
+        kdata_destroy(p->graph_data);
+        p->graph_data = NULL;
     }
     free(p);
 }
@@ -788,6 +846,55 @@ static void poll_timer_cb(IswPointer closure, IswIntervalId *id)
             snprintf(fbuf, sizeof(fbuf), "%lld / %lld bytes", cb, ct);
         }
         progress_dialog_update_file(job->progress, fpct, fbuf);
+
+        IsdeProgress *p = job->progress;
+        if (p && p->shell && p->graph) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            double elapsed = (now.tv_sec - p->start_time.tv_sec) +
+                             (now.tv_nsec - p->start_time.tv_nsec) / 1e9;
+            long long total_done = atomic_load(&job->total_bytes_done);
+            double dt = elapsed - p->prev_time;
+
+            if (p->prev_time < 0.0) {
+                p->prev_bytes = total_done;
+                p->prev_time = elapsed;
+            } else if (dt >= 0.1) {
+                double rate_mbs = (total_done - p->prev_bytes)
+                                  / (dt * 1024.0 * 1024.0);
+                if (rate_mbs < 0.0) {
+                    rate_mbs = 0.0;
+                }
+                p->prev_bytes = total_done;
+                p->prev_time = elapsed;
+
+                if (p->smooth_rate == 0.0) {
+                    p->smooth_rate = rate_mbs;
+                } else {
+                    p->smooth_rate += 0.3 * (rate_mbs - p->smooth_rate);
+                }
+
+                kdata_vector_append(p->graph_data, elapsed, p->smooth_rate);
+                IswGraphRedraw(p->graph);
+
+                char rbuf[64];
+                if (p->smooth_rate >= 1024.0) {
+                    snprintf(rbuf, sizeof(rbuf), "%.1f GB/s", p->smooth_rate / 1024.0);
+                } else if (p->smooth_rate >= 1.0) {
+                    snprintf(rbuf, sizeof(rbuf), "%.1f MB/s", p->smooth_rate);
+                } else {
+                    snprintf(rbuf, sizeof(rbuf), "%.0f KB/s", p->smooth_rate * 1024.0);
+                }
+                if (p->rate_label &&
+                    strcmp(rbuf, p->last_rate_msg) != 0) {
+                    IswArgBuilder rab = IswArgBuilderInit();
+                    IswArgLabel(&rab, rbuf);
+                    IswSetValues(p->rate_label, rab.args, rab.count);
+                    snprintf(p->last_rate_msg, sizeof(p->last_rate_msg),
+                             "%s", rbuf);
+                }
+            }
+        }
     }
 
     Fm *win = job->origin_win;

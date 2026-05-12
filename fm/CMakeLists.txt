@@ -27,6 +27,7 @@ find_package(Threads REQUIRED)
 
 target_link_libraries(isde-fm
     isde
+    isw-graph
     PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_EWMH

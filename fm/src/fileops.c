@@ -80,7 +80,8 @@ static char *resolve_conflict(const char *dst)
 static int copy_file_cancellable(const char *src, const char *dst,
                                  atomic_int *cancelled,
                                  atomic_llong *cur_done,
-                                 atomic_llong *cur_total)
+                                 atomic_llong *cur_total,
+                                 atomic_llong *total_done)
 {
     int fd_in = open(src, O_RDONLY);
     if (fd_in < 0) {
@@ -120,6 +121,8 @@ static int copy_file_cancellable(const char *src, const char *dst,
         }
         if (cur_done)
             atomic_fetch_add(cur_done, (long long)nread);
+        if (total_done)
+            atomic_fetch_add(total_done, (long long)nread);
     }
     if (nread < 0) {
         ret = -1;
@@ -137,7 +140,7 @@ done:
 /* Non-cancellable wrapper for the original API */
 static int copy_file(const char *src, const char *dst)
 {
-    return copy_file_cancellable(src, dst, NULL, NULL, NULL);
+    return copy_file_cancellable(src, dst, NULL, NULL, NULL, NULL);
 }
 
 /* ---------- recursive file counting ---------- */
@@ -178,7 +181,8 @@ static int count_recursive(const char *path)
 
 static int copy_recursive_cb(const char *src, const char *dst,
                               atomic_int *done, atomic_int *cancelled,
-                              atomic_llong *cur_done, atomic_llong *cur_total)
+                              atomic_llong *cur_done, atomic_llong *cur_total,
+                              atomic_llong *total_done)
 {
     if (cancelled && atomic_load(cancelled)) {
         return -1;
@@ -221,7 +225,7 @@ static int copy_recursive_cb(const char *src, const char *dst,
             free(child_dst_base);
 
             if (copy_recursive_cb(child_src, child_dst, done, cancelled,
-                                  cur_done, cur_total) != 0) {
+                                  cur_done, cur_total, total_done) != 0) {
                 ret = -1;
             }
 
@@ -248,7 +252,7 @@ static int copy_recursive_cb(const char *src, const char *dst,
 
     } else {
         int ret = copy_file_cancellable(src, dst, cancelled,
-                                         cur_done, cur_total);
+                                         cur_done, cur_total, total_done);
         if (done) {
             atomic_fetch_add(done, 1);
         }
@@ -761,11 +765,12 @@ int fileops_count_files(const char *path)
 
 int fileops_copy_progress(const char *src, const char *dst,
                           atomic_int *done, atomic_int *cancelled,
-                          atomic_llong *cur_done, atomic_llong *cur_total)
+                          atomic_llong *cur_done, atomic_llong *cur_total,
+                          atomic_llong *total_done)
 {
     char *resolved = resolve_conflict(dst);
     int ret = copy_recursive_cb(src, resolved, done, cancelled,
-                                 cur_done, cur_total);
+                                 cur_done, cur_total, total_done);
     free(resolved);
     return ret;
 }

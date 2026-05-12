@@ -126,7 +126,8 @@ static void exec_copy(FmJob *job)
         int ret = fileops_copy_progress(src, dest,
                                         &job->files_done, &job->cancelled,
                                         &job->cur_bytes_done,
-                                        &job->cur_bytes_total);
+                                        &job->cur_bytes_total,
+                                        &job->total_bytes_done);
         free(dest);
         if (ret != 0 && job->error == 0) {
             job->error = errno;
@@ -172,7 +173,8 @@ static void exec_move(FmJob *job)
             ret = fileops_copy_progress(src, dest,
                                         &job->files_done, &job->cancelled,
                                         &job->cur_bytes_done,
-                                        &job->cur_bytes_total);
+                                        &job->cur_bytes_total,
+                                        &job->total_bytes_done);
             if (ret == 0) {
                 fileops_delete(NULL, src);
             }
