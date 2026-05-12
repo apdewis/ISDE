@@ -362,12 +362,34 @@ void   fm_app_run(FmApp *app);
 void   fm_app_cleanup(FmApp *app);
 Fm    *fm_window_new(FmApp *app, const char *path);
 void   fm_window_destroy(Fm *fm);
+
+/* ---------- navigate.c ---------- */
 void   fm_navigate(Fm *fm, const char *path);
 void   fm_refresh(Fm *fm);
+void   cwd_watch_start(Fm *fm, const char *path);
+void   cwd_watch_stop(Fm *fm);
+
+/* ---------- context.c ---------- */
 void   fm_register_context_menu(Fm *fm, Widget w);
-void   fm_install_shortcuts(Widget w);
 void   fm_dismiss_context(Fm *fm);
+void   ctx_free_dynamic(Fm *fm);
+
+/* ---------- shortcuts.c ---------- */
+void   fm_register_actions(IswAppContext app);
+void   fm_install_shortcuts(Widget w);
+
+/* ---------- dialogs.c ---------- */
 void   show_rename_dialog(Fm *fm);
+void   fm_delete_selected(Fm *fm);
+void   fm_delete_selected_permanent(Fm *fm);
+void   ctx_empty_trash(Fm *fm);
+void   ctx_open_terminal(Fm *fm);
+void   show_properties_dialog(Fm *fm);
+void   ctx_set_default(Fm *fm);
+
+/* ---------- mounts.c ---------- */
+void   mount_monitor_init(FmApp *app);
+void   mount_monitor_cleanup(FmApp *app);
 
 /* ---------- browser.c ---------- */
 int   browser_read_dir(Fm *fm, const char *path);
@@ -430,7 +452,6 @@ void  clipboard_cleanup(Fm *fm);
 void  dnd_init(Fm *fm);
 void  dnd_cleanup(Fm *fm);
 
-/* ---------- progress.c ---------- */
 void  progress_start(FmApp *app, FmJob *job);
 void  progress_stop(FmJob *job);
 

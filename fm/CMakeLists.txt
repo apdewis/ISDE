@@ -1,6 +1,11 @@
 add_executable(isde-fm
     src/main.c
     src/fm.c
+    src/dialogs.c
+    src/context.c
+    src/shortcuts.c
+    src/navigate.c
+    src/mounts.c
     src/browser.c
     src/fileview.c
     src/navbar.c
@@ -10,7 +15,6 @@ add_executable(isde-fm
     src/dnd.c
     src/instance.c
     src/jobqueue.c
-    src/progress.c
     src/places.c
     src/fm_mountd.c
     src/actions.c
