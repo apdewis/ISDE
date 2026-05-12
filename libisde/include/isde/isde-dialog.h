@@ -119,18 +119,6 @@ Widget isde_dialog_about(Widget parent, const char *app_name,
                          const char *version, const char *description,
                          const char *icon_path);
 
-/* Progress dialog — non-modal, delayed show (500ms).
- * Returns an opaque handle for updating/dismissing. */
-typedef struct IsdeProgress IsdeProgress;
-
-IsdeProgress *isde_progress_create(Widget parent, const char *title,
-                                   IswAppContext app,
-                                   IswCallbackProc cancel_cb, void *data);
-void isde_progress_update(IsdeProgress *p, int percent, const char *message);
-void isde_progress_update_file(IsdeProgress *p, int percent,
-                               const char *message);
-void isde_progress_destroy(IsdeProgress *p);
-
 #ifdef __cplusplus
 }
 #endif

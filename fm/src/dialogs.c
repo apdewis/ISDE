@@ -14,6 +14,7 @@
 
 #include <ISW/IswArgMacros.h>
 #include <ISW/Toggle.h>
+#include <ISW/ProgressBar.h>
 #include "isde/isde-dialog.h"
 
 /* ---------- rename dialog ---------- */
@@ -562,7 +563,172 @@ void ctx_set_default(Fm *fm)
 
 /* ---------- progress dialog ---------- */
 
-#define POLL_INTERVAL_MS  200
+#define PROGRESS_SHOW_DELAY_MS 500
+#define POLL_INTERVAL_MS       200
+
+typedef struct IsdeProgress {
+    Widget       shell;
+    Widget       bar;
+    Widget       label;
+    Widget       file_bar;
+    Widget       file_label;
+    IswIntervalId show_timer;
+    IswAppContext app;
+    Widget       parent;
+    const char  *title;
+    IswCallbackProc cancel_cb;
+    void        *cancel_data;
+    int          last_pct;
+    int          last_file_pct;
+    char         last_msg[128];
+    char         last_file_msg[128];
+} IsdeProgress;
+
+static void progress_create_dialog(IsdeProgress *p)
+{
+    p->shell = isde_dialog_create_shell(p->parent, "progressShell",
+                                        p->title, 350, 190);
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    Widget vbox = IswCreateManagedWidget("progressBox", flexBoxWidgetClass,
+                                         p->shell, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgResize(&ab, False);
+    p->label = IswCreateManagedWidget("progressLabel", labelWidgetClass,
+                                      vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgValue(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexGrow(&ab, 1);
+    p->bar = IswCreateManagedWidget("progressBar", progressBarWidgetClass,
+                                    vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgResize(&ab, False);
+    p->file_label = IswCreateManagedWidget("fileLabel", labelWidgetClass,
+                                           vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgValue(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexGrow(&ab, 1);
+    p->file_bar = IswCreateManagedWidget("fileBar", progressBarWidgetClass,
+                                         vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Cancel");
+    IswArgWidth(&ab, 80);
+    IswArgInternalWidth(&ab, 8);
+    IswArgInternalHeight(&ab, 8);
+    IswArgFlexAlign(&ab, IswFlexAlignEnd);
+    Widget cancel = IswCreateManagedWidget("cancelBtn", commandWidgetClass,
+                                           vbox, ab.args, ab.count);
+    if (p->cancel_cb)
+        IswAddCallback(cancel, IswNcallback, p->cancel_cb, p->cancel_data);
+
+    isde_dialog_popup(p->shell, IswGrabNone);
+}
+
+static void progress_show_delay_cb(IswPointer closure, IswIntervalId *id)
+{
+    (void)id;
+    IsdeProgress *p = (IsdeProgress *)closure;
+    p->show_timer = 0;
+    progress_create_dialog(p);
+}
+
+static IsdeProgress *progress_dialog_create(Widget parent, const char *title,
+                                            IswAppContext app,
+                                            IswCallbackProc cancel_cb,
+                                            void *data)
+{
+    IsdeProgress *p = calloc(1, sizeof(*p));
+    p->parent = parent;
+    p->title = title;
+    p->app = app;
+    p->cancel_cb = cancel_cb;
+    p->cancel_data = data;
+
+    p->show_timer = IswAppAddTimeOut(app, PROGRESS_SHOW_DELAY_MS,
+                                    progress_show_delay_cb, p);
+    return p;
+}
+
+static void progress_dialog_update(IsdeProgress *p, int percent,
+                                   const char *message)
+{
+    if (!p || !p->shell) return;
+
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    if (p->bar && percent != p->last_pct) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgValue(&ab, percent);
+        IswSetValues(p->bar, ab.args, ab.count);
+        p->last_pct = percent;
+    }
+    if (p->label && message && strcmp(message, p->last_msg) != 0) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, message);
+        IswSetValues(p->label, ab.args, ab.count);
+        snprintf(p->last_msg, sizeof(p->last_msg), "%s", message);
+    }
+}
+
+static void progress_dialog_update_file(IsdeProgress *p, int percent,
+                                        const char *message)
+{
+    if (!p || !p->shell) return;
+
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    if (p->file_bar && percent != p->last_file_pct) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgValue(&ab, percent);
+        IswSetValues(p->file_bar, ab.args, ab.count);
+        p->last_file_pct = percent;
+    }
+    if (p->file_label && message &&
+        strcmp(message, p->last_file_msg) != 0) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgLabel(&ab, message);
+        IswSetValues(p->file_label, ab.args, ab.count);
+        snprintf(p->last_file_msg, sizeof(p->last_file_msg), "%s", message);
+    }
+}
+
+static void progress_dialog_destroy(IsdeProgress *p)
+{
+    if (!p) return;
+
+    if (p->show_timer) {
+        IswRemoveTimeOut(p->show_timer);
+        p->show_timer = 0;
+    }
+    if (p->shell) {
+        isde_dialog_dismiss(p->shell);
+        p->shell = NULL;
+        p->bar = NULL;
+        p->label = NULL;
+        p->file_bar = NULL;
+        p->file_label = NULL;
+    }
+    free(p);
+}
+
+/* ---------- progress polling (timer-driven) ---------- */
 
 static const char *job_type_verb(FmJobType type)
 {
@@ -603,7 +769,7 @@ static void poll_timer_cb(IswPointer closure, IswIntervalId *id)
     snprintf(buf, sizeof(buf), "%s file %d of %d...",
              job_type_verb(job->type), cur, total);
 
-    isde_progress_update(job->progress, pct, buf);
+    progress_dialog_update(job->progress, pct, buf);
 
     if (job->type == FM_JOB_COPY || job->type == FM_JOB_MOVE) {
         long long cb = atomic_load(&job->cur_bytes_done);
@@ -621,7 +787,7 @@ static void poll_timer_cb(IswPointer closure, IswIntervalId *id)
         } else {
             snprintf(fbuf, sizeof(fbuf), "%lld / %lld bytes", cb, ct);
         }
-        isde_progress_update_file(job->progress, fpct, fbuf);
+        progress_dialog_update_file(job->progress, fpct, fbuf);
     }
 
     Fm *win = job->origin_win;
@@ -636,9 +802,9 @@ void progress_start(FmApp *app, FmJob *job)
     Fm *win = job->origin_win;
     if (!win) return;
 
-    job->progress = isde_progress_create(win->toplevel,
-                                         job_type_verb(job->type),
-                                         app->app, cancel_cb, job);
+    job->progress = progress_dialog_create(win->toplevel,
+                                           job_type_verb(job->type),
+                                           app->app, cancel_cb, job);
 
     job->progress_timer = IswAppAddTimeOut(
         app->app, POLL_INTERVAL_MS, poll_timer_cb, job);
@@ -650,6 +816,6 @@ void progress_stop(FmJob *job)
         IswRemoveTimeOut(job->progress_timer);
         job->progress_timer = 0;
     }
-    isde_progress_destroy(job->progress);
+    progress_dialog_destroy(job->progress);
     job->progress = NULL;
 }

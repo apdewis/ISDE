@@ -112,7 +112,7 @@ typedef struct FmJob {
     atomic_int      finished;
     int             error;         /* errno of first failure */
     struct Fm      *origin_win;    /* window that started this op */
-    /* Progress UI (managed by progress.c, main thread only) */
+    /* Progress UI (managed by dialogs.c, main thread only) */
     struct IsdeProgress *progress;
     IswIntervalId    progress_timer;    /* polls atomic counters */
     struct FmJob   *next;
