@@ -365,6 +365,7 @@ Fm    *fm_window_new(FmApp *app, const char *path);
 void   fm_window_destroy(Fm *fm);
 
 /* ---------- navigate.c ---------- */
+void   fm_update_title(Fm *fm);
 void   fm_navigate(Fm *fm, const char *path);
 void   fm_refresh(Fm *fm);
 void   cwd_watch_start(Fm *fm, const char *path);

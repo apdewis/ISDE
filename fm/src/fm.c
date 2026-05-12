@@ -272,6 +272,19 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     return 0;
 }
 
+void fm_update_title(Fm *fm)
+{
+    const char *name = strrchr(fm->cwd, '/');
+    if (!name || name[1] == '\0')
+        name = fm->cwd;
+    else
+        name++;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgTitle(&ab, (String)name);
+    IswSetValues(fm->toplevel, ab.args, ab.count);
+}
+
 Fm *fm_window_new(FmApp *app, const char *path)
 {
     Fm *fm = calloc(1, sizeof(Fm));
@@ -369,6 +382,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm->hist_count = 1;
 
     cwd_watch_start(fm, fm->cwd);
+    fm_update_title(fm);
 
     IswRealizeWidget(fm->toplevel);
 

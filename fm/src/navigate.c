@@ -128,6 +128,7 @@ void fm_navigate(Fm *fm, const char *path)
 
     cwd_watch_start(fm, fm->cwd);
 
+    fm_update_title(fm);
     fileview_populate(fm);
     navbar_update(fm);
 }
