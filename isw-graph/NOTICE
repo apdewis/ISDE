@@ -1,0 +1,7 @@
+isw-graph incorporates the following third-party software:
+
+kplot - https://kristaps.bsd.lv/kplot/
+  Copyright (c) 2014, 2015 Kristaps Dzonsons <kristaps@bsd.lv>
+  License: ISC
+  Source: vendor/kplot/
+  See vendor/kplot/LICENSE for the full license text.
