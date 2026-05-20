@@ -78,6 +78,11 @@ typedef struct Session {
     IsdeDBus         *dbus;
     DBusConnection   *system_bus;     /* system bus for DM signals */
 
+    /* Screensaver inhibit (org.freedesktop.ScreenSaver) */
+    uint32_t          inhibit_cookies[32];
+    int               inhibit_count;
+    uint32_t          next_cookie;
+
     /* Flags set from D-Bus callbacks */
     volatile sig_atomic_t reload_appearance;
     volatile sig_atomic_t reload_display;

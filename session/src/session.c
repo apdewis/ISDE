@@ -212,12 +212,122 @@ static void apply_power_settings(Session *s)
             (int)s->lid_action);
 }
 
+/* ---------- org.freedesktop.ScreenSaver inhibit ---------- */
+
+#define SCREENSAVER_DBUS_IFACE "org.freedesktop.ScreenSaver"
+#define SCREENSAVER_DBUS_PATH  "/org/freedesktop/ScreenSaver"
+#define SCREENSAVER_DBUS_NAME  "org.freedesktop.ScreenSaver"
+
+static DBusHandlerResult
+screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
+                            void *user_data)
+{
+    Session *s = (Session *)user_data;
+
+    if (dbus_message_is_method_call(msg, SCREENSAVER_DBUS_IFACE, "Inhibit")) {
+        const char *app = NULL;
+        const char *reason = NULL;
+        if (!dbus_message_get_args(msg, NULL,
+                                   DBUS_TYPE_STRING, &app,
+                                   DBUS_TYPE_STRING, &reason,
+                                   DBUS_TYPE_INVALID)) {
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        }
+        if (s->inhibit_count >= 32) {
+            DBusMessage *err = dbus_message_new_error(msg,
+                DBUS_ERROR_LIMITS_EXCEEDED, "too many inhibitors");
+            dbus_connection_send(conn, err, NULL);
+            dbus_message_unref(err);
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+        uint32_t cookie = ++s->next_cookie;
+        s->inhibit_cookies[s->inhibit_count++] = cookie;
+        fprintf(stderr, "isde-session: screensaver inhibit by '%s': %s "
+                "(cookie %u, active %d)\n", app, reason, cookie,
+                s->inhibit_count);
+
+        DBusMessage *reply = dbus_message_new_method_return(msg);
+        dbus_message_append_args(reply,
+                                 DBUS_TYPE_UINT32, &cookie,
+                                 DBUS_TYPE_INVALID);
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (dbus_message_is_method_call(msg, SCREENSAVER_DBUS_IFACE, "UnInhibit")) {
+        uint32_t cookie = 0;
+        if (!dbus_message_get_args(msg, NULL,
+                                   DBUS_TYPE_UINT32, &cookie,
+                                   DBUS_TYPE_INVALID)) {
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        }
+        for (int i = 0; i < s->inhibit_count; i++) {
+            if (s->inhibit_cookies[i] == cookie) {
+                s->inhibit_cookies[i] =
+                    s->inhibit_cookies[--s->inhibit_count];
+                fprintf(stderr, "isde-session: screensaver uninhibit "
+                        "cookie %u (active %d)\n", cookie,
+                        s->inhibit_count);
+                break;
+            }
+        }
+        DBusMessage *reply = dbus_message_new_method_return(msg);
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+static const DBusObjectPathVTable screensaver_vtable = {
+    .message_function = screensaver_message_handler
+};
+
+static void init_screensaver_service(Session *s)
+{
+    DBusError err;
+    dbus_error_init(&err);
+    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+    if (!conn) {
+        fprintf(stderr, "isde-session: screensaver service: %s\n",
+                err.message ? err.message : "cannot connect");
+        dbus_error_free(&err);
+        return;
+    }
+
+    int ret = dbus_bus_request_name(conn, SCREENSAVER_DBUS_NAME,
+                                    DBUS_NAME_FLAG_DO_NOT_QUEUE, &err);
+    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+        fprintf(stderr, "isde-session: cannot own %s: %s\n",
+                SCREENSAVER_DBUS_NAME,
+                dbus_error_is_set(&err) ? err.message : "already owned");
+        dbus_error_free(&err);
+        dbus_connection_unref(conn);
+        return;
+    }
+
+    dbus_connection_register_object_path(conn, SCREENSAVER_DBUS_PATH,
+                                         &screensaver_vtable, s);
+    dbus_connection_register_object_path(conn, "/ScreenSaver",
+                                         &screensaver_vtable, s);
+    dbus_connection_unref(conn);
+    dbus_error_free(&err);
+    fprintf(stderr, "isde-session: screensaver inhibit service active\n");
+}
+
 /* ---------- idle suspend timer ---------- */
 
 static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
     Session *s = (Session *)client_data;
+
+    if (s->inhibit_count > 0) {
+        s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
+        return;
+    }
 
     if ((s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) && s->conn) {
         xcb_screensaver_query_info_cookie_t cookie =
@@ -633,6 +743,9 @@ int session_init(Session *s)
 
     /* D-Bus system bus for DM ConfirmationRequested signal */
     init_system_bus(s);
+
+    /* org.freedesktop.ScreenSaver inhibit service on session bus */
+    init_screensaver_service(s);
 
     /* XCB connection for IPC (ISDE_CMD_LOGOUT etc.) */
     s->conn = xcb_connect(getenv("DISPLAY"), &s->screen_num);
