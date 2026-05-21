@@ -235,6 +235,7 @@ void      frame_init_cursors(Wm *wm);
 /* ---------- ewmh.c — EWMH property management ---------- */
 void  wm_ewmh_setup(Wm *wm);
 void  wm_ewmh_update_client_list(Wm *wm);
+void  wm_ewmh_update_client_list_stacking(Wm *wm);
 void  wm_ewmh_update_active(Wm *wm);
 void  wm_ewmh_update_workarea(Wm *wm);
 

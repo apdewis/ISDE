@@ -23,6 +23,7 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_SUPPORTED,
         ewmh->_NET_SUPPORTING_WM_CHECK,
         ewmh->_NET_CLIENT_LIST,
+        ewmh->_NET_CLIENT_LIST_STACKING,
         ewmh->_NET_ACTIVE_WINDOW,
         ewmh->_NET_WM_NAME,
         ewmh->_NET_WM_STATE,
@@ -43,6 +44,7 @@ void wm_ewmh_setup(Wm *wm)
 
     /* Desktop count set by wm_desktops_init() */
     isde_ewmh_set_client_list(wm->ewmh, NULL, 0);
+    isde_ewmh_set_client_list_stacking(wm->ewmh, NULL, 0);
     isde_ewmh_set_active_window(wm->ewmh, XCB_WINDOW_NONE);
 
     xcb_flush(wm->conn);
@@ -70,6 +72,57 @@ void wm_ewmh_update_client_list(Wm *wm)
     }
 
     isde_ewmh_set_client_list(wm->ewmh, wins, count);
+    free(wins);
+}
+
+static int cmp_stacking(const void *a, const void *b)
+{
+    const WmClient *ca = *(const WmClient *const *)a;
+    const WmClient *cb = *(const WmClient *const *)b;
+    if (ca->below != cb->below) { return ca->below ? -1 : 1; }
+    if (ca->above != cb->above) { return ca->above ? 1 : -1; }
+    if (ca->focus_seq < cb->focus_seq) { return -1; }
+    if (ca->focus_seq > cb->focus_seq) { return 1; }
+    return 0;
+}
+
+void wm_ewmh_update_client_list_stacking(Wm *wm)
+{
+    int count = 0;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (!c->transient_for) {
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        isde_ewmh_set_client_list_stacking(wm->ewmh, NULL, 0);
+        return;
+    }
+
+    WmClient **sorted = malloc(count * sizeof(WmClient *));
+    xcb_window_t *wins = malloc(count * sizeof(xcb_window_t));
+    if (!sorted || !wins) {
+        free(sorted);
+        free(wins);
+        return;
+    }
+
+    int idx = 0;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (!c->transient_for) {
+            sorted[idx++] = c;
+        }
+    }
+
+    qsort(sorted, count, sizeof(WmClient *), cmp_stacking);
+
+    for (int i = 0; i < count; i++) {
+        wins[i] = sorted[i]->client;
+    }
+
+    free(sorted);
+    isde_ewmh_set_client_list_stacking(wm->ewmh, wins, count);
     free(wins);
 }
 

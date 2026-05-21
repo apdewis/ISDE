@@ -32,6 +32,7 @@ xcb_window_t           isde_ewmh_root(IsdeEwmh *e);
 /* Frequently-used atom helpers */
 int isde_ewmh_set_supported(IsdeEwmh *e, xcb_atom_t *atoms, int count);
 int isde_ewmh_set_client_list(IsdeEwmh *e, xcb_window_t *wins, int count);
+int isde_ewmh_set_client_list_stacking(IsdeEwmh *e, xcb_window_t *wins, int count);
 int isde_ewmh_set_active_window(IsdeEwmh *e, xcb_window_t win);
 int isde_ewmh_set_number_of_desktops(IsdeEwmh *e, uint32_t n);
 int isde_ewmh_set_current_desktop(IsdeEwmh *e, uint32_t desk);
@@ -46,6 +47,11 @@ uint32_t      isde_ewmh_get_number_of_desktops(IsdeEwmh *e);
 /* Get _NET_CLIENT_LIST.  Caller must free() the returned array.
  * Returns the count; *wins is set to the window array. */
 int isde_ewmh_get_client_list(IsdeEwmh *e, xcb_window_t **wins);
+
+/* Get _NET_CLIENT_LIST_STACKING (bottom-to-top stacking order).
+ * Caller must free() the returned array.
+ * Returns the count; *wins is set to the window array. */
+int isde_ewmh_get_client_list_stacking(IsdeEwmh *e, xcb_window_t **wins);
 
 /* Get _NET_WM_WINDOW_TYPE for a window.  Returns the first type atom. */
 xcb_atom_t isde_ewmh_get_window_type(IsdeEwmh *e, xcb_window_t win);

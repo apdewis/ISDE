@@ -67,6 +67,13 @@ int isde_ewmh_set_client_list(IsdeEwmh *e, xcb_window_t *wins, int count)
     return 1;
 }
 
+int isde_ewmh_set_client_list_stacking(IsdeEwmh *e, xcb_window_t *wins, int count)
+{
+    xcb_ewmh_set_client_list_stacking(&e->ewmh, e->screen_num, count, wins);
+    xcb_flush(e->conn);
+    return 1;
+}
+
 int isde_ewmh_set_active_window(IsdeEwmh *e, xcb_window_t win)
 {
     xcb_ewmh_set_active_window(&e->ewmh, e->screen_num, win);
@@ -132,6 +139,27 @@ int isde_ewmh_get_client_list(IsdeEwmh *e, xcb_window_t **wins)
     if (!xcb_ewmh_get_client_list_reply(
             &e->ewmh,
             xcb_ewmh_get_client_list(&e->ewmh, e->screen_num),
+            &reply, NULL)) {
+        return 0;
+    }
+
+    int count = reply.windows_len;
+    *wins = malloc(count * sizeof(xcb_window_t));
+    if (*wins) {
+        memcpy(*wins, reply.windows, count * sizeof(xcb_window_t));
+    } else {
+        count = 0;
+    }
+    xcb_ewmh_get_windows_reply_wipe(&reply);
+    return count;
+}
+
+int isde_ewmh_get_client_list_stacking(IsdeEwmh *e, xcb_window_t **wins)
+{
+    xcb_ewmh_get_windows_reply_t reply;
+    if (!xcb_ewmh_get_client_list_stacking_reply(
+            &e->ewmh,
+            xcb_ewmh_get_client_list_stacking(&e->ewmh, e->screen_num),
             &reply, NULL)) {
         return 0;
     }

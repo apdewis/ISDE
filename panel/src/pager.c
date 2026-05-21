@@ -85,7 +85,7 @@ static int      pager_cache_count;
 static void refresh_cache(Panel *p)
 {
     xcb_window_t *wins = NULL;
-    int nwins = isde_ewmh_get_client_list(p->ewmh, &wins);
+    int nwins = isde_ewmh_get_client_list_stacking(p->ewmh, &wins);
     if (nwins <= 0) {
         pager_cache_count = 0;
         return;

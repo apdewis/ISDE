@@ -281,6 +281,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
     }
     wm_restack_above_below(wm);
     wm_ewmh_update_client_list(wm);
+    wm_ewmh_update_client_list_stacking(wm);
     xcb_flush(wm->conn);
     wm->running = 1;
     return 0;
@@ -364,6 +365,7 @@ void wm_focus_client(Wm *wm, WmClient *c)
     }
     wm_ewmh_update_active(wm);
     wm_restack_above_below(wm);
+    wm_ewmh_update_client_list_stacking(wm);
 }
 
 /* ---------- remove client ---------- */
@@ -395,6 +397,7 @@ void wm_remove_client(Wm *wm, WmClient *c)
 
     frame_destroy(wm, c);
     wm_ewmh_update_client_list(wm);
+    wm_ewmh_update_client_list_stacking(wm);
     wm_ewmh_update_active(wm);
 
     if (!wm->focused && wm->clients) {
@@ -986,6 +989,7 @@ void wm_set_above(Wm *wm, WmClient *c, int enable)
     c->above = enable;
     wm_update_net_wm_state(wm, c);
     wm_restack_above_below(wm);
+    wm_ewmh_update_client_list_stacking(wm);
 }
 
 void wm_set_below(Wm *wm, WmClient *c, int enable)
@@ -995,6 +999,7 @@ void wm_set_below(Wm *wm, WmClient *c, int enable)
     c->below = enable;
     wm_update_net_wm_state(wm, c);
     wm_restack_above_below(wm);
+    wm_ewmh_update_client_list_stacking(wm);
 }
 
 void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
@@ -1163,6 +1168,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         if (c->above || c->below)
             wm_restack_above_below(wm);
         wm_ewmh_update_client_list(wm);
+        wm_ewmh_update_client_list_stacking(wm);
         xcb_flush(wm->conn);
     }
 }
