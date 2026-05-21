@@ -27,6 +27,7 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 static Boolean convert_selection(Widget, Atom *, Atom *, Atom *,
                                  IswPointer *, unsigned long *, int *);
 static void lose_selection(Widget, Atom *);
+static void selection_done(Widget, Atom *, Atom *);
 
 static void clip_free(FmClipboard *clip)
 {
@@ -104,7 +105,7 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
     /* Own the CLIPBOARD selection via Xt so convert_selection is called */
     FmApp *app = fm->app_state;
     IswOwnSelection(fm->toplevel, app->atom_clipboard, XCB_CURRENT_TIME,
-                    convert_selection, lose_selection, NULL);
+                    convert_selection, lose_selection, selection_done);
     app->clipboard_owner = fm;
 }
 
@@ -124,7 +125,6 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
     FmApp *app = fm->app_state;
 
     if (*target == app->atom_targets) {
-        /* Return list of supported targets */
         static xcb_atom_t targets[3];
         targets[0] = app->atom_targets;
         targets[1] = app->atom_uri_list;
@@ -165,6 +165,13 @@ static void lose_selection(Widget w, Atom *selection)
             app->clipboard_owner = NULL;
         }
     }
+}
+
+static void selection_done(Widget w, Atom *selection, Atom *target)
+{
+    (void)w;
+    (void)selection;
+    (void)target;
 }
 
 /* ---------- paste: submit file operations ---------- */
