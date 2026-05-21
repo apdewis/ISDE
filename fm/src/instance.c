@@ -121,12 +121,7 @@ int instance_try_primary(FmApp *app, const char *path)
         IswRealizeWidget(shell);
     }
 
-    /* Try to own the selection */
-    xcb_set_selection_owner(conn, IswWindow(shell), atom_instance,
-                            XCB_CURRENT_TIME);
-    xcb_flush(conn);
-
-    /* Check if we got it */
+    /* Check if another instance already owns the selection */
     xcb_get_selection_owner_cookie_t ck =
         xcb_get_selection_owner(conn, atom_instance);
     xcb_get_selection_owner_reply_t *owner_reply =
@@ -138,18 +133,35 @@ int instance_try_primary(FmApp *app, const char *path)
     xcb_window_t owner = owner_reply->owner;
     free(owner_reply);
 
-    if (owner == IswWindow(shell)) {
+    if (owner == XCB_WINDOW_NONE) {
+        /* No existing instance — claim ownership */
+        xcb_set_selection_owner(conn, IswWindow(shell), atom_instance,
+                                XCB_CURRENT_TIME);
+        xcb_flush(conn);
+
+        /* Verify we actually got it (another instance could race us) */
+        ck = xcb_get_selection_owner(conn, atom_instance);
+        owner_reply = xcb_get_selection_owner_reply(conn, ck, NULL);
+        if (!owner_reply) {
+            return -1;
+        }
+        owner = owner_reply->owner;
+        free(owner_reply);
+
+        if (owner != IswWindow(shell)) {
+            /* Lost the race — treat as secondary */
+            goto forward;
+        }
+
         /* We are the primary instance — listen for open-path messages */
         IswAddEventHandler(shell, (EventMask)0, True,
                           instance_event_handler, app);
-        /* Also register the Xt selection convert so IswOwnSelection works
-         * for future queries (not strictly needed for our protocol but
-         * keeps things clean). */
         IswOwnSelection(shell, atom_instance, XCB_CURRENT_TIME,
                         instance_convert, instance_lose, NULL);
         return 1;
     }
 
+forward:
     /* Another instance owns the selection — forward the path */
     /* Set the path as a property on the owner's window */
     xcb_change_property(conn, XCB_PROP_MODE_REPLACE, owner,
