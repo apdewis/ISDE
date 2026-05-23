@@ -870,21 +870,13 @@ void startmenu_init(Panel *p)
     Widget form = IswCreateManagedWidget("menuForm", formWidgetClass,
                                         p->start_shell, ab.args, ab.count);
 
-    /* Pane background tones from theme */
-    const IsdeColorScheme *scheme = isde_theme_current();
-    Pixel cat_bg  = scheme ? start_color_pixel(p, scheme->bg_light)
-                           : IswScreen(p->start_btn)->white_pixel;
-    Pixel app_bg  = scheme ? start_color_pixel(p, scheme->bg)
-                           : IswScreen(p->start_btn)->white_pixel;
-
-    /* Viewport for category list (left pane) — darker tone, vertical scroll */
+    /* Viewport for category list (left pane) — vertical scroll */
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
     IswArgBorderWidth(&ab, 1);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
-    IswArgBackground(&ab, cat_bg);
     p->cat_viewport = IswCreateManagedWidget("catViewport",
                                             viewportWidgetClass,
                                             form, ab.args, ab.count);
@@ -905,7 +897,6 @@ void startmenu_init(Panel *p)
     IswArgBorderWidth(&ab, 1);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgCursor(&ab, None);
-    IswArgBackground(&ab, cat_bg);
     p->cat_box = IswCreateManagedWidget("catList", listWidgetClass,
                                        p->cat_viewport, ab.args, ab.count);
     IswAddCallback(p->cat_box, IswNcallback, category_selected, p);
@@ -921,7 +912,6 @@ void startmenu_init(Panel *p)
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, True);
-    IswArgBackground(&ab, app_bg);
     p->app_viewport = IswCreateManagedWidget("appViewport",
                                             viewportWidgetClass,
                                             form, ab.args, ab.count);
@@ -938,7 +928,6 @@ void startmenu_init(Panel *p)
     IswArgBorderWidth(&ab, 1);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
     IswArgCursor(&ab, None);
-    IswArgBackground(&ab, app_bg);
     p->app_box = IswCreateManagedWidget("appList", listWidgetClass,
                                        p->app_viewport, ab.args, ab.count);
     IswAddCallback(p->app_box, IswNcallback, app_selected, p);
@@ -972,7 +961,6 @@ void startmenu_init(Panel *p)
     IswArgLabel(&ab, "");
     ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
     IswArgInternalWidth(&ab, 6);
-    IswArgBackground(&ab, app_bg);
     p->search_input = IswCreateManagedWidget("searchInput", labelWidgetClass,
                                             form, ab.args, ab.count);
 
@@ -985,7 +973,6 @@ void startmenu_init(Panel *p)
     IswArgBorderWidth(&ab, 1);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
-    IswArgBackground(&ab, app_bg);
     p->search_viewport = IswCreateManagedWidget("searchViewport",
                                                viewportWidgetClass,
                                                form, ab.args, ab.count);
@@ -999,7 +986,6 @@ void startmenu_init(Panel *p)
     IswArgVerticalList(&ab, True);
     IswArgBorderWidth(&ab, 0);
     IswArgCursor(&ab, None);
-    IswArgBackground(&ab, app_bg);
     p->search_list = IswCreateManagedWidget("searchList", listWidgetClass,
                                            p->search_viewport, ab.args, ab.count);
     IswAddCallback(p->search_list, IswNcallback, search_selected, p);
@@ -1032,7 +1018,6 @@ void startmenu_init(Panel *p)
     IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, TOOLBAR_HEIGHT);
     IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, cat_bg);
     p->menu_toolbar = IswCreateManagedWidget("menuToolbar", formWidgetClass,
                                             form, ab.args, ab.count);
 
@@ -1105,6 +1090,11 @@ void startmenu_init(Panel *p)
 
     p->desktop_inotify_fd = -1;
     desktop_watch_start(p);
+}
+
+void startmenu_reload_theme(Panel *p)
+{
+    set_start_btn_active(p, p->active_popup == p->start_shell);
 }
 
 void startmenu_cleanup(Panel *p)

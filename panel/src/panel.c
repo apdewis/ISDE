@@ -457,7 +457,14 @@ static void on_panel_theme_changed(void *user_data)
 {
     Panel *p = (Panel *)user_data;
 
+    IswReloadResources(p->toplevel);
     IswReloadResources(p->shell);
+    IswReloadResources(p->box);
+    IswReloadResources(p->form);
+
+    taskbar_highlight_active(p);
+    startmenu_reload_theme(p);
+    calendar_reload_theme(p);
     tray_set_colors(p);
 }
 

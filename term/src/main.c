@@ -51,6 +51,7 @@ static void dbus_input_cb(IswPointer closure, int *source, IswInputId *id)
 static void on_theme_changed(void *user_data)
 {
     TermApp *a = (TermApp *)user_data;
+    IswReloadResources(a->toplevel);
     TermConfig cfg;
     term_config_load(&cfg);
     term_widget_apply_config(a->term, &cfg);

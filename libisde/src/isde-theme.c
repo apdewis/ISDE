@@ -872,7 +872,13 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
     }
     isde_config_invalidate_cache();
     isde_theme_reload();
+
+    xcb_connection_t *conn = IswDisplay(w->toplevel);
+    xcb_screen_t *scr = IswScreen(w->toplevel);
+    isde_theme_set_resource_manager(conn, scr->root);
+    IswReloadScreenDatabase(scr);
     isde_theme_merge_xrm(w->toplevel);
+
     if (w->cb) {
         w->cb(w->user_data);
     }
@@ -1146,6 +1152,11 @@ char **isde_theme_build_resources(void)
     res[i++] = strdup("*taskBtn.borderWidth: 0");
     res[i++] = strdup("*startBtn.cornerRadius: 0");
     res[i++] = strdup("*startBtn.borderWidth: 0");
+
+    /* Start menu — only overrides that differ from defaults */
+    res[i++] = fmt_color("*catViewport.background", s->bg_light);
+    res[i++] = fmt_color("*catList.background", s->bg_light);
+    res[i++] = fmt_color("*menuToolbar.background", s->bg_light);
 
     /* --- Fonts from [fonts] config --- */
     {
