@@ -233,6 +233,7 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class);
 /* ---------- startmenu.c ---------- */
 void  startmenu_init(Panel *p);
 void  startmenu_toggle(Panel *p);
+void  startmenu_reload_theme(Panel *p);
 void  startmenu_cleanup(Panel *p);
 
 /* ---------- tray.c ---------- */
@@ -249,6 +250,7 @@ void  clock_cleanup(Panel *p);
 /* ---------- calendar.c ---------- */
 void  calendar_init(Panel *p);
 void  calendar_toggle(Panel *p);
+void  calendar_reload_theme(Panel *p);
 void  calendar_cleanup(Panel *p);
 
 /* ---------- pager.c ---------- */

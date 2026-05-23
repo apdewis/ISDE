@@ -36,6 +36,16 @@ static void wm_on_theme_changed(void *user_data)
 {
     Wm *wm = (Wm *)user_data;
     for (WmClient *c = wm->clients; c; c = c->next) {
+        IswReloadResources(c->shell);
+        if (c->decorated) {
+            IswReloadResources(c->menu_btn);
+            IswReloadResources(c->minimize_btn);
+            IswReloadResources(c->maximize_btn);
+            IswReloadResources(c->close_btn);
+            if (c->win_menu) {
+                IswReloadResources(c->win_menu);
+            }
+        }
         frame_apply_theme(wm, c);
     }
 }

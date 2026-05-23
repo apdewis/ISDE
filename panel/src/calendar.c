@@ -339,6 +339,13 @@ void calendar_toggle(Panel *p)
     xcb_flush(p->conn);
 }
 
+void calendar_reload_theme(Panel *p)
+{
+    if (p->cal_shell) {
+        calendar_populate(p);
+    }
+}
+
 void calendar_cleanup(Panel *p)
 {
     (void)p;

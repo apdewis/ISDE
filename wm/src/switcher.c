@@ -128,8 +128,6 @@ static void update_labels(Wm *wm)
 /* Create the OSD shell and label widgets (called once per activation) */
 static void create_osd(Wm *wm)
 {
-    const IsdeColorScheme *scheme = isde_theme_current();
-
     int pm_x, pm_y, pm_w, pm_h;
     wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
 
@@ -155,10 +153,6 @@ static void create_osd(Wm *wm)
     IswArgHeight(&ab, osd_h);
     IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 1);
-    if (scheme) {
-        IswArgBorderColor(&ab, switcher_pixel(wm, scheme->border));
-        IswArgBackground(&ab, switcher_pixel(wm, scheme->bg));
-    }
     wm->switcher_shell = IswCreatePopupShell("switcherOSD",
                                              overrideShellWidgetClass,
                                              wm->toplevel, ab.args, ab.count);
@@ -174,10 +168,6 @@ static void create_osd(Wm *wm)
         IswArgBorderWidth(&ab, 0);
         IswArgJustify(&ab, IswJustifyLeft);
         IswArgInternalWidth(&ab, 4);
-        if (scheme) {
-            IswArgBackground(&ab, switcher_pixel(wm, scheme->bg));
-            IswArgForeground(&ab, switcher_pixel(wm, scheme->fg));
-        }
         IswCreateManagedWidget("switcherItem", labelWidgetClass,
                                wm->switcher_shell, ab.args, ab.count);
     }

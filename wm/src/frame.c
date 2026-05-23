@@ -38,11 +38,6 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     const IsdeElementColors *tb = c->focused
         ? &s->titlebar_active : &s->titlebar;
 
-    /* Update frame border color */
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgBorderColor(&ab, color_to_pixel(wm, s->titlebar.border));
-    IswSetValues(c->shell, ab.args, ab.count);
-
     /* Include explicit width/height so IswSetValues doesn't resize the
      * label to its preferred (text-fitting) geometry. */
     int th = wm->title_height;
@@ -50,7 +45,7 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     int title_w = c->width - btn_area;
     if (title_w < 1) { title_w = 1; }
 
-    IswArgBuilderReset(&ab);
+    IswArgBuilder ab = IswArgBuilderInit();
     IswArgBackground(&ab, color_to_pixel(wm, tb->bg));
     IswArgForeground(&ab, color_to_pixel(wm, tb->fg));
     IswArgWidth(&ab, title_w);
@@ -497,12 +492,6 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     IswArgHeight(&ab, fh);
     IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 1);
-    {
-        const IsdeColorScheme *s = isde_theme_current();
-        if (s) {
-            IswArgBorderColor(&ab, color_to_pixel(wm, s->titlebar.border));
-        }
-    }
     c->shell = IswCreatePopupShell("frame", overrideShellWidgetClass,
                                   wm->toplevel, ab.args, ab.count);
 
