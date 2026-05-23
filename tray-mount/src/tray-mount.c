@@ -103,6 +103,30 @@ static void system_bus_input_cb(IswPointer client_data, int *fd,
     }
 }
 
+static void on_theme_changed(void *user_data)
+{
+    TrayMount *tm = (TrayMount *)user_data;
+    IswReloadResources(tm->toplevel);
+
+    const IsdeColorScheme *s = isde_theme_current();
+    if (s && tm->tray_icon) {
+        xcb_connection_t *conn = IswDisplay(tm->toplevel);
+        xcb_window_t win = IswTrayIconGetWindow(tm->tray_icon);
+        xcb_alloc_color_reply_t *acr = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, IswScreen(tm->toplevel)->default_colormap,
+                            ((s->taskbar.bg >> 16) & 0xFF) * 257,
+                            ((s->taskbar.bg >>  8) & 0xFF) * 257,
+                            ( s->taskbar.bg        & 0xFF) * 257), NULL);
+        if (acr) {
+            uint32_t bg = acr->pixel;
+            free(acr);
+            xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXEL, &bg);
+            xcb_clear_area(conn, 0, win, 0, 0, 0, 0);
+        }
+    }
+    load_tray_icon(tm);
+}
+
 static void session_bus_input_cb(IswPointer client_data, int *fd,
                                  IswInputId *id)
 {
@@ -114,17 +138,6 @@ static void session_bus_input_cb(IswPointer client_data, int *fd,
     }
 }
 
-static void on_settings_changed(const char *section, const char *key,
-                                void *user_data)
-{
-    (void)key;
-    TrayMount *tm = (TrayMount *)user_data;
-
-    if (strcmp(section, "appearance") == 0) {
-        tm->running = 0;
-        tm->restart = 1;
-    }
-}
 
 /* ---------- public API ---------- */
 
@@ -192,8 +205,8 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
 
     tm->session_dbus = isde_dbus_init();
     if (tm->session_dbus) {
-        isde_dbus_settings_subscribe(tm->session_dbus,
-                                     on_settings_changed, tm);
+        isde_theme_watch(tm->session_dbus, tm->toplevel,
+                         on_theme_changed, tm);
         int dbus_fd = isde_dbus_get_fd(tm->session_dbus);
         if (dbus_fd >= 0) {
             IswAppAddInput(tm->app, dbus_fd, (IswPointer)IswInputReadMask,

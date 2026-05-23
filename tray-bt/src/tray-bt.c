@@ -137,6 +137,30 @@ static void system_bus_input_cb(IswPointer client_data, int *fd,
     }
 }
 
+static void on_theme_changed(void *user_data)
+{
+    TrayBt *tb = (TrayBt *)user_data;
+    IswReloadResources(tb->toplevel);
+
+    const IsdeColorScheme *s = isde_theme_current();
+    if (s && tb->tray_icon) {
+        xcb_connection_t *conn = IswDisplay(tb->toplevel);
+        xcb_window_t win = IswTrayIconGetWindow(tb->tray_icon);
+        xcb_alloc_color_reply_t *acr = xcb_alloc_color_reply(conn,
+            xcb_alloc_color(conn, IswScreen(tb->toplevel)->default_colormap,
+                            ((s->taskbar.bg >> 16) & 0xFF) * 257,
+                            ((s->taskbar.bg >>  8) & 0xFF) * 257,
+                            ( s->taskbar.bg        & 0xFF) * 257), NULL);
+        if (acr) {
+            uint32_t bg = acr->pixel;
+            free(acr);
+            xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXEL, &bg);
+            xcb_clear_area(conn, 0, win, 0, 0, 0, 0);
+        }
+    }
+    load_icon(tb, tb->icon_state);
+}
+
 static void session_bus_input_cb(IswPointer client_data, int *fd,
                                  IswInputId *id)
 {
@@ -147,17 +171,6 @@ static void session_bus_input_cb(IswPointer client_data, int *fd,
         isde_dbus_dispatch(tb->session_dbus);
 }
 
-static void on_settings_changed(const char *section, const char *key,
-                                void *user_data)
-{
-    (void)key;
-    TrayBt *tb = (TrayBt *)user_data;
-
-    if (strcmp(section, "appearance") == 0) {
-        tb->running = 0;
-        tb->restart = 1;
-    }
-}
 
 /* ---------- BlueZ availability polling ---------- */
 
@@ -245,8 +258,8 @@ int tray_bt_init(TrayBt *tb, int *argc, char **argv)
     /* Session bus for theme changes */
     tb->session_dbus = isde_dbus_init();
     if (tb->session_dbus) {
-        isde_dbus_settings_subscribe(tb->session_dbus,
-                                     on_settings_changed, tb);
+        isde_theme_watch(tb->session_dbus, tb->toplevel,
+                         on_theme_changed, tb);
         int dbus_fd = isde_dbus_get_fd(tb->session_dbus);
         if (dbus_fd >= 0) {
             IswAppAddInput(tb->app, dbus_fd, (IswPointer)IswInputReadMask,
