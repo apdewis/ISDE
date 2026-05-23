@@ -453,10 +453,19 @@ static void on_panel_theme_changed(void *user_data)
 {
     Panel *p = (Panel *)user_data;
 
-    IswReloadResources(p->toplevel);
     IswReloadResources(p->shell);
-    IswReloadResources(p->box);
-    IswReloadResources(p->form);
+
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (g->menu)
+            IswReloadResources(g->menu);
+        if (g->ctx_menu)
+            IswReloadResources(g->ctx_menu);
+    }
+
+    if (p->start_shell)
+        IswReloadResources(p->start_shell);
+    if (p->cal_shell)
+        IswReloadResources(p->cal_shell);
 
     taskbar_highlight_active(p);
     startmenu_reload_theme(p);
