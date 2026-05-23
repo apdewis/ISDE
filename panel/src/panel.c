@@ -211,6 +211,7 @@ static void panel_reconfigure(Panel *p);
 /* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(IswPointer, int *, IswInputId *);
+static void on_panel_theme_changed(void *);
 
 static void panel_ipc_event_handler(Widget w, IswPointer client_data,
                                     xcb_generic_event_t *xev, Boolean *cont)
@@ -373,7 +374,12 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     xcb_flush(p->conn);
 
-    /* D-Bus settings notifications */
+    /* Theme change notifications */
+    p->theme_watch = isde_theme_watch_start(p->toplevel,
+                                             on_panel_theme_changed, p);
+    isde_theme_watch_xt(p->theme_watch, p->app);
+
+    /* D-Bus settings notifications (non-appearance) */
     p->dbus = isde_dbus_init();
     if (p->dbus) {
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
@@ -447,15 +453,21 @@ static Pixel panel_color_pixel(Panel *p, unsigned int rgb)
  * No manual IswSetValues needed — all widget names match resource specs. */
 
 
+static void on_panel_theme_changed(void *user_data)
+{
+    Panel *p = (Panel *)user_data;
+
+    IswReloadResources(p->shell);
+    tray_set_colors(p);
+}
+
 static void on_panel_settings_changed(const char *section, const char *key,
                                       void *user_data)
 {
     (void)key;
     Panel *p = (Panel *)user_data;
     if (strcmp(section, "panel.clock") == 0 ||
-        strcmp(section, "panel") == 0 ||
-        strcmp(section, "appearance") == 0 ||
-        strcmp(section, "*") == 0) {
+        strcmp(section, "panel") == 0) {
         p->running = 0;
         p->restart = 1;
     }
@@ -654,6 +666,7 @@ void panel_cleanup(Panel *p)
     }
     free(p->pinned_classes);
 
+    isde_theme_watch_stop(p->theme_watch);
     isde_dbus_free(p->dbus);
     isde_ipc_free(p->ipc);
     isde_ewmh_free(p->ewmh);

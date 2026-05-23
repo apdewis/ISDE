@@ -16,12 +16,13 @@
 #include "isde/isde-theme.h"
 
 typedef struct {
-    IswAppContext  app;
-    Widget         toplevel;
-    TermWidget    *term;
-    TermPty       *pty;
-    IsdeDBus      *dbus;
-    int            running;
+    IswAppContext   app;
+    Widget          toplevel;
+    TermWidget     *term;
+    TermPty        *pty;
+    IsdeDBus       *dbus;
+    IsdeThemeWatch *theme_watch;
+    int             running;
 } TermApp;
 
 static TermApp g_app;
@@ -47,15 +48,21 @@ static void dbus_input_cb(IswPointer closure, int *source, IswInputId *id)
     isde_dbus_dispatch((IsdeDBus *)closure);
 }
 
+static void on_theme_changed(void *user_data)
+{
+    TermApp *a = (TermApp *)user_data;
+    TermConfig cfg;
+    term_config_load(&cfg);
+    term_widget_apply_config(a->term, &cfg);
+}
+
 static void on_settings_changed(const char *section, const char *key, void *user)
 {
     (void)key;
     TermApp *a = (TermApp *)user;
-    if (!section) return;
+    if (!section) { return; }
     if (strcmp(section, "terminal") == 0 ||
-        strcmp(section, "appearance") == 0 ||
         strcmp(section, "fonts") == 0) {
-        isde_theme_reload();
         TermConfig cfg;
         term_config_load(&cfg);
         term_widget_apply_config(a->term, &cfg);
@@ -157,7 +164,12 @@ int main(int argc, char **argv)
     }
     term_widget_attach_pty(g_app.term, g_app.pty);
 
-    /* DBus settings subscription */
+    /* Theme change notifications */
+    g_app.theme_watch = isde_theme_watch_start(g_app.toplevel,
+                                                on_theme_changed, &g_app);
+    isde_theme_watch_xt(g_app.theme_watch, g_app.app);
+
+    /* DBus settings subscription (non-appearance) */
     g_app.dbus = isde_dbus_init();
     if (g_app.dbus) {
         int fd = isde_dbus_get_fd(g_app.dbus);
@@ -173,6 +185,7 @@ int main(int argc, char **argv)
 
     term_pty_close(g_app.pty);
     term_widget_destroy(g_app.term);
+    isde_theme_watch_stop(g_app.theme_watch);
     if (g_app.dbus) isde_dbus_free(g_app.dbus);
     return 0;
 }

@@ -641,9 +641,7 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
             for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
             isde_theme_set_resource_manager(s->conn, it.data->root);
         }
-        fprintf(stderr, "isde-session: appearance changed, "
-                "restarting WM and panel\n");
-        restart_ui_children(s);
+        fprintf(stderr, "isde-session: appearance changed\n");
     }
 
     if (s->reload_power) {

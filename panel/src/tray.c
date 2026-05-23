@@ -253,7 +253,7 @@ static uint32_t expand8to16(unsigned int c8)
     return (c8 << 8) | c8;
 }
 
-static void tray_set_colors(Panel *p)
+void tray_set_colors(Panel *p)
 {
     const IsdeColorScheme *s = isde_theme_current();
     if (!s)
