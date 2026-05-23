@@ -144,7 +144,8 @@ typedef struct FmApp {
     int                ndesktop;
 
     /* D-Bus for settings notifications */
-    IsdeDBus      *dbus;
+    IsdeDBus        *dbus;
+    IsdeThemeWatch  *theme_watch;
 
     /* Icon cache (moved from icons.c statics) */
     char *icon_folder;

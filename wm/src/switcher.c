@@ -14,6 +14,8 @@
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
 
+#define switcher_pixel(wm, rgb) wm_color_pixel((wm)->conn, (wm)->screen, (rgb))
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -112,11 +114,11 @@ static void update_labels(Wm *wm)
         IswArgLabel(&ab, wm->switcher_labels[idx]);
         if (scheme) {
             if (is_sel) {
-                IswArgBackground(&ab, (Pixel)scheme->active);
-                IswArgForeground(&ab, (Pixel)scheme->fg_light);
+                IswArgBackground(&ab, switcher_pixel(wm, scheme->select_bg));
+                IswArgForeground(&ab, switcher_pixel(wm, scheme->select_fg));
             } else {
-                IswArgBackground(&ab, (Pixel)scheme->bg);
-                IswArgForeground(&ab, (Pixel)scheme->fg_light);
+                IswArgBackground(&ab, switcher_pixel(wm, scheme->bg));
+                IswArgForeground(&ab, switcher_pixel(wm, scheme->fg));
             }
         }
         IswSetValues(cw->composite.children[i], ab.args, ab.count);
@@ -154,8 +156,8 @@ static void create_osd(Wm *wm)
     IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 1);
     if (scheme) {
-        IswArgBorderColor(&ab, (Pixel)scheme->border);
-        IswArgBackground(&ab, (Pixel)scheme->bg);
+        IswArgBorderColor(&ab, switcher_pixel(wm, scheme->border));
+        IswArgBackground(&ab, switcher_pixel(wm, scheme->bg));
     }
     wm->switcher_shell = IswCreatePopupShell("switcherOSD",
                                              overrideShellWidgetClass,
@@ -173,8 +175,8 @@ static void create_osd(Wm *wm)
         IswArgJustify(&ab, IswJustifyLeft);
         IswArgInternalWidth(&ab, 4);
         if (scheme) {
-            IswArgBackground(&ab, (Pixel)scheme->bg);
-            IswArgForeground(&ab, (Pixel)scheme->fg_light);
+            IswArgBackground(&ab, switcher_pixel(wm, scheme->bg));
+            IswArgForeground(&ab, switcher_pixel(wm, scheme->fg));
         }
         IswCreateManagedWidget("switcherItem", labelWidgetClass,
                                wm->switcher_shell, ab.args, ab.count);

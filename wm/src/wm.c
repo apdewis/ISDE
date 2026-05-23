@@ -30,17 +30,22 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
     return a;
 }
 
-/* ---------- D-Bus settings changed ---------- */
+/* ---------- theme / settings change ---------- */
+
+static void wm_on_theme_changed(void *user_data)
+{
+    Wm *wm = (Wm *)user_data;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        frame_apply_theme(wm, c);
+    }
+}
 
 static void wm_on_settings_changed(const char *section, const char *key,
                                     void *user_data)
 {
     (void)key;
     Wm *wm = (Wm *)user_data;
-    if (strcmp(section, "appearance") == 0 ||
-        strcmp(section, "wm.desktops") == 0 ||
-        strcmp(section, "*") == 0) {
-        /* Restart to pick up new config */
+    if (strcmp(section, "wm.desktops") == 0) {
         wm->running = 0;
         wm->restart = 1;
     }
@@ -125,6 +130,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
+    wm->theme_watch = isde_theme_watch_start(wm->toplevel,
+                                              wm_on_theme_changed, wm);
     wm->dbus = isde_dbus_init();
     if (wm->dbus) {
         isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
@@ -1645,6 +1652,7 @@ void wm_run(Wm *wm)
         }
 
         /* D-Bus dispatch */
+        isde_theme_watch_dispatch(wm->theme_watch);
         if (wm->dbus) {
             isde_dbus_dispatch(wm->dbus);
         }
@@ -1698,6 +1706,7 @@ void wm_cleanup(Wm *wm)
     if (wm->keysyms) {
         xcb_key_symbols_free(wm->keysyms);
     }
+    isde_theme_watch_stop(wm->theme_watch);
     isde_dbus_free(wm->dbus);
     isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);

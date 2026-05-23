@@ -19,23 +19,7 @@
 
 #define GRIP_SIZE 6
 
-/* Convert 0xRRGGBB to an X11 Pixel via AllocColor */
-static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
-{
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        wm->conn,
-        xcb_alloc_color(wm->conn, wm->screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply) {
-        return wm->screen->white_pixel;
-    }
-    Pixel px = reply->pixel;
-    free(reply);
-    return px;
-}
+#define color_to_pixel(wm, rgb) wm_color_pixel((wm)->conn, (wm)->screen, (rgb))
 
 /* Apply theme colors to a client's frame widgets */
 /* Only the title bar needs IswSetValues — focused/unfocused is state-dependent.
@@ -54,6 +38,11 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     const IsdeElementColors *tb = c->focused
         ? &s->titlebar_active : &s->titlebar;
 
+    /* Update frame border color */
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBorderColor(&ab, color_to_pixel(wm, s->titlebar.border));
+    IswSetValues(c->shell, ab.args, ab.count);
+
     /* Include explicit width/height so IswSetValues doesn't resize the
      * label to its preferred (text-fitting) geometry. */
     int th = wm->title_height;
@@ -61,7 +50,7 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     int title_w = c->width - btn_area;
     if (title_w < 1) { title_w = 1; }
 
-    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgBuilderReset(&ab);
     IswArgBackground(&ab, color_to_pixel(wm, tb->bg));
     IswArgForeground(&ab, color_to_pixel(wm, tb->fg));
     IswArgWidth(&ab, title_w);

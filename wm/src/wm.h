@@ -95,6 +95,7 @@ typedef struct Wm {
     /* IPC */
     IsdeIpc               *ipc;
     IsdeDBus              *dbus;
+    IsdeThemeWatch        *theme_watch;
 
     /* Key bindings */
     xcb_key_symbols_t     *keysyms;
@@ -164,6 +165,23 @@ typedef struct Wm {
     int                    running;
     int                    restart;
 } Wm;
+
+/* ---------- colour conversion ---------- */
+static inline Pixel wm_color_pixel(xcb_connection_t *conn,
+                                   xcb_screen_t *screen, unsigned int rgb)
+{
+    xcb_alloc_color_reply_t *r = xcb_alloc_color_reply(
+        conn,
+        xcb_alloc_color(conn, screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!r) { return screen->white_pixel; }
+    Pixel px = r->pixel;
+    free(r);
+    return px;
+}
 
 /* ---------- coordinate conversion ---------- */
 /* Convert physical pixels to logical (divide by scale factor) */

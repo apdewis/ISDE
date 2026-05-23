@@ -204,6 +204,7 @@ typedef struct Panel {
 
     /* D-Bus */
     IsdeDBus          *dbus;
+    IsdeThemeWatch    *theme_watch;
 
     /* Active popup tracking — for click-outside-to-dismiss */
     Widget             active_popup;  /* Currently open popup shell, or NULL */
@@ -238,6 +239,7 @@ void  startmenu_cleanup(Panel *p);
 void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
 void  tray_init_selection(Panel *p); /* claim selection (after realize) */
 void  tray_check_icons(Panel *p);
+void  tray_set_colors(Panel *p);
 void  tray_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */

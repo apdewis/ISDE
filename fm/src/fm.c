@@ -44,20 +44,27 @@ static void fm_reload_config(Fm *fm)
     fm_refresh(fm);
 }
 
+static void on_theme_changed(void *user_data)
+{
+    Fm *fm = (Fm *)user_data;
+    FmApp *app = fm->app_state;
+
+    icons_init(app);
+
+    for (int i = 0; i < app->nwindows; i++) {
+        IswReloadResources(app->windows[i]->toplevel);
+    }
+
+    fm_reload_config(fm);
+}
+
 static void on_settings_changed(const char *section, const char *key,
                                 void *user_data)
 {
     (void)key;
     Fm *fm = (Fm *)user_data;
-    FmApp *app = fm->app_state;
     if (strcmp(section, "general") == 0 ||
-        strcmp(section, "input") == 0 ||
-        strcmp(section, "appearance") == 0 ||
-        strcmp(section, "*") == 0) {
-        if (strcmp(section, "appearance") == 0 || strcmp(section, "*") == 0) {
-            isde_theme_reload();
-            icons_init(app);
-        }
+        strcmp(section, "input") == 0) {
         fm_reload_config(fm);
     }
 }
@@ -256,7 +263,12 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         return 1;
     }
 
-    /* Subscribe D-Bus settings for first window (TODO: broadcast to all) */
+    /* Theme change notifications */
+    app->theme_watch = isde_theme_watch_start(app->first_toplevel,
+                                               on_theme_changed, first);
+    isde_theme_watch_xt(app->theme_watch, app->app);
+
+    /* Subscribe D-Bus settings for first window */
     if (app->dbus) {
         isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
     }
@@ -431,6 +443,7 @@ void fm_app_cleanup(FmApp *app)
     mount_monitor_cleanup(app);
 #endif
     jobqueue_shutdown(app);
+    isde_theme_watch_stop(app->theme_watch);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
     thumbs_cleanup(app);

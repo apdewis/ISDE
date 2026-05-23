@@ -205,8 +205,8 @@ void wm_desktops_show_osd(Wm *wm)
             IswArgBorderWidth(&ab, 1);
 
             if (scheme && is_active) {
-                IswArgBackground(&ab, (Pixel)scheme->active);
-                IswArgForeground(&ab, (Pixel)scheme->fg_light);
+                IswArgBackground(&ab, wm_color_pixel(wm->conn, wm->screen, scheme->select_bg));
+                IswArgForeground(&ab, wm_color_pixel(wm->conn, wm->screen, scheme->select_fg));
             }
 
             Widget cell = IswCreateManagedWidget("deskCell",

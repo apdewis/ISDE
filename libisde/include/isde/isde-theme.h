@@ -125,8 +125,45 @@ const IsdeColorScheme *isde_theme_current(void);
  * instead of reading isde.toml — useful for the greeter. */
 void isde_theme_set_scheme(IsdeColorScheme *scheme);
 
-/* Reload the active colour scheme from config (call after D-Bus notification). */
+/* Reload the active colour scheme from config. */
 void isde_theme_reload(void);
+
+/* ---------- Theme change protocol ---------- */
+
+/* Callback invoked when the ISDE theme changes.  The new scheme is already
+ * loaded and available via isde_theme_current().  The toplevel widget's Xrm
+ * database has been re-merged.  The callback should refresh any cached
+ * colors or trigger a redraw. */
+typedef void (*IsdeThemeChangedCb)(void *user_data);
+
+/* Subscribe to ISDE theme changes via D-Bus.  Connects to the session bus,
+ * listens for appearance changes, and automatically calls
+ * isde_theme_reload() + isde_theme_merge_xrm() before invoking the
+ * callback.  The caller must pump D-Bus messages by calling
+ * isde_theme_watch_fd() / isde_theme_watch_dispatch() in its event loop,
+ * or use isde_theme_watch_xt() for Xt integration.
+ *
+ * Returns an opaque handle, or NULL if D-Bus is unavailable. */
+typedef struct IsdeThemeWatch IsdeThemeWatch;
+
+IsdeThemeWatch *isde_theme_watch_start(Widget toplevel,
+                                       IsdeThemeChangedCb cb,
+                                       void *user_data);
+
+/* Get the D-Bus file descriptor for event loop integration.
+ * Returns -1 if not connected. */
+int  isde_theme_watch_fd(IsdeThemeWatch *w);
+
+/* Process pending D-Bus messages.  Call when the fd is readable. */
+void isde_theme_watch_dispatch(IsdeThemeWatch *w);
+
+/* Xt convenience: register the D-Bus fd with IswAppAddInput so theme
+ * change notifications are processed automatically in the Xt main loop.
+ * Call once after isde_theme_watch_start(). */
+void isde_theme_watch_xt(IsdeThemeWatch *w, IswAppContext app);
+
+/* Stop watching and free resources. */
+void isde_theme_watch_stop(IsdeThemeWatch *w);
 
 /* Convert a theme color (0xRRGGBB) to a double triplet (0.0-1.0). */
 void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);

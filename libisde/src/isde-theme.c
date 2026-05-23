@@ -4,6 +4,7 @@
  */
 #include "isde/isde-theme.h"
 #include "isde/isde-config.h"
+#include "isde/isde-dbus.h"
 #include "isde/isde-xdg.h"
 
 #include <ISW/Intrinsic.h>
@@ -12,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -846,6 +848,83 @@ void isde_theme_reload(void)
     isde_scheme_free(g_scheme);
     g_scheme = NULL;
     isde_theme_current(); /* re-load */
+}
+
+/* ---------- Theme change protocol ---------- */
+
+struct IsdeThemeWatch {
+    IsdeDBus          *bus;
+    Widget             toplevel;
+    IsdeThemeChangedCb cb;
+    void              *user_data;
+};
+
+static void theme_watch_dbus_cb(const char *section, const char *key,
+                                void *user_data)
+{
+    (void)key;
+    IsdeThemeWatch *w = (IsdeThemeWatch *)user_data;
+    if (strcmp(section, "appearance") != 0 && strcmp(section, "*") != 0) {
+        return;
+    }
+    isde_config_invalidate_cache();
+    isde_theme_reload();
+    isde_theme_merge_xrm(w->toplevel);
+    if (w->cb) {
+        w->cb(w->user_data);
+    }
+}
+
+IsdeThemeWatch *isde_theme_watch_start(Widget toplevel,
+                                       IsdeThemeChangedCb cb,
+                                       void *user_data)
+{
+    IsdeDBus *bus = isde_dbus_init();
+    if (!bus) { return NULL; }
+
+    IsdeThemeWatch *w = calloc(1, sizeof(*w));
+    w->bus = bus;
+    w->toplevel = toplevel;
+    w->cb = cb;
+    w->user_data = user_data;
+
+    isde_dbus_settings_subscribe(bus, theme_watch_dbus_cb, w);
+    return w;
+}
+
+int isde_theme_watch_fd(IsdeThemeWatch *w)
+{
+    return w ? isde_dbus_get_fd(w->bus) : -1;
+}
+
+void isde_theme_watch_dispatch(IsdeThemeWatch *w)
+{
+    if (w) { isde_dbus_dispatch(w->bus); }
+}
+
+static void theme_watch_xt_input_cb(IswPointer client_data, int *fd,
+                                    IswInputId *id)
+{
+    (void)fd;
+    (void)id;
+    isde_theme_watch_dispatch((IsdeThemeWatch *)client_data);
+}
+
+void isde_theme_watch_xt(IsdeThemeWatch *w, IswAppContext app)
+{
+    if (!w) { return; }
+    int fd = isde_theme_watch_fd(w);
+    if (fd >= 0) {
+        IswAppAddInput(app, fd, (IswPointer)(intptr_t)IswInputReadMask,
+                      theme_watch_xt_input_cb, w);
+    }
+}
+
+void isde_theme_watch_stop(IsdeThemeWatch *w)
+{
+    if (!w) { return; }
+    isde_dbus_free(w->bus);
+    free(w);
 }
 
 const char *isde_cursor_theme_configured(void)
