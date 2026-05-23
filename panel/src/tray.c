@@ -285,6 +285,7 @@ void tray_set_colors(Panel *p)
     xcb_change_property(p->conn, XCB_PROP_MODE_REPLACE,
                         IswWindow(p->shell), atom, XCB_ATOM_CARDINAL,
                         32, 12, colors);
+
 }
 
 static void tray_claim_selection(Panel *p)
