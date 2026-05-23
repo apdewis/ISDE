@@ -21,7 +21,6 @@ typedef struct {
     TermWidget     *term;
     TermPty        *pty;
     IsdeDBus       *dbus;
-    IsdeThemeWatch *theme_watch;
     int             running;
 } TermApp;
 
@@ -165,28 +164,24 @@ int main(int argc, char **argv)
     }
     term_widget_attach_pty(g_app.term, g_app.pty);
 
-    /* Theme change notifications */
-    g_app.theme_watch = isde_theme_watch_start(g_app.toplevel,
-                                                on_theme_changed, &g_app);
-    isde_theme_watch_xt(g_app.theme_watch, g_app.app);
-
-    /* DBus settings subscription (non-appearance) */
+    /* DBus settings subscription */
     g_app.dbus = isde_dbus_init();
     if (g_app.dbus) {
+        isde_theme_watch(g_app.dbus, g_app.toplevel,
+                         on_theme_changed, &g_app);
+        isde_dbus_settings_subscribe(g_app.dbus, on_settings_changed, &g_app);
         int fd = isde_dbus_get_fd(g_app.dbus);
         if (fd >= 0) {
             IswAppAddInput(g_app.app, fd,
                           (IswPointer)(intptr_t)IswInputReadMask,
                           dbus_input_cb, g_app.dbus);
         }
-        isde_dbus_settings_subscribe(g_app.dbus, on_settings_changed, &g_app);
     }
 
     IswAppMainLoop(g_app.app);
 
     term_pty_close(g_app.pty);
     term_widget_destroy(g_app.term);
-    isde_theme_watch_stop(g_app.theme_watch);
     if (g_app.dbus) isde_dbus_free(g_app.dbus);
     return 0;
 }
