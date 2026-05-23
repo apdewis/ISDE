@@ -852,85 +852,55 @@ void isde_theme_reload(void)
 
 /* ---------- Theme change protocol ---------- */
 
-struct IsdeThemeWatch {
-    IsdeDBus          *bus;
+typedef struct {
     Widget             toplevel;
     IsdeThemeChangedCb cb;
     void              *user_data;
-};
+} ThemeWatchCtx;
+
+#define MAX_THEME_WATCHERS 8
+static ThemeWatchCtx g_watchers[MAX_THEME_WATCHERS];
+static int           g_nwatchers;
 
 static void theme_watch_dbus_cb(const char *section, const char *key,
                                 void *user_data)
 {
     (void)key;
-    IsdeThemeWatch *w = (IsdeThemeWatch *)user_data;
+    (void)user_data;
     if (strcmp(section, "appearance") != 0 && strcmp(section, "*") != 0) {
         return;
     }
+
     isde_config_invalidate_cache();
     isde_theme_reload();
 
-    xcb_connection_t *conn = IswDisplay(w->toplevel);
-    xcb_screen_t *scr = IswScreen(w->toplevel);
-    isde_theme_set_resource_manager(conn, scr->root);
-    IswReloadScreenDatabase(scr);
-    isde_theme_merge_xrm(w->toplevel);
-
-    if (w->cb) {
-        w->cb(w->user_data);
+    for (int i = 0; i < g_nwatchers; i++) {
+        ThemeWatchCtx *w = &g_watchers[i];
+        xcb_connection_t *conn = IswDisplay(w->toplevel);
+        xcb_screen_t *scr = IswScreen(w->toplevel);
+        isde_theme_set_resource_manager(conn, scr->root);
+        IswReloadScreenDatabase(scr);
+        isde_theme_merge_xrm(w->toplevel);
+        if (w->cb) {
+            w->cb(w->user_data);
+        }
     }
 }
 
-IsdeThemeWatch *isde_theme_watch_start(Widget toplevel,
-                                       IsdeThemeChangedCb cb,
-                                       void *user_data)
+void isde_theme_watch(IsdeDBus *bus, Widget toplevel,
+                      IsdeThemeChangedCb cb, void *user_data)
 {
-    IsdeDBus *bus = isde_dbus_init();
-    if (!bus) { return NULL; }
+    if (!bus || g_nwatchers >= MAX_THEME_WATCHERS) { return; }
 
-    IsdeThemeWatch *w = calloc(1, sizeof(*w));
-    w->bus = bus;
+    int first = (g_nwatchers == 0);
+    ThemeWatchCtx *w = &g_watchers[g_nwatchers++];
     w->toplevel = toplevel;
     w->cb = cb;
     w->user_data = user_data;
 
-    isde_dbus_settings_subscribe(bus, theme_watch_dbus_cb, w);
-    return w;
-}
-
-int isde_theme_watch_fd(IsdeThemeWatch *w)
-{
-    return w ? isde_dbus_get_fd(w->bus) : -1;
-}
-
-void isde_theme_watch_dispatch(IsdeThemeWatch *w)
-{
-    if (w) { isde_dbus_dispatch(w->bus); }
-}
-
-static void theme_watch_xt_input_cb(IswPointer client_data, int *fd,
-                                    IswInputId *id)
-{
-    (void)fd;
-    (void)id;
-    isde_theme_watch_dispatch((IsdeThemeWatch *)client_data);
-}
-
-void isde_theme_watch_xt(IsdeThemeWatch *w, IswAppContext app)
-{
-    if (!w) { return; }
-    int fd = isde_theme_watch_fd(w);
-    if (fd >= 0) {
-        IswAppAddInput(app, fd, (IswPointer)(intptr_t)IswInputReadMask,
-                      theme_watch_xt_input_cb, w);
+    if (first) {
+        isde_dbus_settings_subscribe(bus, theme_watch_dbus_cb, NULL);
     }
-}
-
-void isde_theme_watch_stop(IsdeThemeWatch *w)
-{
-    if (!w) { return; }
-    isde_dbus_free(w->bus);
-    free(w);
 }
 
 const char *isde_cursor_theme_configured(void)

@@ -52,7 +52,21 @@ static void on_theme_changed(void *user_data)
     icons_init(app);
 
     for (int i = 0; i < app->nwindows; i++) {
-        IswReloadResources(app->windows[i]->toplevel);
+        Fm *w = app->windows[i];
+        IswReloadResources(w->toplevel);
+        IswOverrideTranslations(w->toplevel, IswParseTranslationTable(
+            "<Message>WM_PROTOCOLS: fm-close-window()\n"));
+        IswReloadResources(w->main_window);
+        IswReloadResources(w->nav_box);
+        IswReloadResources(w->vbox);
+        IswReloadResources(w->hbox);
+        if (w->viewport) { IswReloadResources(w->viewport); }
+        if (w->iconview) { IswReloadResources(w->iconview); }
+        if (w->listview) { IswReloadResources(w->listview); }
+        if (w->places_vp) { IswReloadResources(w->places_vp); }
+        if (w->places_listbox) { IswReloadResources(w->places_listbox); }
+        if (w->ctx_shell) { IswReloadResources(w->ctx_shell); }
+        if (w->dev_ctx_shell) { IswReloadResources(w->dev_ctx_shell); }
     }
 
     fm_reload_config(fm);
@@ -263,13 +277,10 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         return 1;
     }
 
-    /* Theme change notifications */
-    app->theme_watch = isde_theme_watch_start(app->first_toplevel,
-                                               on_theme_changed, first);
-    isde_theme_watch_xt(app->theme_watch, app->app);
-
-    /* Subscribe D-Bus settings for first window */
+    /* D-Bus settings subscriptions */
     if (app->dbus) {
+        isde_theme_watch(app->dbus, app->first_toplevel,
+                         on_theme_changed, first);
         isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
     }
 
@@ -443,7 +454,6 @@ void fm_app_cleanup(FmApp *app)
     mount_monitor_cleanup(app);
 #endif
     jobqueue_shutdown(app);
-    isde_theme_watch_stop(app->theme_watch);
     isde_dbus_free(app->dbus);
     icons_cleanup(app);
     thumbs_cleanup(app);

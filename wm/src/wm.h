@@ -95,7 +95,6 @@ typedef struct Wm {
     /* IPC */
     IsdeIpc               *ipc;
     IsdeDBus              *dbus;
-    IsdeThemeWatch        *theme_watch;
 
     /* Key bindings */
     xcb_key_symbols_t     *keysyms;

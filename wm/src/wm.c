@@ -140,10 +140,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
-    wm->theme_watch = isde_theme_watch_start(wm->toplevel,
-                                              wm_on_theme_changed, wm);
     wm->dbus = isde_dbus_init();
     if (wm->dbus) {
+        isde_theme_watch(wm->dbus, wm->toplevel, wm_on_theme_changed, wm);
         isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
     }
 
@@ -1662,7 +1661,6 @@ void wm_run(Wm *wm)
         }
 
         /* D-Bus dispatch */
-        isde_theme_watch_dispatch(wm->theme_watch);
         if (wm->dbus) {
             isde_dbus_dispatch(wm->dbus);
         }
@@ -1716,7 +1714,6 @@ void wm_cleanup(Wm *wm)
     if (wm->keysyms) {
         xcb_key_symbols_free(wm->keysyms);
     }
-    isde_theme_watch_stop(wm->theme_watch);
     isde_dbus_free(wm->dbus);
     isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);

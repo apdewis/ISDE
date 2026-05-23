@@ -204,7 +204,6 @@ typedef struct Panel {
 
     /* D-Bus */
     IsdeDBus          *dbus;
-    IsdeThemeWatch    *theme_watch;
 
     /* Active popup tracking — for click-outside-to-dismiss */
     Widget             active_popup;  /* Currently open popup shell, or NULL */

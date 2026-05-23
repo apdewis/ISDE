@@ -372,14 +372,10 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     xcb_flush(p->conn);
 
-    /* Theme change notifications */
-    p->theme_watch = isde_theme_watch_start(p->toplevel,
-                                             on_panel_theme_changed, p);
-    isde_theme_watch_xt(p->theme_watch, p->app);
-
-    /* D-Bus settings notifications (non-appearance) */
+    /* D-Bus settings notifications */
     p->dbus = isde_dbus_init();
     if (p->dbus) {
+        isde_theme_watch(p->dbus, p->toplevel, on_panel_theme_changed, p);
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
         int dbus_fd = isde_dbus_get_fd(p->dbus);
         if (dbus_fd >= 0) {
@@ -586,7 +582,6 @@ void panel_cleanup(Panel *p)
     }
     free(p->pinned_classes);
 
-    isde_theme_watch_stop(p->theme_watch);
     isde_dbus_free(p->dbus);
     isde_ipc_free(p->ipc);
     isde_ewmh_free(p->ewmh);

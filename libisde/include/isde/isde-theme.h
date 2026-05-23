@@ -15,6 +15,8 @@
 extern "C" {
 #endif
 
+typedef struct IsdeDBus IsdeDBus;
+
 /* ---------- Colour scheme ---------- */
 
 /* Widget state colours — background, foreground, border, hover variants */
@@ -136,34 +138,14 @@ void isde_theme_reload(void);
  * colors or trigger a redraw. */
 typedef void (*IsdeThemeChangedCb)(void *user_data);
 
-/* Subscribe to ISDE theme changes via D-Bus.  Connects to the session bus,
- * listens for appearance changes, and automatically calls
- * isde_theme_reload() + isde_theme_merge_xrm() before invoking the
- * callback.  The caller must pump D-Bus messages by calling
- * isde_theme_watch_fd() / isde_theme_watch_dispatch() in its event loop,
- * or use isde_theme_watch_xt() for Xt integration.
- *
- * Returns an opaque handle, or NULL if D-Bus is unavailable. */
-typedef struct IsdeThemeWatch IsdeThemeWatch;
-
-IsdeThemeWatch *isde_theme_watch_start(Widget toplevel,
-                                       IsdeThemeChangedCb cb,
-                                       void *user_data);
-
-/* Get the D-Bus file descriptor for event loop integration.
- * Returns -1 if not connected. */
-int  isde_theme_watch_fd(IsdeThemeWatch *w);
-
-/* Process pending D-Bus messages.  Call when the fd is readable. */
-void isde_theme_watch_dispatch(IsdeThemeWatch *w);
-
-/* Xt convenience: register the D-Bus fd with IswAppAddInput so theme
- * change notifications are processed automatically in the Xt main loop.
- * Call once after isde_theme_watch_start(). */
-void isde_theme_watch_xt(IsdeThemeWatch *w, IswAppContext app);
-
-/* Stop watching and free resources. */
-void isde_theme_watch_stop(IsdeThemeWatch *w);
+/* Subscribe to theme changes on an existing D-Bus connection.
+ * Filters for "appearance" section changes and automatically calls
+ * isde_config_invalidate_cache(), isde_theme_reload(),
+ * isde_theme_set_resource_manager(), IswReloadScreenDatabase(),
+ * and isde_theme_merge_xrm() before invoking the callback.
+ * The D-Bus connection must already be dispatched in the event loop. */
+void isde_theme_watch(IsdeDBus *bus, Widget toplevel,
+                      IsdeThemeChangedCb cb, void *user_data);
 
 /* Convert a theme color (0xRRGGBB) to a double triplet (0.0-1.0). */
 void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
