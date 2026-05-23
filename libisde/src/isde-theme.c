@@ -867,7 +867,9 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
 {
     (void)key;
     (void)user_data;
-    if (strcmp(section, "appearance") != 0 && strcmp(section, "*") != 0) {
+    if (strcmp(section, "appearance") != 0 &&
+        strcmp(section, "fonts") != 0 &&
+        strcmp(section, "*") != 0) {
         return;
     }
 

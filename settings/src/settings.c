@@ -229,6 +229,12 @@ static void panel_list_cb(Widget w, IswPointer cd, IswPointer call)
 
 /* ---------- D-Bus ---------- */
 
+static void settings_theme_changed_cb(void *user_data)
+{
+    Settings *s = (Settings *)user_data;
+    IswReloadResources(s->toplevel);
+}
+
 static void settings_dbus_input_cb(IswPointer client_data, int *fd,
                                     IswInputId *id)
 {
@@ -411,6 +417,8 @@ int settings_init(Settings *s, int *argc, char **argv)
             IswAppAddInput(s->app, fd, (IswPointer)IswInputReadMask,
                           settings_dbus_input_cb, s->dbus);
         }
+        isde_theme_watch(s->dbus, s->toplevel,
+                         settings_theme_changed_cb, s);
         panel_appearance_set_dbus(s->dbus);
         panel_fonts_set_dbus(s->dbus);
         panel_terminal_set_dbus(s->dbus);

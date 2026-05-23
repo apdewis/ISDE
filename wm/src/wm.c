@@ -353,8 +353,9 @@ void wm_focus_client(Wm *wm, WmClient *c)
             xcb_configure_window(wm->conn, IswWindow(prev->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
         }
-        frame_apply_theme(wm, prev);
+        
         frame_update_title(wm, prev);
+        frame_apply_theme(wm, prev);
     }
 
     if (c) {
@@ -376,8 +377,9 @@ void wm_focus_client(Wm *wm, WmClient *c)
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
         }
-        frame_apply_theme(wm, c);
+        
         frame_update_title(wm, c);
+        frame_apply_theme(wm, c);
     }
     wm_ewmh_update_active(wm);
     wm_restack_above_below(wm);

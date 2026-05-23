@@ -59,7 +59,7 @@ IsdeDBus *isde_dbus_init(void)
     DBusError err;
     dbus_error_init(&err);
 
-    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+    DBusConnection *conn = dbus_bus_get_private(DBUS_BUS_SESSION, &err);
     if (dbus_error_is_set(&err)) {
         fprintf(stderr, "isde-dbus: connection failed: %s\n", err.message);
         dbus_error_free(&err);
@@ -107,6 +107,7 @@ void isde_dbus_free(IsdeDBus *bus)
     if (!bus) { return; }
     if (bus->conn) {
         dbus_connection_remove_filter(bus->conn, filter_func, bus);
+        dbus_connection_close(bus->conn);
         dbus_connection_unref(bus->conn);
     }
     free(bus);

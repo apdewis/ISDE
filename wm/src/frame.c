@@ -46,11 +46,27 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     if (title_w < 1) { title_w = 1; }
 
     IswArgBuilder ab = IswArgBuilderInit();
+
     IswArgBackground(&ab, color_to_pixel(wm, tb->bg));
     IswArgForeground(&ab, color_to_pixel(wm, tb->fg));
     IswArgWidth(&ab, title_w);
     IswArgHeight(&ab, th);
     IswSetValues(c->title_label, ab.args, ab.count);
+
+    Widget btns[] = { c->menu_btn, c->minimize_btn,
+                      c->maximize_btn, c->close_btn };
+    for (int i = 0; i < 4; i++) {
+        IswArgBuilderReset(&ab);
+        IswArgWidth(&ab, th);
+        IswArgHeight(&ab, th);
+        IswSetValues(btns[i], ab.args, ab.count);
+    }
+
+    const IsdeElementColors *tbb = &s->titlebar;
+    IswArgBuilderReset(&ab);
+    IswArgBorderColor(&ab, color_to_pixel(wm, tbb->border));
+    IswArgBackground(&ab, color_to_pixel(wm, tbb->bg));
+    IswSetValues(c->shell, ab.args, ab.count);
 }
 
 /* ---------- icon paths (resolved once) ---------- */

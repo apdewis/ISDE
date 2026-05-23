@@ -51,6 +51,7 @@ static void on_theme_changed(void *user_data)
 
     icons_init(app);
 
+    printf("Number of windows %d \n", app->nwindows);
     for (int i = 0; i < app->nwindows; i++) {
         Fm *w = app->windows[i];
         IswReloadResources(w->toplevel);
@@ -69,7 +70,7 @@ static void on_theme_changed(void *user_data)
         if (w->dev_ctx_shell) { IswReloadResources(w->dev_ctx_shell); }
     }
 
-    fm_reload_config(fm);
+    //fm_reload_config(fm);
 }
 
 static void on_settings_changed(const char *section, const char *key,
@@ -87,8 +88,7 @@ static void dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd;
     (void)id;
-    IsdeDBus *bus = (IsdeDBus *)client_data;
-    isde_dbus_dispatch(bus);
+    isde_dbus_dispatch((IsdeDBus *)client_data);
 }
 
 /* ---------- close handling ---------- */
@@ -238,7 +238,7 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
-    /* D-Bus settings notifications (shared) */
+    /* D-Bus settings notifications */
     app->dbus = isde_dbus_init();
     if (app->dbus) {
         int dbus_fd = isde_dbus_get_fd(app->dbus);
