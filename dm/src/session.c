@@ -343,8 +343,10 @@ int dm_session_start(Dm *dm, const char *username,
             chdir("/");
         }
 
-        /* Exec the session */
-        execl("/bin/sh", "sh", "-c", exec_cmd, (char *)NULL);
+        /* Exec the session wrapped in dbus-launch so every child
+         * inherits DBUS_SESSION_BUS_ADDRESS. */
+        execlp("dbus-launch", "dbus-launch", "--exit-with-session",
+               "sh", "-c", exec_cmd, (char *)NULL);
         fprintf(stderr, "isde-dm: exec session failed: %s\n",
                 strerror(errno));
         _exit(1);
