@@ -105,12 +105,15 @@ Widget isde_dialog_input(Widget parent, const char *title,
                          IsdeDialogInputCB callback, void *data);
 
 /* Font chooser — wraps ISW FontChooser + OK/Cancel, modal.
- * Callback receives the chosen family + size on OK, or NULL on cancel. */
+ * Callback receives the chosen family, size, weight (FC_WEIGHT),
+ * and slant (FC_SLANT) on OK, or NULL/0 on cancel. */
 typedef void (*IsdeDialogFontCB)(IsdeDialogResult result,
-                                 const char *family, int size, void *data);
+                                 const char *family, int size,
+                                 int weight, int slant, void *data);
 
 Widget isde_dialog_font(Widget parent, const char *title,
                         const char *initial_family, int initial_size,
+                        int initial_weight, int initial_slant,
                         IsdeDialogFontCB callback, void *data);
 
 /* About dialog — app name, version, description, single Close button.

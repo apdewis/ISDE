@@ -17,6 +17,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <fontconfig/fontconfig.h>
 
 /* ---------- helpers ---------- */
 
@@ -936,17 +937,17 @@ static char *fmt_color(const char *resource, unsigned int rgb)
     return buf;
 }
 
-static char *fmt_font(const char *resource, const char *family, int size)
+static char *fmt_font(const char *resource, const char *family,
+                      int size, int weight, int slant)
 {
-    char *buf = malloc(strlen(resource) + strlen(family) + 16);
-    sprintf(buf, "%s: %s-%d", resource, family, size);
-    return buf;
-}
-
-static char *fmt_font_bold(const char *resource, const char *family, int size)
-{
-    char *buf = malloc(strlen(resource) + strlen(family) + 32);
-    sprintf(buf, "%s: %s-%d:bold", resource, family, size);
+    char *buf = malloc(strlen(resource) + strlen(family) + 48);
+    int n = sprintf(buf, "%s: %s-%d", resource, family, size);
+    if (weight != FC_WEIGHT_REGULAR) {
+        n += sprintf(buf + n, ":weight=%d", weight);
+    }
+    if (slant != FC_SLANT_ROMAN) {
+        sprintf(buf + n, ":slant=%d", slant);
+    }
     return buf;
 }
 
@@ -1140,49 +1141,74 @@ char **isde_theme_build_resources(void)
             IsdeConfigTable *fonts = isde_config_table(root, "fonts");
             if (fonts) {
                 const char *fam;
-                int sz;
+                int sz, wt, sl;
 
                 /* General — global default */
                 fam = isde_config_string(fonts, "general_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "general_size", 10);
-                res[i++] = fmt_font("*font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "general_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "general_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*font", fam, sz, wt, sl);
 
-                /* Section headings — general +2pt bold */
-                res[i++] = fmt_font_bold("*sectionHd.font", fam, sz + 2);
+                /* Section headings — general +2pt, always bold */
+                res[i++] = fmt_font("*sectionHd.font", fam, sz + 2,
+                                    FC_WEIGHT_BOLD, sl);
 
                 /* Fixed — Text widget (editors, terminal) */
                 fam = isde_config_string(fonts, "fixed_family", "Monospace");
                 sz  = (int)isde_config_int(fonts, "fixed_size", 10);
-                res[i++] = fmt_font("*Text.font", fam, sz);
-                res[i++] = fmt_font("*TextSink.font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "fixed_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "fixed_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*Text.font", fam, sz, wt, sl);
+                res[i++] = fmt_font("*TextSink.font", fam, sz, wt, sl);
 
                 /* Places sidebar headers — 2pt smaller than general */
-                res[i++] = fmt_font("*placeHdr0.font", fam, sz - 2);
-                res[i++] = fmt_font("*placeHdr1.font", fam, sz - 2);
-                res[i++] = fmt_font("*placeHdr2.font", fam, sz - 2);
+                res[i++] = fmt_font("*placeHdr0.font", fam, sz - 2, wt, sl);
+                res[i++] = fmt_font("*placeHdr1.font", fam, sz - 2, wt, sl);
+                res[i++] = fmt_font("*placeHdr2.font", fam, sz - 2, wt, sl);
 
                 /* Small — StatusBar, Tip */
                 fam = isde_config_string(fonts, "small_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "small_size", 8);
-                res[i++] = fmt_font("*StatusBar.font", fam, sz);
-                res[i++] = fmt_font("*Tip.font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "small_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "small_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*StatusBar.font", fam, sz, wt, sl);
+                res[i++] = fmt_font("*Tip.font", fam, sz, wt, sl);
 
                 /* Toolbar — Command buttons in toolbars */
                 fam = isde_config_string(fonts, "toolbar_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "toolbar_size", 9);
-                res[i++] = fmt_font("*startBtn.font", fam, sz);
-                res[i++] = fmt_font("*taskBtn.font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "toolbar_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "toolbar_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*startBtn.font", fam, sz, wt, sl);
+                res[i++] = fmt_font("*taskBtn.font", fam, sz, wt, sl);
 
                 /* Menus */
                 fam = isde_config_string(fonts, "menu_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "menu_size", 10);
-                res[i++] = fmt_font("*SmeBSB.font", fam, sz);
-                res[i++] = fmt_font("*MenuButton.font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "menu_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "menu_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*SmeBSB.font", fam, sz, wt, sl);
+                res[i++] = fmt_font("*MenuButton.font", fam, sz, wt, sl);
 
                 /* Window title */
                 fam = isde_config_string(fonts, "title_family", "Sans");
                 sz  = (int)isde_config_int(fonts, "title_size", 10);
-                res[i++] = fmt_font("*titleBar.font", fam, sz);
+                wt  = (int)isde_config_int(fonts, "title_weight",
+                                           FC_WEIGHT_REGULAR);
+                sl  = (int)isde_config_int(fonts, "title_slant",
+                                           FC_SLANT_ROMAN);
+                res[i++] = fmt_font("*titleBar.font", fam, sz, wt, sl);
             }
             isde_config_free(cfg);
         }
