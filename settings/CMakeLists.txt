@@ -21,6 +21,7 @@ target_link_libraries(isde-settings
     PkgConfig::DBUS
     PkgConfig::XCB_XKB
     PkgConfig::CAIRO
+    PkgConfig::FONTCONFIG
     ${CMAKE_DL_LIBS}
 )
 

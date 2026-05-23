@@ -13,6 +13,7 @@
 #include <ISW/List.h>
 #include <ISW/SpinBox.h>
 #include <ISW/IswArgMacros.h>
+#include <fontconfig/fontconfig.h>
 #include "isde/isde-dialog.h"
 
 #include <stdio.h>
@@ -73,9 +74,10 @@ static void update_font_label(void)
 }
 
 static void chooser_result_cb(IsdeDialogResult result,
-                              const char *family, int size, void *data)
+                              const char *family, int size,
+                              int weight, int slant, void *data)
 {
-    (void)data;
+    (void)weight; (void)slant; (void)data;
     chooser_shell = NULL;
     if (result != ISDE_DIALOG_OK) return;
     if (family && family[0] && family != cur_font_family) {
@@ -91,6 +93,7 @@ static void edit_font_cb(Widget w, IswPointer cd, IswPointer call)
     isde_dialog_dismiss(chooser_shell);
     chooser_shell = isde_dialog_font(toplevel_cache, "Terminal Font",
                                      cur_font_family, cur_font_size,
+                                     FC_WEIGHT_REGULAR, FC_SLANT_ROMAN,
                                      chooser_result_cb, NULL);
 }
 

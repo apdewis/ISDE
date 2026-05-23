@@ -20,6 +20,7 @@
 #include <ISW/Dialog.h>
 #include <ISW/Text.h>
 #include <ISW/FontChooser.h>
+#include <fontconfig/fontconfig.h>
 #include <ISW/ProgressBar.h>
 #include <ISW/IswArgMacros.h>
 #include <ISW/IntrinsicP.h>
@@ -384,12 +385,17 @@ static void font_ok_cb(Widget w, IswPointer cd, IswPointer call)
     DialogCtx *ctx = (DialogCtx *)cd;
     const char *family = NULL;
     int size = 0;
+    int weight = FC_WEIGHT_NORMAL;
+    int slant = FC_SLANT_ROMAN;
     if (ctx->chooser_widget) {
         family = IswFontChooserGetFamily(ctx->chooser_widget);
         size = IswFontChooserGetSize(ctx->chooser_widget);
+        weight = IswFontChooserGetWeight(ctx->chooser_widget);
+        slant = IswFontChooserGetSlant(ctx->chooser_widget);
     }
     if (ctx->font_cb)
-        ctx->font_cb(ISDE_DIALOG_OK, family, size, ctx->user_data);
+        ctx->font_cb(ISDE_DIALOG_OK, family, size, weight, slant,
+                     ctx->user_data);
     ctx_dismiss_and_free(ctx);
 }
 
@@ -398,12 +404,13 @@ static void font_cancel_cb(Widget w, IswPointer cd, IswPointer call)
     (void)w; (void)call;
     DialogCtx *ctx = (DialogCtx *)cd;
     if (ctx->font_cb)
-        ctx->font_cb(ISDE_DIALOG_CANCEL, NULL, 0, ctx->user_data);
+        ctx->font_cb(ISDE_DIALOG_CANCEL, NULL, 0, 0, 0, ctx->user_data);
     ctx_dismiss_and_free(ctx);
 }
 
 Widget isde_dialog_font(Widget parent, const char *title,
                         const char *initial_family, int initial_size,
+                        int initial_weight, int initial_slant,
                         IsdeDialogFontCB callback, void *data)
 {
     DialogCtx *ctx = ctx_new();
@@ -425,6 +432,8 @@ Widget isde_dialog_font(Widget parent, const char *title,
         IswArgFontFamily(&ab, initial_family);
     }
     IswArgFontSize(&ab, initial_size);
+    IswArgFontWeight(&ab, initial_weight);
+    IswArgFontSlant(&ab, initial_slant);
     IswArgBorderWidth(&ab, 0);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainBottom);

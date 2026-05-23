@@ -17,6 +17,7 @@
 
 #include <ISW/FontChooser.h>
 #include <ISW/IswArgMacros.h>
+#include <fontconfig/fontconfig.h>
 #include "isde/isde-dialog.h"
 
 /* ---------- font slot definitions ---------- */
@@ -55,6 +56,24 @@ static const char *font_size_keys[NUM_FONTS] = {
     "title_size",
 };
 
+static const char *font_weight_keys[NUM_FONTS] = {
+    "general_weight",
+    "fixed_weight",
+    "small_weight",
+    "toolbar_weight",
+    "menu_weight",
+    "title_weight",
+};
+
+static const char *font_slant_keys[NUM_FONTS] = {
+    "general_slant",
+    "fixed_slant",
+    "small_slant",
+    "toolbar_slant",
+    "menu_slant",
+    "title_slant",
+};
+
 static const char *default_families[NUM_FONTS] = {
     "Sans",
     "Monospace",
@@ -73,6 +92,8 @@ static const int default_sizes[NUM_FONTS] = {
 typedef struct {
     char family[128];
     int  size;
+    int  weight;
+    int  slant;
 } FontSetting;
 
 static FontSetting current[NUM_FONTS];
@@ -85,19 +106,60 @@ static IsdeDBus *panel_dbus;
 
 /* ---------- helpers ---------- */
 
-static void format_font_desc(char *buf, size_t bufsz,
-                             const char *family, int size)
+static void fc_style_name(const char *family, int weight, int slant,
+                          char *out, size_t outsz)
 {
-    snprintf(buf, bufsz, "%s %dpt", family, size);
+    FcPattern *pat = FcPatternCreate();
+    FcPatternAddString(pat, FC_FAMILY, (const FcChar8 *)family);
+    FcPatternAddInteger(pat, FC_WEIGHT, weight);
+    FcPatternAddInteger(pat, FC_SLANT, slant);
+    FcConfigSubstitute(NULL, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    FcResult result;
+    FcPattern *match = FcFontMatch(NULL, pat, &result);
+    FcChar8 *style = NULL;
+    if (match && FcPatternGetString(match, FC_STYLE, 0, &style) == FcResultMatch
+        && style) {
+        snprintf(out, outsz, "%s", (const char *)style);
+    } else {
+        snprintf(out, outsz, "Regular");
+    }
+    if (match) FcPatternDestroy(match);
+    FcPatternDestroy(pat);
+}
+
+static void format_font_desc(char *buf, size_t bufsz,
+                             const char *family, int size,
+                             int weight, int slant)
+{
+    char style[64];
+    fc_style_name(family, weight, slant, style, sizeof(style));
+    snprintf(buf, bufsz, "%s %s %dpt", family, style, size);
+}
+
+static void format_fc_pattern(char *out, size_t outsz,
+                              const char *family, int size,
+                              int weight, int slant)
+{
+    int n = snprintf(out, outsz, "%s-%d", family, size);
+    if (weight != FC_WEIGHT_REGULAR) {
+        n += snprintf(out + n, outsz - n, ":weight=%d", weight);
+    }
+    if (slant != FC_SLANT_ROMAN) {
+        snprintf(out + n, outsz - n, ":slant=%d", slant);
+    }
 }
 
 static void update_desc_label(int idx)
 {
     char buf[160];
     char font[160];
-    format_font_desc(buf, sizeof(buf), current[idx].family, current[idx].size);
-    snprintf(font, sizeof(font), "%s-%d",
-             current[idx].family, current[idx].size);
+    format_font_desc(buf, sizeof(buf), current[idx].family,
+                     current[idx].size, current[idx].weight,
+                     current[idx].slant);
+    format_fc_pattern(font, sizeof(font), current[idx].family,
+                      current[idx].size, current[idx].weight,
+                      current[idx].slant);
     IswFontStruct *fs = isde_resolve_font(desc_labels[idx], font);
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgResize(&ab, True);
@@ -113,7 +175,8 @@ static Widget chooser_shell;
 static int    chooser_slot;  /* which font slot is being edited */
 
 static void chooser_result_cb(IsdeDialogResult result,
-                              const char *family, int size, void *data)
+                              const char *family, int size,
+                              int weight, int slant, void *data)
 {
     (void)data;
     chooser_shell = NULL;
@@ -127,6 +190,8 @@ static void chooser_result_cb(IsdeDialogResult result,
     if (size > 0) {
         current[chooser_slot].size = size;
     }
+    current[chooser_slot].weight = weight;
+    current[chooser_slot].slant = slant;
     update_desc_label(chooser_slot);
 }
 
@@ -137,6 +202,8 @@ static void show_chooser(int slot)
     chooser_shell = isde_dialog_font(toplevel_cache, font_labels[slot],
                                      current[slot].family,
                                      current[slot].size,
+                                     current[slot].weight,
+                                     current[slot].slant,
                                      chooser_result_cb, NULL);
 }
 
@@ -177,6 +244,8 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         snprintf(current[i].family, sizeof(current[i].family),
                  "%s", default_families[i]);
         current[i].size = default_sizes[i];
+        current[i].weight = FC_WEIGHT_REGULAR;
+        current[i].slant = FC_SLANT_ROMAN;
     }
 
     char errbuf[256];
@@ -196,6 +265,16 @@ static Widget fonts_create(Widget parent, IswAppContext app)
                     font_size_keys[i], 0);
                 if (sz > 0) {
                     current[i].size = sz;
+                }
+                int wt = (int)isde_config_int(fonts,
+                    font_weight_keys[i], -1);
+                if (wt >= 0) {
+                    current[i].weight = wt;
+                }
+                int sl = (int)isde_config_int(fonts,
+                    font_slant_keys[i], -1);
+                if (sl >= 0) {
+                    current[i].slant = sl;
                 }
             }
         }
@@ -224,9 +303,11 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         char desc[160];
         char font[160];
         format_font_desc(desc, sizeof(desc),
-                         current[i].family, current[i].size);
-        snprintf(font, sizeof(font), "%s-%d",
-                 current[i].family, current[i].size);
+                         current[i].family, current[i].size,
+                         current[i].weight, current[i].slant);
+        format_fc_pattern(font, sizeof(font), current[i].family,
+                          current[i].size, current[i].weight,
+                          current[i].slant);
         IswFontStruct *fs = isde_resolve_font(form, font);
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, desc);
@@ -271,6 +352,10 @@ static void fonts_apply(void)
                                  font_family_keys[i], current[i].family);
         isde_config_write_int(path, "fonts",
                               font_size_keys[i], current[i].size);
+        isde_config_write_int(path, "fonts",
+                              font_weight_keys[i], current[i].weight);
+        isde_config_write_int(path, "fonts",
+                              font_slant_keys[i], current[i].slant);
     }
 
     free(path);

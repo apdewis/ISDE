@@ -39,6 +39,7 @@ target_link_libraries(isde
     PRIVATE
         PkgConfig::DBUS
         PkgConfig::XCB_DPMS
+        PkgConfig::FONTCONFIG
 )
 
 set_target_properties(isde PROPERTIES
