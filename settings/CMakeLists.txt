@@ -20,9 +20,11 @@ target_link_libraries(isde-settings
     PkgConfig::XCB
     PkgConfig::DBUS
     PkgConfig::XCB_XKB
+    PkgConfig::XCB_XINPUT
     PkgConfig::CAIRO
     PkgConfig::FONTCONFIG
     ${CMAKE_DL_LIBS}
+    m
 )
 
 install(TARGETS isde-settings RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

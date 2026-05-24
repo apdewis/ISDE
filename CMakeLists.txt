@@ -58,6 +58,7 @@ pkg_check_modules(XCB_RANDR REQUIRED IMPORTED_TARGET xcb-randr)
 pkg_check_modules(XCB_CURSOR REQUIRED IMPORTED_TARGET xcb-cursor)
 pkg_check_modules(XCB_DPMS REQUIRED IMPORTED_TARGET xcb-dpms)
 pkg_check_modules(XCB_SCREENSAVER REQUIRED IMPORTED_TARGET xcb-screensaver)
+pkg_check_modules(XCB_XINPUT REQUIRED IMPORTED_TARGET xcb-xinput)
 pkg_check_modules(LIBSEAT REQUIRED IMPORTED_TARGET libseat)
 
 # PAM has no pkg-config file on most distros — find it manually
