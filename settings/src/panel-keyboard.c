@@ -27,11 +27,19 @@ static void apply_keyboard(int delay, int interval)
     xcb_xkb_use_extension(panel_conn, 1, 0);
     xcb_xkb_set_controls(panel_conn,
         XCB_XKB_ID_USE_CORE_KBD,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        delay, interval,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        XCB_XKB_BOOL_CTRL_REPEAT_KEYS,
-        0, NULL);
+        0, 0, 0, 0,                                /* affect/set internal+ignoreLock real mods */
+        0, 0, 0, 0,                                /* affect/set internal+ignoreLock virtual mods */
+        0, 0, 0,                                    /* mouseKeysDfltBtn, groupsWrap, accessXOptions */
+        0,                                          /* affectEnabledControls */
+        0,                                          /* enabledControls */
+        XCB_XKB_BOOL_CTRL_REPEAT_KEYS,             /* changeControls */
+        delay, interval,                            /* repeatDelay, repeatInterval */
+        0, 0, 0, 0, 0, 0, 0,                       /* slowKeys..mouseKeysCurve */
+        0, 0, 0, 0, 0,                             /* accessXTimeout..accessXTimeoutOptionsValues */
+        (const uint8_t *)"\xff\xff\xff\xff\xff\xff\xff\xff"
+                        "\xff\xff\xff\xff\xff\xff\xff\xff"
+                        "\xff\xff\xff\xff\xff\xff\xff\xff"
+                        "\xff\xff\xff\xff\xff\xff\xff\xff");
     xcb_flush(panel_conn);
 }
 
