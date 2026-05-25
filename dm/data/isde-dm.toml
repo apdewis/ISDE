@@ -21,7 +21,7 @@ dev_mode = false
 
 # Greeter colour scheme (name from /usr/share/isde/themes/<name>.theme)
 # Defaults to "default-light" if not set.
-# color_scheme = "default-light"
+color_scheme = "default-dark"
 
 # UI scale factor for the greeter (e.g. 1.0, 1.5, 2.0).
 # If not set, auto-detected from the display's physical size via RandR.
