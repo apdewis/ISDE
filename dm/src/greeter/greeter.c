@@ -482,7 +482,7 @@ static void build_ui(Greeter *g)
     if (login_icon) {
         IswArgImage(&ab, login_icon);
     }
-    IswArgHeight(&ab, input_h);
+    IswArgHeight(&ab, input_h + 2); //#FIXME appears to be some mismatch in border offsets in the button code
     IswArgInternalWidth(&ab, BUTTON_PAD);
     IswArgInternalHeight(&ab, 0);
     IswArgHorizDistance(&ab, input_x + INPUT_W + ROW_GAP);
