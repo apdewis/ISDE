@@ -71,6 +71,13 @@ typedef struct WmClient {
     char        *title;
     unsigned long focus_seq;       /* focus sequence number for MRU fallback */
 
+    /* ICCCM size hints (WM_NORMAL_HINTS) — logical pixels */
+    int          min_w, min_h;
+    int          max_w, max_h;
+    int          base_w, base_h;
+    int          inc_w, inc_h;
+    int          fixed_size;       /* 1 if min == max in both dimensions */
+
     /* Resize grips — input-only windows on frame edges */
     xcb_window_t  grip[8];  /* top, bottom, left, right, tl, tr, bl, br */
 
@@ -217,6 +224,7 @@ void      frame_set_extents(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
+void      frame_read_size_hints(Wm *wm, WmClient *c);
 void      frame_create_grips(Wm *wm, WmClient *c);
 void      frame_update_grips(Wm *wm, WmClient *c);
 void      frame_destroy_grips(Wm *wm, WmClient *c);

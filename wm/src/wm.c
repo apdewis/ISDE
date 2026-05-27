@@ -1188,7 +1188,7 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
 {
     int edge;
     WmClient *c = find_grip_client(wm, ev->event, &edge);
-    if (!c || edge < 0) {
+    if (!c || edge < 0 || c->fixed_size) {
         return;
     }
 
@@ -1306,7 +1306,6 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
         int ny = wm->drag_orig_y;
         int nw = wm->drag_orig_w;
         int nh = wm->drag_orig_h;
-        int min_sz = 50;
 
         if (e == GRIP_TOP || e == GRIP_TL || e == GRIP_TR) {
             nh = wm->drag_orig_h - dy;
@@ -1323,8 +1322,20 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
             nw = wm->drag_orig_w + dx;
         }
 
-        if (nw < min_sz) { nw = min_sz; nx = wm->drag_orig_x + wm->drag_orig_w - min_sz; }
-        if (nh < min_sz) { nh = min_sz; ny = wm->drag_orig_y + wm->drag_orig_h - min_sz; }
+        int min_w = c->min_w > 0 ? c->min_w : 50;
+        int min_h = c->min_h > 0 ? c->min_h : 50;
+
+        if (c->inc_w > 1 || c->inc_h > 1) {
+            int bw = c->base_w > 0 ? c->base_w : min_w;
+            int bh = c->base_h > 0 ? c->base_h : min_h;
+            nw = bw + ((nw - bw) / c->inc_w) * c->inc_w;
+            nh = bh + ((nh - bh) / c->inc_h) * c->inc_h;
+        }
+
+        if (nw < min_w) { nw = min_w; nx = wm->drag_orig_x + wm->drag_orig_w - min_w; }
+        if (nh < min_h) { nh = min_h; ny = wm->drag_orig_y + wm->drag_orig_h - min_h; }
+        if (c->max_w > 0 && nw > c->max_w) { nw = c->max_w; }
+        if (c->max_h > 0 && nh > c->max_h) { nh = c->max_h; }
 
         c->x = nx; c->y = ny;
         c->width = nw; c->height = nh;
@@ -1361,6 +1372,14 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
 
     if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name) {
         frame_update_title(wm, c);
+    } else if (ev->atom == XCB_ATOM_WM_NORMAL_HINTS) {
+        int was_fixed = c->fixed_size;
+        frame_read_size_hints(wm, c);
+        if (c->fixed_size && !was_fixed && c->grip[0]) {
+            frame_destroy_grips(wm, c);
+        } else if (!c->fixed_size && was_fixed && c->decorated && !c->grip[0]) {
+            frame_create_grips(wm, c);
+        }
     } else if (ev->atom == wm->atom_motif_wm_hints) {
         int dominated = wm_client_wants_decorations(wm, c->client);
         if (dominated != c->decorated) {
@@ -1479,7 +1498,7 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
             dir == XCB_EWMH_WM_MOVERESIZE_MOVE_KEYBOARD) {
             wm->drag_mode = DRAG_MOVE;
         } else if (dir <= XCB_EWMH_WM_MOVERESIZE_SIZE_LEFT) {
-            /* Resize directions 0-7 map to edges */
+            if (c->fixed_size) { return 1; }
             static const int dir_to_grip[] = {
                 GRIP_TL, GRIP_TOP, GRIP_TR, GRIP_RIGHT,
                 GRIP_BR, GRIP_BOTTOM, GRIP_BL, GRIP_LEFT
