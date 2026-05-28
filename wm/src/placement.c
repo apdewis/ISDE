@@ -146,9 +146,10 @@ void wm_place_client(Wm *wm, WmClient *c)
     }
 
     /* 3. Dialog type without transient_for: center on screen */
-    if (place_dialog_type(wm, c)) {
-        return;
-    }
+    //#FIXME this path currently causes broken centering and is causing more problems than not 
+    //if (place_dialog_type(wm, c)) {
+    //    return;
+    //}
 
     /* 4. Check if client explicitly requested a position via WM_NORMAL_HINTS */
     xcb_size_hints_t hints;
