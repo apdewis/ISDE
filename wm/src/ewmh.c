@@ -36,8 +36,13 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_WM_STATE_FULLSCREEN,
         ewmh->_NET_WM_STATE_ABOVE,
         ewmh->_NET_WM_STATE_BELOW,
+        ewmh->_NET_WM_STATE_HIDDEN,
+        ewmh->_NET_WM_STATE_MAXIMIZED_VERT,
+        ewmh->_NET_WM_STATE_MAXIMIZED_HORZ,
         ewmh->_NET_WORKAREA,
         ewmh->_NET_FRAME_EXTENTS,
+        ewmh->_NET_WM_MOVERESIZE,
+        ewmh->_NET_DESKTOP_LAYOUT,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);
