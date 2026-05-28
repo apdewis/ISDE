@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ISDE Calculator
+GenericName=Calculator
+Comment=Desktop calculator for the ISDE desktop
+Exec=isde-calc
+Icon=isde-calc
+Terminal=false
+Categories=Utility;Calculator;
+Keywords=math;arithmetic;addition;subtraction;multiply;divide;
+StartupNotify=true
