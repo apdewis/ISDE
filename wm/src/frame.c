@@ -422,6 +422,49 @@ static void menu_button_callback(Widget w, IswPointer client_data,
     win_menu_show(wm, c);
 }
 
+/* ---------- size hints ---------- */
+
+void frame_read_size_hints(Wm *wm, WmClient *c)
+{
+    double sf = wm->scale_factor;
+    xcb_size_hints_t hints;
+
+    c->min_w = 0;  c->min_h = 0;
+    c->max_w = 0;  c->max_h = 0;
+    c->base_w = 0; c->base_h = 0;
+    c->inc_w = 1;  c->inc_h = 1;
+    c->fixed_size = 0;
+
+    if (!xcb_icccm_get_wm_normal_hints_reply(
+            wm->conn,
+            xcb_icccm_get_wm_normal_hints(wm->conn, c->client),
+            &hints, NULL)) {
+        return;
+    }
+
+    if (hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE) {
+        c->min_w = phys_to_log(sf, hints.min_width);
+        c->min_h = phys_to_log(sf, hints.min_height);
+    }
+    if (hints.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE) {
+        c->max_w = phys_to_log(sf, hints.max_width);
+        c->max_h = phys_to_log(sf, hints.max_height);
+    }
+    if (hints.flags & XCB_ICCCM_SIZE_HINT_BASE_SIZE) {
+        c->base_w = phys_to_log(sf, hints.base_width);
+        c->base_h = phys_to_log(sf, hints.base_height);
+    }
+    if (hints.flags & XCB_ICCCM_SIZE_HINT_P_RESIZE_INC) {
+        c->inc_w = phys_to_log(sf, hints.width_inc);
+        c->inc_h = phys_to_log(sf, hints.height_inc);
+        if (c->inc_w < 1) { c->inc_w = 1; }
+        if (c->inc_h < 1) { c->inc_h = 1; }
+    }
+
+    c->fixed_size = (c->min_w > 0 && c->max_w > 0 && c->min_w == c->max_w &&
+                     c->min_h > 0 && c->max_h > 0 && c->min_h == c->max_h);
+}
+
 /* ---------- frame creation ---------- */
 
 WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
@@ -452,6 +495,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     c->width  = (int)(geo->width / sf + 0.5);
     c->height = (int)(geo->height / sf + 0.5);
     free(geo);
+
+    frame_read_size_hints(wm, c);
 
     c->decorated = wm_client_wants_decorations(wm, client) &&
                    wm_window_type_wants_decorations(wm, client);
@@ -634,8 +679,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     }
 
     /* Create invisible resize grips — after reparent so they stack on top.
-     * Undecorated windows handle their own resize. */
-    if (c->decorated) {
+     * Undecorated windows handle their own resize.
+     * Fixed-size windows (min == max) must not be resizable. */
+    if (c->decorated && !c->fixed_size) {
         frame_create_grips(wm, c);
     }
 
