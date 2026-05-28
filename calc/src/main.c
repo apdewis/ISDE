@@ -260,35 +260,41 @@ static void create_display(Widget parent)
     IswArgBuilderReset(&ab);
     IswArgRight(&ab, IswChainRight);
     IswArgWidth(&ab, ((BTN_W * 5) - (BTN_GAP * 2))); //outer containers have same gap spacing as buttons
-    IswArgHeight(&ab, 40);
+    IswArgBorderWidth(&ab, 0);
     IswArgJustify(&ab, IswJustifyRight);
 
-    LCD = IswCreateManagedWidget("LCD", toggleWidgetClass, screen, ab.args,
+    LCD = IswCreateManagedWidget("LCD", labelWidgetClass, screen, ab.args,
                                  ab.count);
 
+    IswArgBuilderReset(&ab);
+    IswArgFromVert(&ab, LCD);
+    IswArgBorderWidth(&ab, 0);
     ind[XCalc_INVERSE] = IswCreateManagedWidget("INV", labelWidgetClass,
-                                                 screen, args, IswNumber(args));
+                                                 screen, ab.args, ab.count);
 
+    IswArgFromHoriz(&ab, ind[XCalc_INVERSE]);
     ind[XCalc_DEGREE] = IswCreateManagedWidget("DEG", labelWidgetClass, screen,
-                                                args, IswNumber(args));
+                                                ab.args, ab.count);
 
     ind[XCalc_RADIAN] = IswCreateManagedWidget("RAD", labelWidgetClass, screen,
-                                                args, IswNumber(args));
+                                                ab.args, ab.count);
 
     ind[XCalc_GRADAM] = IswCreateManagedWidget("GRAD", labelWidgetClass, screen,
-                                                args, IswNumber(args));
-
+                                                ab.args, ab.count);
+    IswArgFromHoriz(&ab, ind[XCalc_DEGREE]);
     ind[XCalc_PAREN] = IswCreateManagedWidget("P", labelWidgetClass, screen,
-                                               args, IswNumber(args));
+                                               ab.args, ab.count);
 
+    IswArgFromHoriz(&ab, ind[XCalc_PAREN]);
+    
     ind[XCalc_HEX] = IswCreateManagedWidget("HEX", labelWidgetClass, screen,
-                                             args, IswNumber(args));
+                                             ab.args, ab.count);
 
     ind[XCalc_DEC] = IswCreateManagedWidget("DEC", labelWidgetClass, screen,
-                                             args, IswNumber(args));
+                                             ab.args, ab.count);
 
     ind[XCalc_OCT] = IswCreateManagedWidget("OCT", labelWidgetClass, screen,
-                                             args, IswNumber(args));
+                                             ab.args, ab.count);
 }
 
 static int ti_ops[] = {
