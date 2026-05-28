@@ -56,7 +56,7 @@ static int opt_rpn = 0;
 #define ROWS_TI  11
 #define COLS_HP  10
 #define ROWS_HP  4
-#define BTN_W    40
+#define BTN_W    50
 #define BTN_H    26
 #define BTN_GAP  2
 #define BTN_LEFT 4
@@ -368,7 +368,6 @@ static void create_keypad(Widget parent)
     char **labels = opt_rpn ? hp_labels : ti_labels;
     int cols = opt_rpn ? COLS_HP : COLS_TI;
     int total = opt_rpn ? 39 : 55;
-    IswFontStruct *mono = isde_resolve_font(parent, "Monospace-9");
 
     int *ops = opt_rpn ? hp_ops : ti_ops;
 
@@ -383,9 +382,7 @@ static void create_keypad(Widget parent)
         IswSetArg(a[ac], IswNwidth, BTN_W); ac++;
         IswSetArg(a[ac], IswNheight, BTN_H); ac++;
         IswSetArg(a[ac], IswNjustify, IswJustifyCenter); ac++;
-        if (mono) {
-            IswSetArg(a[ac], IswNfont, mono); ac++;
-        }
+
         if (col == 0) {
             IswSetArg(a[ac], IswNhorizDistance, BTN_LEFT); ac++;
         }
