@@ -282,7 +282,7 @@ static void title_press_callback(Widget w, IswPointer client_data,
     (void)call_data;
     Wm *wm = ((void **)client_data)[0];
     WmClient *c = ((void **)client_data)[1];
-    wm_focus_client(wm, c);
+    wm_focus_client(wm, c, wm->last_user_time);
 }
 
 /* ---------- event handlers for drag ---------- */
@@ -300,7 +300,7 @@ static void title_button_handler(Widget w, IswPointer client_data,
     }
 
     xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    wm_focus_client(wm, c);
+    wm_focus_client(wm, c, ev->time);
     wm->drag_mode    = DRAG_MOVE;
     wm->drag_client  = c;
     wm->drag_start_x = ev->root_x;
@@ -510,7 +510,7 @@ static void menu_button_callback(Widget w, IswPointer client_data,
     (void)w; (void)call_data;
     Wm *wm       = ((void **)client_data)[0];
     WmClient *c   = ((void **)client_data)[1];
-    wm_focus_client(wm, c);
+    wm_focus_client(wm, c, wm->last_user_time);
     win_menu_show(wm, c);
 }
 
@@ -613,6 +613,28 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
         }
         xcb_ewmh_get_atoms_reply_wipe(&init_state);
     }
+
+    xcb_get_property_reply_t *utw_reply = xcb_get_property_reply(wm->conn,
+        xcb_get_property(wm->conn, 0, client,
+                         wm->atom_net_wm_user_time_window,
+                         XCB_ATOM_WINDOW, 0, 1), NULL);
+    if (utw_reply && xcb_get_property_value_length(utw_reply) >= 4) {
+        c->user_time_window = *(xcb_window_t *)xcb_get_property_value(utw_reply);
+        uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
+        xcb_change_window_attributes(wm->conn, c->user_time_window,
+                                     XCB_CW_EVENT_MASK, &mask);
+    }
+    free(utw_reply);
+
+    xcb_window_t ut_win = c->user_time_window ? c->user_time_window : client;
+    xcb_get_property_reply_t *ut_reply = xcb_get_property_reply(wm->conn,
+        xcb_get_property(wm->conn, 0, ut_win,
+                         wm->atom_net_wm_user_time,
+                         XCB_ATOM_CARDINAL, 0, 1), NULL);
+    if (ut_reply && xcb_get_property_value_length(ut_reply) >= 4) {
+        c->user_time = *(uint32_t *)xcb_get_property_value(ut_reply);
+    }
+    free(ut_reply);
 
     if (adopt) {
         int title = c->decorated ? wm->title_height : 0;

@@ -272,7 +272,7 @@ void wm_switcher_commit(Wm *wm)
     if (target) {
         if (target->minimized)
             wm_restore_client(wm, target);
-        wm_focus_client(wm, target);
+        wm_focus_client(wm, target, XCB_CURRENT_TIME);
     }
 }
 

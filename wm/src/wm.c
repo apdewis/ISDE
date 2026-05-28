@@ -120,6 +120,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_wm_change_state   = intern(wm->conn, "WM_CHANGE_STATE");
     wm->atom_wm_icon_name      = intern(wm->conn, "WM_ICON_NAME");
     wm->atom_net_wm_icon_name  = intern(wm->conn, "_NET_WM_ICON_NAME");
+    wm->atom_net_wm_user_time  = intern(wm->conn, "_NET_WM_USER_TIME");
+    wm->atom_net_wm_user_time_window = intern(wm->conn, "_NET_WM_USER_TIME_WINDOW");
 
     /* Load initial colour scheme */
     isde_theme_current();
@@ -327,7 +329,7 @@ WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win)
 
 /* ---------- focus ---------- */
 
-void wm_focus_client(Wm *wm, WmClient *c)
+void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
 {
     WmClient *prev = wm->focused;
     wm->focused = c;
@@ -349,7 +351,7 @@ void wm_focus_client(Wm *wm, WmClient *c)
         c->focused = 1;
         c->focus_seq = ++wm->focus_seq;
         xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
-                            c->client, XCB_CURRENT_TIME);
+                            c->client, time);
         /* Raise frame — below dock windows so we don't have to
            restack docks (which triggers ConfigureNotify on them) */
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
@@ -418,7 +420,7 @@ void wm_remove_client(Wm *wm, WmClient *c)
             if (!mru || p->focus_seq > mru->focus_seq)
                 mru = p;
         }
-        wm_focus_client(wm, mru);
+        wm_focus_client(wm, mru, XCB_CURRENT_TIME);
     }
 }
 
@@ -947,7 +949,7 @@ void wm_minimize_client(Wm *wm, WmClient *c)
         /* Focus next available client */
         for (WmClient *n = wm->clients; n; n = n->next) {
             if (n != c) {
-                wm_focus_client(wm, n);
+                wm_focus_client(wm, n, XCB_CURRENT_TIME);
                 break;
             }
         }
@@ -1176,7 +1178,17 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             c->fullscreen = 0;
             wm_fullscreen_client(wm, c, 1);
         }
-        wm_focus_client(wm, c);
+        int dominated_focus = 1;
+        if (wm->focused && c->user_time != 0 && wm->last_user_time != 0 &&
+            (int32_t)(c->user_time - wm->last_user_time) < 0) {
+            dominated_focus = 0;
+        }
+        if (c->user_time == 0 && wm->focused) {
+            dominated_focus = 0;
+        }
+        if (dominated_focus) {
+            wm_focus_client(wm, c, c->user_time ? c->user_time : XCB_CURRENT_TIME);
+        }
         if (c->above || c->below)
             wm_restack_above_below(wm);
         wm_ewmh_update_client_list(wm);
@@ -1206,7 +1218,7 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
 
     /* Raw XCB event — convert to logical */
     double sf = wm->scale_factor;
-    wm_focus_client(wm, c);
+    wm_focus_client(wm, c, ev->time);
     wm->drag_mode    = DRAG_RESIZE;
     wm->resize_edge  = edge;
     wm->drag_client  = c;
@@ -1400,6 +1412,35 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
             c->decorated = dominated;
             frame_configure(wm, c);
         }
+    } else if (ev->atom == wm->atom_net_wm_user_time) {
+        xcb_get_property_reply_t *r = xcb_get_property_reply(wm->conn,
+            xcb_get_property(wm->conn, 0, ev->window,
+                             wm->atom_net_wm_user_time,
+                             XCB_ATOM_CARDINAL, 0, 1), NULL);
+        if (r && xcb_get_property_value_length(r) >= 4) {
+            c->user_time = *(uint32_t *)xcb_get_property_value(r);
+        }
+        free(r);
+    }
+}
+
+static void on_user_time_window_notify(Wm *wm, xcb_property_notify_event_t *ev)
+{
+    if (ev->atom != wm->atom_net_wm_user_time) {
+        return;
+    }
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->user_time_window == ev->window) {
+            xcb_get_property_reply_t *r = xcb_get_property_reply(wm->conn,
+                xcb_get_property(wm->conn, 0, ev->window,
+                                 wm->atom_net_wm_user_time,
+                                 XCB_ATOM_CARDINAL, 0, 1), NULL);
+            if (r && xcb_get_property_value_length(r) >= 4) {
+                c->user_time = *(uint32_t *)xcb_get_property_value(r);
+            }
+            free(r);
+            return;
+        }
     }
 }
 
@@ -1410,11 +1451,15 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
 
     if (ev->type == ewmh->_NET_ACTIVE_WINDOW) {
         uint32_t source = ev->data.data32[0];
+        xcb_timestamp_t req_time = ev->data.data32[1];
         WmClient *c = wm_find_client_by_window(wm, ev->window);
         if (!c) { return 1; }
 
         if (source != 2 && wm->focused && wm->focused != c) {
-            return 1;
+            if (req_time == 0 || (wm->last_user_time != 0 &&
+                (int32_t)(req_time - wm->last_user_time) < 0)) {
+                return 1;
+            }
         }
 
         if (c->shell && !IswIsRealized(c->shell)) {
@@ -1422,7 +1467,7 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         }
         xcb_map_window(wm->conn, IswWindow(c->shell));
         xcb_map_window(wm->conn, c->client);
-        wm_focus_client(wm, c);
+        wm_focus_client(wm, c, req_time ? req_time : XCB_CURRENT_TIME);
         return 1;
     } else if (ev->type == ewmh->_NET_CLOSE_WINDOW) {
         WmClient *c = wm_find_client_by_window(wm, ev->window);
@@ -1627,6 +1672,7 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         break;
     case XCB_BUTTON_PRESS: {
         xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
+        wm->last_user_time = bp->time;
         int edge;
         if (find_grip_client(wm, bp->event, &edge)) {
             on_grip_press(wm, bp);
@@ -1635,7 +1681,7 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
              * focus+raise it and replay the event to the client */
             WmClient *c = wm_find_client_by_window(wm, bp->event);
             if (c) {
-                wm_focus_client(wm, c);
+                wm_focus_client(wm, c, bp->time);
                 xcb_allow_events(wm->conn, XCB_ALLOW_REPLAY_POINTER,
                                  bp->time);
                 xcb_flush(wm->conn);
@@ -1645,12 +1691,21 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         }
         break;
     }
-    case XCB_PROPERTY_NOTIFY:
-        on_property_notify(wm, (xcb_property_notify_event_t *)ev);
+    case XCB_PROPERTY_NOTIFY: {
+        xcb_property_notify_event_t *pn = (xcb_property_notify_event_t *)ev;
+        if (!wm_find_client_by_window(wm, pn->window)) {
+            on_user_time_window_notify(wm, pn);
+        } else {
+            on_property_notify(wm, pn);
+        }
         break;
-    case XCB_KEY_PRESS:
-        wm_keys_handle(wm, (xcb_key_press_event_t *)ev);
+    }
+    case XCB_KEY_PRESS: {
+        xcb_key_press_event_t *kp = (xcb_key_press_event_t *)ev;
+        wm->last_user_time = kp->time;
+        wm_keys_handle(wm, kp);
         break;
+    }
     case XCB_KEY_RELEASE:
         wm_keys_handle_release(wm, (xcb_key_release_event_t *)ev);
         break;

@@ -73,6 +73,8 @@ typedef struct WmClient {
     char        *visible_name;
     char        *visible_icon_name;
     unsigned long focus_seq;       /* focus sequence number for MRU fallback */
+    uint32_t     user_time;        /* _NET_WM_USER_TIME (0 = don't focus) */
+    xcb_window_t user_time_window; /* _NET_WM_USER_TIME_WINDOW (0 = none) */
 
     /* ICCCM size hints (WM_NORMAL_HINTS) — logical pixels */
     int          min_w, min_h;
@@ -119,11 +121,14 @@ typedef struct Wm {
     xcb_atom_t             atom_wm_change_state;
     xcb_atom_t             atom_wm_icon_name;
     xcb_atom_t             atom_net_wm_icon_name;
+    xcb_atom_t             atom_net_wm_user_time;
+    xcb_atom_t             atom_net_wm_user_time_window;
 
     /* Client list */
     WmClient              *clients;
     WmClient              *focused;
     unsigned long          focus_seq;  /* monotonic counter for MRU tracking */
+    xcb_timestamp_t        last_user_time; /* most recent user interaction */
 
     /* Unmanaged dock windows (_NET_WM_WINDOW_TYPE_DOCK) —
        tracked for stacking only, not reparented or focused */
@@ -197,7 +202,7 @@ void  wm_cleanup(Wm *wm);
 WmClient *wm_find_client_by_frame(Wm *wm, xcb_window_t frame);
 WmClient *wm_find_client_by_widget(Wm *wm, Widget w);
 WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win);
-void      wm_focus_client(Wm *wm, WmClient *c);
+void      wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time);
 void      wm_remove_client(Wm *wm, WmClient *c);
 void      wm_close_client(Wm *wm, WmClient *c);
 void      wm_maximize_client(Wm *wm, WmClient *c);

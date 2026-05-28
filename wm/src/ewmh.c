@@ -46,6 +46,8 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_WM_ALLOWED_ACTIONS,
         ewmh->_NET_WM_VISIBLE_NAME,
         ewmh->_NET_WM_VISIBLE_ICON_NAME,
+        wm->atom_net_wm_user_time,
+        wm->atom_net_wm_user_time_window,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);
