@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <xcb/xcb_cursor.h>
 
 #include <ISW/IswArgMacros.h>
 #include <ISW/ISWRender.h>
@@ -78,6 +79,7 @@ static void fm_destroy_cb(Widget w, IswPointer cd, IswPointer call)
     Fm *fm = (Fm *)cd;
     FmApp *app = fm->app_state;
     app_remove_window(app, fm);
+    fm_clear_launch(fm);
     thumbs_cancel(fm);
     cwd_watch_stop(fm);
     fm_dismiss_context(fm);
@@ -228,6 +230,9 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
+    /* EWMH atoms (for startup notification) */
+    app->ewmh = isde_ewmh_init(IswDisplay(app->first_toplevel), 0);
+
     /* Thumbnail cache */
     thumbs_init(app);
 
@@ -283,6 +288,81 @@ void fm_update_title(Fm *fm)
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgTitle(&ab, (String)name);
     IswSetValues(fm->toplevel, ab.args, ab.count);
+}
+
+/* ---------- startup notification / busy cursor ---------- */
+
+#define FM_LAUNCH_TIMEOUT_MS 15000
+
+static xcb_cursor_t fm_cursor_watch;
+static xcb_cursor_t fm_cursor_default;
+
+static void fm_cursor_init(Fm *fm)
+{
+    if (fm_cursor_watch) {
+        return;
+    }
+    xcb_connection_t *conn = IswDisplay(fm->toplevel);
+    xcb_screen_t *scr = IswScreen(fm->toplevel);
+    xcb_cursor_context_t *ctx;
+    if (xcb_cursor_context_new(conn, scr, &ctx) < 0) {
+        return;
+    }
+    fm_cursor_watch = xcb_cursor_load_cursor(ctx, "watch");
+    fm_cursor_default = xcb_cursor_load_cursor(ctx, "left_ptr");
+    xcb_cursor_context_free(ctx);
+}
+
+static void fm_set_cursor(Fm *fm, xcb_cursor_t cursor)
+{
+    if (!fm->toplevel || !IswIsRealized(fm->toplevel)) {
+        return;
+    }
+    xcb_connection_t *conn = IswDisplay(fm->toplevel);
+    uint32_t vals[] = { cursor };
+    xcb_change_window_attributes(conn, IswWindow(fm->toplevel),
+                                 XCB_CW_CURSOR, vals);
+    xcb_flush(conn);
+}
+
+static void fm_launch_timer_cb(IswPointer cd, IswIntervalId *id)
+{
+    (void)id;
+    Fm *fm = (Fm *)cd;
+    fm_clear_launch(fm);
+}
+
+void fm_clear_launch(Fm *fm)
+{
+    if (fm->launch_timer) {
+        IswRemoveTimeOut(fm->launch_timer);
+        fm->launch_timer = 0;
+    }
+    free(fm->launch_id);
+    fm->launch_id = NULL;
+    if (fm_cursor_default) {
+        fm_set_cursor(fm, fm_cursor_default);
+    }
+}
+
+void fm_launch_notify(Fm *fm, IsdeDesktopEntry *de,
+                      const char **files, int nfiles)
+{
+    fm_cursor_init(fm);
+    fm_clear_launch(fm);
+
+    char *id = NULL;
+    isde_desktop_launch_notify(de, files, nfiles,
+                               fm->app_state->ewmh, &id);
+    if (id) {
+        fm->launch_id = id;
+        if (fm_cursor_watch) {
+            fm_set_cursor(fm, fm_cursor_watch);
+        }
+        fm->launch_timer = IswAppAddTimeOut(fm->app_state->app,
+                                            FM_LAUNCH_TIMEOUT_MS,
+                                            fm_launch_timer_cb, fm);
+    }
 }
 
 Fm *fm_window_new(FmApp *app, const char *path)
@@ -432,6 +512,7 @@ void fm_app_cleanup(FmApp *app)
 #endif
     jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
+    isde_ewmh_free(app->ewmh);
     icons_cleanup(app);
     thumbs_cleanup(app);
     actions_cleanup(app);

@@ -37,6 +37,7 @@ target_link_libraries(isde-fm
     PkgConfig::DBUS
     PkgConfig::CAIRO
     PkgConfig::LIBJPEG
+    PkgConfig::XCB_CURSOR
 )
 
 install(TARGETS isde-fm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

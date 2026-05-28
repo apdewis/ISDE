@@ -35,6 +35,7 @@
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
+#include "isde/isde-ewmh.h"
 #include "isde/isde-theme.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-desktop.h"
@@ -183,6 +184,8 @@ typedef struct FmApp {
     int             notify_pipe[2]; /* worker writes, main loop reads */
     IswInputId       notify_input_id;
 
+    IsdeEwmh      *ewmh;
+
     char          *initial_path;  /* from argv, used by fm_app_init */
 
     /* Mount monitor (inotify on /proc/mounts) */
@@ -322,6 +325,10 @@ typedef struct Fm {
     /* Thumbnail generation (per-window) */
     struct ThumbJob *thumb_job;
 
+    /* Startup notification — busy cursor */
+    char          *launch_id;
+    IswIntervalId  launch_timer;
+
     /* Directory watch (inotify on cwd) */
     int            cwd_inotify_fd;
     int            cwd_wd;
@@ -363,6 +370,11 @@ void   fm_app_run(FmApp *app);
 void   fm_app_cleanup(FmApp *app);
 Fm    *fm_window_new(FmApp *app, const char *path);
 void   fm_window_destroy(Fm *fm);
+
+/* ---------- fm.c — startup notification ---------- */
+void   fm_launch_notify(Fm *fm, IsdeDesktopEntry *de,
+                        const char **files, int nfiles);
+void   fm_clear_launch(Fm *fm);
 
 /* ---------- navigate.c ---------- */
 void   fm_update_title(Fm *fm);

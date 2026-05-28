@@ -200,7 +200,7 @@ static void launch_app(Panel *p, int index)
     IsdeDesktopEntry *de = c->apps[index].entry;
     panel_dismiss_popup(p);
 
-    isde_desktop_launch(de, NULL, 0);
+    panel_launch_notify(p, de, NULL, 0);
 }
 
 /* ---------- callbacks ---------- */
@@ -339,7 +339,7 @@ static void search_selected(Widget w, IswPointer client_data,
     }
     IsdeDesktopEntry *de = p->search_results[ret->list_index]->entry;
     panel_dismiss_popup(p);
-    isde_desktop_launch(de, NULL, 0);
+    panel_launch_notify(p, de, NULL, 0);
 }
 
 static void launch_search_result(Panel *p, int index)
@@ -349,7 +349,7 @@ static void launch_search_result(Panel *p, int index)
     }
     IsdeDesktopEntry *de = p->search_results[index]->entry;
     panel_dismiss_popup(p);
-    isde_desktop_launch(de, NULL, 0);
+    panel_launch_notify(p, de, NULL, 0);
 }
 
 /* ---------- keyboard navigation ---------- */

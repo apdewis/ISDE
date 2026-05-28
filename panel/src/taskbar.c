@@ -164,9 +164,9 @@ static void focus_window(Panel *p, xcb_window_t win)
 static void launch_app(Panel *p, TaskGroup *g)
 {
     if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
-        isde_desktop_launch(p->desktop_entries[g->desktop_index], NULL, 0);
+        panel_launch_notify(p, p->desktop_entries[g->desktop_index], NULL, 0);
     } else if (g->desktop_exec) {
-        isde_desktop_launch_cmd(g->desktop_exec);
+        panel_launch_cmd_notify(p, g->desktop_exec);
     }
 }
 
@@ -537,7 +537,7 @@ static void action_callback(Widget w, IswPointer client_data,
     if (ac->terminal) {
         isde_desktop_launch_in_terminal(ac->exec);
     } else {
-        isde_desktop_launch_cmd(ac->exec);
+        panel_launch_cmd_notify(ac->panel, ac->exec);
     }
 }
 

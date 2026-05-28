@@ -646,6 +646,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     }
     free(ut_reply);
 
+    xcb_get_property_reply_t *sid_reply = xcb_get_property_reply(wm->conn,
+        xcb_get_property(wm->conn, 0, client,
+                         wm->atom_net_startup_id,
+                         XCB_ATOM_ANY, 0, 256), NULL);
+    if (sid_reply && sid_reply->value_len > 0) {
+        c->startup_id = strndup(xcb_get_property_value(sid_reply),
+                                sid_reply->value_len);
+    }
+    free(sid_reply);
+
     if (adopt) {
         int title = c->decorated ? wm->title_height : 0;
         int bw = 1;
@@ -879,6 +889,7 @@ void frame_destroy(Wm *wm, WmClient *c)
     free(c->icon_name);
     free(c->visible_name);
     free(c->visible_icon_name);
+    free(c->startup_id);
     free(c);
 }
 

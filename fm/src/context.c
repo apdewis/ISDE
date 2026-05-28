@@ -169,7 +169,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         fm_dismiss_context(fm);
 
         if (file && de) {
-            isde_desktop_launch(de, (const char **)&file, 1);
+            fm_launch_notify(fm, de, (const char **)&file, 1);
             free(file);
         }
         fm->ctx_target_index = -1;

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <limits.h>
 #include <poll.h>
 #include <xcb/xcb_aux.h>
@@ -15,6 +16,8 @@
 #include <xcb/xcb_cursor.h>
 #include <ISW/ISWRender.h>
 #include "isde/isde-config.h"
+
+static Wm *wm_instance;
 
 /* ---------- helpers ---------- */
 
@@ -123,6 +126,9 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_net_wm_user_time  = intern(wm->conn, "_NET_WM_USER_TIME");
     wm->atom_net_wm_user_time_window = intern(wm->conn, "_NET_WM_USER_TIME_WINDOW");
     wm->atom_net_wm_state_focused = intern(wm->conn, "_NET_WM_STATE_FOCUSED");
+    wm->atom_net_startup_info_begin = intern(wm->conn, "_NET_STARTUP_INFO_BEGIN");
+    wm->atom_net_startup_info = intern(wm->conn, "_NET_STARTUP_INFO");
+    wm->atom_net_startup_id = intern(wm->conn, "_NET_STARTUP_ID");
 
     /* Load initial colour scheme */
     isde_theme_current();
@@ -300,6 +306,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm_ewmh_update_client_list(wm);
     wm_ewmh_update_client_list_stacking(wm);
     xcb_flush(wm->conn);
+    wm_instance = wm;
     wm->running = 1;
     return 0;
 }
@@ -1181,6 +1188,196 @@ static void wm_remove_dock(Wm *wm, xcb_window_t win)
     }
 }
 
+/* ---------- startup notification ---------- */
+
+WmStartupSeq *wm_find_startup_seq(Wm *wm, const char *id)
+{
+    for (WmStartupSeq *s = wm->startup_seqs; s; s = s->next) {
+        if (strcmp(s->id, id) == 0) {
+            return s;
+        }
+    }
+    return NULL;
+}
+
+WmStartupSeq *wm_find_startup_seq_by_wmclass(Wm *wm, const char *instance,
+                                              const char *class_name)
+{
+    for (WmStartupSeq *s = wm->startup_seqs; s; s = s->next) {
+        if (!s->wmclass) {
+            continue;
+        }
+        if ((class_name && strcasecmp(s->wmclass, class_name) == 0) ||
+            (instance && strcasecmp(s->wmclass, instance) == 0)) {
+            return s;
+        }
+    }
+    return NULL;
+}
+
+void wm_remove_startup_seq(Wm *wm, WmStartupSeq *seq)
+{
+    WmStartupSeq **pp = &wm->startup_seqs;
+    while (*pp && *pp != seq) {
+        pp = &(*pp)->next;
+    }
+    if (*pp) {
+        *pp = seq->next;
+    }
+
+    if (seq->timer) {
+        IswRemoveTimeOut(seq->timer);
+    }
+
+    char msg[256];
+    snprintf(msg, sizeof(msg), "remove: ID=%s", seq->id);
+    xcb_atom_t begin = isde_ewmh_atom_startup_info_begin(wm->ewmh);
+    size_t len = strlen(msg) + 1;
+    const char *p = msg;
+    int first = 1;
+    while (len > 0) {
+        xcb_client_message_event_t ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.response_type = XCB_CLIENT_MESSAGE;
+        ev.window = wm->root;
+        ev.type = first ? begin : isde_ewmh_atom_startup_info(wm->ewmh);
+        ev.format = 8;
+        size_t chunk = len > 20 ? 20 : len;
+        memcpy(ev.data.data8, p, chunk);
+        xcb_send_event(wm->conn, 0, wm->root,
+                       XCB_EVENT_MASK_PROPERTY_CHANGE,
+                       (const char *)&ev);
+        p += chunk;
+        len -= chunk;
+        first = 0;
+    }
+    xcb_flush(wm->conn);
+
+    free(seq->id);
+    free(seq->wmclass);
+    free(seq);
+}
+
+static void startup_timeout_cb2(IswPointer cd, IswIntervalId *id)
+{
+    (void)id;
+    WmStartupSeq *seq = (WmStartupSeq *)cd;
+    seq->timer = 0;
+    if (wm_instance) {
+        fprintf(stderr, "isde-wm: startup notification timeout for %s\n",
+                seq->id);
+        wm_remove_startup_seq(wm_instance, seq);
+    }
+}
+
+static char *sn_parse_value(const char *msg, const char *key)
+{
+    const char *p = strstr(msg, key);
+    if (!p) {
+        return NULL;
+    }
+    p += strlen(key);
+
+    if (*p == '"') {
+        p++;
+        size_t cap = 128;
+        char *val = malloc(cap);
+        size_t len = 0;
+        while (*p && *p != '"') {
+            if (*p == '\\' && p[1]) {
+                p++;
+            }
+            if (len + 1 >= cap) {
+                cap *= 2;
+                val = realloc(val, cap);
+            }
+            val[len++] = *p++;
+        }
+        val[len] = '\0';
+        return val;
+    }
+
+    const char *end = p;
+    while (*end && *end != ' ' && *end != '\t') {
+        end++;
+    }
+    return strndup(p, end - p);
+}
+
+static void sn_handle_message(Wm *wm, const char *msg)
+{
+    if (strncmp(msg, "new:", 4) == 0) {
+        char *id = sn_parse_value(msg, "ID=");
+        if (!id) {
+            return;
+        }
+
+        if (wm_find_startup_seq(wm, id)) {
+            free(id);
+            return;
+        }
+
+        WmStartupSeq *seq = calloc(1, sizeof(*seq));
+        seq->id = id;
+        seq->wmclass = sn_parse_value(msg, "WMCLASS=");
+
+        char *ts_str = sn_parse_value(msg, "TIMESTAMP=");
+        if (ts_str) {
+            seq->timestamp = (uint32_t)strtoul(ts_str, NULL, 10);
+            free(ts_str);
+        }
+
+        seq->timer = IswAppAddTimeOut(wm->app, STARTUP_TIMEOUT_MS,
+                                      startup_timeout_cb2, seq);
+
+        seq->next = wm->startup_seqs;
+        wm->startup_seqs = seq;
+
+        fprintf(stderr, "isde-wm: startup notification new: %s wmclass=%s\n",
+                id, seq->wmclass ? seq->wmclass : "(none)");
+
+    } else if (strncmp(msg, "remove:", 7) == 0) {
+        char *id = sn_parse_value(msg, "ID=");
+        if (!id) {
+            return;
+        }
+        WmStartupSeq *seq = wm_find_startup_seq(wm, id);
+        if (seq) {
+            fprintf(stderr, "isde-wm: startup notification remove: %s\n", id);
+            wm_remove_startup_seq(wm, seq);
+        }
+        free(id);
+    }
+}
+
+static void on_startup_info(Wm *wm, xcb_client_message_event_t *ev)
+{
+    int is_begin = (ev->type == wm->atom_net_startup_info_begin);
+
+    if (is_begin) {
+        wm->sn_buf_len = 0;
+    }
+
+    int space = (int)sizeof(wm->sn_buf) - wm->sn_buf_len - 1;
+    if (space <= 0) {
+        wm->sn_buf_len = 0;
+        return;
+    }
+
+    int chunk = 20;
+    if (chunk > space) {
+        chunk = space;
+    }
+    memcpy(wm->sn_buf + wm->sn_buf_len, ev->data.data8, chunk);
+    wm->sn_buf_len += chunk;
+    wm->sn_buf[wm->sn_buf_len] = '\0';
+
+    if (memchr(ev->data.data8, '\0', 20)) {
+        sn_handle_message(wm, wm->sn_buf);
+        wm->sn_buf_len = 0;
+    }
+}
+
 static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 {
     fprintf(stderr, "isde-wm: MapRequest for window 0x%x\n", ev->window);
@@ -1230,13 +1427,36 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             wm_fullscreen_client(wm, c, 1);
         }
         int dominated_focus = 1;
-        if (wm->focused && c->user_time != 0 && wm->last_user_time != 0 &&
-            (int32_t)(c->user_time - wm->last_user_time) < 0) {
-            dominated_focus = 0;
+        WmStartupSeq *matched_seq = NULL;
+
+        if (c->startup_id) {
+            matched_seq = wm_find_startup_seq(wm, c->startup_id);
         }
-        if (c->user_time == 0 && wm->focused) {
-            dominated_focus = 0;
+        if (!matched_seq) {
+            char *inst = NULL, *cls = NULL;
+            if (isde_ewmh_get_wm_class(wm->ewmh, ev->window, &inst, &cls)) {
+                matched_seq = wm_find_startup_seq_by_wmclass(wm, inst, cls);
+                free(inst);
+                free(cls);
+            }
         }
+
+        if (matched_seq) {
+            if (matched_seq->timestamp != 0) {
+                c->user_time = matched_seq->timestamp;
+            }
+            dominated_focus = 1;
+            wm_remove_startup_seq(wm, matched_seq);
+        } else {
+            if (wm->focused && c->user_time != 0 && wm->last_user_time != 0 &&
+                (int32_t)(c->user_time - wm->last_user_time) < 0) {
+                dominated_focus = 0;
+            }
+            if (c->user_time == 0 && wm->focused) {
+                dominated_focus = 0;
+            }
+        }
+
         if (dominated_focus) {
             wm_focus_client(wm, c, c->user_time ? c->user_time : XCB_CURRENT_TIME);
         }
@@ -1709,6 +1929,12 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         return 1;
     }
 
+    if (ev->type == wm->atom_net_startup_info_begin ||
+        ev->type == wm->atom_net_startup_info) {
+        on_startup_info(wm, ev);
+        return 1;
+    }
+
     /* Not an EWMH message — let Xt handle (WM_PROTOCOLS, etc.) */
     return 0;
 }
@@ -1864,6 +2090,18 @@ void wm_cleanup(Wm *wm)
     while (wm->clients) {
         wm_remove_client(wm, wm->clients);
     }
+
+    while (wm->startup_seqs) {
+        WmStartupSeq *s = wm->startup_seqs;
+        wm->startup_seqs = s->next;
+        if (s->timer) {
+            IswRemoveTimeOut(s->timer);
+        }
+        free(s->id);
+        free(s->wmclass);
+        free(s);
+    }
+
     free(wm->docks);
     wm->docks = NULL;
     wm->ndocks = wm->cap_docks = 0;

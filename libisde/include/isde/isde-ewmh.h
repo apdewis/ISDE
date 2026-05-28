@@ -97,6 +97,11 @@ void isde_ewmh_set_desktop_layout(IsdeEwmh *e, int orientation,
 int isde_ewmh_get_desktop_layout(IsdeEwmh *e, int *orientation,
                                  int *cols, int *rows, int *starting_corner);
 
+/* Startup notification atoms (not part of xcb-ewmh) */
+xcb_atom_t isde_ewmh_atom_startup_info_begin(IsdeEwmh *e);
+xcb_atom_t isde_ewmh_atom_startup_info(IsdeEwmh *e);
+xcb_atom_t isde_ewmh_atom_startup_id(IsdeEwmh *e);
+
 #ifdef __cplusplus
 }
 #endif

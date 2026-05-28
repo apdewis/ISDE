@@ -174,7 +174,7 @@ void browser_open_entry(Fm *fm, int index)
 
     if (de) {
         const char *file = e->full_path;
-        isde_desktop_launch(de, &file, 1);
+        fm_launch_notify(fm, de, &file, 1);
         if (!from_cache) {
             isde_desktop_free(de);
         }

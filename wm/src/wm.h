@@ -40,6 +40,17 @@
  * Converted to logical via scale_factor when needed. */
 typedef IsdeMonitor MonitorGeom;
 
+/* ---------- Startup notification sequence ---------- */
+#define STARTUP_TIMEOUT_MS 30000
+
+typedef struct WmStartupSeq {
+    char        *id;
+    char        *wmclass;
+    uint32_t     timestamp;
+    IswIntervalId timer;
+    struct WmStartupSeq *next;
+} WmStartupSeq;
+
 /* ---------- Client (managed window) ---------- */
 typedef struct WmClient {
     xcb_window_t client;       /* The application window */
@@ -80,6 +91,7 @@ typedef struct WmClient {
     unsigned long focus_seq;       /* focus sequence number for MRU fallback */
     uint32_t     user_time;        /* _NET_WM_USER_TIME (0 = don't focus) */
     xcb_window_t user_time_window; /* _NET_WM_USER_TIME_WINDOW (0 = none) */
+    char        *startup_id;      /* _NET_STARTUP_ID (NULL = none) */
 
     /* ICCCM size hints (WM_NORMAL_HINTS) — logical pixels */
     int          min_w, min_h;
@@ -129,6 +141,14 @@ typedef struct Wm {
     xcb_atom_t             atom_net_wm_user_time;
     xcb_atom_t             atom_net_wm_user_time_window;
     xcb_atom_t             atom_net_wm_state_focused;
+    xcb_atom_t             atom_net_startup_info_begin;
+    xcb_atom_t             atom_net_startup_info;
+    xcb_atom_t             atom_net_startup_id;
+
+    /* Startup notification */
+    WmStartupSeq          *startup_seqs;
+    char                   sn_buf[2048];
+    int                    sn_buf_len;
 
     /* Client list */
     WmClient              *clients;
@@ -257,6 +277,12 @@ void      frame_init_cursors(Wm *wm);
 #define GRIP_TR     5
 #define GRIP_BL     6
 #define GRIP_BR     7
+
+/* ---------- wm.c — startup notification ---------- */
+WmStartupSeq *wm_find_startup_seq(Wm *wm, const char *id);
+WmStartupSeq *wm_find_startup_seq_by_wmclass(Wm *wm, const char *instance,
+                                              const char *class_name);
+void           wm_remove_startup_seq(Wm *wm, WmStartupSeq *seq);
 
 /* ---------- ewmh.c — EWMH property management ---------- */
 void  wm_ewmh_setup(Wm *wm);

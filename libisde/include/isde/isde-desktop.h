@@ -8,6 +8,8 @@
 
 #include <sys/types.h>
 
+#include "isde-ewmh.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,6 +39,7 @@ const char *isde_desktop_type(const IsdeDesktopEntry *e);
 const char *isde_desktop_categories(const IsdeDesktopEntry *e);
 const char *isde_desktop_mime_types(const IsdeDesktopEntry *e);
 const char *isde_desktop_startup_wm_class(const IsdeDesktopEntry *e);
+int         isde_desktop_startup_notify(const IsdeDesktopEntry *e);
 int         isde_desktop_handles_mime(const IsdeDesktopEntry *e,
                                       const char *mime);
 int         isde_desktop_terminal(const IsdeDesktopEntry *e);
@@ -62,6 +65,18 @@ char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
  * fork and exec.  Returns the child pid, or -1 on failure. */
 pid_t isde_desktop_launch(const IsdeDesktopEntry *e,
                           const char **files, int nfiles);
+
+/* Launch with startup notification.  If ewmh is non-NULL and the entry has
+ * StartupNotify=true, sends _NET_STARTUP_INFO_BEGIN/INFO messages and sets
+ * DESKTOP_STARTUP_ID in the child environment.  If id_out is non-NULL, the
+ * caller receives ownership of the allocated startup ID string (NULL when
+ * notification was not sent).  Caller should free *id_out. */
+pid_t isde_desktop_launch_notify(const IsdeDesktopEntry *e,
+                                 const char **files, int nfiles,
+                                 IsdeEwmh *ewmh, char **id_out);
+
+/* Send a startup notification remove message for the given ID. */
+void isde_desktop_startup_remove(IsdeEwmh *ewmh, const char *id);
 
 /* Return the configured terminal emulator from [session] terminal in
  * isde.toml, falling back to "xterm". */

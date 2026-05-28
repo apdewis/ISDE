@@ -13,6 +13,9 @@ struct IsdeEwmh {
     xcb_ewmh_connection_t  ewmh;
     xcb_screen_t          *screen;
     int                    screen_num;
+    xcb_atom_t             startup_info_begin;
+    xcb_atom_t             startup_info;
+    xcb_atom_t             startup_id;
 };
 
 IsdeEwmh *isde_ewmh_init(xcb_connection_t *conn, int screen)
@@ -36,6 +39,26 @@ IsdeEwmh *isde_ewmh_init(xcb_connection_t *conn, int screen)
     }
 
     e->screen = xcb_aux_get_screen(conn, screen);
+
+    xcb_intern_atom_cookie_t sib_ck = xcb_intern_atom(conn, 0, 24,
+        "_NET_STARTUP_INFO_BEGIN");
+    xcb_intern_atom_cookie_t si_ck = xcb_intern_atom(conn, 0, 18,
+        "_NET_STARTUP_INFO");
+    xcb_intern_atom_cookie_t sid_ck = xcb_intern_atom(conn, 0, 16,
+        "_NET_STARTUP_ID");
+
+    xcb_intern_atom_reply_t *sib_r = xcb_intern_atom_reply(conn, sib_ck, NULL);
+    xcb_intern_atom_reply_t *si_r = xcb_intern_atom_reply(conn, si_ck, NULL);
+    xcb_intern_atom_reply_t *sid_r = xcb_intern_atom_reply(conn, sid_ck, NULL);
+
+    e->startup_info_begin = sib_r ? sib_r->atom : XCB_ATOM_NONE;
+    e->startup_info       = si_r  ? si_r->atom  : XCB_ATOM_NONE;
+    e->startup_id         = sid_r ? sid_r->atom  : XCB_ATOM_NONE;
+
+    free(sib_r);
+    free(si_r);
+    free(sid_r);
+
     return e;
 }
 
@@ -306,6 +329,10 @@ int isde_ewmh_get_desktop_layout(IsdeEwmh *e, int *orientation,
     *starting_corner = layout.starting_corner;
     return 1;
 }
+
+xcb_atom_t isde_ewmh_atom_startup_info_begin(IsdeEwmh *e) { return e->startup_info_begin; }
+xcb_atom_t isde_ewmh_atom_startup_info(IsdeEwmh *e)       { return e->startup_info; }
+xcb_atom_t isde_ewmh_atom_startup_id(IsdeEwmh *e)         { return e->startup_id; }
 
 void isde_clamp_to_workarea(xcb_connection_t *conn, int screen,
                             int *w, int *h)

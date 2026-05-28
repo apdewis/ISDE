@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb_aux.h>
+#include <xcb/xcb_cursor.h>
 #include <xcb/randr.h>
 
 static xcb_atom_t intern(xcb_connection_t *c, const char *name)
@@ -473,6 +474,8 @@ static void panel_dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
  * would otherwise drop (PropertyNotify on root, no widget). */
 static xcb_window_t last_active = XCB_WINDOW_NONE;
 
+static int prev_client_count;
+
 static void poll_clients(IswPointer client_data, IswIntervalId *id)
 {
     (void)id;
@@ -485,6 +488,16 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     taskbar_update(p);
     taskbar_highlight_active(p);
     pager_update(p);
+
+    if (p->launch_id) {
+        xcb_window_t *wins = NULL;
+        int n = isde_ewmh_get_client_list(p->ewmh, &wins);
+        free(wins);
+        if (n > prev_client_count) {
+            panel_clear_launch(p);
+        }
+        prev_client_count = n;
+    }
 
     /* Dismiss popups when focus moves to a managed window */
     if (p->active_popup) {
@@ -537,6 +550,78 @@ void panel_dismiss_popup(Panel *p)
     p->active_popup = NULL;
 }
 
+/* ---------- startup notification / busy cursor ---------- */
+
+#define LAUNCH_TIMEOUT_MS 15000
+
+static void launch_cursor_init(Panel *p)
+{
+    if (p->cursor_watch) {
+        return;
+    }
+    xcb_cursor_context_t *ctx;
+    if (xcb_cursor_context_new(p->conn, p->screen, &ctx) < 0) {
+        return;
+    }
+    p->cursor_watch = xcb_cursor_load_cursor(ctx, "watch");
+    p->cursor_default = xcb_cursor_load_cursor(ctx, "left_ptr");
+    xcb_cursor_context_free(ctx);
+}
+
+static void set_panel_cursor(Panel *p, xcb_cursor_t cursor)
+{
+    if (!p->shell || !IswIsRealized(p->shell)) {
+        return;
+    }
+    uint32_t vals[] = { cursor };
+    xcb_change_window_attributes(p->conn, IswWindow(p->shell),
+                                 XCB_CW_CURSOR, vals);
+    xcb_flush(p->conn);
+}
+
+static void launch_timer_cb(IswPointer cd, IswIntervalId *id)
+{
+    (void)id;
+    Panel *p = (Panel *)cd;
+    panel_clear_launch(p);
+}
+
+void panel_clear_launch(Panel *p)
+{
+    if (p->launch_timer) {
+        IswRemoveTimeOut(p->launch_timer);
+        p->launch_timer = 0;
+    }
+    free(p->launch_id);
+    p->launch_id = NULL;
+    if (p->cursor_default) {
+        set_panel_cursor(p, p->cursor_default);
+    }
+}
+
+void panel_launch_notify(Panel *p, IsdeDesktopEntry *de,
+                         const char **files, int nfiles)
+{
+    launch_cursor_init(p);
+    panel_clear_launch(p);
+
+    char *id = NULL;
+    isde_desktop_launch_notify(de, files, nfiles, p->ewmh, &id);
+    if (id) {
+        p->launch_id = id;
+        if (p->cursor_watch) {
+            set_panel_cursor(p, p->cursor_watch);
+        }
+        p->launch_timer = IswAppAddTimeOut(p->app, LAUNCH_TIMEOUT_MS,
+                                           launch_timer_cb, p);
+    }
+}
+
+void panel_launch_cmd_notify(Panel *p, const char *cmd)
+{
+    isde_desktop_launch_cmd(cmd);
+}
+
 void panel_run(Panel *p)
 {
     /* Initial taskbar population */
@@ -552,6 +637,7 @@ void panel_run(Panel *p)
 
 void panel_cleanup(Panel *p)
 {
+    panel_clear_launch(p);
     clock_cleanup(p);
     tray_cleanup(p);
     taskbar_cleanup(p);

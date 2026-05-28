@@ -209,6 +209,12 @@ typedef struct Panel {
     /* Active popup tracking — for click-outside-to-dismiss */
     Widget             active_popup;  /* Currently open popup shell, or NULL */
 
+    /* Startup notification — busy cursor */
+    char              *launch_id;         /* pending startup ID (owned) */
+    IswIntervalId      launch_timer;      /* timeout to clear busy cursor */
+    xcb_cursor_t       cursor_watch;      /* cached watch cursor */
+    xcb_cursor_t       cursor_default;    /* cached default cursor */
+
     int                running;
     int                restart;
 } Panel;
@@ -220,6 +226,12 @@ void  panel_show_popup(Panel *p, Widget popup);
 void  panel_dismiss_popup(Panel *p);
 void  panel_run(Panel *p);
 void  panel_cleanup(Panel *p);
+
+/* ---------- panel.c — startup notification ---------- */
+void  panel_launch_notify(Panel *p, IsdeDesktopEntry *de,
+                          const char **files, int nfiles);
+void  panel_launch_cmd_notify(Panel *p, const char *cmd);
+void  panel_clear_launch(Panel *p);
 
 /* ---------- taskbar.c ---------- */
 void  taskbar_init(Panel *p);
