@@ -92,6 +92,7 @@ add_subdirectory(tray-bt)
 add_subdirectory(term)
 add_subdirectory(isw-graph)
 add_subdirectory(calc)
+add_subdirectory(screenshot)
 add_subdirectory(common)
 
 # --- Optional service-unit install targets ---------------------------------
