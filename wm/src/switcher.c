@@ -64,8 +64,10 @@ static void build_order(Wm *wm)
     qsort(wm->switcher_order, count, sizeof(WmClient *), cmp_mru);
 
     for (i = 0; i < count; i++) {
-        wm->switcher_labels[i] = wm->switcher_order[i]->title
-                                  ? wm->switcher_order[i]->title
+        WmClient *sc = wm->switcher_order[i];
+        wm->switcher_labels[i] = sc->visible_name
+                                  ? sc->visible_name
+                                  : sc->title ? sc->title
                                   : (String)"(untitled)";
     }
 

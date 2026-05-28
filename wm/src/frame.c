@@ -126,6 +126,98 @@ static char *fetch_title(Wm *wm, xcb_window_t win)
     return strdup("(untitled)");
 }
 
+static char *fetch_icon_name(Wm *wm, xcb_window_t win)
+{
+    xcb_get_property_reply_t *reply = xcb_get_property_reply(
+        wm->conn,
+        xcb_get_property(wm->conn, 0, win, wm->atom_net_wm_icon_name,
+                         XCB_ATOM_ANY, 0, 256),
+        NULL);
+    if (reply && reply->value_len > 0) {
+        char *name = strndup(xcb_get_property_value(reply),
+                             reply->value_len);
+        free(reply);
+        return name;
+    }
+    free(reply);
+
+    reply = xcb_get_property_reply(
+        wm->conn,
+        xcb_get_property(wm->conn, 0, win, wm->atom_wm_icon_name,
+                         XCB_ATOM_ANY, 0, 256),
+        NULL);
+    if (reply && reply->value_len > 0) {
+        char *name = strndup(xcb_get_property_value(reply),
+                             reply->value_len);
+        free(reply);
+        return name;
+    }
+    free(reply);
+
+    return NULL;
+}
+
+static void disambiguate_name(Wm *wm, WmClient *target,
+                              const char *raw, int is_icon)
+{
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    int suffix = 1;
+
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c == target) {
+            break;
+        }
+        const char *other = is_icon ? c->icon_name : c->title;
+        if (other && strcmp(other, raw) == 0) {
+            suffix++;
+        }
+    }
+
+    if (suffix == 1) {
+        if (is_icon) {
+            free(target->visible_icon_name);
+            target->visible_icon_name = NULL;
+            xcb_delete_property(wm->conn, target->client,
+                                ewmh->_NET_WM_VISIBLE_ICON_NAME);
+        } else {
+            free(target->visible_name);
+            target->visible_name = NULL;
+            xcb_delete_property(wm->conn, target->client,
+                                ewmh->_NET_WM_VISIBLE_NAME);
+        }
+        return;
+    }
+
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s [%d]", raw, suffix);
+
+    if (is_icon) {
+        free(target->visible_icon_name);
+        target->visible_icon_name = strdup(buf);
+        xcb_ewmh_set_wm_visible_icon_name(ewmh, target->client,
+                                           strlen(buf), buf);
+    } else {
+        free(target->visible_name);
+        target->visible_name = strdup(buf);
+        xcb_ewmh_set_wm_visible_name(ewmh, target->client,
+                                      strlen(buf), buf);
+    }
+}
+
+void frame_disambiguate_all(Wm *wm, const char *base_title,
+                            const char *base_icon)
+{
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (base_title && c->title && strcmp(c->title, base_title) == 0) {
+            disambiguate_name(wm, c, c->title, 0);
+        }
+        if (base_icon && c->icon_name &&
+            strcmp(c->icon_name, base_icon) == 0) {
+            disambiguate_name(wm, c, c->icon_name, 1);
+        }
+    }
+}
+
 /* ---------- callbacks ---------- */
 
 static void close_callback(Widget w, IswPointer client_data,
@@ -752,6 +844,9 @@ void frame_destroy(Wm *wm, WmClient *c)
     }
 
     free(c->title);
+    free(c->icon_name);
+    free(c->visible_name);
+    free(c->visible_icon_name);
     free(c);
 }
 
@@ -857,17 +952,33 @@ void frame_configure(Wm *wm, WmClient *c)
 
 void frame_update_title(Wm *wm, WmClient *c)
 {
-    free(c->title);
-    c->title = fetch_title(wm, c->client);
+    char *old_title = c->title;
+    char *old_icon  = c->icon_name;
+
+    c->title     = fetch_title(wm, c->client);
+    c->icon_name = fetch_icon_name(wm, c->client);
+
+    frame_disambiguate_all(wm, c->title, c->icon_name);
+
+    if (old_title && strcmp(old_title, c->title) != 0) {
+        frame_disambiguate_all(wm, old_title, NULL);
+    }
+    if (old_icon && (!c->icon_name || strcmp(old_icon, c->icon_name) != 0)) {
+        frame_disambiguate_all(wm, NULL, old_icon);
+    }
+
+    free(old_title);
+    free(old_icon);
 
     if (c->title_label) {
+        const char *display = c->visible_name ? c->visible_name : c->title;
         int th = wm->title_height;
         int btn_area = 4 * th;
         int title_w = c->width - btn_area;
         if (title_w < 1) { title_w = 1; }
 
         IswArgBuilder ab = IswArgBuilderInit();
-        IswArgLabel(&ab, c->title ? c->title : "(untitled)");
+        IswArgLabel(&ab, display ? display : "(untitled)");
         IswArgWidth(&ab, title_w);
         IswArgHeight(&ab, th);
         IswSetValues(c->title_label, ab.args, ab.count);

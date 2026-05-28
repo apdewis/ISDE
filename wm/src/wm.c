@@ -118,6 +118,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_net_wm_name       = intern(wm->conn, "_NET_WM_NAME");
     wm->atom_motif_wm_hints    = intern(wm->conn, "_MOTIF_WM_HINTS");
     wm->atom_wm_change_state   = intern(wm->conn, "WM_CHANGE_STATE");
+    wm->atom_wm_icon_name      = intern(wm->conn, "WM_ICON_NAME");
+    wm->atom_net_wm_icon_name  = intern(wm->conn, "_NET_WM_ICON_NAME");
 
     /* Load initial colour scheme */
     isde_theme_current();
@@ -397,7 +399,14 @@ void wm_remove_client(Wm *wm, WmClient *c)
     if (wm->switcher_active)
         wm_switcher_cancel(wm);
 
+    char *old_title = c->title ? strdup(c->title) : NULL;
+    char *old_icon  = c->icon_name ? strdup(c->icon_name) : NULL;
     frame_destroy(wm, c);
+    if (old_title || old_icon) {
+        frame_disambiguate_all(wm, old_title, old_icon);
+        free(old_title);
+        free(old_icon);
+    }
     wm_ewmh_update_client_list(wm);
     wm_ewmh_update_client_list_stacking(wm);
     wm_ewmh_update_active(wm);
@@ -1373,7 +1382,9 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
         return;
     }
 
-    if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name) {
+    if (ev->atom == wm->atom_wm_name || ev->atom == wm->atom_net_wm_name ||
+        ev->atom == wm->atom_wm_icon_name ||
+        ev->atom == wm->atom_net_wm_icon_name) {
         frame_update_title(wm, c);
     } else if (ev->atom == XCB_ATOM_WM_NORMAL_HINTS) {
         int was_fixed = c->fixed_size;

@@ -44,6 +44,8 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_WM_MOVERESIZE,
         ewmh->_NET_DESKTOP_LAYOUT,
         ewmh->_NET_WM_ALLOWED_ACTIONS,
+        ewmh->_NET_WM_VISIBLE_NAME,
+        ewmh->_NET_WM_VISIBLE_ICON_NAME,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);

@@ -103,6 +103,19 @@ static char *get_window_title(Panel *p, xcb_window_t win)
 {
     xcb_get_property_reply_t *reply = xcb_get_property_reply(
         p->conn,
+        xcb_get_property(p->conn, 0, win, p->atom_net_wm_visible_name,
+                         XCB_ATOM_ANY, 0, 256),
+        NULL);
+    if (reply && reply->value_len > 0) {
+        char *title = strndup(xcb_get_property_value(reply),
+                              reply->value_len);
+        free(reply);
+        return title;
+    }
+    free(reply);
+
+    reply = xcb_get_property_reply(
+        p->conn,
         xcb_get_property(p->conn, 0, win, p->atom_net_wm_name,
                          XCB_ATOM_ANY, 0, 256),
         NULL);

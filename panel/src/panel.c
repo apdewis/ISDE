@@ -257,8 +257,9 @@ int panel_init(Panel *p, int *argc, char **argv)
     p->ewmh = isde_ewmh_init(p->conn, p->screen_num);
     p->ipc  = isde_ipc_init(p->conn, p->screen_num);
 
-    p->atom_net_wm_name = intern(p->conn, "_NET_WM_NAME");
-    p->atom_wm_name     = intern(p->conn, "WM_NAME");
+    p->atom_net_wm_name         = intern(p->conn, "_NET_WM_NAME");
+    p->atom_net_wm_visible_name = intern(p->conn, "_NET_WM_VISIBLE_NAME");
+    p->atom_wm_name             = intern(p->conn, "WM_NAME");
 
     /* Load config and desktop entries */
     load_pinned(p);

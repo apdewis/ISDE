@@ -69,6 +69,9 @@ typedef struct WmClient {
     int16_t      save_x, save_y;
     uint16_t     save_w, save_h;
     char        *title;
+    char        *icon_name;
+    char        *visible_name;
+    char        *visible_icon_name;
     unsigned long focus_seq;       /* focus sequence number for MRU fallback */
 
     /* ICCCM size hints (WM_NORMAL_HINTS) — logical pixels */
@@ -114,6 +117,8 @@ typedef struct Wm {
     xcb_atom_t             atom_net_wm_name;
     xcb_atom_t             atom_motif_wm_hints;
     xcb_atom_t             atom_wm_change_state;
+    xcb_atom_t             atom_wm_icon_name;
+    xcb_atom_t             atom_net_wm_icon_name;
 
     /* Client list */
     WmClient              *clients;
@@ -224,6 +229,8 @@ void      frame_set_extents(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
+void      frame_disambiguate_all(Wm *wm, const char *base_title,
+                                 const char *base_icon);
 void      frame_read_size_hints(Wm *wm, WmClient *c);
 void      frame_create_grips(Wm *wm, WmClient *c);
 void      frame_update_grips(Wm *wm, WmClient *c);

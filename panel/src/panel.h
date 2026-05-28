@@ -187,6 +187,7 @@ typedef struct Panel {
 
     /* Atoms */
     xcb_atom_t         atom_net_wm_name;
+    xcb_atom_t         atom_net_wm_visible_name;
     xcb_atom_t         atom_wm_name;
 
     /* System tray */
