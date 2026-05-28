@@ -610,6 +610,16 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
                 c->above = 1;
             else if (init_state.atoms[s] == ec->_NET_WM_STATE_BELOW)
                 c->below = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_MODAL)
+                c->modal = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_STICKY)
+                c->sticky = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_SKIP_TASKBAR)
+                c->skip_taskbar = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_SKIP_PAGER)
+                c->skip_pager = 1;
+            else if (init_state.atoms[s] == ec->_NET_WM_STATE_DEMANDS_ATTENTION)
+                c->demands_attention = 1;
         }
         xcb_ewmh_get_atoms_reply_wipe(&init_state);
     }

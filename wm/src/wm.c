@@ -122,6 +122,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_net_wm_icon_name  = intern(wm->conn, "_NET_WM_ICON_NAME");
     wm->atom_net_wm_user_time  = intern(wm->conn, "_NET_WM_USER_TIME");
     wm->atom_net_wm_user_time_window = intern(wm->conn, "_NET_WM_USER_TIME_WINDOW");
+    wm->atom_net_wm_state_focused = intern(wm->conn, "_NET_WM_STATE_FOCUSED");
 
     /* Load initial colour scheme */
     isde_theme_current();
@@ -222,6 +223,16 @@ int wm_init(Wm *wm, int *argc, char **argv)
                                     c->above = 1;
                                 } else if (state.atoms[s] == ec->_NET_WM_STATE_BELOW) {
                                     c->below = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_MODAL) {
+                                    c->modal = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_STICKY) {
+                                    c->sticky = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_SKIP_TASKBAR) {
+                                    c->skip_taskbar = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_SKIP_PAGER) {
+                                    c->skip_pager = 1;
+                                } else if (state.atoms[s] == ec->_NET_WM_STATE_DEMANDS_ATTENTION) {
+                                    c->demands_attention = 1;
                                 }
                             }
                             xcb_ewmh_get_atoms_reply_wipe(&state);
@@ -329,6 +340,8 @@ WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win)
 
 /* ---------- focus ---------- */
 
+static void wm_update_net_wm_state(Wm *wm, WmClient *c);
+
 void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
 {
     WmClient *prev = wm->focused;
@@ -336,6 +349,7 @@ void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
 
     if (prev && prev != c) {
         prev->focused = 0;
+        wm_update_net_wm_state(wm, prev);
         /* Lower fullscreen windows when they lose focus so the new
            window is visible */
         if (prev->fullscreen) {
@@ -366,6 +380,8 @@ void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
         }
+        c->demands_attention = 0;
+        wm_update_net_wm_state(wm, c);
         frame_apply_theme(wm, c);
         frame_update_title(wm, c);
     }
@@ -826,7 +842,7 @@ static void apply_snap(Wm *wm, WmClient *c, int zone, int monitor)
 static void wm_update_net_wm_state(Wm *wm, WmClient *c)
 {
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
-    xcb_atom_t states[6];
+    xcb_atom_t states[12];
     int n = 0;
 
     if (c->maximized) {
@@ -839,6 +855,18 @@ static void wm_update_net_wm_state(Wm *wm, WmClient *c)
         states[n++] = ewmh->_NET_WM_STATE_ABOVE;
     if (c->below)
         states[n++] = ewmh->_NET_WM_STATE_BELOW;
+    if (c->modal)
+        states[n++] = ewmh->_NET_WM_STATE_MODAL;
+    if (c->sticky)
+        states[n++] = ewmh->_NET_WM_STATE_STICKY;
+    if (c->skip_taskbar)
+        states[n++] = ewmh->_NET_WM_STATE_SKIP_TASKBAR;
+    if (c->skip_pager)
+        states[n++] = ewmh->_NET_WM_STATE_SKIP_PAGER;
+    if (c->demands_attention)
+        states[n++] = ewmh->_NET_WM_STATE_DEMANDS_ATTENTION;
+    if (c->focused)
+        states[n++] = wm->atom_net_wm_state_focused;
 
     xcb_ewmh_set_wm_state(ewmh, c->client, n, n ? states : NULL);
 }
@@ -1522,6 +1550,44 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
             a2 == ewmh->_NET_WM_STATE_BELOW) {
             int want = (action == 1) || (action == 2 && !c->below);
             wm_set_below(wm, c, want);
+        }
+        /* Modal */
+        if (a1 == ewmh->_NET_WM_STATE_MODAL ||
+            a2 == ewmh->_NET_WM_STATE_MODAL) {
+            c->modal = (action == 1) || (action == 2 && !c->modal);
+            wm_update_net_wm_state(wm, c);
+        }
+        /* Sticky */
+        if (a1 == ewmh->_NET_WM_STATE_STICKY ||
+            a2 == ewmh->_NET_WM_STATE_STICKY) {
+            int want = (action == 1) || (action == 2 && !c->sticky);
+            if (want && !c->sticky) {
+                c->sticky = 1;
+                wm_move_to_desktop(wm, c, 0xFFFFFFFF);
+            } else if (!want && c->sticky) {
+                c->sticky = 0;
+                wm_move_to_desktop(wm, c, wm->current_desktop);
+            }
+            wm_update_net_wm_state(wm, c);
+        }
+        /* Skip taskbar */
+        if (a1 == ewmh->_NET_WM_STATE_SKIP_TASKBAR ||
+            a2 == ewmh->_NET_WM_STATE_SKIP_TASKBAR) {
+            c->skip_taskbar = (action == 1) || (action == 2 && !c->skip_taskbar);
+            wm_update_net_wm_state(wm, c);
+        }
+        /* Skip pager */
+        if (a1 == ewmh->_NET_WM_STATE_SKIP_PAGER ||
+            a2 == ewmh->_NET_WM_STATE_SKIP_PAGER) {
+            c->skip_pager = (action == 1) || (action == 2 && !c->skip_pager);
+            wm_update_net_wm_state(wm, c);
+        }
+        /* Demands attention */
+        if (a1 == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION ||
+            a2 == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
+            c->demands_attention = (action == 1) ||
+                                   (action == 2 && !c->demands_attention);
+            wm_update_net_wm_state(wm, c);
         }
         return 1;
     } else if (ev->type == ewmh->_NET_WM_MOVERESIZE) {

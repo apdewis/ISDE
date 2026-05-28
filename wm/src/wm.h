@@ -61,6 +61,11 @@ typedef struct WmClient {
     int          minimized;
     int          above;        /* _NET_WM_STATE_ABOVE */
     int          below;        /* _NET_WM_STATE_BELOW */
+    int          modal;        /* _NET_WM_STATE_MODAL */
+    int          sticky;       /* _NET_WM_STATE_STICKY */
+    int          skip_taskbar; /* _NET_WM_STATE_SKIP_TASKBAR */
+    int          skip_pager;   /* _NET_WM_STATE_SKIP_PAGER */
+    int          demands_attention; /* _NET_WM_STATE_DEMANDS_ATTENTION */
     int          hidden;       /* WM-initiated unmap (desktop switch) */
     int          decorated;     /* 0 = CSD/no frame chrome */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
@@ -123,6 +128,7 @@ typedef struct Wm {
     xcb_atom_t             atom_net_wm_icon_name;
     xcb_atom_t             atom_net_wm_user_time;
     xcb_atom_t             atom_net_wm_user_time_window;
+    xcb_atom_t             atom_net_wm_state_focused;
 
     /* Client list */
     WmClient              *clients;

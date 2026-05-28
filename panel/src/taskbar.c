@@ -894,10 +894,28 @@ void taskbar_update(Panel *p)
     int nwins = isde_ewmh_get_client_list(p->ewmh, &wins);
     uint32_t cur_desk = isde_ewmh_get_current_desktop(p->ewmh);
 
+    xcb_ewmh_connection_t *ec = isde_ewmh_connection(p->ewmh);
+
     for (int i = 0; i < nwins; i++) {
         uint32_t win_desk = isde_ewmh_get_wm_desktop(p->ewmh, wins[i]);
         if (win_desk != cur_desk && win_desk != 0xFFFFFFFF) {
             continue;
+        }
+        xcb_ewmh_get_atoms_reply_t wm_state;
+        if (xcb_ewmh_get_wm_state_reply(ec,
+                xcb_ewmh_get_wm_state(ec, wins[i]),
+                &wm_state, NULL)) {
+            int skip = 0;
+            for (uint32_t s = 0; s < wm_state.atoms_len; s++) {
+                if (wm_state.atoms[s] == ec->_NET_WM_STATE_SKIP_TASKBAR) {
+                    skip = 1;
+                    break;
+                }
+            }
+            xcb_ewmh_get_atoms_reply_wipe(&wm_state);
+            if (skip) {
+                continue;
+            }
         }
         char *cls = get_wm_class(p, wins[i]);
         TaskGroup *g = taskbar_find_group(p, cls);

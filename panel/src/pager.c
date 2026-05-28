@@ -125,6 +125,25 @@ static void refresh_cache(Panel *p)
             continue;
         }
 
+        xcb_ewmh_get_atoms_reply_t wm_state;
+        int skip = 0;
+        if (xcb_ewmh_get_wm_state_reply(ec,
+                xcb_ewmh_get_wm_state(ec, wins[i]),
+                &wm_state, NULL)) {
+            for (uint32_t s = 0; s < wm_state.atoms_len; s++) {
+                if (wm_state.atoms[s] == ec->_NET_WM_STATE_SKIP_PAGER) {
+                    skip = 1;
+                    break;
+                }
+            }
+            xcb_ewmh_get_atoms_reply_wipe(&wm_state);
+        }
+        if (skip) {
+            free(geo);
+            free(tr);
+            continue;
+        }
+
         pager_cache[count].win = wins[i];
         pager_cache[count].desktop = desk;
         pager_cache[count].x = tr->dst_x;
