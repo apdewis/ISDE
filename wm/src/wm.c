@@ -234,6 +234,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             }
                         }
 
+                        wm_ewmh_set_allowed_actions(wm, c);
+
                         if (c->fullscreen) {
                             c->fullscreen = 0;
                             wm_fullscreen_client(wm, c, 1);
@@ -1158,6 +1160,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         c->desktop = wm->current_desktop;
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
                                 c->client, c->desktop);
+        wm_ewmh_set_allowed_actions(wm, c);
         xcb_map_window(wm->conn, ev->window);
         xcb_map_window(wm->conn, IswWindow(c->shell));
         if (c->fullscreen) {

@@ -246,6 +246,7 @@ void  wm_ewmh_update_client_list(Wm *wm);
 void  wm_ewmh_update_client_list_stacking(Wm *wm);
 void  wm_ewmh_update_active(Wm *wm);
 void  wm_ewmh_update_workarea(Wm *wm);
+void  wm_ewmh_set_allowed_actions(Wm *wm, WmClient *c);
 
 /* ---------- desktops.c — virtual desktop management ---------- */
 void  wm_desktops_init(Wm *wm);

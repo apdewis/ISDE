@@ -43,6 +43,7 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_FRAME_EXTENTS,
         ewmh->_NET_WM_MOVERESIZE,
         ewmh->_NET_DESKTOP_LAYOUT,
+        ewmh->_NET_WM_ALLOWED_ACTIONS,
     };
     int nsupported = sizeof(supported) / sizeof(supported[0]);
     isde_ewmh_set_supported(wm->ewmh, supported, nsupported);
@@ -197,4 +198,28 @@ void wm_ewmh_update_workarea(Wm *wm)
                           wm->num_desktops, areas);
     free(areas);
     xcb_flush(wm->conn);
+}
+
+void wm_ewmh_set_allowed_actions(Wm *wm, WmClient *c)
+{
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
+    xcb_atom_t actions[10];
+    int n = 0;
+
+    if (c->decorated) {
+        actions[n++] = ewmh->_NET_WM_ACTION_MOVE;
+        if (!c->fixed_size) {
+            actions[n++] = ewmh->_NET_WM_ACTION_RESIZE;
+            actions[n++] = ewmh->_NET_WM_ACTION_MAXIMIZE_HORZ;
+            actions[n++] = ewmh->_NET_WM_ACTION_MAXIMIZE_VERT;
+        }
+    }
+    actions[n++] = ewmh->_NET_WM_ACTION_MINIMIZE;
+    actions[n++] = ewmh->_NET_WM_ACTION_FULLSCREEN;
+    actions[n++] = ewmh->_NET_WM_ACTION_CHANGE_DESKTOP;
+    actions[n++] = ewmh->_NET_WM_ACTION_CLOSE;
+    actions[n++] = ewmh->_NET_WM_ACTION_ABOVE;
+    actions[n++] = ewmh->_NET_WM_ACTION_BELOW;
+
+    xcb_ewmh_set_wm_allowed_actions(ewmh, c->client, n, actions);
 }
