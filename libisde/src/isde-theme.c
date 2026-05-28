@@ -117,7 +117,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         SEC_CLOSE_BUTTON, SEC_MENU, SEC_MENU_ITEM,
         SEC_TASKBAR, SEC_TASKBAR_BUTTON,
         SEC_TASKBAR_BUTTON_ACTIVE, SEC_TASKBAR_BUTTON_FOCUS,
-        SEC_TERMINAL
+        SEC_TASKBAR_BUTTON_URGENT, SEC_TERMINAL
     } section = SEC_NONE;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -137,6 +137,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
             else if (strcmp(line, "[TaskbarButton]")       == 0) { section = SEC_TASKBAR_BUTTON; }
             else if (strcmp(line, "[TaskbarButtonActive]") == 0) { section = SEC_TASKBAR_BUTTON_ACTIVE; }
             else if (strcmp(line, "[TaskbarButtonFocus]")  == 0) { section = SEC_TASKBAR_BUTTON_FOCUS; }
+            else if (strcmp(line, "[TaskbarButtonUrgent]") == 0) { section = SEC_TASKBAR_BUTTON_URGENT; }
             else if (strcmp(line, "[Terminal]")            == 0) { section = SEC_TERMINAL; }
             else { section = SEC_NONE; }
             continue;
@@ -183,6 +184,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
         case SEC_TASKBAR_BUTTON:        parse_element(&s->taskbar_button,        key, val); break;
         case SEC_TASKBAR_BUTTON_ACTIVE: parse_element(&s->taskbar_button_active, key, val); break;
         case SEC_TASKBAR_BUTTON_FOCUS:  parse_element(&s->taskbar_button_focus,  key, val); break;
+        case SEC_TASKBAR_BUTTON_URGENT: parse_element(&s->taskbar_button_urgent, key, val); break;
 
         case SEC_TERMINAL: {
             unsigned int c = parse_hex_color(val);
@@ -222,6 +224,7 @@ IsdeColorScheme *isde_scheme_load(const char *name)
     element_defaults(&s->taskbar_button,       s->bg_light,  s->fg,       s->border);
     element_defaults(&s->taskbar_button_active,s->select_bg, s->fg,       s->border);
     element_defaults(&s->taskbar_button_focus, s->active,    s->fg_light, s->active);
+    element_defaults(&s->taskbar_button_urgent, s->warning, s->fg,       s->warning);
 
     /* Terminal fallbacks: derive FG/BG/cursor from the general scheme;
      * supply a built-in ANSI palette when the theme did not set one. */

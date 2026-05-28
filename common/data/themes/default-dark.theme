@@ -88,6 +88,13 @@ Border=#1976D2
 HoverBackground=#64B5F6
 HoverForeground=#D8D8E8
 
+[TaskbarButtonUrgent]
+Background=#B8860B
+Foreground=#E8E8F0
+Border=#DAA520
+HoverBackground=#DAA520
+HoverForeground=#E8E8F0
+
 [Terminal]
 Background=#151525
 Foreground=#D8D8E8

@@ -988,6 +988,8 @@ void taskbar_highlight_active(Panel *p)
         active_class = get_wm_class(p, active);
     }
 
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
+
     for (TaskGroup *g = p->groups; g; g = g->next) {
         if (!g->button) {
             continue;
@@ -996,9 +998,32 @@ void taskbar_highlight_active(Panel *p)
         int is_focused = (active_class && g->wm_class &&
                           strcmp(g->wm_class, active_class) == 0);
 
+        int urgent = 0;
+        if (!is_focused) {
+            for (int w = 0; w < g->nwindows; w++) {
+                xcb_ewmh_get_atoms_reply_t wm_state;
+                if (xcb_ewmh_get_wm_state_reply(ewmh,
+                        xcb_ewmh_get_wm_state(ewmh, g->windows[w]),
+                        &wm_state, NULL)) {
+                    for (uint32_t a = 0; a < wm_state.atoms_len; a++) {
+                        if (wm_state.atoms[a] == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
+                            urgent = 1;
+                            break;
+                        }
+                    }
+                    xcb_ewmh_get_atoms_reply_wipe(&wm_state);
+                }
+                if (urgent) {
+                    break;
+                }
+            }
+        }
+
         const IsdeElementColors *ec;
         if (is_focused) {
             ec = &s->taskbar_button_focus;
+        } else if (urgent) {
+            ec = &s->taskbar_button_urgent;
         } else if (g->nwindows > 0) {
             ec = &s->taskbar_button_active;
         } else {

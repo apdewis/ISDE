@@ -59,6 +59,7 @@ typedef struct {
     IsdeElementColors taskbar_button;       /* taskbar button (no windows) */
     IsdeElementColors taskbar_button_active; /* taskbar button (has windows) */
     IsdeElementColors taskbar_button_focus;  /* taskbar button (focused app) */
+    IsdeElementColors taskbar_button_urgent; /* taskbar button (demands attention) */
 
     /* Terminal palette — 16 ANSI + foreground + background + cursor.
      * Values are 0xRRGGBB. If terminal_valid is 0 the palette was not
