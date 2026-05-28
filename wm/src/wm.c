@@ -344,6 +344,16 @@ static void wm_update_net_wm_state(Wm *wm, WmClient *c);
 
 void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
 {
+    if (c) {
+        for (WmClient *m = wm->clients; m; m = m->next) {
+            if (m->modal && m->transient_for == c->client &&
+                m->shell && IswIsRealized(m->shell)) {
+                c = m;
+                break;
+            }
+        }
+    }
+
     WmClient *prev = wm->focused;
     wm->focused = c;
 
@@ -1019,6 +1029,19 @@ void wm_restack_above_below(Wm *wm)
             xcb_configure_window(wm->conn, IswWindow(c->shell),
                                  XCB_CONFIG_WINDOW_STACK_MODE, v);
         }
+    }
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (!c->shell || !IswIsRealized(c->shell))
+            continue;
+        if (!c->modal || !c->transient_for)
+            continue;
+        WmClient *parent = wm_find_client_by_window(wm, c->transient_for);
+        if (!parent || !parent->shell || !IswIsRealized(parent->shell))
+            continue;
+        uint32_t v[] = { IswWindow(parent->shell), XCB_STACK_MODE_ABOVE };
+        xcb_configure_window(wm->conn, IswWindow(c->shell),
+                             XCB_CONFIG_WINDOW_SIBLING |
+                             XCB_CONFIG_WINDOW_STACK_MODE, v);
     }
     xcb_flush(wm->conn);
 }
