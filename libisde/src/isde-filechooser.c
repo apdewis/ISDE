@@ -425,10 +425,13 @@ Widget isde_filechooser_show(Widget parent, const char *title,
                                            form, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
+    static String empty_list[] = { NULL };
     IswArgVerticalList(&ab, True);
     IswArgForceColumns(&ab, True);
     IswArgDefaultColumns(&ab, 1);
     IswArgBorderWidth(&ab, 0);
+    IswArgList(&ab, empty_list);
+    IswArgNumberStrings(&ab, 0);
     if (scheme) {
         IswArgBackground(&ab, scheme->bg);
         IswArgForeground(&ab, scheme->fg);
@@ -460,6 +463,8 @@ Widget isde_filechooser_show(Widget parent, const char *title,
     IswArgForceColumns(&ab, True);
     IswArgDefaultColumns(&ab, 1);
     IswArgBorderWidth(&ab, 0);
+    IswArgList(&ab, empty_list);
+    IswArgNumberStrings(&ab, 0);
     if (scheme) {
         IswArgBackground(&ab, scheme->bg_light);
         IswArgForeground(&ab, scheme->fg);
