@@ -64,9 +64,15 @@ static int opt_rpn = 0;
 
 /* ---------- theme reload ---------- */
 
-static void on_theme_changed(void *user_data)
+static void on_settings_changed(const char *section, const char *key,
+                                void *user_data)
 {
-    (void)user_data;
+    (void)key; (void)user_data;
+    if (strcmp(section, "appearance") != 0 && strcmp(section, "*") != 0) {
+        return;
+    }
+    isde_theme_reload();
+    isde_theme_merge_xrm(toplevel);
     IswReloadResources(toplevel);
 }
 
@@ -205,6 +211,7 @@ main(int argc, char **argv)
     /* D-Bus theme watching */
     dbus_conn = isde_dbus_init();
     if (dbus_conn) {
+        isde_dbus_settings_subscribe(dbus_conn, on_settings_changed, NULL);
         int dbus_fd = isde_dbus_get_fd(dbus_conn);
         if (dbus_fd >= 0) {
             IswAppAddInput(app, dbus_fd, (IswPointer)IswInputReadMask,
