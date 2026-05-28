@@ -89,8 +89,6 @@ static void dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 int
 main(int argc, char **argv)
 {
-    Arg args[20];
-
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-rpn") == 0) {
             opt_rpn = 1;
@@ -101,8 +99,9 @@ main(int argc, char **argv)
                                 &argc, argv, NULL, NULL, 0);
     isde_theme_merge_xrm(toplevel);
 
-    IswSetArg(args[0], IswNinput, True);
-    IswSetValues(toplevel, args, ONE);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgInput(&ab, True);
+    IswSetValues(toplevel, ab.args, ab.count);
 
     create_calculator(toplevel);
 
@@ -178,18 +177,17 @@ main(int argc, char **argv)
 
     IswRealizeWidget(toplevel);
 
-    {
-        Dimension cur_w = 0, cur_h = 0;
-        Arg sargs[20];
-        IswSetArg(sargs[0], IswNwidth, &cur_w);
-        IswSetArg(sargs[1], IswNheight, &cur_h);
-        IswGetValues(toplevel, sargs, 2);
-        IswSetArg(sargs[0], IswNminWidth, cur_w);
-        IswSetArg(sargs[1], IswNminHeight, cur_h);
-        IswSetArg(sargs[2], IswNmaxWidth, cur_w);
-        IswSetArg(sargs[3], IswNmaxHeight, cur_h);
-        IswSetValues(toplevel, sargs, 4);
-    }
+    Dimension cur_w = 0, cur_h = 0;
+    IswArgBuilderReset(&ab);
+    IswArgWidth(&ab, &cur_w);
+    IswArgHeight(&ab, &cur_h);
+    IswGetValues(toplevel, ab.args, ab.count);
+    IswArgBuilderReset(&ab);
+    IswArgMinWidth(&ab, cur_w);
+    IswArgMinHeight(&ab, cur_h);
+    IswArgMaxWidth(&ab, cur_w);
+    IswArgMaxHeight(&ab, cur_h);
+    IswSetValues(toplevel, ab.args, ab.count);
 
     /* WM_DELETE_WINDOW */
     xcb_connection_t *conn = IswDisplay(toplevel);
@@ -246,12 +244,6 @@ static void create_display(Widget parent)
     Widget screen;
     IswArgBuilder ab = IswArgBuilderInit();
 
-    static Arg args[] = {
-        {IswNborderWidth, (IswArgVal)0},
-        {IswNjustify, (IswArgVal)IswJustifyRight},
-    };
-
-    IswArgBuilderReset(&ab);
     IswArgJustify(&ab, IswJustifyRight);
     bevel_w = IswCreateManagedWidget("bevel", formWidgetClass, parent,
                                     ab.args, ab.count);
@@ -261,15 +253,17 @@ static void create_display(Widget parent)
     screen = IswCreateManagedWidget("screen", formWidgetClass, bevel_w,
                                     ab.args, ab.count);
 
+    IswArgBuilderReset(&ab);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
     ind[XCalc_MEMORY] = IswCreateManagedWidget("M", labelWidgetClass, screen,
-                                                args, IswNumber(args));
+                                                ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgRight(&ab, IswChainRight);
-    IswArgWidth(&ab, ((BTN_W * 5) - (BTN_GAP * 2))); //outer containers have same gap spacing as buttons
+    IswArgWidth(&ab, ((BTN_W * 5) - (BTN_GAP * 2)));
     IswArgBorderWidth(&ab, 0);
     IswArgJustify(&ab, IswJustifyRight);
-
     LCD = IswCreateManagedWidget("LCD", labelWidgetClass, screen, ab.args,
                                  ab.count);
 
@@ -293,7 +287,7 @@ static void create_display(Widget parent)
                                                ab.args, ab.count);
 
     IswArgFromHoriz(&ab, ind[XCalc_PAREN]);
-    
+
     ind[XCalc_HEX] = IswCreateManagedWidget("HEX", labelWidgetClass, screen,
                                              ab.args, ab.count);
 
@@ -375,34 +369,33 @@ static void create_keypad(Widget parent)
     for (int i = 0; i < total; i++) {
         int row = i / cols;
         int col = i % cols;
-        Arg a[20];
-        int ac = 0;
+        IswArgBuilder ab = IswArgBuilderInit();
 
-        IswSetArg(a[ac], IswNlabel, labels[i]); ac++;
-        IswSetArg(a[ac], IswNwidth, BTN_W); ac++;
-        IswSetArg(a[ac], IswNheight, BTN_H); ac++;
-        IswSetArg(a[ac], IswNjustify, IswJustifyCenter); ac++;
+        IswArgLabel(&ab, labels[i]);
+        IswArgWidth(&ab, BTN_W);
+        IswArgHeight(&ab, BTN_H);
+        IswArgJustify(&ab, IswJustifyCenter);
 
         if (col == 0) {
-            IswSetArg(a[ac], IswNhorizDistance, BTN_LEFT); ac++;
+            IswArgHorizDistance(&ab, BTN_LEFT);
         }
         if (col > 0) {
-            IswSetArg(a[ac], IswNfromHoriz, buttons[i - 1]); ac++;
-            IswSetArg(a[ac], IswNhorizDistance, BTN_GAP); ac++;
+            IswArgFromHoriz(&ab, buttons[i - 1]);
+            IswArgHorizDistance(&ab, BTN_GAP);
         }
         if (row == 0) {
-            IswSetArg(a[ac], IswNfromVert, bevel_w); ac++;
-            IswSetArg(a[ac], IswNvertDistance, BTN_TOP); ac++;
+            IswArgFromVert(&ab, bevel_w);
+            IswArgVertDistance(&ab, BTN_TOP);
         }
         if (row > 0) {
-            IswSetArg(a[ac], IswNfromVert, buttons[i - cols]); ac++;
-            IswSetArg(a[ac], IswNvertDistance, BTN_GAP); ac++;
+            IswArgFromVert(&ab, buttons[i - cols]);
+            IswArgVertDistance(&ab, BTN_GAP);
         }
 
         char name[16];
         snprintf(name, sizeof(name), "button%d", i + 1);
         buttons[i] = IswCreateManagedWidget(name, commandWidgetClass,
-                                            parent, a, ac);
+                                            parent, ab.args, ab.count);
         IswAddCallback(buttons[i], IswNcallback, button_cb,
                        (IswPointer)(intptr_t)ops[i]);
     }
@@ -412,10 +405,9 @@ static void create_keypad(Widget parent)
 
 void draw(char *string)
 {
-    Arg args[20];
-
-    IswSetArg(args[0], IswNlabel, string);
-    IswSetValues(LCD, args, ONE);
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgLabel(&ab, string);
+    IswSetValues(LCD, ab.args, ab.count);
 }
 
 void setflag(int indicator, Boolean on)
@@ -476,10 +468,10 @@ static void done(Widget w, xcb_atom_t *selection, xcb_atom_t *target)
 void do_select(xcb_timestamp_t time)
 {
     Boolean state;
-    Arg args[20];
+    IswArgBuilder ab = IswArgBuilderInit();
 
-    IswSetArg(args[0], IswNstate, &state);
-    IswGetValues(LCD, args, 1);
+    IswArgState(&ab, &state);
+    IswGetValues(LCD, ab.args, ab.count);
 
     if (state) {
         IswOwnSelection(LCD, XCB_ATOM_PRIMARY, time, convert, lose, done);
