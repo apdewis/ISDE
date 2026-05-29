@@ -15,9 +15,44 @@
 
 #include <isde/isde-theme.h>
 #include <xcb/xcb_cursor.h>
+#include <xcb/xcb_xrm.h>
 #include "isde/isde-config.h"
 
 static Wm *wm_instance;
+
+/* Determine the HiDPI scale factor the same way libISW does, so the WM's
+ * decorations match the rest of the desktop: ISW_SCALE_FACTOR env override,
+ * else Xft.dpi / 96 from the X resource database, clamped to >= 1.0. */
+static double compute_scale_factor(xcb_connection_t *conn)
+{
+    const char *env = getenv("ISW_SCALE_FACTOR");
+    double scale = 0.0;
+
+    if (env) {
+        scale = atof(env);
+    }
+
+    if (scale <= 0.0) {
+        xcb_xrm_database_t *db = xcb_xrm_database_from_default(conn);
+        if (db) {
+            char *value = NULL;
+            if (xcb_xrm_resource_get_string(db, "Xft.dpi", "Xft.Dpi",
+                                            &value) >= 0 && value) {
+                double dpi = atof(value);
+                if (dpi > 0.0) {
+                    scale = dpi / 96.0;
+                }
+                free(value);
+            }
+            xcb_xrm_database_free(db);
+        }
+    }
+
+    if (scale < 1.0) {
+        scale = 1.0;
+    }
+    return scale;
+}
 
 /* ---------- helpers ---------- */
 
@@ -144,7 +179,12 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->screen = si.data;
     wm->root = wm->screen->root;
 
-    wm->title_height = WM_TITLE_HEIGHT;
+    wm->scale_factor = compute_scale_factor(wm->conn);
+    if (wm->scale_factor != 1.0) {
+        fprintf(stderr, "isde-wm: HiDPI scale factor: %.2f\n",
+                wm->scale_factor);
+    }
+    wm->title_height = wm_scale(wm, WM_TITLE_HEIGHT);
 
     /* ICCCM WM_Sn selection — WM replacement protocol */
     {

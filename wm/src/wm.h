@@ -212,8 +212,12 @@ typedef struct Wm {
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
 
-    /* Logical title bar height */
+    /* Title bar height (physical pixels, already scaled for HiDPI) */
     int                    title_height;
+
+    /* HiDPI scale factor (Xft.dpi / 96, or ISW_SCALE_FACTOR; >= 1.0).
+     * Decoration metrics are design pixels multiplied by this. */
+    double                 scale_factor;
 
     /* WM_Sn selection (ICCCM WM replacement protocol) */
     xcb_atom_t             atom_wm_sn;
@@ -237,6 +241,13 @@ typedef struct Wm {
     WmCompositor          *compositor;
 #endif
 } Wm;
+
+/* Scale a design (logical, 96-DPI) pixel value to physical pixels for the
+ * current HiDPI scale factor. */
+static inline int wm_scale(const Wm *wm, int v)
+{
+    return (int)(v * wm->scale_factor + 0.5);
+}
 
 /* ---------- wm.c — core ---------- */
 int   wm_init(Wm *wm, int *argc, char **argv);

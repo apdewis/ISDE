@@ -162,27 +162,30 @@ static void paint_osd(Wm *wm, int w, int h)
 
     int cols = wm->desk_cols;
     int rows = wm->desk_rows;
-    int font_px = OSD_CELL - 10;
+    int cell = wm_scale(wm, OSD_CELL);
+    int gap  = wm_scale(wm, OSD_GAP);
+    int pad  = wm_scale(wm, OSD_PAD);
+    int font_px = cell - wm_scale(wm, 10);
     if (font_px < 8) { font_px = 8; }
 
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             uint32_t idx = r * cols + c;
             int is_active = (idx == wm->current_desktop);
-            int cx = OSD_PAD + c * (OSD_CELL + OSD_GAP);
-            int cy = OSD_PAD + r * (OSD_CELL + OSD_GAP);
+            int cx = pad + c * (cell + gap);
+            int cy = pad + r * (cell + gap);
 
             if (is_active && scheme) {
-                render_fill_rect(cr, scheme->active, cx, cy, OSD_CELL, OSD_CELL);
+                render_fill_rect(cr, scheme->active, cx, cy, cell, cell);
             } else if (scheme) {
-                render_fill_rect(cr, scheme->bg_light, cx, cy, OSD_CELL, OSD_CELL);
+                render_fill_rect(cr, scheme->bg_light, cx, cy, cell, cell);
             }
 
             char name[16];
             snprintf(name, sizeof(name), "%d", idx + 1);
             unsigned int fg = (is_active && scheme) ? scheme->fg_light
                             : scheme ? scheme->fg : 0xFFFFFF;
-            render_text_centered(cr, name, fg, cx, cy, OSD_CELL, OSD_CELL, font_px);
+            render_text_centered(cr, name, fg, cx, cy, cell, cell, font_px);
         }
     }
 
@@ -196,8 +199,11 @@ void wm_desktops_show_osd(Wm *wm)
 {
     int cols = wm->desk_cols;
     int rows = wm->desk_rows;
-    int w = 2 * OSD_PAD + cols * OSD_CELL + (cols - 1) * OSD_GAP;
-    int h = 2 * OSD_PAD + rows * OSD_CELL + (rows - 1) * OSD_GAP;
+    int cell = wm_scale(wm, OSD_CELL);
+    int gap  = wm_scale(wm, OSD_GAP);
+    int pad  = wm_scale(wm, OSD_PAD);
+    int w = 2 * pad + cols * cell + (cols - 1) * gap;
+    int h = 2 * pad + rows * cell + (rows - 1) * gap;
 
     int pm_x, pm_y, pm_w, pm_h;
     wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);

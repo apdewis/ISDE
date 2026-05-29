@@ -27,6 +27,7 @@ target_link_libraries(isde-wm-compositor
     PkgConfig::XCB_EWMH
     PkgConfig::XCB_ICCCM
     PkgConfig::XCB_KEYSYMS
+    PkgConfig::XCB_XRM
     PkgConfig::XCB_UTIL
     PkgConfig::CAIRO
     PkgConfig::CAIRO_XCB

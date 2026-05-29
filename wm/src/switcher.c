@@ -98,9 +98,10 @@ static void paint_switcher(Wm *wm)
     const IsdeColorScheme *scheme = isde_theme_current();
     int visible = wm->switcher_visible;
     int center_row = visible / 2;
-    int row_h = isde_font_height("general", 4);
-    int osd_w = SWITCHER_WIDTH;
-    int osd_h = visible * row_h + 2 * SWITCHER_PAD;
+    int pad = wm_scale(wm, SWITCHER_PAD);
+    int row_h = wm_scale(wm, isde_font_height("general", 4));
+    int osd_w = wm_scale(wm, SWITCHER_WIDTH);
+    int osd_h = visible * row_h + 2 * pad;
 
     cairo_surface_t *surface = render_surface_for_window(
         wm->conn, wm->screen, wm->switcher_shell, osd_w, osd_h);
@@ -112,23 +113,23 @@ static void paint_switcher(Wm *wm)
     unsigned int bg_color = scheme ? scheme->bg : 0x333333;
     render_fill_rect(cr, bg_color, 0, 0, osd_w, osd_h);
 
-    int label_w = osd_w - 2 * SWITCHER_PAD;
-    int font_px = row_h - 6;
+    int label_w = osd_w - 2 * pad;
+    int font_px = row_h - wm_scale(wm, 6);
     if (font_px < 8) { font_px = 8; }
 
     for (int i = 0; i < visible; i++) {
         int idx = row_to_index(wm, i, center_row);
         int is_sel = (i == center_row);
-        int y = SWITCHER_PAD + i * row_h;
+        int y = pad + i * row_h;
 
         if (is_sel && scheme) {
             render_fill_rect(cr, scheme->active,
-                             SWITCHER_PAD, y, label_w, row_h);
+                             pad, y, label_w, row_h);
         }
 
         unsigned int fg = scheme ? scheme->fg_light : 0xFFFFFF;
         render_text(cr, wm->switcher_labels[idx], fg,
-                    SWITCHER_PAD, y, label_w, row_h, font_px);
+                    pad, y, label_w, row_h, font_px);
     }
 
     cairo_destroy(cr);
@@ -145,9 +146,10 @@ static void create_osd(Wm *wm)
     wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
 
     int max_height = pm_h / 3;
-    int row_h = isde_font_height("general", 4);
+    int pad = wm_scale(wm, SWITCHER_PAD);
+    int row_h = wm_scale(wm, isde_font_height("general", 4));
 
-    int max_rows = (max_height - 2 * SWITCHER_PAD) / row_h;
+    int max_rows = (max_height - 2 * pad) / row_h;
     if (max_rows < 1) max_rows = 1;
     int visible = wm->switcher_count;
     if (visible > max_rows) {
@@ -155,8 +157,8 @@ static void create_osd(Wm *wm)
     }
     wm->switcher_visible = visible;
 
-    int osd_h = visible * row_h + 2 * SWITCHER_PAD;
-    int osd_w = SWITCHER_WIDTH;
+    int osd_h = visible * row_h + 2 * pad;
+    int osd_w = wm_scale(wm, SWITCHER_WIDTH);
     int sx = pm_x + (pm_w - osd_w) / 2;
     int sy = pm_y + (pm_h - osd_h) / 2;
 

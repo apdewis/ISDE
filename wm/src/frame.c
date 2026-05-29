@@ -20,7 +20,7 @@
 
 void frame_init_icons(Wm *wm)
 {
-    int icon_sz = wm->title_height - 4;
+    int icon_sz = wm->title_height - wm_scale(wm, 4);
     if (icon_sz < 8) { icon_sz = 8; }
 
     if (wm->icon_minimize) { cairo_surface_destroy(wm->icon_minimize); }
@@ -298,7 +298,7 @@ void frame_paint(Wm *wm, WmClient *c)
     /* Title text */
     const char *display = c->visible_name ? c->visible_name
                         : c->title ? c->title : "(untitled)";
-    int font_px = th - 8;
+    int font_px = th - wm_scale(wm, 8);
     if (font_px < 8) { font_px = 8; }
     render_text(cr, display, tb->fg, title_x, 0, title_w, th, font_px);
 
@@ -708,7 +708,7 @@ void frame_update_grips(Wm *wm, WmClient *c)
 {
     int fw = frame_total_width(c);
     int fh = frame_total_height(wm, c);
-    int g = GRIP_SIZE;
+    int g = wm_scale(wm, GRIP_SIZE);
     int th = wm->title_height;
 
     int client_top = th;
@@ -786,7 +786,7 @@ static void menu_paint(Wm *wm)
 
     int item_h = wm->menu_item_height;
     int total_items = 2 + 1 + wm->num_desktops + 1;
-    int menu_w = 180;
+    int menu_w = wm_scale(wm, 180);
     int menu_h = total_items * item_h;
 
     cairo_surface_t *surface = render_surface_for_window(
@@ -798,7 +798,7 @@ static void menu_paint(Wm *wm)
 
     render_fill_rect(cr, s->menu.bg, 0, 0, menu_w, menu_h);
 
-    int font_px = item_h - 6;
+    int font_px = item_h - wm_scale(wm, 6);
     if (font_px < 8) { font_px = 8; }
     int y = 0;
 
@@ -844,9 +844,9 @@ void win_menu_show(Wm *wm, WmClient *c)
     wm_dismiss_menu(wm);
 
     const IsdeColorScheme *s = isde_theme_current();
-    int item_h = isde_font_height("menu", 6);
+    int item_h = wm_scale(wm, isde_font_height("menu", 6));
     int total_items = 2 + 1 + wm->num_desktops + 1;
-    int menu_w = 180;
+    int menu_w = wm_scale(wm, 180);
     int menu_h = total_items * item_h;
 
     /* Position below the menu button */
