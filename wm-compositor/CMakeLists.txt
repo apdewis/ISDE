@@ -1,5 +1,6 @@
 add_executable(isde-wm-compositor
     src/main.c
+    src/compositor.c
     ${CMAKE_SOURCE_DIR}/wm/src/wm.c
     ${CMAKE_SOURCE_DIR}/wm/src/frame.c
     ${CMAKE_SOURCE_DIR}/wm/src/ewmh.c
@@ -7,10 +8,12 @@ add_executable(isde-wm-compositor
     ${CMAKE_SOURCE_DIR}/wm/src/desktops.c
     ${CMAKE_SOURCE_DIR}/wm/src/keys.c
     ${CMAKE_SOURCE_DIR}/wm/src/switcher.c
+    ${CMAKE_SOURCE_DIR}/wm/src/render.c
 )
 
 target_include_directories(isde-wm-compositor PRIVATE
     ${CMAKE_SOURCE_DIR}/wm/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_compile_definitions(isde-wm-compositor PRIVATE
@@ -20,7 +23,6 @@ target_compile_definitions(isde-wm-compositor PRIVATE
 
 target_link_libraries(isde-wm-compositor
     isde
-    PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_EWMH
     PkgConfig::XCB_ICCCM
@@ -34,6 +36,10 @@ target_link_libraries(isde-wm-compositor
     PkgConfig::EGL
     PkgConfig::GL
     PkgConfig::XCB_PRESENT
+    PkgConfig::XCB_COMPOSITE
+    PkgConfig::XCB_DAMAGE
+    PkgConfig::XCB_RENDER
+    m
 )
 
 install(TARGETS isde-wm-compositor RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

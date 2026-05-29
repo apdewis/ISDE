@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <signal.h>
 
 static Wm wm;
@@ -20,6 +21,12 @@ int main(int argc, char **argv)
 {
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--replace") == 0) {
+            wm.replace = 1;
+        }
+    }
 
     do {
         if (wm_init(&wm, &argc, argv) != 0) {

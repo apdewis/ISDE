@@ -8,8 +8,6 @@
  */
 #include "wm.h"
 #include "isde/isde-config.h"
-#include <ISW/ISWRender.h>
-#include <ISW/IswArgMacros.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,18 +17,15 @@
 
 void wm_desktops_init(Wm *wm)
 {
-    /* Defaults */
     wm->desk_rows = 1;
     wm->desk_cols = 2;
 
-    /* Prefer _NET_DESKTOP_LAYOUT if a pager has set it */
     int lo, lc, lr, lsc;
     if (isde_ewmh_get_desktop_layout(wm->ewmh, &lo, &lc, &lr, &lsc) &&
         lc > 0 && lr > 0) {
         wm->desk_cols = lc;
         wm->desk_rows = lr;
     } else {
-        /* Fall back to config */
         char errbuf[256];
         IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
         if (cfg) {
@@ -49,14 +44,14 @@ void wm_desktops_init(Wm *wm)
 
     wm->num_desktops = wm->desk_rows * wm->desk_cols;
 
-    /* Restore the active desktop from the previous session if valid */
     uint32_t prev = isde_ewmh_get_current_desktop(wm->ewmh);
     wm->current_desktop = (prev < (uint32_t)wm->num_desktops) ? prev : 0;
 
-    /* Set EWMH properties */
     isde_ewmh_set_number_of_desktops(wm->ewmh, wm->num_desktops);
     isde_ewmh_set_current_desktop(wm->ewmh, wm->current_desktop);
     xcb_flush(wm->conn);
+
+    wm->desk_osd_timer = -1;
 
     fprintf(stderr, "isde-wm: desktops: %dx%d grid (%d total)\n",
             wm->desk_cols, wm->desk_rows, wm->num_desktops);
@@ -76,34 +71,30 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
     uint32_t old = wm->current_desktop;
     wm->current_desktop = desktop;
 
-    /* Map/unmap windows based on desktop assignment */
     for (WmClient *c = wm->clients; c; c = c->next) {
-        /* Sticky windows (0xFFFFFFFF) are always visible */
         if (c->desktop == 0xFFFFFFFF) {
             continue;
         }
 
         if (c->desktop == old && c->desktop != desktop) {
-            /* Hide: unmap client and frame */
             c->hidden = 1;
             xcb_unmap_window(wm->conn, c->client);
-            if (c->shell && IswIsRealized(c->shell)) {
-                xcb_unmap_window(wm->conn, IswWindow(c->shell));
+            if (c->frame && c->mapped) {
+                xcb_unmap_window(wm->conn, c->frame);
+                c->mapped = 0;
             }
         } else if (c->desktop == desktop && c->desktop != old) {
-            /* Show: map client and frame */
             c->hidden = 0;
             xcb_map_window(wm->conn, c->client);
-            if (c->shell && IswIsRealized(c->shell)) {
-                xcb_map_window(wm->conn, IswWindow(c->shell));
+            if (c->frame) {
+                xcb_map_window(wm->conn, c->frame);
+                c->mapped = 1;
             }
         }
     }
 
-    /* Update EWMH */
     isde_ewmh_set_current_desktop(wm->ewmh, desktop);
 
-    /* If the focused window is on the old desktop, clear focus */
     if (wm->focused && wm->focused->desktop != desktop &&
         wm->focused->desktop != 0xFFFFFFFF) {
         wm->focused->focused = 0;
@@ -117,7 +108,6 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
     wm_desktops_show_osd(wm);
 }
 
-/* Move relative to current position in the grid */
 void wm_desktops_move(Wm *wm, int dx, int dy)
 {
     int col = wm->current_desktop % wm->desk_cols;
@@ -126,7 +116,6 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
     col += dx;
     row += dy;
 
-    /* Clamp to grid bounds */
     if (col < 0) { col = 0; }
     if (col >= wm->desk_cols) { col = wm->desk_cols - 1; }
     if (row < 0) { row = 0; }
@@ -143,17 +132,66 @@ void wm_desktops_move(Wm *wm, int dx, int dy)
 #define OSD_PAD    8
 #define OSD_TIMEOUT 800  /* ms */
 
-static void osd_hide_cb(IswPointer client_data, IswIntervalId *id)
+static void osd_hide_cb(void *data)
 {
-    (void)id;
-    Wm *wm = (Wm *)client_data;
-    if (wm->desk_osd && IswIsRealized(wm->desk_osd)) {
-        IswPopdown(wm->desk_osd);
+    Wm *wm = (Wm *)data;
+    if (wm->desk_osd) {
+        xcb_unmap_window(wm->conn, wm->desk_osd);
+        xcb_flush(wm->conn);
     }
-    wm->desk_osd_timer = 0;
+    wm->desk_osd_timer = -1;
 }
 
-/* Draw the grid using the shell background + colored child windows */
+static void paint_osd(Wm *wm, int w, int h)
+{
+    if (!wm->desk_osd) {
+        return;
+    }
+
+    const IsdeColorScheme *scheme = isde_theme_current();
+
+    cairo_surface_t *surface = render_surface_for_window(
+        wm->conn, wm->screen, wm->desk_osd, w, h);
+    if (!surface) {
+        return;
+    }
+    cairo_t *cr = cairo_create(surface);
+
+    unsigned int bg = scheme ? scheme->bg : 0x333333;
+    render_fill_rect(cr, bg, 0, 0, w, h);
+
+    int cols = wm->desk_cols;
+    int rows = wm->desk_rows;
+    int font_px = OSD_CELL - 10;
+    if (font_px < 8) { font_px = 8; }
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            uint32_t idx = r * cols + c;
+            int is_active = (idx == wm->current_desktop);
+            int cx = OSD_PAD + c * (OSD_CELL + OSD_GAP);
+            int cy = OSD_PAD + r * (OSD_CELL + OSD_GAP);
+
+            if (is_active && scheme) {
+                render_fill_rect(cr, scheme->active, cx, cy, OSD_CELL, OSD_CELL);
+            } else if (scheme) {
+                render_fill_rect(cr, scheme->bg_light, cx, cy, OSD_CELL, OSD_CELL);
+            }
+
+            char name[16];
+            snprintf(name, sizeof(name), "%d", idx + 1);
+            unsigned int fg = (is_active && scheme) ? scheme->fg_light
+                            : scheme ? scheme->fg : 0xFFFFFF;
+            render_text_centered(cr, name, fg, cx, cy, OSD_CELL, OSD_CELL, font_px);
+        }
+    }
+
+    cairo_destroy(cr);
+    cairo_surface_flush(surface);
+    cairo_surface_destroy(surface);
+    xcb_flush(wm->conn);
+}
+
 void wm_desktops_show_osd(Wm *wm)
 {
     int cols = wm->desk_cols;
@@ -161,82 +199,57 @@ void wm_desktops_show_osd(Wm *wm)
     int w = 2 * OSD_PAD + cols * OSD_CELL + (cols - 1) * OSD_GAP;
     int h = 2 * OSD_PAD + rows * OSD_CELL + (rows - 1) * OSD_GAP;
 
-    /* Center on primary monitor */
     int pm_x, pm_y, pm_w, pm_h;
     wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
     int sx = pm_x + (pm_w - w) / 2;
     int sy = pm_y + (pm_h - h) / 2;
 
-    /* Destroy and recreate each time for simplicity */
+    if (wm->desk_osd_timer >= 0) {
+        wm_timer_remove(wm, wm->desk_osd_timer);
+        wm->desk_osd_timer = -1;
+    }
+
     if (wm->desk_osd) {
-        if (wm->desk_osd_timer) {
-            IswRemoveTimeOut(wm->desk_osd_timer);
-            wm->desk_osd_timer = 0;
+        /* Reposition and repaint existing window */
+        uint32_t vals[] = { sx, sy, w, h };
+        xcb_configure_window(wm->conn, wm->desk_osd,
+                             XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+                             XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                             vals);
+        xcb_map_window(wm->conn, wm->desk_osd);
+        paint_osd(wm, w, h);
+    } else {
+        const IsdeColorScheme *scheme = isde_theme_current();
+        uint32_t bg_pixel = wm->screen->black_pixel;
+        if (scheme) {
+            xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
+                wm->conn,
+                xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                                ((scheme->bg >> 16) & 0xFF) * 257,
+                                ((scheme->bg >> 8)  & 0xFF) * 257,
+                                ( scheme->bg        & 0xFF) * 257),
+                NULL);
+            if (cr) { bg_pixel = cr->pixel; free(cr); }
         }
-        IswDestroyWidget(wm->desk_osd);
-        wm->desk_osd = NULL;
+
+        wm->desk_osd = xcb_generate_id(wm->conn);
+        uint32_t vals[] = {
+            bg_pixel,
+            1,
+            XCB_EVENT_MASK_EXPOSURE
+        };
+        xcb_create_window(wm->conn, XCB_COPY_FROM_PARENT,
+                          wm->desk_osd, wm->root,
+                          sx, sy, w, h, 1,
+                          XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          wm->screen->root_visual,
+                          XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
+                          XCB_CW_EVENT_MASK,
+                          vals);
+        xcb_map_window(wm->conn, wm->desk_osd);
+        xcb_flush(wm->conn);
+        paint_osd(wm, w, h);
     }
 
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgX(&ab, sx);
-    IswArgY(&ab, sy);
-    IswArgWidth(&ab, w);
-    IswArgHeight(&ab, h);
-    IswArgOverrideRedirect(&ab, True);
-    IswArgBorderWidth(&ab, 1);
-    wm->desk_osd = IswCreatePopupShell("desktopOSD",
-                                       overrideShellWidgetClass,
-                                       wm->toplevel, ab.args, ab.count);
-
-    /* Create a label for each desktop cell */
-    const IsdeColorScheme *scheme = isde_theme_current();
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            uint32_t idx = r * cols + c;
-            int is_active = (idx == wm->current_desktop);
-
-            char name[16];
-            snprintf(name, sizeof(name), "%d", idx + 1);
-
-            IswArgBuilderReset(&ab);
-            IswArgLabel(&ab, name);
-            IswArgWidth(&ab, OSD_CELL);
-            IswArgHeight(&ab, OSD_CELL);
-            IswArgBorderWidth(&ab, 1);
-
-            if (scheme && is_active) {
-                IswArgBackground(&ab, (Pixel)scheme->active);
-                IswArgForeground(&ab, (Pixel)scheme->fg_light);
-            }
-
-            Widget cell = IswCreateManagedWidget("deskCell",
-                labelWidgetClass, wm->desk_osd, ab.args, ab.count);
-
-            /* Position manually after realize */
-            (void)cell;
-        }
-    }
-
-    IswRealizeWidget(wm->desk_osd);
-
-    /* Position each cell */
-    int child_idx = 0;
-    CompositeWidget cw = (CompositeWidget)wm->desk_osd;
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            if (child_idx < (int)cw->composite.num_children) {
-                int cx = OSD_PAD + c * (OSD_CELL + OSD_GAP);
-                int cy = OSD_PAD + r * (OSD_CELL + OSD_GAP);
-                IswConfigureWidget(cw->composite.children[child_idx],
-                                  cx, cy, OSD_CELL, OSD_CELL, 1);
-            }
-            child_idx++;
-        }
-    }
-
-    IswPopup(wm->desk_osd, IswGrabNone);
-
-    /* Auto-hide after timeout */
-    wm->desk_osd_timer = IswAppAddTimeOut(wm->app, OSD_TIMEOUT,
-                                          osd_hide_cb, wm);
+    wm->desk_osd_timer = wm_timer_add(wm, OSD_TIMEOUT, osd_hide_cb, wm);
 }

@@ -7,13 +7,17 @@ add_executable(isde-wm
     src/desktops.c
     src/keys.c
     src/switcher.c
+    src/render.c
+)
+
+target_include_directories(isde-wm PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_compile_definitions(isde-wm PRIVATE _POSIX_C_SOURCE=200809L)
 
 target_link_libraries(isde-wm
     isde
-    PkgConfig::ISW
     PkgConfig::XCB
     PkgConfig::XCB_EWMH
     PkgConfig::XCB_ICCCM
@@ -24,6 +28,7 @@ target_link_libraries(isde-wm
     PkgConfig::FONTCONFIG
     PkgConfig::FREETYPE
     PkgConfig::XCB_CURSOR
+    m
 )
 
 install(TARGETS isde-wm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

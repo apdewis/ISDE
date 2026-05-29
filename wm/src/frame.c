@@ -1,12 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * frame.c — window frame creation using ISW widgets
+ * frame.c — window frame creation using raw XCB + Cairo
  *
- * Each frame is an OverrideShell containing:
- *   - Form (layout container)
- *     - Label (title bar — shows window name)
- *     - Command (close button)
- *   - The client window is reparented below the title area
+ * Each frame is an override-redirect window containing:
+ *   - Title bar drawn with Cairo (icon, title text, min/max/close buttons)
+ *   - Input-only child windows for button click detection
+ *   - The client window reparented below the title area
  */
 #include "wm.h"
 
@@ -14,88 +13,49 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb_cursor.h>
-#include <ISW/IswArgMacros.h>
-#include <X11/keysym.h>
 
 #define GRIP_SIZE 6
 
-/* Convert 0xRRGGBB to an X11 Pixel via AllocColor */
-static Pixel color_to_pixel(Wm *wm, unsigned int rgb)
+/* ---------- icon loading ---------- */
+
+void frame_init_icons(Wm *wm)
 {
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        wm->conn,
-        xcb_alloc_color(wm->conn, wm->screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply) {
-        return wm->screen->white_pixel;
-    }
-    Pixel px = reply->pixel;
-    free(reply);
-    return px;
-}
+    int icon_sz = wm->title_height - 4;
+    if (icon_sz < 8) { icon_sz = 8; }
 
-/* Apply theme colors to a client's frame widgets */
-/* Only the title bar needs IswSetValues — focused/unfocused is state-dependent.
- * Everything else comes from Xresources. */
-void frame_apply_theme(Wm *wm, WmClient *c)
-{
-    if (!c->decorated) {
-        return;
-    }
+    if (wm->icon_minimize) { cairo_surface_destroy(wm->icon_minimize); }
+    if (wm->icon_maximize) { cairo_surface_destroy(wm->icon_maximize); }
+    if (wm->icon_restore)  { cairo_surface_destroy(wm->icon_restore); }
+    if (wm->icon_close)    { cairo_surface_destroy(wm->icon_close); }
+    if (wm->icon_menu)     { cairo_surface_destroy(wm->icon_menu); }
 
-    const IsdeColorScheme *s = isde_theme_current();
-    if (!s) {
-        return;
-    }
+    char *path;
 
-    const IsdeElementColors *tb = c->focused
-        ? &s->titlebar_active : &s->titlebar;
+    path = isde_icon_find("actions", "window-minimize");
+    wm->icon_minimize = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    free(path);
 
-    /* Include explicit width/height so IswSetValues doesn't resize the
-     * label to its preferred (text-fitting) geometry. */
-    int th = wm->title_height;
-    int btn_area = 4 * th;
-    int title_w = c->width - btn_area;
-    if (title_w < 1) { title_w = 1; }
+    path = isde_icon_find("actions", "window-maximize");
+    wm->icon_maximize = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    free(path);
 
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgBackground(&ab, color_to_pixel(wm, tb->bg));
-    IswArgForeground(&ab, color_to_pixel(wm, tb->fg));
-    IswArgWidth(&ab, title_w);
-    IswArgHeight(&ab, th);
-    IswSetValues(c->title_label, ab.args, ab.count);
-}
+    path = isde_icon_find("actions", "window-restore");
+    wm->icon_restore = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    free(path);
 
-/* ---------- icon paths (resolved once) ---------- */
+    path = isde_icon_find("actions", "window-close");
+    wm->icon_close = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    free(path);
 
-static char *icon_minimize;
-static char *icon_maximize;
-static char *icon_restore;
-static char *icon_close;
-static char *icon_menu;
-
-static void frame_init_icons(void)
-{
-    free(icon_minimize);
-    free(icon_maximize);
-    free(icon_restore);
-    free(icon_close);
-    free(icon_menu);
-    icon_minimize = isde_icon_find("actions", "window-minimize");
-    icon_maximize = isde_icon_find("actions", "window-maximize");
-    icon_restore  = isde_icon_find("actions", "window-restore");
-    icon_close    = isde_icon_find("actions", "window-close");
-    icon_menu     = isde_icon_find("actions", "application-menu");
+    path = isde_icon_find("actions", "application-menu");
+    wm->icon_menu = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    free(path);
 }
 
 /* ---------- title fetching ---------- */
 
 static char *fetch_title(Wm *wm, xcb_window_t win)
 {
-    /* Try _NET_WM_NAME first (UTF-8) */
     xcb_get_property_reply_t *reply = xcb_get_property_reply(
         wm->conn,
         xcb_get_property(wm->conn, 0, win, wm->atom_net_wm_name,
@@ -109,7 +69,6 @@ static char *fetch_title(Wm *wm, xcb_window_t win)
     }
     free(reply);
 
-    /* Fallback to WM_NAME */
     reply = xcb_get_property_reply(
         wm->conn,
         xcb_get_property(wm->conn, 0, win, wm->atom_wm_name,
@@ -156,6 +115,8 @@ static char *fetch_icon_name(Wm *wm, xcb_window_t win)
 
     return NULL;
 }
+
+/* ---------- disambiguation ---------- */
 
 static void disambiguate_name(Wm *wm, WmClient *target,
                               const char *raw, int is_icon)
@@ -218,286 +179,10 @@ void frame_disambiguate_all(Wm *wm, const char *base_title,
     }
 }
 
-/* ---------- callbacks ---------- */
-
-static void close_callback(Widget w, IswPointer client_data,
-                           IswPointer call_data)
-{
-    (void)w;
-    (void)call_data;
-    Wm *wm = ((void **)client_data)[0];
-    WmClient *c = ((void **)client_data)[1];
-    wm_close_client(wm, c);
-}
-
-static void maximize_callback(Widget w, IswPointer client_data,
-                              IswPointer call_data)
-{
-    (void)w;
-    (void)call_data;
-    Wm *wm = ((void **)client_data)[0];
-    WmClient *c = ((void **)client_data)[1];
-    wm_maximize_client(wm, c);
-
-    /* Swap icon using svgData (svgFile SetValues doesn't redraw) */
-    {
-        char *icon = c->maximized ? icon_restore : icon_maximize;
-        if (icon) {
-            FILE *fp = fopen(icon, "r");
-            if (fp) {
-                fseek(fp, 0, SEEK_END);
-                long len = ftell(fp);
-                fseek(fp, 0, SEEK_SET);
-                char *data = malloc(len + 1);
-                if (data) {
-                    fread(data, 1, len, fp);
-                    data[len] = '\0';
-                    IswArgBuilder ab = IswArgBuilderInit();
-                    IswArgImage(&ab, data);
-                    IswArgWidth(&ab, wm->title_height);
-                    IswArgHeight(&ab, wm->title_height);
-                    IswSetValues(c->maximize_btn, ab.args, ab.count);
-                    free(data);
-                }
-                fclose(fp);
-            }
-        }
-    }
-}
-
-static void minimize_callback(Widget w, IswPointer client_data,
-                              IswPointer call_data)
-{
-    (void)w;
-    (void)call_data;
-    Wm *wm = ((void **)client_data)[0];
-    WmClient *c = ((void **)client_data)[1];
-    wm_minimize_client(wm, c);
-}
-
-static void title_press_callback(Widget w, IswPointer client_data,
-                                 IswPointer call_data)
-{
-    (void)w;
-    (void)call_data;
-    Wm *wm = ((void **)client_data)[0];
-    WmClient *c = ((void **)client_data)[1];
-    wm_focus_client(wm, c, wm->last_user_time);
-}
-
-/* ---------- event handlers for drag ---------- */
-
-static void title_button_handler(Widget w, IswPointer client_data,
-                                 xcb_generic_event_t *event, Boolean *cont)
-{
-    (void)w;
-    (void)cont;
-    Wm *wm = ((void **)client_data)[0];
-    WmClient *c = ((void **)client_data)[1];
-
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
-        return;
-    }
-
-    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    wm_focus_client(wm, c, ev->time);
-    wm->drag_mode    = DRAG_MOVE;
-    wm->drag_client  = c;
-    wm->drag_start_x = ev->root_x;
-    wm->drag_start_y = ev->root_y;
-    wm->drag_orig_x  = c->x;
-    wm->drag_orig_y  = c->y;
-
-    /* Grab pointer to root so all motion/release events come to us
-     * via the main event loop, not the widget handler */
-    xcb_grab_pointer(wm->conn, 1, wm->root,
-                     XCB_EVENT_MASK_BUTTON_RELEASE |
-                     XCB_EVENT_MASK_POINTER_MOTION,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(wm->conn);
-}
-
-/* Command widget default translations lack LeaveWindow/EnterWindow bindings,
- * so the button stays "set" when the pointer leaves and fires on release
- * anywhere.  Override with the missing bindings so that leaving the button
- * cancels the press. */
-static IswTranslations btn_leave_fixup;
-
-/* ---------- window menu ---------- */
-
-static void winmenu_dismiss(Wm *wm, WmClient *c)
-{
-    if (c->win_menu) {
-        xcb_ungrab_keyboard(wm->conn, XCB_CURRENT_TIME);
-        xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
-        xcb_flush(wm->conn);
-        IswDestroyWidget(c->win_menu);
-        c->win_menu = NULL;
-    }
-    if (wm->menu_client == c) {
-        wm->menu_client = NULL;
-    }
-}
-
-void wm_dismiss_menu(Wm *wm)
-{
-    if (wm->menu_client) {
-        winmenu_dismiss(wm, wm->menu_client);
-    }
-}
-
-typedef struct {
-    Wm       *wm;
-    WmClient *client;
-    uint32_t  desktop;
-} MenuDesktopClosure;
-
-static void above_callback(Widget w, IswPointer client_data,
-                            IswPointer call_data)
-{
-    (void)w; (void)call_data;
-    Wm *wm       = ((void **)client_data)[0];
-    WmClient *c   = ((void **)client_data)[1];
-    wm_set_above(wm, c, !c->above);
-    winmenu_dismiss(wm, c);
-}
-
-static void below_callback(Widget w, IswPointer client_data,
-                            IswPointer call_data)
-{
-    (void)w; (void)call_data;
-    Wm *wm       = ((void **)client_data)[0];
-    WmClient *c   = ((void **)client_data)[1];
-    wm_set_below(wm, c, !c->below);
-    winmenu_dismiss(wm, c);
-}
-
-static void desktop_move_callback(Widget w, IswPointer client_data,
-                                  IswPointer call_data)
-{
-    (void)w; (void)call_data;
-    MenuDesktopClosure *mc = client_data;
-    wm_move_to_desktop(mc->wm, mc->client, mc->desktop);
-    winmenu_dismiss(mc->wm, mc->client);
-}
-
-static void free_closure_callback(Widget w, IswPointer client_data,
-                                  IswPointer call_data)
-{
-    (void)w; (void)call_data;
-    free(client_data);
-}
-
-static void win_menu_show(Wm *wm, WmClient *c)
-{
-    if (c->win_menu) {
-        IswDestroyWidget(c->win_menu);
-        c->win_menu = NULL;
-    }
-
-    IswArgBuilder ab = IswArgBuilderInit();
-    c->win_menu = IswCreatePopupShell("winMenu", simpleMenuWidgetClass,
-                                      c->menu_btn, ab.args, ab.count);
-
-    void **closure = malloc(2 * sizeof(void *));
-    closure[0] = wm;
-    closure[1] = c;
-    IswAddCallback(c->win_menu, IswNdestroyCallback,
-                   free_closure_callback, closure);
-
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, c->above ? "* Keep Above" : "  Keep Above");
-    Widget above_item = IswCreateManagedWidget("above", smeBSBObjectClass,
-                                               c->win_menu, ab.args, ab.count);
-    IswAddCallback(above_item, IswNcallback, above_callback, closure);
-
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, c->below ? "* Keep Below" : "  Keep Below");
-    Widget below_item = IswCreateManagedWidget("below", smeBSBObjectClass,
-                                               c->win_menu, ab.args, ab.count);
-    IswAddCallback(below_item, IswNcallback, below_callback, closure);
-
-    IswCreateManagedWidget("sep", smeLineObjectClass, c->win_menu, NULL, 0);
-
-    for (int d = 0; d < wm->num_desktops; d++) {
-        char label[32];
-        if (c->desktop == (uint32_t)d)
-            snprintf(label, sizeof(label), "* Desktop %d", d + 1);
-        else
-            snprintf(label, sizeof(label), "  Desktop %d", d + 1);
-
-        IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, label);
-        Widget di = IswCreateManagedWidget("desk", smeBSBObjectClass,
-                                           c->win_menu, ab.args, ab.count);
-        MenuDesktopClosure *mc = malloc(sizeof(*mc));
-        mc->wm      = wm;
-        mc->client  = c;
-        mc->desktop = d;
-        IswAddCallback(di, IswNcallback, desktop_move_callback, mc);
-        IswAddCallback(di, IswNdestroyCallback, free_closure_callback, mc);
-    }
-
-    /* "All Desktops" (sticky) */
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, c->desktop == 0xFFFFFFFF ? "* All Desktops"
-                                              : "  All Desktops");
-    Widget sticky = IswCreateManagedWidget("sticky", smeBSBObjectClass,
-                                           c->win_menu, ab.args, ab.count);
-    MenuDesktopClosure *mc = malloc(sizeof(*mc));
-    mc->wm      = wm;
-    mc->client  = c;
-    mc->desktop = 0xFFFFFFFF;
-    IswAddCallback(sticky, IswNcallback, desktop_move_callback, mc);
-    IswAddCallback(sticky, IswNdestroyCallback, free_closure_callback, mc);
-
-    /* Position below the menu button */
-    Position bx, by;
-    IswTranslateCoords(c->menu_btn, 0, 0, &bx, &by);
-
-    Dimension bh;
-    IswArgBuilderReset(&ab);
-    IswArgHeight(&ab, &bh);
-    IswGetValues(c->menu_btn, ab.args, ab.count);
-
-    IswRealizeWidget(c->win_menu);
-
-    IswArgBuilderReset(&ab);
-    IswArgX(&ab, bx);
-    IswArgY(&ab, by + (Position)bh);
-    IswSetValues(c->win_menu, ab.args, ab.count);
-
-    IswPopup(c->win_menu, IswGrabNone);
-
-    xcb_grab_keyboard(wm->conn, 0, IswWindow(c->win_menu),
-                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                      XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(wm->conn, 0, IswWindow(c->win_menu),
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(wm->conn);
-
-    wm->menu_client = c;
-}
-
-static void menu_button_callback(Widget w, IswPointer client_data,
-                                 IswPointer call_data)
-{
-    (void)w; (void)call_data;
-    Wm *wm       = ((void **)client_data)[0];
-    WmClient *c   = ((void **)client_data)[1];
-    wm_focus_client(wm, c, wm->last_user_time);
-    win_menu_show(wm, c);
-}
-
 /* ---------- size hints ---------- */
 
 void frame_read_size_hints(Wm *wm, WmClient *c)
 {
-    double sf = wm->scale_factor;
     xcb_size_hints_t hints;
 
     c->min_w = 0;  c->min_h = 0;
@@ -514,20 +199,20 @@ void frame_read_size_hints(Wm *wm, WmClient *c)
     }
 
     if (hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE) {
-        c->min_w = phys_to_log(sf, hints.min_width);
-        c->min_h = phys_to_log(sf, hints.min_height);
+        c->min_w = hints.min_width;
+        c->min_h = hints.min_height;
     }
     if (hints.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE) {
-        c->max_w = phys_to_log(sf, hints.max_width);
-        c->max_h = phys_to_log(sf, hints.max_height);
+        c->max_w = hints.max_width;
+        c->max_h = hints.max_height;
     }
     if (hints.flags & XCB_ICCCM_SIZE_HINT_BASE_SIZE) {
-        c->base_w = phys_to_log(sf, hints.base_width);
-        c->base_h = phys_to_log(sf, hints.base_height);
+        c->base_w = hints.base_width;
+        c->base_h = hints.base_height;
     }
     if (hints.flags & XCB_ICCCM_SIZE_HINT_P_RESIZE_INC) {
-        c->inc_w = phys_to_log(sf, hints.width_inc);
-        c->inc_h = phys_to_log(sf, hints.height_inc);
+        c->inc_w = hints.width_inc;
+        c->inc_h = hints.height_inc;
         if (c->inc_w < 1) { c->inc_w = 1; }
         if (c->inc_h < 1) { c->inc_h = 1; }
     }
@@ -536,19 +221,122 @@ void frame_read_size_hints(Wm *wm, WmClient *c)
                      c->min_h > 0 && c->max_h > 0 && c->min_h == c->max_h);
 }
 
+/* ---------- title bar layout ----------
+ * Buttons are hit-tested by coordinate on the frame window; there are no
+ * separate sub-windows.  Layout (frame-relative x), th = title height:
+ *   menu     [0,       th)
+ *   title    [th,      fw-3th)
+ *   minimize [fw-3th,  fw-2th)
+ *   maximize [fw-2th,  fw-th)
+ *   close    [fw-th,   fw)
+ */
+
+int frame_button_at(Wm *wm, WmClient *c, int x, int y)
+{
+    if (!c->decorated || y < 0 || y >= wm->title_height) {
+        return -1;
+    }
+    int th = wm->title_height;
+    int fw = frame_total_width(c);
+
+    if (x >= 0 && x < th) {
+        return FRAME_BTN_MENU;
+    }
+    if (x >= fw - 3 * th && x < fw - 2 * th) {
+        return FRAME_BTN_MINIMIZE;
+    }
+    if (x >= fw - 2 * th && x < fw - th) {
+        return FRAME_BTN_MAXIMIZE;
+    }
+    if (x >= fw - th && x < fw) {
+        return FRAME_BTN_CLOSE;
+    }
+    return -1;
+}
+
+/* ---------- frame painting ---------- */
+
+static void alloc_frame_surface(Wm *wm, WmClient *c)
+{
+    if (c->frame_surface) {
+        cairo_surface_destroy(c->frame_surface);
+    }
+    int fw = frame_total_width(c);
+    int fh = frame_total_height(wm, c);
+    c->frame_surface = render_surface_for_window(wm->conn, wm->screen,
+                                                  c->frame, fw, fh);
+}
+
+void frame_paint(Wm *wm, WmClient *c)
+{
+    if (!c->decorated || !c->frame_surface) {
+        return;
+    }
+
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) {
+        return;
+    }
+
+    const IsdeElementColors *tb = c->focused
+        ? &s->titlebar_active : &s->titlebar;
+
+    int th = wm->title_height;
+    int fw = frame_total_width(c);
+    int title_x = th;
+    int title_w = fw - 4 * th;   /* menu + 3 right-hand buttons */
+    if (title_w < 1) { title_w = 1; }
+
+    cairo_t *cr = cairo_create(c->frame_surface);
+
+    /* Title bar background */
+    render_fill_rect(cr, tb->bg, 0, 0, fw, th);
+
+    /* Menu button (left) */
+    render_icon(cr, wm->icon_menu, 0, 0, th, th);
+
+    /* Title text */
+    const char *display = c->visible_name ? c->visible_name
+                        : c->title ? c->title : "(untitled)";
+    int font_px = th - 8;
+    if (font_px < 8) { font_px = 8; }
+    render_text(cr, display, tb->fg, title_x, 0, title_w, th, font_px);
+
+    /* Right-hand buttons — must match frame_button_at() layout */
+    const IsdeElementColors *btn_colors = &s->titlebar_button;
+    const IsdeElementColors *close_colors = &s->close_button;
+
+    int min_x   = fw - 3 * th;
+    int max_x   = fw - 2 * th;
+    int close_x = fw - th;
+
+    render_fill_rect(cr, btn_colors->bg, min_x, 0, th, th);
+    render_icon(cr, wm->icon_minimize, min_x, 0, th, th);
+
+    render_fill_rect(cr, btn_colors->bg, max_x, 0, th, th);
+    render_icon(cr, c->maximized ? wm->icon_restore : wm->icon_maximize,
+                max_x, 0, th, th);
+
+    render_fill_rect(cr, close_colors->bg, close_x, 0, th, th);
+    render_icon(cr, wm->icon_close, close_x, 0, th, th);
+
+    cairo_destroy(cr);
+    cairo_surface_flush(c->frame_surface);
+    xcb_flush(wm->conn);
+}
+
+void frame_apply_theme(Wm *wm, WmClient *c)
+{
+    if (!c->decorated) {
+        return;
+    }
+    frame_paint(wm, c);
+}
+
 /* ---------- frame creation ---------- */
 
 WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 {
-    frame_init_icons();
-
-    if (!btn_leave_fixup) {
-        btn_leave_fixup = IswParseTranslationTable(
-            "<LeaveWindow>: reset()\n"
-            "<EnterWindow>: highlight(Always)");
-    }
-
-    /* Get client geometry */
     xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(
         wm->conn, xcb_get_geometry(wm->conn, client), NULL);
     if (!geo) {
@@ -559,12 +347,10 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     if (!c) { free(geo); return NULL; }
 
     c->client = client;
-    /* xcb_get_geometry returns physical pixels — convert to logical */
-    double sf = wm->scale_factor;
-    c->x      = (int)(geo->x / sf + 0.5);
-    c->y      = (int)(geo->y / sf + 0.5);
-    c->width  = (int)(geo->width / sf + 0.5);
-    c->height = (int)(geo->height / sf + 0.5);
+    c->x      = geo->x;
+    c->y      = geo->y;
+    c->width  = geo->width;
+    c->height = geo->height;
     free(geo);
 
     frame_read_size_hints(wm, c);
@@ -574,8 +360,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
     c->title = fetch_title(wm, client);
 
-    /* Read initial _NET_WM_STATE before placement so flags like
-     * above/below can influence positioning. */
+    /* Read initial _NET_WM_STATE */
     xcb_ewmh_get_atoms_reply_t init_state;
     if (xcb_ewmh_get_wm_state_reply(
             isde_ewmh_connection(wm->ewmh),
@@ -651,149 +436,57 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     int fw = frame_total_width(c);
     int fh = frame_total_height(wm, c);
 
-    /* Callback closure: array of [wm, client] pointers.
-     * Allocated once, freed in frame_destroy. */
-    void **closure = malloc(2 * sizeof(void *));
-    closure[0] = wm;
-    closure[1] = c;
-
-    /* Create OverrideShell for the frame.  All geometry is logical;
-       ISW scales to physical when creating the X window. */
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgX(&ab, c->x);
-    IswArgY(&ab, c->y);
-    IswArgWidth(&ab, fw);
-    IswArgHeight(&ab, fh);
-    IswArgOverrideRedirect(&ab, True);
-    IswArgBorderWidth(&ab, 1);
-    {
-        const IsdeColorScheme *s = isde_theme_current();
-        if (s) {
-            IswArgBorderColor(&ab, color_to_pixel(wm, s->titlebar.border));
+    /* Allocate border pixel color */
+    const IsdeColorScheme *scheme = isde_theme_current();
+    uint32_t border_pixel = wm->screen->black_pixel;
+    if (scheme) {
+        xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
+            wm->conn,
+            xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                            ((scheme->titlebar.border >> 16) & 0xFF) * 257,
+                            ((scheme->titlebar.border >> 8)  & 0xFF) * 257,
+                            ( scheme->titlebar.border        & 0xFF) * 257),
+            NULL);
+        if (cr) {
+            border_pixel = cr->pixel;
+            free(cr);
         }
     }
-    c->shell = IswCreatePopupShell("frame", overrideShellWidgetClass,
-                                  wm->toplevel, ab.args, ab.count);
 
-    /* Title bar widgets — only for decorated windows */
-    if (c->decorated) {
-        int th = wm->title_height;
-        int btn_area = 4 * th;  /* menu + min + max + close */
-        int title_w = c->width - btn_area;
-        if (title_w < 1) { title_w = 1; }
+    /* Create override-redirect frame window */
+    c->frame = xcb_generate_id(wm->conn);
+    uint32_t vals[] = {
+        wm->screen->black_pixel,
+        border_pixel,
+        1,
+        XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_EXPOSURE |
+        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY
+    };
+    xcb_create_window(wm->conn, XCB_COPY_FROM_PARENT,
+                      c->frame, wm->root,
+                      c->x, c->y, fw, fh, 1,
+                      XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                      wm->screen->root_visual,
+                      XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
+                      XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK,
+                      vals);
 
-        /* Menu button (left-most) */
-        IswArgBuilderReset(&ab);
-        if (icon_menu) {
-            IswArgImage(&ab, icon_menu);
-        }
-        IswArgWidth(&ab, WM_TITLE_HEIGHT);
-        IswArgHeight(&ab, WM_TITLE_HEIGHT);
-        IswArgInternalWidth(&ab, 0);
-        IswArgInternalHeight(&ab, 0);
-        IswArgCornerRadius(&ab, 0);
-        c->menu_btn = IswCreateWidget("menuBtn", commandWidgetClass,
-                                     c->shell, ab.args, ab.count);
-        IswOverrideTranslations(c->menu_btn, btn_leave_fixup);
-        IswAddCallback(c->menu_btn, IswNcallback, menu_button_callback, closure);
-
-        /* Title bar label */
-        IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, c->title ? c->title : "(untitled)");
-        IswArgWidth(&ab, title_w);
-        IswArgHeight(&ab, WM_TITLE_HEIGHT);
-        IswArgBorderWidth(&ab, 0);
-        IswArgResize(&ab, False);
-        c->title_label = IswCreateWidget("titleBar", labelWidgetClass,
-                                        c->shell, ab.args, ab.count);
-
-        IswAddEventHandler(c->title_label,
-                          XCB_EVENT_MASK_BUTTON_PRESS,
-                          False, title_button_handler, closure);
-
-        /* Minimize button */
-        IswArgBuilderReset(&ab);
-        if (icon_minimize) {
-            IswArgImage(&ab, icon_minimize);
-        }
-        IswArgWidth(&ab, WM_TITLE_HEIGHT);
-        IswArgHeight(&ab, WM_TITLE_HEIGHT);
-        IswArgInternalWidth(&ab, 0);
-        IswArgInternalHeight(&ab, 0);
-        IswArgCornerRadius(&ab, 0);
-        c->minimize_btn = IswCreateWidget("minimizeBtn", commandWidgetClass,
-                                         c->shell, ab.args, ab.count);
-        IswOverrideTranslations(c->minimize_btn, btn_leave_fixup);
-        IswAddCallback(c->minimize_btn, IswNcallback, minimize_callback, closure);
-
-        /* Maximize / restore button */
-        IswArgBuilderReset(&ab);
-        if (icon_maximize) {
-            IswArgImage(&ab, icon_maximize);
-        }
-        IswArgWidth(&ab, WM_TITLE_HEIGHT);
-        IswArgHeight(&ab, WM_TITLE_HEIGHT);
-        IswArgInternalWidth(&ab, 0);
-        IswArgInternalHeight(&ab, 0);
-        IswArgCornerRadius(&ab, 0);
-        c->maximize_btn = IswCreateWidget("maximizeBtn", commandWidgetClass,
-                                         c->shell, ab.args, ab.count);
-        IswOverrideTranslations(c->maximize_btn, btn_leave_fixup);
-        IswAddCallback(c->maximize_btn, IswNcallback, maximize_callback, closure);
-
-        /* Close button */
-        IswArgBuilderReset(&ab);
-        if (icon_close) {
-            IswArgImage(&ab, icon_close);
-        }
-        IswArgWidth(&ab, WM_TITLE_HEIGHT);
-        IswArgHeight(&ab, WM_TITLE_HEIGHT);
-        IswArgInternalWidth(&ab, 0);
-        IswArgInternalHeight(&ab, 0);
-        IswArgCornerRadius(&ab, 0);
-        c->close_btn = IswCreateWidget("closeBtn", commandWidgetClass,
-                                      c->shell, ab.args, ab.count);
-        IswOverrideTranslations(c->close_btn, btn_leave_fixup);
-        IswAddCallback(c->close_btn, IswNcallback, close_callback, closure);
-    }
-
-    /* Realize the shell so we get a window ID.  Title bar widgets are
-     * created unmanaged so Shell's Resize proc never touches them —
-     * map them explicitly after realization. */
+    /* Create Cairo surface for frame painting */
     frame_init_cursors(wm);
-    IswRealizeWidget(c->shell);
     if (c->decorated) {
-        IswMapWidget(c->menu_btn);
-        IswMapWidget(c->title_label);
-        IswMapWidget(c->minimize_btn);
-        IswMapWidget(c->maximize_btn);
-        IswMapWidget(c->close_btn);
+        alloc_frame_surface(wm, c);
     }
 
-    /* Set correct initial positions and apply theme colors */
-    frame_configure(wm, c);
-    frame_apply_theme(wm, c);
-
-    /* Add client to the save-set before reparenting.
-     * If the WM connection closes for any reason (crash, SIGKILL),
-     * X automatically reparents and maps save-set windows to root. */
+    /* Reparent client into frame */
     xcb_change_save_set(wm->conn, XCB_SET_MODE_INSERT, client);
 
-    /* Reparent the client window into the frame, below the title bar.
-     * Client keeps its full requested size; border is extra space around it.
-     * xcb_reparent_window needs physical pixel offsets. */
     {
-        double sf = wm->scale_factor;
         int title = c->decorated ? wm->title_height : 0;
-        int phys_bw = (int)(WM_BORDER_WIDTH * sf + 0.5);
-        int phys_title = (int)(title * sf + 0.5);
-        xcb_reparent_window(wm->conn, client, IswWindow(c->shell),
-                            phys_bw, phys_bw + phys_title);
+        xcb_reparent_window(wm->conn, client, c->frame,
+                            WM_BORDER_WIDTH, WM_BORDER_WIDTH + title);
     }
 
-    /* Create invisible resize grips — after reparent so they stack on top.
-     * Undecorated windows handle their own resize.
-     * Fixed-size windows (min == max) must not be resizable. */
+    /* Create resize grips */
     if (c->decorated && !c->fixed_size) {
         frame_create_grips(wm, c);
     }
@@ -809,26 +502,27 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     xcb_change_window_attributes(wm->conn, client,
                                  XCB_CW_EVENT_MASK, &client_mask);
 
-    /* Passive grab for click-to-focus on the client window.
-     * SYNC grab freezes the pointer until we replay the event,
-     * ensuring the WM can focus+raise before the client sees it. */
+    /* Passive grab for click-to-focus */
     xcb_grab_button(wm->conn, 0, client,
                     XCB_EVENT_MASK_BUTTON_PRESS,
                     XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
                     XCB_NONE, XCB_NONE,
                     XCB_BUTTON_INDEX_1, XCB_MOD_MASK_ANY);
 
-    /* Set _NET_FRAME_EXTENTS so CSD clients know the frame geometry */
     frame_set_extents(wm, c);
 
-    /* Append to list tail — _NET_CLIENT_LIST must be in initial mapping order */
+    /* Initial paint */
+    frame_paint(wm, c);
+
+    /* Append to list tail */
     c->next = NULL;
     if (!wm->clients) {
         wm->clients = c;
     } else {
         WmClient *tail = wm->clients;
-        while (tail->next)
+        while (tail->next) {
             tail = tail->next;
+        }
         tail->next = c;
     }
 
@@ -841,27 +535,22 @@ void frame_destroy(Wm *wm, WmClient *c)
 {
     frame_destroy_grips(wm, c);
 
-    /* Remove from save-set, reparent back to root, and re-map.
-     * X auto-unmaps a mapped window during reparent, so we re-map it
-     * unless it was intentionally minimized. */
     xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);
-    /* Reparent back to root at the client content position (frame
-       origin + decoration offset).  This matches what save-set
-       produces on a crash, so adoption works identically either way. */
-    double sf = wm->scale_factor;
     int title = c->decorated ? wm->title_height : 0;
     int bw = 1;
     int cx = c->x + WM_BORDER_WIDTH + bw;
     int cy = c->y + WM_BORDER_WIDTH + title + bw;
-    xcb_reparent_window(wm->conn, c->client, wm->root,
-                        (int)(cx * sf + 0.5), (int)(cy * sf + 0.5));
+    xcb_reparent_window(wm->conn, c->client, wm->root, cx, cy);
     if (!c->minimized) {
         xcb_map_window(wm->conn, c->client);
     }
     xcb_flush(wm->conn);
 
-    if (c->shell) {
-        IswDestroyWidget(c->shell);
+    if (c->frame_surface) {
+        cairo_surface_destroy(c->frame_surface);
+    }
+    if (c->frame) {
+        xcb_destroy_window(wm->conn, c->frame);
     }
 
     free(c->title);
@@ -881,13 +570,12 @@ void frame_set_extents(Wm *wm, WmClient *c)
                                    c->client, 0, 0, 0, 0);
         return;
     }
-    double sf = wm->scale_factor;
     int bw = c->maximized ? 0 : 1;
     int title = wm->title_height;
-    uint32_t left   = log_to_phys(sf, WM_BORDER_WIDTH + bw);
+    uint32_t left   = WM_BORDER_WIDTH + bw;
     uint32_t right  = left;
-    uint32_t top    = log_to_phys(sf, WM_BORDER_WIDTH + title + bw);
-    uint32_t bottom = log_to_phys(sf, WM_BORDER_WIDTH + bw);
+    uint32_t top    = WM_BORDER_WIDTH + title + bw;
+    uint32_t bottom = WM_BORDER_WIDTH + bw;
     xcb_ewmh_set_frame_extents(isde_ewmh_connection(wm->ewmh),
                                c->client, left, right, top, bottom);
 }
@@ -913,60 +601,38 @@ void frame_configure(Wm *wm, WmClient *c)
     int fh = frame_total_height(wm, c);
     int th = wm->title_height;
     int title = c->decorated ? th : 0;
-
-    /* Use IswConfigureWidget to update both Xt internal state and
-     * the X window atomically — avoids Xt and XCB disagreeing.
-     * Non-maximized windows get a 1px border; maximized get none. */
     int bw = c->maximized ? 0 : 1;
-    IswConfigureWidget(c->shell, c->x, c->y, fw, fh, bw);
 
-    /* IswConfigureWidget may skip the border_width change if Xt thinks
-     * it hasn't changed, so force it via XCB as well (physical pixels). */
-    double sf = wm->scale_factor;
-    uint32_t bw32 = log_to_phys(sf, bw);
-    xcb_configure_window(wm->conn, IswWindow(c->shell),
-                         XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw32);
+    uint32_t frame_vals[] = { c->x, c->y, fw, fh, bw };
+    xcb_configure_window(wm->conn, c->frame,
+                         XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+                         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT |
+                         XCB_CONFIG_WINDOW_BORDER_WIDTH, frame_vals);
 
     if (c->decorated) {
-        int btn_area = 4 * th;  /* menu + min + max + close */
-        int inner_w = c->width;
-        int title_w = inner_w - btn_area;
-        if (title_w < 1) { title_w = 1; }
-        int bx = WM_BORDER_WIDTH;
-        int by = WM_BORDER_WIDTH;
-        IswConfigureWidget(c->menu_btn, bx, by,
-                          th, th, 0);
-        IswConfigureWidget(c->title_label, bx + th, by,
-                          title_w, th, 0);
-        IswConfigureWidget(c->minimize_btn, bx + th + title_w, by,
-                          th, th, 0);
-        IswConfigureWidget(c->maximize_btn, bx + th + title_w + th, by,
-                          th, th, 0);
-        IswConfigureWidget(c->close_btn, bx + th + title_w + 2 * th, by,
-                          th, th, 0);
+        /* Reallocate Cairo surface for new size; buttons are hit-tested
+         * by coordinate, so there are no sub-windows to reposition. */
+        alloc_frame_surface(wm, c);
     }
 
-    /* Reposition client window within the frame (physical pixels for XCB) */
-    int phys_bw = (int)(WM_BORDER_WIDTH * sf + 0.5);
-    int phys_title = (int)(title * sf + 0.5);
-    uint32_t cpos[] = { phys_bw, phys_bw + phys_title };
+    /* Reposition client window within frame */
+    uint32_t cpos[] = { WM_BORDER_WIDTH, WM_BORDER_WIDTH + title };
     xcb_configure_window(wm->conn, c->client,
                          XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
                          cpos);
 
-    /* Resize client window (physical pixels for XCB) */
-    uint32_t cvals[] = { (uint32_t)(c->width * sf + 0.5),
-                         (uint32_t)(c->height * sf + 0.5) };
+    /* Resize client window */
+    uint32_t cvals[] = { (uint32_t)c->width, (uint32_t)c->height };
     xcb_configure_window(wm->conn, c->client,
                          XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                          cvals);
 
-    /* Update grip positions */
     if (c->grip[0]) {
         frame_update_grips(wm, c);
     }
 
     frame_set_extents(wm, c);
+    frame_paint(wm, c);
     xcb_flush(wm->conn);
 }
 
@@ -992,19 +658,7 @@ void frame_update_title(Wm *wm, WmClient *c)
     free(old_title);
     free(old_icon);
 
-    if (c->title_label) {
-        const char *display = c->visible_name ? c->visible_name : c->title;
-        int th = wm->title_height;
-        int btn_area = 4 * th;
-        int title_w = c->width - btn_area;
-        if (title_w < 1) { title_w = 1; }
-
-        IswArgBuilder ab = IswArgBuilderInit();
-        IswArgLabel(&ab, display ? display : "(untitled)");
-        IswArgWidth(&ab, title_w);
-        IswArgHeight(&ab, th);
-        IswSetValues(c->title_label, ab.args, ab.count);
-    }
+    frame_paint(wm, c);
 }
 
 /* ---------- resize cursors ---------- */
@@ -1033,7 +687,6 @@ void frame_init_cursors(Wm *wm)
 
 void frame_create_grips(Wm *wm, WmClient *c)
 {
-    xcb_window_t parent = IswWindow(c->shell);
     uint32_t mask = XCB_EVENT_MASK_BUTTON_PRESS |
                     XCB_EVENT_MASK_ENTER_WINDOW |
                     XCB_EVENT_MASK_LEAVE_WINDOW;
@@ -1041,7 +694,7 @@ void frame_create_grips(Wm *wm, WmClient *c)
     for (int i = 0; i < 8; i++) {
         uint32_t vals[2] = { mask, wm->cursors[i] };
         c->grip[i] = xcb_generate_id(wm->conn);
-        xcb_create_window(wm->conn, 0, c->grip[i], parent,
+        xcb_create_window(wm->conn, 0, c->grip[i], c->frame,
                           0, 0, 1, 1, 0,
                           XCB_WINDOW_CLASS_INPUT_ONLY,
                           XCB_COPY_FROM_PARENT,
@@ -1053,24 +706,14 @@ void frame_create_grips(Wm *wm, WmClient *c)
 
 void frame_update_grips(Wm *wm, WmClient *c)
 {
-    /* Grips are raw XCB children of the frame shell window, so their
-     * coordinates must be in physical pixels. */
-    double sf = wm->scale_factor;
-    int fw = log_to_phys(sf, frame_total_width(c));
-    int fh = log_to_phys(sf, frame_total_height(wm, c));
-    int g = log_to_phys(sf, GRIP_SIZE);
-    int th = log_to_phys(sf, wm->title_height);
+    int fw = frame_total_width(c);
+    int fh = frame_total_height(wm, c);
+    int g = GRIP_SIZE;
+    int th = wm->title_height;
 
-    /* Grips sit on client edges, below the title bar.
-     * No top edge grip — title bar handles that area.
-     * Left/right grips span from title bar bottom to frame bottom.
-     * Corner grips at bottom-left and bottom-right only. */
     int client_top = th;
     int client_h = fh - th;
 
-    /* Order: top, bottom, left, right, tl, tr, bl, br
-     * Top and top-corners are zero-sized (disabled) since
-     * the title bar occupies that space. */
     struct { int x, y, w, h; } r[8] = {
         { 0,      0,        0, 0 },                      /* top — disabled */
         { g,      fh - g,   fw - 2*g, g },               /* bottom */
@@ -1105,4 +748,181 @@ void frame_destroy_grips(Wm *wm, WmClient *c)
             c->grip[i] = 0;
         }
     }
+}
+
+/* ---------- window menu ---------- */
+
+typedef struct {
+    int desktop;
+    int is_above;
+    int is_below;
+    int is_sticky;
+} MenuAction;
+
+void wm_dismiss_menu(Wm *wm)
+{
+    if (wm->win_menu) {
+        xcb_ungrab_keyboard(wm->conn, XCB_CURRENT_TIME);
+        xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
+        xcb_destroy_window(wm->conn, wm->win_menu);
+        wm->win_menu = 0;
+        wm->menu_client = NULL;
+        wm->menu_item_count = 0;
+        xcb_flush(wm->conn);
+    }
+}
+
+static void menu_paint(Wm *wm)
+{
+    WmClient *c = wm->menu_client;
+    if (!c || !wm->win_menu) {
+        return;
+    }
+
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) {
+        return;
+    }
+
+    int item_h = wm->menu_item_height;
+    int total_items = 2 + 1 + wm->num_desktops + 1;
+    int menu_w = 180;
+    int menu_h = total_items * item_h;
+
+    cairo_surface_t *surface = render_surface_for_window(
+        wm->conn, wm->screen, wm->win_menu, menu_w, menu_h);
+    if (!surface) {
+        return;
+    }
+    cairo_t *cr = cairo_create(surface);
+
+    render_fill_rect(cr, s->menu.bg, 0, 0, menu_w, menu_h);
+
+    int font_px = item_h - 6;
+    if (font_px < 8) { font_px = 8; }
+    int y = 0;
+
+    /* Above */
+    render_text(cr, c->above ? "* Keep Above" : "  Keep Above",
+                s->menu_item.fg, 0, y, menu_w, item_h, font_px);
+    y += item_h;
+
+    /* Below */
+    render_text(cr, c->below ? "* Keep Below" : "  Keep Below",
+                s->menu_item.fg, 0, y, menu_w, item_h, font_px);
+    y += item_h;
+
+    /* Separator */
+    render_fill_rect(cr, s->border, 4, y + item_h/2, menu_w - 8, 1);
+    y += item_h;
+
+    /* Desktop entries */
+    for (int d = 0; d < wm->num_desktops; d++) {
+        char label[32];
+        if (c->desktop == (uint32_t)d) {
+            snprintf(label, sizeof(label), "* Desktop %d", d + 1);
+        } else {
+            snprintf(label, sizeof(label), "  Desktop %d", d + 1);
+        }
+        render_text(cr, label, s->menu_item.fg, 0, y, menu_w, item_h, font_px);
+        y += item_h;
+    }
+
+    /* All Desktops (sticky) */
+    render_text(cr, c->desktop == 0xFFFFFFFF ? "* All Desktops"
+                                              : "  All Desktops",
+                s->menu_item.fg, 0, y, menu_w, item_h, font_px);
+
+    cairo_destroy(cr);
+    cairo_surface_flush(surface);
+    cairo_surface_destroy(surface);
+    xcb_flush(wm->conn);
+}
+
+void win_menu_show(Wm *wm, WmClient *c)
+{
+    wm_dismiss_menu(wm);
+
+    const IsdeColorScheme *s = isde_theme_current();
+    int item_h = isde_font_height("menu", 6);
+    int total_items = 2 + 1 + wm->num_desktops + 1;
+    int menu_w = 180;
+    int menu_h = total_items * item_h;
+
+    /* Position below the menu button */
+    int mx = c->x + WM_BORDER_WIDTH;
+    int my = c->y + wm->title_height + 1;
+
+    wm->win_menu = xcb_generate_id(wm->conn);
+    uint32_t bg_pixel = wm->screen->white_pixel;
+    if (s) {
+        xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
+            wm->conn,
+            xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                            ((s->menu.bg >> 16) & 0xFF) * 257,
+                            ((s->menu.bg >> 8)  & 0xFF) * 257,
+                            ( s->menu.bg        & 0xFF) * 257),
+            NULL);
+        if (cr) { bg_pixel = cr->pixel; free(cr); }
+    }
+
+    uint32_t vals[] = {
+        bg_pixel,
+        1,
+        XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_EXPOSURE
+    };
+    xcb_create_window(wm->conn, XCB_COPY_FROM_PARENT,
+                      wm->win_menu, wm->root,
+                      mx, my, menu_w, menu_h, 1,
+                      XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                      wm->screen->root_visual,
+                      XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
+                      XCB_CW_EVENT_MASK,
+                      vals);
+    xcb_map_window(wm->conn, wm->win_menu);
+
+    xcb_grab_keyboard(wm->conn, 0, wm->win_menu,
+                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
+                      XCB_GRAB_MODE_ASYNC);
+    xcb_grab_pointer(wm->conn, 0, wm->win_menu,
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(wm->conn);
+
+    wm->menu_client = c;
+    wm->menu_item_count = total_items;
+    wm->menu_item_height = item_h;
+
+    menu_paint(wm);
+}
+
+int win_menu_click(Wm *wm, int16_t x, int16_t y)
+{
+    (void)x;
+    WmClient *c = wm->menu_client;
+    if (!c) {
+        return 0;
+    }
+
+    int item_h = wm->menu_item_height;
+    int idx = y / item_h;
+
+    if (idx == 0) {
+        wm_set_above(wm, c, !c->above);
+    } else if (idx == 1) {
+        wm_set_below(wm, c, !c->below);
+    } else if (idx == 2) {
+        /* separator — do nothing */
+        wm_dismiss_menu(wm);
+        return 1;
+    } else if (idx >= 3 && idx < 3 + wm->num_desktops) {
+        wm_move_to_desktop(wm, c, idx - 3);
+    } else if (idx == 3 + wm->num_desktops) {
+        wm_move_to_desktop(wm, c, 0xFFFFFFFF);
+    }
+
+    wm_dismiss_menu(wm);
+    return 1;
 }

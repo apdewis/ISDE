@@ -66,6 +66,9 @@ if(ISDE_BUILD_COMPOSITOR)
     pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
     pkg_check_modules(GL REQUIRED IMPORTED_TARGET gl)
     pkg_check_modules(XCB_PRESENT REQUIRED IMPORTED_TARGET xcb-present)
+    pkg_check_modules(XCB_COMPOSITE REQUIRED IMPORTED_TARGET xcb-composite)
+    pkg_check_modules(XCB_DAMAGE REQUIRED IMPORTED_TARGET xcb-damage)
+    pkg_check_modules(XCB_RENDER REQUIRED IMPORTED_TARGET xcb-render)
 endif()
 
 # PAM has no pkg-config file on most distros — find it manually
