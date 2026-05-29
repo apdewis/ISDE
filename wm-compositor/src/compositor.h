@@ -23,6 +23,7 @@ typedef struct CompositorWindow {
     float               opacity;         /* current rendered opacity, 0..1 */
     int                 fade_dir;        /* +1 fading in, -1 fading out, 0 idle */
     uint64_t            fade_last_ms;    /* timestamp of last opacity advance */
+    int                 slide_role;      /* +1 incoming, -1 outgoing, 0 not in slide */
     xcb_window_t        above;           /* last-seen above_sibling, for restack detection */
     struct CompositorWindow *next;
 } CompositorWindow;
@@ -46,6 +47,12 @@ typedef struct WmCompositor {
 
     CompositorWindow   *windows;
     int                 needs_repaint;
+
+    int                 slide_active;    /* a desktop-switch slide is in progress */
+    int                 slide_dx, slide_dy; /* slide direction, each in {-1,0,+1} */
+    float               slide_progress;  /* 0..1 */
+    uint64_t            slide_last_ms;    /* timestamp of last slide advance */
+    uint64_t            slide_start_ms;   /* slide begin time, for the pre-tag wait cap */
 } WmCompositor;
 
 struct Wm;
@@ -57,6 +64,7 @@ void  wm_compositor_remove_window(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped);
 void  wm_compositor_paint(WmCompositor *comp);
 int   wm_compositor_animating(WmCompositor *comp);
+void  wm_compositor_slide(WmCompositor *comp, int dx, int dy);
 void  wm_compositor_handle_damage(WmCompositor *comp,
                                    xcb_damage_notify_event_t *ev);
 void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,

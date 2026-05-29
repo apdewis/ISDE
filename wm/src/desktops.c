@@ -71,6 +71,18 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
     uint32_t old = wm->current_desktop;
     wm->current_desktop = desktop;
 
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        int oldcol = old % wm->desk_cols;
+        int oldrow = old / wm->desk_cols;
+        int newcol = desktop % wm->desk_cols;
+        int newrow = desktop / wm->desk_cols;
+        int dx = (newcol > oldcol) - (newcol < oldcol);
+        int dy = (newrow > oldrow) - (newrow < oldrow);
+        wm_compositor_slide(wm->compositor, dx, dy);
+    }
+#endif
+
     for (WmClient *c = wm->clients; c; c = c->next) {
         if (c->desktop == 0xFFFFFFFF) {
             continue;

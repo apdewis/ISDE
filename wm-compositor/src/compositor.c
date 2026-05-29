@@ -585,6 +585,7 @@ void wm_compositor_destroy(WmCompositor *comp)
 /* ---------- fade animation ---------- */
 
 #define FADE_DURATION_MS 150
+#define SLIDE_DURATION_MS 250
 
 static uint64_t comp_now_ms(void)
 {
@@ -688,7 +689,16 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
         return;
     }
     cw->mapped = mapped;
-    cw->fade_dir = mapped ? 1 : -1;
+    if (comp->slide_active) {
+        /* During a desktop switch the window slides rather than fades: tag it
+         * incoming/outgoing, keep it fully opaque, and suppress the fade.
+         * An unmapped window keeps its snapshot so it can slide out. */
+        cw->slide_role = mapped ? 1 : -1;
+        cw->fade_dir = 0;
+        cw->opacity = 1.0f;
+    } else {
+        cw->fade_dir = mapped ? 1 : -1;
+    }
     cw->fade_last_ms = comp_now_ms();
     if (mapped) {
         /* Re-fetch the storage pixmap on next paint — the old one is
@@ -697,6 +707,27 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
     }
     /* On unmap we keep the bound texture so the last frame can fade out;
      * the window stays in the paint list until its opacity reaches 0. */
+    comp->needs_repaint = 1;
+}
+
+void wm_compositor_slide(WmCompositor *comp, int dx, int dy)
+{
+    /* Finalize any slide still in flight: windows that never got remapped were
+     * outgoing and should be gone, and stale roles must not bleed into the new
+     * slide. */
+    for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
+        if (!cw->mapped) {
+            cw->opacity = 0.0f;
+        }
+        cw->slide_role = 0;
+    }
+
+    comp->slide_active = 1;
+    comp->slide_dx = dx;
+    comp->slide_dy = dy;
+    comp->slide_progress = 0.0f;
+    comp->slide_last_ms = comp_now_ms();
+    comp->slide_start_ms = comp->slide_last_ms;
     comp->needs_repaint = 1;
 }
 
@@ -802,6 +833,43 @@ void wm_compositor_paint(WmCompositor *comp)
         }
     }
 
+    /* Advance the desktop-switch slide.  Hold at progress 0 until the map/unmap
+     * events have tagged the participating windows, so the slide doesn't begin
+     * before there is anything to move.  A switch between empty desktops never
+     * tags anything, so cap the wait to avoid spinning forever. */
+    if (comp->slide_active) {
+        int tagged = 0;
+        for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
+            if (cw->slide_role != 0) {
+                tagged = 1;
+                break;
+            }
+        }
+
+        uint64_t now = comp_now_ms();
+        uint64_t dt = now - comp->slide_last_ms;
+        comp->slide_last_ms = now;
+
+        if (tagged) {
+            comp->slide_progress += (float)dt / SLIDE_DURATION_MS;
+        }
+
+        int done = (tagged && comp->slide_progress >= 1.0f) ||
+                   (!tagged && now - comp->slide_start_ms > SLIDE_DURATION_MS);
+        if (done) {
+            comp->slide_progress = 1.0f;
+            comp->slide_active = 0;
+            for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
+                if (cw->slide_role < 0) {
+                    cw->opacity = 0.0f;  /* outgoing window is now off-screen */
+                }
+                cw->slide_role = 0;
+            }
+        } else {
+            comp->needs_repaint = 1;
+        }
+    }
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -836,12 +904,28 @@ void wm_compositor_paint(WmCompositor *comp)
             glBindTexture(GL_TEXTURE_2D, tex);
             glColor4f(1.0f, 1.0f, 1.0f, cw->opacity);
 
+            /* Desktop-switch slide offset.  Outgoing windows slide off toward
+             * the travel edge; incoming windows slide in from the opposite
+             * edge.  Windows not in the slide (e.g. sticky panels) stay put. */
+            float ox = 0.0f, oy = 0.0f;
+            if (cw->slide_role > 0) {
+                ox = (1.0f - comp->slide_progress) * comp->slide_dx *
+                     comp->screen->width_in_pixels;
+                oy = (1.0f - comp->slide_progress) * comp->slide_dy *
+                     comp->screen->height_in_pixels;
+            } else if (cw->slide_role < 0) {
+                ox = -comp->slide_progress * comp->slide_dx *
+                     comp->screen->width_in_pixels;
+                oy = -comp->slide_progress * comp->slide_dy *
+                     comp->screen->height_in_pixels;
+            }
+
             /* Draw the named pixmap verbatim at the window's outer corner —
              * it already contains the border X11 drew. */
-            float x0 = cw->x;
-            float y0 = cw->y;
-            float x1 = cw->x + cw->pw;
-            float y1 = cw->y + cw->ph;
+            float x0 = cw->x + ox;
+            float y0 = cw->y + oy;
+            float x1 = cw->x + cw->pw + ox;
+            float y1 = cw->y + cw->ph + oy;
 
             glBegin(GL_QUADS);
             glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
@@ -859,6 +943,9 @@ void wm_compositor_paint(WmCompositor *comp)
 
 int wm_compositor_animating(WmCompositor *comp)
 {
+    if (comp->slide_active) {
+        return 1;
+    }
     for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
         if (cw->fade_dir != 0) {
             return 1;
