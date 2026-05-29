@@ -2373,6 +2373,14 @@ void wm_run(Wm *wm)
         }
 
         int timeout = wm_timer_next_timeout(wm);
+#ifdef ISDE_COMPOSITOR
+        /* Drive fade animations at ~60fps while the compositor is animating;
+         * the idle cadence (50ms) is too coarse for a smooth fade. */
+        if (wm->compositor && wm_compositor_animating(wm->compositor) &&
+            timeout > 16) {
+            timeout = 16;
+        }
+#endif
         struct pollfd pfd = { .fd = xcb_fd, .events = POLLIN };
         poll(&pfd, 1, timeout);
 

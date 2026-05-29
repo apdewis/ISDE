@@ -11,13 +11,18 @@ typedef struct CompositorWindow {
     xcb_window_t        window;
     xcb_pixmap_t        pixmap;
     xcb_damage_damage_t damage;
-    GLuint              texture;
+    GLuint              texture;         /* live pixmap texture (may alias X storage) */
+    GLuint              snapshot;        /* owned copy of last mapped frame, for fade-out */
+    uint16_t            snap_w, snap_h;  /* snapshot texture size */
     int16_t             x, y;
     uint16_t            width, height;   /* window content size */
     uint16_t            border;          /* X border width */
     uint16_t            pw, ph;          /* pixmap size (incl. border, drawn as-is) */
     int                 dirty;
     int                 mapped;
+    float               opacity;         /* current rendered opacity, 0..1 */
+    int                 fade_dir;        /* +1 fading in, -1 fading out, 0 idle */
+    uint64_t            fade_last_ms;    /* timestamp of last opacity advance */
     xcb_window_t        above;           /* last-seen above_sibling, for restack detection */
     struct CompositorWindow *next;
 } CompositorWindow;
@@ -37,6 +42,7 @@ typedef struct WmCompositor {
     EGLConfig           egl_config;
 
     GLuint              quad_program;
+    GLuint              snapshot_fbo;    /* FBO for copying live textures into snapshots */
 
     CompositorWindow   *windows;
     int                 needs_repaint;
@@ -50,6 +56,7 @@ void  wm_compositor_add_window(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_remove_window(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped);
 void  wm_compositor_paint(WmCompositor *comp);
+int   wm_compositor_animating(WmCompositor *comp);
 void  wm_compositor_handle_damage(WmCompositor *comp,
                                    xcb_damage_notify_event_t *ev);
 void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,

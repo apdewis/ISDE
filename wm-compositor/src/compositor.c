@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <xcb/composite.h>
 #include <xcb/damage.h>
@@ -25,6 +26,31 @@ static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC pfn_glEGLImageTargetTexture2DOES;
 
 static int egl_image_available;
 
+/* Framebuffer-object entry points (not in GL 1.1 headers) — used to copy a
+ * window's live texture into an owned snapshot so fade-out never samples the
+ * X pixmap storage that the server frees on unmap. */
+#ifndef GL_FRAMEBUFFER
+#define GL_FRAMEBUFFER          0x8D40
+#define GL_COLOR_ATTACHMENT0    0x8CE0
+#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#endif
+
+typedef void   (*PFNGLGENFRAMEBUFFERS)(GLsizei n, GLuint *ids);
+typedef void   (*PFNGLBINDFRAMEBUFFER)(GLenum target, GLuint fb);
+typedef void   (*PFNGLFRAMEBUFFERTEXTURE2D)(GLenum target, GLenum att,
+                                            GLenum textarget, GLuint tex,
+                                            GLint level);
+typedef void   (*PFNGLDELETEFRAMEBUFFERS)(GLsizei n, const GLuint *ids);
+typedef GLenum (*PFNGLCHECKFRAMEBUFFERSTATUS)(GLenum target);
+
+static PFNGLGENFRAMEBUFFERS         pfn_glGenFramebuffers;
+static PFNGLBINDFRAMEBUFFER         pfn_glBindFramebuffer;
+static PFNGLFRAMEBUFFERTEXTURE2D    pfn_glFramebufferTexture2D;
+static PFNGLDELETEFRAMEBUFFERS      pfn_glDeleteFramebuffers;
+static PFNGLCHECKFRAMEBUFFERSTATUS  pfn_glCheckFramebufferStatus;
+
+static int fbo_available;
+
 static void load_extensions(void)
 {
     pfn_eglCreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)
@@ -43,6 +69,25 @@ static void load_extensions(void)
     } else {
         fprintf(stderr, "compositor: EGLImage not available, "
                         "using glTexImage2D readback path\n");
+    }
+
+    pfn_glGenFramebuffers = (PFNGLGENFRAMEBUFFERS)
+        eglGetProcAddress("glGenFramebuffers");
+    pfn_glBindFramebuffer = (PFNGLBINDFRAMEBUFFER)
+        eglGetProcAddress("glBindFramebuffer");
+    pfn_glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2D)
+        eglGetProcAddress("glFramebufferTexture2D");
+    pfn_glDeleteFramebuffers = (PFNGLDELETEFRAMEBUFFERS)
+        eglGetProcAddress("glDeleteFramebuffers");
+    pfn_glCheckFramebufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUS)
+        eglGetProcAddress("glCheckFramebufferStatus");
+
+    fbo_available = (pfn_glGenFramebuffers && pfn_glBindFramebuffer &&
+                     pfn_glFramebufferTexture2D && pfn_glDeleteFramebuffers &&
+                     pfn_glCheckFramebufferStatus);
+
+    if (!fbo_available) {
+        fprintf(stderr, "compositor: FBO unavailable, fade-out disabled\n");
     }
 }
 
@@ -189,6 +234,72 @@ static int bind_pixmap_readback(WmCompositor *comp, CompositorWindow *cw)
     return 0;
 }
 
+/* Copy the live texture into the window's owned snapshot texture via an FBO.
+ * The on-screen paint draws the snapshot, so a window can keep fading out
+ * after it unmaps without sampling the X pixmap storage the server has freed.
+ * Only valid to call while the window is mapped (the live texture is valid). */
+static void snapshot_window(WmCompositor *comp, CompositorWindow *cw)
+{
+    if (!fbo_available || !cw->texture || cw->pw == 0 || cw->ph == 0) {
+        return;
+    }
+
+    if (cw->snapshot == 0 || cw->snap_w != cw->pw || cw->snap_h != cw->ph) {
+        if (cw->snapshot == 0) {
+            glGenTextures(1, &cw->snapshot);
+        }
+        glBindTexture(GL_TEXTURE_2D, cw->snapshot);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cw->pw, cw->ph, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        cw->snap_w = cw->pw;
+        cw->snap_h = cw->ph;
+    }
+
+    pfn_glBindFramebuffer(GL_FRAMEBUFFER, comp->snapshot_fbo);
+    pfn_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, cw->snapshot, 0);
+    if (pfn_glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        pfn_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return;
+    }
+
+    /* Identity copy: vertex and texcoord run the same direction so the
+     * snapshot stores pixels in the live texture's orientation. */
+    glViewport(0, 0, cw->pw, cw->ph);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, cw->pw, 0, cw->ph, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_BLEND);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glBindTexture(GL_TEXTURE_2D, cw->texture);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(0.0f, 0.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(cw->pw, 0.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(cw->pw, cw->ph);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(0.0f, cw->ph);
+    glEnd();
+    glEnable(GL_BLEND);
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
+    pfn_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, comp->screen->width_in_pixels,
+               comp->screen->height_in_pixels);
+}
+
 static void bind_pixmap(WmCompositor *comp, CompositorWindow *cw)
 {
     if (cw->pixmap) {
@@ -213,15 +324,20 @@ static void bind_pixmap(WmCompositor *comp, CompositorWindow *cw)
     }
     xcb_flush(comp->conn);
 
-    if (egl_image_available &&
-        bind_pixmap_eglimage(comp, cw) == 0) {
+    int bound = (egl_image_available &&
+                 bind_pixmap_eglimage(comp, cw) == 0);
+    if (!bound) {
+        bound = (bind_pixmap_readback(comp, cw) == 0);
+    }
+    if (!bound) {
+        fprintf(stderr, "compositor: failed to bind pixmap for "
+                        "window 0x%x\n", cw->window);
         return;
     }
 
-    if (bind_pixmap_readback(comp, cw) != 0) {
-        fprintf(stderr, "compositor: failed to bind pixmap for "
-                        "window 0x%x\n", cw->window);
-    }
+    /* Refresh the owned snapshot from the freshly bound live texture so a
+     * later unmap can fade out a valid copy. */
+    snapshot_window(comp, cw);
 }
 
 /* ---------- init / destroy ---------- */
@@ -391,6 +507,10 @@ int wm_compositor_init(Wm *wm)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    if (fbo_available) {
+        pfn_glGenFramebuffers(1, &comp->snapshot_fbo);
+    }
+
     comp->needs_repaint = 1;
     wm->compositor = comp;
 
@@ -435,10 +555,17 @@ void wm_compositor_destroy(WmCompositor *comp)
         if (cw->texture) {
             glDeleteTextures(1, &cw->texture);
         }
+        if (cw->snapshot) {
+            glDeleteTextures(1, &cw->snapshot);
+        }
         if (cw->pixmap) {
             xcb_free_pixmap(comp->conn, cw->pixmap);
         }
         free(cw);
+    }
+
+    if (comp->snapshot_fbo) {
+        pfn_glDeleteFramebuffers(1, &comp->snapshot_fbo);
     }
 
     eglMakeCurrent(comp->egl_display, EGL_NO_SURFACE,
@@ -453,6 +580,17 @@ void wm_compositor_destroy(WmCompositor *comp)
                                          XCB_COMPOSITE_REDIRECT_MANUAL);
     xcb_flush(comp->conn);
     free(comp);
+}
+
+/* ---------- fade animation ---------- */
+
+#define FADE_DURATION_MS 150
+
+static uint64_t comp_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
 /* ---------- window management ---------- */
@@ -496,6 +634,9 @@ void wm_compositor_add_window(WmCompositor *comp, xcb_window_t win)
     cw->border = geo->border_width;
     cw->mapped = 1;
     cw->dirty = 1;
+    cw->opacity = 0.0f;
+    cw->fade_dir = 1;
+    cw->fade_last_ms = comp_now_ms();
     free(geo);
 
     cw->damage = xcb_generate_id(comp->conn);
@@ -530,6 +671,9 @@ void wm_compositor_remove_window(WmCompositor *comp, xcb_window_t win)
     if (cw->texture) {
         glDeleteTextures(1, &cw->texture);
     }
+    if (cw->snapshot) {
+        glDeleteTextures(1, &cw->snapshot);
+    }
     if (cw->pixmap) {
         xcb_free_pixmap(comp->conn, cw->pixmap);
     }
@@ -544,11 +688,15 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
         return;
     }
     cw->mapped = mapped;
+    cw->fade_dir = mapped ? 1 : -1;
+    cw->fade_last_ms = comp_now_ms();
     if (mapped) {
         /* Re-fetch the storage pixmap on next paint — the old one is
          * stale after an unmap/remap cycle. */
         cw->dirty = 1;
     }
+    /* On unmap we keep the bound texture so the last frame can fade out;
+     * the window stays in the paint list until its opacity reaches 0. */
     comp->needs_repaint = 1;
 }
 
@@ -573,8 +721,11 @@ void wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
     cw->height = height;
     cw->border = border;
 
-    if (resized) {
+    if (resized && cw->mapped) {
         bind_pixmap(comp, cw);
+    } else if (resized) {
+        /* Unmapped: defer the rebind to the next map (set_mapped sets dirty). */
+        cw->dirty = 1;
     }
 
     /* A change in above_sibling means the window was restacked.  Rebuild the
@@ -623,6 +774,34 @@ void wm_compositor_paint(WmCompositor *comp)
         }
     }
 
+    /* Advance fade animations by elapsed wall-clock time so the speed is
+     * independent of frame rate.  Re-arm needs_repaint while any window is
+     * still animating so the next loop iteration paints the next frame. */
+    {
+        uint64_t now = comp_now_ms();
+        for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
+            if (cw->fade_dir == 0) {
+                continue;
+            }
+            uint64_t dt = now - cw->fade_last_ms;
+            cw->fade_last_ms = now;
+            cw->opacity += cw->fade_dir * (float)dt / FADE_DURATION_MS;
+            /* Only complete in the direction we're actually fading.  A dt==0
+             * first frame leaves opacity at the start value (1.0 fading out,
+             * 0.0 fading in); a direction-blind check would mistake that for
+             * completion and freeze the fade. */
+            if (cw->fade_dir > 0 && cw->opacity >= 1.0f) {
+                cw->opacity = 1.0f;
+                cw->fade_dir = 0;
+            } else if (cw->fade_dir < 0 && cw->opacity <= 0.0f) {
+                cw->opacity = 0.0f;
+                cw->fade_dir = 0;
+            } else {
+                comp->needs_repaint = 1;
+            }
+        }
+    }
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -643,12 +822,19 @@ void wm_compositor_paint(WmCompositor *comp)
 
         for (i = 0; i < count; i++) {
             CompositorWindow *cw = order[i];
-            if (!cw->mapped || !cw->texture) {
+            /* Draw the owned snapshot so fade-out doesn't sample freed pixmap
+             * storage; fall back to the live texture only while mapped (e.g.
+             * when no FBO is available to snapshot). */
+            GLuint tex = cw->snapshot ? cw->snapshot
+                                      : (cw->mapped ? cw->texture : 0);
+            /* Paint mapped windows, and unmapped ones still fading out.
+             * Skip when fully transparent and unmapped, or with no texture. */
+            if ((!cw->mapped && cw->opacity <= 0.0f) || !tex) {
                 continue;
             }
 
-            glBindTexture(GL_TEXTURE_2D, cw->texture);
-            glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glColor4f(1.0f, 1.0f, 1.0f, cw->opacity);
 
             /* Draw the named pixmap verbatim at the window's outer corner —
              * it already contains the border X11 drew. */
@@ -669,4 +855,14 @@ void wm_compositor_paint(WmCompositor *comp)
     }
 
     eglSwapBuffers(comp->egl_display, comp->egl_surface);
+}
+
+int wm_compositor_animating(WmCompositor *comp)
+{
+    for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {
+        if (cw->fade_dir != 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
