@@ -1452,9 +1452,6 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
                 (int32_t)(c->user_time - wm->last_user_time) < 0) {
                 dominated_focus = 0;
             }
-            if (c->user_time == 0 && wm->focused) {
-                dominated_focus = 0;
-            }
         }
 
         if (dominated_focus) {
