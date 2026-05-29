@@ -29,26 +29,32 @@ void frame_init_icons(Wm *wm)
     if (wm->icon_close)    { cairo_surface_destroy(wm->icon_close); }
     if (wm->icon_menu)     { cairo_surface_destroy(wm->icon_menu); }
 
+    /* Icons use SVG `currentColor`; tint with the theme foreground so they
+     * match the title bar (close button uses its own foreground). */
+    const IsdeColorScheme *s = isde_theme_current();
+    unsigned int fg = s ? s->titlebar_button.fg : 0x000000;
+    unsigned int close_fg = s ? s->close_button.fg : 0x000000;
+
     char *path;
 
     path = isde_icon_find("actions", "window-minimize");
-    wm->icon_minimize = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    wm->icon_minimize = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
     free(path);
 
     path = isde_icon_find("actions", "window-maximize");
-    wm->icon_maximize = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    wm->icon_maximize = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
     free(path);
 
     path = isde_icon_find("actions", "window-restore");
-    wm->icon_restore = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    wm->icon_restore = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
     free(path);
 
     path = isde_icon_find("actions", "window-close");
-    wm->icon_close = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    wm->icon_close = path ? render_svg_to_surface(path, icon_sz, close_fg) : NULL;
     free(path);
 
     path = isde_icon_find("actions", "application-menu");
-    wm->icon_menu = path ? render_svg_to_surface(path, icon_sz) : NULL;
+    wm->icon_menu = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
     free(path);
 }
 

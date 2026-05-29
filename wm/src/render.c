@@ -21,13 +21,71 @@ static void color_to_cairo(unsigned int rgb, double *r, double *g, double *b)
     *b = ( rgb        & 0xFF) / 255.0;
 }
 
-cairo_surface_t *render_svg_to_surface(const char *path, int size)
+/* Read an SVG file, replacing every "currentColor" with "#RRGGBB".
+ * Returns a malloc'd, NUL-terminated buffer the caller must free. */
+static char *svg_load_tinted(const char *path, unsigned int tint)
+{
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        return NULL;
+    }
+    fseek(fp, 0, SEEK_END);
+    long len = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    if (len < 0) {
+        fclose(fp);
+        return NULL;
+    }
+
+    char *src = malloc(len + 1);
+    if (!src) {
+        fclose(fp);
+        return NULL;
+    }
+    size_t got = fread(src, 1, len, fp);
+    src[got] = '\0';
+    fclose(fp);
+
+    char hex[8];
+    snprintf(hex, sizeof(hex), "#%06X", tint & 0xFFFFFF);
+
+    /* "#RRGGBB" (7) is shorter than "currentColor" (12), so the result
+     * never grows beyond the source length. */
+    const char *needle = "currentColor";
+    size_t nlen = strlen(needle);
+    char *out = malloc(got + 1);
+    if (!out) {
+        free(src);
+        return NULL;
+    }
+    char *w = out;
+    for (char *r = src; *r; ) {
+        if (strncmp(r, needle, nlen) == 0) {
+            memcpy(w, hex, 7);
+            w += 7;
+            r += nlen;
+        } else {
+            *w++ = *r++;
+        }
+    }
+    *w = '\0';
+    free(src);
+    return out;
+}
+
+cairo_surface_t *render_svg_to_surface(const char *path, int size,
+                                       unsigned int tint)
 {
     if (!path || size < 1) {
         return NULL;
     }
 
-    NSVGimage *svg = nsvgParseFromFile(path, "px", 96.0f);
+    char *data = svg_load_tinted(path, tint);
+    if (!data) {
+        return NULL;
+    }
+    NSVGimage *svg = nsvgParse(data, "px", 96.0f);
+    free(data);
     if (!svg) {
         return NULL;
     }

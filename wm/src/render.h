@@ -9,8 +9,11 @@
 #include <cairo/cairo-xcb.h>
 
 /* Rasterize an SVG file to a Cairo image surface at the given size.
+ * Any `currentColor` in the SVG is substituted with `tint` (0xRRGGBB) so
+ * monochrome icons take the theme foreground colour.
  * Returns NULL on failure. Caller must cairo_surface_destroy(). */
-cairo_surface_t *render_svg_to_surface(const char *path, int size);
+cairo_surface_t *render_svg_to_surface(const char *path, int size,
+                                       unsigned int tint);
 
 /* Paint a solid rectangle with an 0xRRGGBB color */
 void render_fill_rect(cairo_t *cr, unsigned int color,
