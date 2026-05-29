@@ -2259,7 +2259,8 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
             wm_compositor_window_configured(wm->compositor, cn->window,
                                             cn->x, cn->y,
                                             cn->width, cn->height,
-                                            cn->border_width);
+                                            cn->border_width,
+                                            cn->above_sibling);
         }
         break;
     }

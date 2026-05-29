@@ -18,6 +18,7 @@ typedef struct CompositorWindow {
     uint16_t            pw, ph;          /* pixmap size (incl. border, drawn as-is) */
     int                 dirty;
     int                 mapped;
+    xcb_window_t        above;           /* last-seen above_sibling, for restack detection */
     struct CompositorWindow *next;
 } CompositorWindow;
 
@@ -54,6 +55,7 @@ void  wm_compositor_handle_damage(WmCompositor *comp,
 void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                        int16_t x, int16_t y,
                                        uint16_t width, uint16_t height,
-                                       uint16_t border);
+                                       uint16_t border,
+                                       xcb_window_t above_sibling);
 
 #endif /* ISDE_COMPOSITOR_H */

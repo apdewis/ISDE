@@ -58,6 +58,58 @@ static CompositorWindow *find_comp_window(WmCompositor *comp, xcb_window_t win)
     return NULL;
 }
 
+/* Rebuild the window list to match the X server's stacking order.
+ * QueryTree returns root's children bottom-to-top; we reuse the existing
+ * nodes (preserving pixmaps/textures/damage) and reorder so the head is the
+ * topmost window.  Filtering through find_comp_window drops untracked siblings
+ * such as the composite overlay, which can appear as a ConfigureNotify's
+ * above_sibling but must never enter the paint list. */
+static void compositor_restack_from_tree(WmCompositor *comp)
+{
+    xcb_query_tree_reply_t *tree = xcb_query_tree_reply(comp->conn,
+        xcb_query_tree(comp->conn, comp->screen->root), NULL);
+    if (!tree) {
+        return;
+    }
+
+    xcb_window_t *children = xcb_query_tree_children(tree);
+    int n = xcb_query_tree_children_length(tree);
+
+    CompositorWindow *newlist = NULL;
+    for (int i = 0; i < n; i++) {
+        CompositorWindow **pp = &comp->windows;
+        while (*pp && (*pp)->window != children[i]) {
+            pp = &(*pp)->next;
+        }
+        if (!*pp) {
+            continue;
+        }
+        CompositorWindow *cw = *pp;
+        *pp = cw->next;
+        /* Prepend while walking bottom-to-top, so the topmost child ends up
+         * at the head. */
+        cw->next = newlist;
+        newlist = cw;
+    }
+
+    /* Anything left untracked by QueryTree (should not happen) goes to the
+     * bottom so no window is silently dropped. */
+    if (comp->windows) {
+        if (!newlist) {
+            newlist = comp->windows;
+        } else {
+            CompositorWindow *t = newlist;
+            while (t->next) {
+                t = t->next;
+            }
+            t->next = comp->windows;
+        }
+    }
+
+    comp->windows = newlist;
+    free(tree);
+}
+
 static void ensure_texture(CompositorWindow *cw)
 {
     if (!cw->texture) {
@@ -503,7 +555,8 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
 void wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                       int16_t x, int16_t y,
                                       uint16_t width, uint16_t height,
-                                      uint16_t border)
+                                      uint16_t border,
+                                      xcb_window_t above_sibling)
 {
     CompositorWindow *cw = find_comp_window(comp, win);
     if (!cw) {
@@ -522,6 +575,15 @@ void wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
 
     if (resized) {
         bind_pixmap(comp, cw);
+    }
+
+    /* A change in above_sibling means the window was restacked.  Rebuild the
+     * paint order from the server's actual stacking; skip when it is unchanged
+     * so move/resize ConfigureNotify floods (e.g. interactive drags) don't
+     * each trigger a QueryTree round-trip. */
+    if (cw->above != above_sibling) {
+        cw->above = above_sibling;
+        compositor_restack_from_tree(comp);
     }
 
     comp->needs_repaint = 1;
