@@ -2200,7 +2200,8 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         if (wm->compositor && cn->event == wm->root) {
             wm_compositor_window_configured(wm->compositor, cn->window,
                                             cn->x, cn->y,
-                                            cn->width, cn->height);
+                                            cn->width, cn->height,
+                                            cn->border_width);
         }
         break;
     }

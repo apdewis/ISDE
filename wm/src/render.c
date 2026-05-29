@@ -92,6 +92,23 @@ void render_fill_rect(cairo_t *cr, unsigned int color,
     cairo_fill(cr);
 }
 
+void render_stroke_rect(cairo_t *cr, unsigned int color,
+                        int x, int y, int w, int h, int thickness)
+{
+    if (thickness < 1) {
+        thickness = 1;
+    }
+    double r, g, b;
+    color_to_cairo(color, &r, &g, &b);
+    cairo_set_source_rgb(cr, r, g, b);
+    /* Four filled edge rects, all inside [x,x+w) x [y,y+h). */
+    cairo_rectangle(cr, x, y, w, thickness);                  /* top */
+    cairo_rectangle(cr, x, y + h - thickness, w, thickness);  /* bottom */
+    cairo_rectangle(cr, x, y, thickness, h);                  /* left */
+    cairo_rectangle(cr, x + w - thickness, y, thickness, h);  /* right */
+    cairo_fill(cr);
+}
+
 void render_text(cairo_t *cr, const char *text, unsigned int fg_color,
                  int x, int y, int w, int h, int font_px)
 {

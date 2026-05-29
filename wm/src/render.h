@@ -16,6 +16,10 @@ cairo_surface_t *render_svg_to_surface(const char *path, int size);
 void render_fill_rect(cairo_t *cr, unsigned int color,
                       int x, int y, int w, int h);
 
+/* Draw a rectangle outline of the given thickness, inside [x,x+w) x [y,y+h). */
+void render_stroke_rect(cairo_t *cr, unsigned int color,
+                        int x, int y, int w, int h, int thickness);
+
 /* Paint text left-aligned within a rectangle, vertically centered.
  * Uses the default sans font. */
 void render_text(cairo_t *cr, const char *text, unsigned int fg_color,

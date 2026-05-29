@@ -99,13 +99,13 @@ static int bind_pixmap_eglimage(WmCompositor *comp, CompositorWindow *cw)
 
 static int bind_pixmap_readback(WmCompositor *comp, CompositorWindow *cw)
 {
-    if (!cw->pixmap || cw->width == 0 || cw->height == 0) {
+    if (!cw->pixmap || cw->pw == 0 || cw->ph == 0) {
         return -1;
     }
 
     xcb_get_image_reply_t *img = xcb_get_image_reply(comp->conn,
         xcb_get_image(comp->conn, XCB_IMAGE_FORMAT_Z_PIXMAP,
-                      cw->pixmap, 0, 0, cw->width, cw->height,
+                      cw->pixmap, 0, 0, cw->pw, cw->ph,
                       0xFFFFFFFF), NULL);
     if (!img) {
         return -1;
@@ -113,7 +113,7 @@ static int bind_pixmap_readback(WmCompositor *comp, CompositorWindow *cw)
 
     uint8_t *data = xcb_get_image_data(img);
     int len = xcb_get_image_data_length(img);
-    int npixels = cw->width * cw->height;
+    int npixels = cw->pw * cw->ph;
     if (len < npixels * 4) {
         free(img);
         return -1;
@@ -129,7 +129,7 @@ static int bind_pixmap_readback(WmCompositor *comp, CompositorWindow *cw)
     ensure_texture(cw);
     glBindTexture(GL_TEXTURE_2D, cw->texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                 cw->width, cw->height, 0,
+                 cw->pw, cw->ph, 0,
                  GL_BGRA, GL_UNSIGNED_BYTE, data);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -146,6 +146,19 @@ static void bind_pixmap(WmCompositor *comp, CompositorWindow *cw)
 
     cw->pixmap = xcb_generate_id(comp->conn);
     xcb_composite_name_window_pixmap(comp->conn, cw->window, cw->pixmap);
+
+    /* The named pixmap is whatever X11 rendered — content plus the border
+     * X11 drew around it.  Use its real size and draw it verbatim. */
+    xcb_get_geometry_reply_t *pg = xcb_get_geometry_reply(comp->conn,
+        xcb_get_geometry(comp->conn, cw->pixmap), NULL);
+    if (pg) {
+        cw->pw = pg->width;
+        cw->ph = pg->height;
+        free(pg);
+    } else {
+        cw->pw = cw->width;
+        cw->ph = cw->height;
+    }
     xcb_flush(comp->conn);
 
     if (egl_image_available &&
@@ -428,6 +441,7 @@ void wm_compositor_add_window(WmCompositor *comp, xcb_window_t win)
     cw->y = geo->y;
     cw->width = geo->width;
     cw->height = geo->height;
+    cw->border = geo->border_width;
     cw->mapped = 1;
     cw->dirty = 1;
     free(geo);
@@ -488,18 +502,23 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
 
 void wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                       int16_t x, int16_t y,
-                                      uint16_t width, uint16_t height)
+                                      uint16_t width, uint16_t height,
+                                      uint16_t border)
 {
     CompositorWindow *cw = find_comp_window(comp, win);
     if (!cw) {
         return;
     }
 
-    int resized = (cw->width != width || cw->height != height);
+    /* The named pixmap covers the window plus its border, so a border
+     * change resizes the pixmap and needs a rebind too. */
+    int resized = (cw->width != width || cw->height != height ||
+                   cw->border != border);
     cw->x = x;
     cw->y = y;
     cw->width = width;
     cw->height = height;
+    cw->border = border;
 
     if (resized) {
         bind_pixmap(comp, cw);
@@ -569,10 +588,12 @@ void wm_compositor_paint(WmCompositor *comp)
             glBindTexture(GL_TEXTURE_2D, cw->texture);
             glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
+            /* Draw the named pixmap verbatim at the window's outer corner —
+             * it already contains the border X11 drew. */
             float x0 = cw->x;
             float y0 = cw->y;
-            float x1 = cw->x + cw->width;
-            float y1 = cw->y + cw->height;
+            float x1 = cw->x + cw->pw;
+            float y1 = cw->y + cw->ph;
 
             glBegin(GL_QUADS);
             glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);

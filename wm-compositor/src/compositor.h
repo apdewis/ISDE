@@ -13,7 +13,9 @@ typedef struct CompositorWindow {
     xcb_damage_damage_t damage;
     GLuint              texture;
     int16_t             x, y;
-    uint16_t            width, height;
+    uint16_t            width, height;   /* window content size */
+    uint16_t            border;          /* X border width */
+    uint16_t            pw, ph;          /* pixmap size (incl. border, drawn as-is) */
     int                 dirty;
     int                 mapped;
     struct CompositorWindow *next;
@@ -51,6 +53,7 @@ void  wm_compositor_handle_damage(WmCompositor *comp,
                                    xcb_damage_notify_event_t *ev);
 void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                        int16_t x, int16_t y,
-                                       uint16_t width, uint16_t height);
+                                       uint16_t width, uint16_t height,
+                                       uint16_t border);
 
 #endif /* ISDE_COMPOSITOR_H */

@@ -180,6 +180,10 @@ static void paint_osd(Wm *wm, int w, int h)
             } else if (scheme) {
                 render_fill_rect(cr, scheme->bg_light, cx, cy, cell, cell);
             }
+            if (scheme) {
+                render_stroke_rect(cr, scheme->border, cx, cy, cell, cell,
+                                   wm_scale(wm, 1));
+            }
 
             char name[16];
             snprintf(name, sizeof(name), "%d", idx + 1);
@@ -216,7 +220,6 @@ void wm_desktops_show_osd(Wm *wm)
     }
 
     if (wm->desk_osd) {
-        /* Reposition and repaint existing window */
         uint32_t vals[] = { sx, sy, w, h };
         xcb_configure_window(wm->conn, wm->desk_osd,
                              XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
@@ -227,6 +230,7 @@ void wm_desktops_show_osd(Wm *wm)
     } else {
         const IsdeColorScheme *scheme = isde_theme_current();
         uint32_t bg_pixel = wm->screen->black_pixel;
+        uint32_t border_pixel = wm->screen->white_pixel;
         if (scheme) {
             xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
                 wm->conn,
@@ -236,11 +240,21 @@ void wm_desktops_show_osd(Wm *wm)
                                 ( scheme->bg        & 0xFF) * 257),
                 NULL);
             if (cr) { bg_pixel = cr->pixel; free(cr); }
+
+            xcb_alloc_color_reply_t *bc = xcb_alloc_color_reply(
+                wm->conn,
+                xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                                ((scheme->border >> 16) & 0xFF) * 257,
+                                ((scheme->border >> 8)  & 0xFF) * 257,
+                                ( scheme->border        & 0xFF) * 257),
+                NULL);
+            if (bc) { border_pixel = bc->pixel; free(bc); }
         }
 
         wm->desk_osd = xcb_generate_id(wm->conn);
         uint32_t vals[] = {
             bg_pixel,
+            border_pixel,
             1,
             XCB_EVENT_MASK_EXPOSURE
         };
@@ -249,8 +263,8 @@ void wm_desktops_show_osd(Wm *wm)
                           sx, sy, w, h, 1,
                           XCB_WINDOW_CLASS_INPUT_OUTPUT,
                           wm->screen->root_visual,
-                          XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT |
-                          XCB_CW_EVENT_MASK,
+                          XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
+                          XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK,
                           vals);
         xcb_map_window(wm->conn, wm->desk_osd);
         xcb_flush(wm->conn);
