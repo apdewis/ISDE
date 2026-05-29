@@ -232,12 +232,19 @@ typedef struct Wm {
     /* Timer system */
     WmTimer                timers[WM_MAX_TIMERS];
 
-    /* Cached SVG icon surfaces for title bar buttons */
+    /* Cached SVG icon surfaces for title bar buttons.
+     * *_inv variants are tinted with the button background colour, for the
+     * inverted (pressed) state where bg and fg are swapped. */
     cairo_surface_t       *icon_minimize;
     cairo_surface_t       *icon_maximize;
     cairo_surface_t       *icon_restore;
     cairo_surface_t       *icon_close;
     cairo_surface_t       *icon_menu;
+    cairo_surface_t       *icon_minimize_inv;
+    cairo_surface_t       *icon_maximize_inv;
+    cairo_surface_t       *icon_restore_inv;
+    cairo_surface_t       *icon_close_inv;
+    cairo_surface_t       *icon_menu_inv;
 
     int                    running;
     int                    restart;

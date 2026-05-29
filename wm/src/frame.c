@@ -23,39 +23,43 @@ void frame_init_icons(Wm *wm)
     int icon_sz = wm->title_height - wm_scale(wm, 4);
     if (icon_sz < 8) { icon_sz = 8; }
 
-    if (wm->icon_minimize) { cairo_surface_destroy(wm->icon_minimize); }
-    if (wm->icon_maximize) { cairo_surface_destroy(wm->icon_maximize); }
-    if (wm->icon_restore)  { cairo_surface_destroy(wm->icon_restore); }
-    if (wm->icon_close)    { cairo_surface_destroy(wm->icon_close); }
-    if (wm->icon_menu)     { cairo_surface_destroy(wm->icon_menu); }
+    cairo_surface_t **all[] = {
+        &wm->icon_minimize, &wm->icon_maximize, &wm->icon_restore,
+        &wm->icon_close, &wm->icon_menu,
+        &wm->icon_minimize_inv, &wm->icon_maximize_inv, &wm->icon_restore_inv,
+        &wm->icon_close_inv, &wm->icon_menu_inv,
+    };
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) {
+        if (*all[i]) { cairo_surface_destroy(*all[i]); *all[i] = NULL; }
+    }
 
-    /* Icons use SVG `currentColor`; tint with the theme foreground so they
-     * match the title bar (close button uses its own foreground). */
+    /* Icons use SVG `currentColor`.  Normal icons take the button foreground;
+     * the inverted (pressed) icons take the button background, so a pressed
+     * button is the same colours swapped. */
     const IsdeColorScheme *s = isde_theme_current();
-    unsigned int fg = s ? s->titlebar_button.fg : 0x000000;
+    unsigned int fg       = s ? s->titlebar_button.fg : 0x000000;
+    unsigned int bg       = s ? s->titlebar_button.bg : 0xFFFFFF;
     unsigned int close_fg = s ? s->close_button.fg : 0x000000;
+    unsigned int close_bg = s ? s->close_button.bg : 0xFFFFFF;
 
-    char *path;
-
-    path = isde_icon_find("actions", "window-minimize");
-    wm->icon_minimize = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
-    free(path);
-
-    path = isde_icon_find("actions", "window-maximize");
-    wm->icon_maximize = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
-    free(path);
-
-    path = isde_icon_find("actions", "window-restore");
-    wm->icon_restore = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
-    free(path);
-
-    path = isde_icon_find("actions", "window-close");
-    wm->icon_close = path ? render_svg_to_surface(path, icon_sz, close_fg) : NULL;
-    free(path);
-
-    path = isde_icon_find("actions", "application-menu");
-    wm->icon_menu = path ? render_svg_to_surface(path, icon_sz, fg) : NULL;
-    free(path);
+    struct { const char *name; cairo_surface_t **dst; unsigned int tint; } icons[] = {
+        { "window-minimize", &wm->icon_minimize,     fg },
+        { "window-maximize", &wm->icon_maximize,     fg },
+        { "window-restore",  &wm->icon_restore,      fg },
+        { "window-close",    &wm->icon_close,        close_fg },
+        { "application-menu",&wm->icon_menu,         fg },
+        { "window-minimize", &wm->icon_minimize_inv, bg },
+        { "window-maximize", &wm->icon_maximize_inv, bg },
+        { "window-restore",  &wm->icon_restore_inv,  bg },
+        { "window-close",    &wm->icon_close_inv,    close_bg },
+        { "application-menu",&wm->icon_menu_inv,     bg },
+    };
+    for (size_t i = 0; i < sizeof(icons) / sizeof(icons[0]); i++) {
+        char *path = isde_icon_find("actions", icons[i].name);
+        *icons[i].dst = path
+            ? render_svg_to_surface(path, icon_sz, icons[i].tint) : NULL;
+        free(path);
+    }
 }
 
 /* ---------- title fetching ---------- */
@@ -295,10 +299,19 @@ void frame_paint(Wm *wm, WmClient *c)
 
     cairo_t *cr = cairo_create(c->frame_surface);
 
-    /* Title bar background */
-    render_fill_rect(cr, tb->bg, 0, 0, fw, th);
+    const IsdeElementColors *btn_colors = &s->titlebar_button;
+    const IsdeElementColors *close_colors = &s->close_button;
 
-    /* Menu button (left) */
+    int min_x   = fw - 3 * th;
+    int max_x   = fw - 2 * th;
+    int close_x = fw - th;
+
+    /* Only the title label region reflects focus (active vs inactive);
+     * the buttons keep their own background regardless of focus. */
+    render_fill_rect(cr, tb->bg, title_x, 0, title_w, th);
+
+    /* Menu button (left) — styled like the other buttons */
+    render_fill_rect(cr, btn_colors->bg, 0, 0, th, th);
     render_icon(cr, wm->icon_menu, 0, 0, th, th);
 
     /* Title text */
@@ -309,13 +322,6 @@ void frame_paint(Wm *wm, WmClient *c)
     render_text_centered(cr, display, tb->fg, title_x, 0, title_w, th, font_px);
 
     /* Right-hand buttons — must match frame_button_at() layout */
-    const IsdeElementColors *btn_colors = &s->titlebar_button;
-    const IsdeElementColors *close_colors = &s->close_button;
-
-    int min_x   = fw - 3 * th;
-    int max_x   = fw - 2 * th;
-    int close_x = fw - th;
-
     render_fill_rect(cr, btn_colors->bg, min_x, 0, th, th);
     render_icon(cr, wm->icon_minimize, min_x, 0, th, th);
 
@@ -326,23 +332,30 @@ void frame_paint(Wm *wm, WmClient *c)
     render_fill_rect(cr, close_colors->bg, close_x, 0, th, th);
     render_icon(cr, wm->icon_close, close_x, 0, th, th);
 
-    /* Invert the button currently held down (DIFFERENCE with white flips
-     * the destination pixels — inverts bg and icon together). */
+    /* The button currently held down is drawn with bg and fg swapped:
+     * fill with the foreground colour and draw the background-tinted icon. */
     if (wm->btn_press_client == c && wm->btn_press_hover &&
         wm->btn_press_btn >= 0) {
         int bx = 0;
+        unsigned int swap_bg = btn_colors->fg;
+        cairo_surface_t *inv = NULL;
         switch (wm->btn_press_btn) {
-        case FRAME_BTN_MENU:     bx = 0;        break;
-        case FRAME_BTN_MINIMIZE: bx = min_x;    break;
-        case FRAME_BTN_MAXIMIZE: bx = max_x;    break;
-        case FRAME_BTN_CLOSE:    bx = close_x;  break;
+        case FRAME_BTN_MENU:
+            bx = 0; swap_bg = btn_colors->fg; inv = wm->icon_menu_inv;
+            break;
+        case FRAME_BTN_MINIMIZE:
+            bx = min_x; swap_bg = btn_colors->fg; inv = wm->icon_minimize_inv;
+            break;
+        case FRAME_BTN_MAXIMIZE:
+            bx = max_x; swap_bg = btn_colors->fg;
+            inv = c->maximized ? wm->icon_restore_inv : wm->icon_maximize_inv;
+            break;
+        case FRAME_BTN_CLOSE:
+            bx = close_x; swap_bg = close_colors->fg; inv = wm->icon_close_inv;
+            break;
         }
-        cairo_save(cr);
-        cairo_set_operator(cr, CAIRO_OPERATOR_DIFFERENCE);
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-        cairo_rectangle(cr, bx, 0, th, th);
-        cairo_fill(cr);
-        cairo_restore(cr);
+        render_fill_rect(cr, swap_bg, bx, 0, th, th);
+        render_icon(cr, inv, bx, 0, th, th);
     }
 
     cairo_destroy(cr);

@@ -2443,6 +2443,11 @@ void wm_cleanup(Wm *wm)
     if (wm->icon_restore)  { cairo_surface_destroy(wm->icon_restore); }
     if (wm->icon_close)    { cairo_surface_destroy(wm->icon_close); }
     if (wm->icon_menu)     { cairo_surface_destroy(wm->icon_menu); }
+    if (wm->icon_minimize_inv) { cairo_surface_destroy(wm->icon_minimize_inv); }
+    if (wm->icon_maximize_inv) { cairo_surface_destroy(wm->icon_maximize_inv); }
+    if (wm->icon_restore_inv)  { cairo_surface_destroy(wm->icon_restore_inv); }
+    if (wm->icon_close_inv)    { cairo_surface_destroy(wm->icon_close_inv); }
+    if (wm->icon_menu_inv)     { cairo_surface_destroy(wm->icon_menu_inv); }
 
     free(wm->docks);
     wm->docks = NULL;
