@@ -335,35 +335,15 @@ static void winmenu_dismiss(Wm *wm, WmClient *c)
         IswDestroyWidget(c->win_menu);
         c->win_menu = NULL;
     }
-}
-
-static void winmenu_button_handler(Widget w, IswPointer client_data,
-                                   xcb_generic_event_t *xev, Boolean *cont)
-{
-    (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS) {
-        return;
-    }
-    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
-    if (bev->event == IswWindow(w)) {
-        void **cl = (void **)client_data;
-        winmenu_dismiss(cl[0], cl[1]);
+    if (wm->menu_client == c) {
+        wm->menu_client = NULL;
     }
 }
 
-static void winmenu_key_handler(Widget w, IswPointer client_data,
-                                xcb_generic_event_t *xev, Boolean *cont)
+void wm_dismiss_menu(Wm *wm)
 {
-    (void)w; (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
-        return;
-    }
-    void **cl = (void **)client_data;
-    Wm *wm = cl[0];
-    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-    xcb_keysym_t sym = xcb_key_symbols_get_keysym(wm->keysyms, kev->detail, 0);
-    if (sym == XK_Escape) {
-        winmenu_dismiss(wm, cl[1]);
+    if (wm->menu_client) {
+        winmenu_dismiss(wm, wm->menu_client);
     }
 }
 
@@ -380,6 +360,7 @@ static void above_callback(Widget w, IswPointer client_data,
     Wm *wm       = ((void **)client_data)[0];
     WmClient *c   = ((void **)client_data)[1];
     wm_set_above(wm, c, !c->above);
+    winmenu_dismiss(wm, c);
 }
 
 static void below_callback(Widget w, IswPointer client_data,
@@ -389,6 +370,7 @@ static void below_callback(Widget w, IswPointer client_data,
     Wm *wm       = ((void **)client_data)[0];
     WmClient *c   = ((void **)client_data)[1];
     wm_set_below(wm, c, !c->below);
+    winmenu_dismiss(wm, c);
 }
 
 static void desktop_move_callback(Widget w, IswPointer client_data,
@@ -397,6 +379,7 @@ static void desktop_move_callback(Widget w, IswPointer client_data,
     (void)w; (void)call_data;
     MenuDesktopClosure *mc = client_data;
     wm_move_to_desktop(mc->wm, mc->client, mc->desktop);
+    winmenu_dismiss(mc->wm, mc->client);
 }
 
 static void free_closure_callback(Widget w, IswPointer client_data,
@@ -485,23 +468,19 @@ static void win_menu_show(Wm *wm, WmClient *c)
     IswArgY(&ab, by + (Position)bh);
     IswSetValues(c->win_menu, ab.args, ab.count);
 
-    IswAddEventHandler(c->win_menu,
-                      XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS,
-                      False, winmenu_button_handler, closure);
-    IswAddEventHandler(c->win_menu, XCB_EVENT_MASK_KEY_PRESS,
-                      False, winmenu_key_handler, closure);
-
     IswPopup(c->win_menu, IswGrabNone);
 
-    xcb_grab_keyboard(wm->conn, 1, IswWindow(c->win_menu),
+    xcb_grab_keyboard(wm->conn, 0, IswWindow(c->win_menu),
                       XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
                       XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(wm->conn, 1, IswWindow(c->win_menu),
+    xcb_grab_pointer(wm->conn, 0, IswWindow(c->win_menu),
                      XCB_EVENT_MASK_BUTTON_PRESS |
                      XCB_EVENT_MASK_BUTTON_RELEASE,
                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                      XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
     xcb_flush(wm->conn);
+
+    wm->menu_client = c;
 }
 
 static void menu_button_callback(Widget w, IswPointer client_data,

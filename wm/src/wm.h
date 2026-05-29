@@ -179,6 +179,9 @@ typedef struct Wm {
     int                    switcher_sel;     /* currently highlighted index */
     int                    switcher_active;  /* 1 while Alt is held */
 
+    /* Active window menu (NULL = none open) */
+    WmClient              *menu_client;
+
     /* Drag state */
     enum { DRAG_NONE, DRAG_MOVE, DRAG_RESIZE } drag_mode;
     int                    resize_edge;
@@ -260,6 +263,7 @@ void      frame_set_extents(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
+void      wm_dismiss_menu(Wm *wm);
 void      frame_disambiguate_all(Wm *wm, const char *base_title,
                                  const char *base_icon);
 void      frame_read_size_hints(Wm *wm, WmClient *c);

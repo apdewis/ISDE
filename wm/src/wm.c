@@ -1953,6 +1953,29 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
         return;
     }
 
+    if (wm->menu_client && wm->menu_client->win_menu) {
+        xcb_window_t mwin = IswWindow(wm->menu_client->win_menu);
+        if (type == XCB_BUTTON_PRESS) {
+            xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
+            if (bp->event == mwin &&
+                bp->event_x >= 0 && bp->event_y >= 0) {
+                Dimension mw = IswWidth(wm->menu_client->win_menu);
+                Dimension mh = IswHeight(wm->menu_client->win_menu);
+                if (bp->event_x < (int16_t)mw &&
+                    bp->event_y < (int16_t)mh) {
+                    IswDispatchEvent(ev, wm->conn);
+                    return;
+                }
+            }
+            wm_dismiss_menu(wm);
+            return;
+        }
+        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+            wm_dismiss_menu(wm);
+            return;
+        }
+    }
+
     switch (type) {
     case XCB_MAP_REQUEST:
         on_map_request(wm, (xcb_map_request_event_t *)ev);
