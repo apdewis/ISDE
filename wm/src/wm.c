@@ -585,6 +585,12 @@ void wm_remove_client(Wm *wm, WmClient *c)
         wm->drag_client = NULL;
         wm->drag_mode = DRAG_NONE;
     }
+    if (wm->btn_press_client == c) {
+        xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
+        wm->btn_press_client = NULL;
+        wm->btn_press_btn = -1;
+        wm->btn_press_hover = 0;
+    }
 
     if (wm->switcher_active) {
         wm_switcher_cancel(wm);
@@ -2095,20 +2101,19 @@ static void on_frame_button_press(Wm *wm, WmClient *c,
 
     int btn = frame_button_at(wm, c, ev->event_x, ev->event_y);
     if (btn >= 0) {
-        switch (btn) {
-        case FRAME_BTN_MENU:
-            win_menu_show(wm, c);
-            break;
-        case FRAME_BTN_MINIMIZE:
-            wm_minimize_client(wm, c);
-            break;
-        case FRAME_BTN_MAXIMIZE:
-            wm_maximize_client(wm, c);
-            break;
-        case FRAME_BTN_CLOSE:
-            wm_close_client(wm, c);
-            break;
-        }
+        /* Show the pressed state and wait for release to fire the action,
+         * so the click can be cancelled by releasing off the button. */
+        wm->btn_press_client = c;
+        wm->btn_press_btn    = btn;
+        wm->btn_press_hover  = 1;
+        frame_paint(wm, c);
+
+        xcb_grab_pointer(wm->conn, 1, wm->root,
+                         XCB_EVENT_MASK_BUTTON_RELEASE |
+                         XCB_EVENT_MASK_POINTER_MOTION,
+                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+        xcb_flush(wm->conn);
         return;
     }
 
@@ -2126,6 +2131,59 @@ static void on_frame_button_press(Wm *wm, WmClient *c,
                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                      XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
     xcb_flush(wm->conn);
+}
+
+/* Pointer moved while a title-bar button is held — update the hover state
+ * so the invert only shows while the pointer is over the button. */
+static void on_button_press_motion(Wm *wm, xcb_motion_notify_event_t *ev)
+{
+    WmClient *c = wm->btn_press_client;
+    if (!c) {
+        return;
+    }
+    int rx = ev->root_x - c->x;
+    int ry = ev->root_y - c->y;
+    int over = (frame_button_at(wm, c, rx, ry) == wm->btn_press_btn);
+    if (over != wm->btn_press_hover) {
+        wm->btn_press_hover = over;
+        frame_paint(wm, c);
+    }
+}
+
+/* Button released while a title-bar button was held — fire the action if
+ * the pointer is still over the same button, then clear the pressed state. */
+static void on_button_press_release(Wm *wm, xcb_button_release_event_t *ev)
+{
+    WmClient *c = wm->btn_press_client;
+    int btn = wm->btn_press_btn;
+
+    xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
+
+    wm->btn_press_client = NULL;
+    wm->btn_press_btn = -1;
+    wm->btn_press_hover = 0;
+    frame_paint(wm, c);
+
+    int rx = ev->root_x - c->x;
+    int ry = ev->root_y - c->y;
+    if (frame_button_at(wm, c, rx, ry) != btn) {
+        return;
+    }
+
+    switch (btn) {
+    case FRAME_BTN_MENU:
+        win_menu_show(wm, c);
+        break;
+    case FRAME_BTN_MINIMIZE:
+        wm_minimize_client(wm, c);
+        break;
+    case FRAME_BTN_MAXIMIZE:
+        wm_maximize_client(wm, c);
+        break;
+    case FRAME_BTN_CLOSE:
+        wm_close_client(wm, c);
+        break;
+    }
 }
 
 /* ---------- event loop ---------- */
@@ -2222,11 +2280,15 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     case XCB_MOTION_NOTIFY:
         if (wm->drag_mode != DRAG_NONE) {
             on_motion_notify(wm, (xcb_motion_notify_event_t *)ev);
+        } else if (wm->btn_press_client) {
+            on_button_press_motion(wm, (xcb_motion_notify_event_t *)ev);
         }
         break;
     case XCB_BUTTON_RELEASE:
         if (wm->drag_mode != DRAG_NONE) {
             on_button_release(wm, (xcb_button_release_event_t *)ev);
+        } else if (wm->btn_press_client) {
+            on_button_press_release(wm, (xcb_button_release_event_t *)ev);
         }
         break;
     case XCB_BUTTON_PRESS: {

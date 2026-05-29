@@ -326,6 +326,25 @@ void frame_paint(Wm *wm, WmClient *c)
     render_fill_rect(cr, close_colors->bg, close_x, 0, th, th);
     render_icon(cr, wm->icon_close, close_x, 0, th, th);
 
+    /* Invert the button currently held down (DIFFERENCE with white flips
+     * the destination pixels — inverts bg and icon together). */
+    if (wm->btn_press_client == c && wm->btn_press_hover &&
+        wm->btn_press_btn >= 0) {
+        int bx = 0;
+        switch (wm->btn_press_btn) {
+        case FRAME_BTN_MENU:     bx = 0;        break;
+        case FRAME_BTN_MINIMIZE: bx = min_x;    break;
+        case FRAME_BTN_MAXIMIZE: bx = max_x;    break;
+        case FRAME_BTN_CLOSE:    bx = close_x;  break;
+        }
+        cairo_save(cr);
+        cairo_set_operator(cr, CAIRO_OPERATOR_DIFFERENCE);
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+        cairo_rectangle(cr, bx, 0, th, th);
+        cairo_fill(cr);
+        cairo_restore(cr);
+    }
+
     cairo_destroy(cr);
     cairo_surface_flush(c->frame_surface);
     xcb_flush(wm->conn);
