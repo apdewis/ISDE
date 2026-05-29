@@ -60,6 +60,14 @@ pkg_check_modules(XCB_DPMS REQUIRED IMPORTED_TARGET xcb-dpms)
 pkg_check_modules(XCB_SCREENSAVER REQUIRED IMPORTED_TARGET xcb-screensaver)
 pkg_check_modules(LIBSEAT REQUIRED IMPORTED_TARGET libseat)
 
+# --- Optional compositor WM build ---
+option(ISDE_BUILD_COMPOSITOR "Build isde-wm-compositor (requires EGL + OpenGL)" OFF)
+if(ISDE_BUILD_COMPOSITOR)
+    pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
+    pkg_check_modules(GL REQUIRED IMPORTED_TARGET gl)
+    pkg_check_modules(XCB_PRESENT REQUIRED IMPORTED_TARGET xcb-present)
+endif()
+
 # PAM has no pkg-config file on most distros — find it manually
 find_library(PAM_LIBRARY pam REQUIRED)
 find_path(PAM_INCLUDE_DIR security/pam_appl.h REQUIRED)
@@ -94,6 +102,9 @@ add_subdirectory(isw-graph)
 add_subdirectory(calc)
 add_subdirectory(screenshot)
 add_subdirectory(common)
+if(ISDE_BUILD_COMPOSITOR)
+    add_subdirectory(wm-compositor)
+endif()
 
 # --- Optional service-unit install targets ---------------------------------
 # These are NOT part of `make install`. Invoke explicitly:
