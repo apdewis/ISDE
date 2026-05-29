@@ -300,7 +300,7 @@ void frame_paint(Wm *wm, WmClient *c)
                         : c->title ? c->title : "(untitled)";
     int font_px = th - wm_scale(wm, 8);
     if (font_px < 8) { font_px = 8; }
-    render_text(cr, display, tb->fg, title_x, 0, title_w, th, font_px);
+    render_text_centered(cr, display, tb->fg, title_x, 0, title_w, th, font_px);
 
     /* Right-hand buttons — must match frame_button_at() layout */
     const IsdeElementColors *btn_colors = &s->titlebar_button;

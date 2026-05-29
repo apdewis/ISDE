@@ -159,9 +159,13 @@ void render_text_centered(cairo_t *cr, const char *text, unsigned int fg_color,
     double tx = x + (w - te.width) / 2.0 - te.x_bearing;
     double ty = y + (h - fe.height) / 2.0 + fe.ascent;
 
+    cairo_save(cr);
+    cairo_rectangle(cr, x, y, w, h);
+    cairo_clip(cr);
     cairo_move_to(cr, tx, ty);
     cairo_set_source_rgb(cr, r, g, b);
     cairo_show_text(cr, text);
+    cairo_restore(cr);
 }
 
 void render_icon(cairo_t *cr, cairo_surface_t *icon,
