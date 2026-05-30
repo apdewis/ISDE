@@ -157,6 +157,21 @@ static void wm_on_settings_changed(const char *section, const char *key,
     }
 }
 
+/* Set the desktop pointer to the themed left_ptr, matching the rest of ISDE
+ * (panel, fm) which load cursors through xcb_cursor. */
+static void wm_set_root_cursor(Wm *wm)
+{
+    xcb_cursor_context_t *ctx;
+    if (xcb_cursor_context_new(wm->conn, wm->screen, &ctx) < 0) {
+        return;
+    }
+    xcb_cursor_t ptr = xcb_cursor_load_cursor(ctx, "left_ptr");
+    if (ptr) {
+        xcb_change_window_attributes(wm->conn, wm->root, XCB_CW_CURSOR, &ptr);
+    }
+    xcb_cursor_context_free(ctx);
+}
+
 /* ---------- dock window tracking ---------- */
 static void wm_add_dock(Wm *wm, xcb_window_t win);
 static void wm_remove_dock(Wm *wm, xcb_window_t win);
@@ -297,6 +312,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
         free(err);
         return -1;
     }
+
+    wm_set_root_cursor(wm);
 
     /* Intern atoms */
     wm->atom_wm_protocols      = intern(wm->conn, "WM_PROTOCOLS");
