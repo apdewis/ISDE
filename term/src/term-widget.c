@@ -966,7 +966,6 @@ void term_widget_apply_config(TermWidget *t, const TermConfig *cfg)
 {
     t->cfg = *cfg;
     tsm_screen_set_max_sb(t->screen, cfg->scrollback);
-    term_tsm_apply_palette(t->vte, &cfg->palette);
     recompute_metrics(t);
     /* Trigger a resize recompute with new cell metrics */
     Dimension pw, ph;
