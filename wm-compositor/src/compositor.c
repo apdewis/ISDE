@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #include <xcb/composite.h>
 #include <xcb/damage.h>
@@ -821,6 +822,56 @@ static void draw_solid_quad(float x, float y, float w, float h,
     glEnable(GL_TEXTURE_2D);
 }
 
+static void draw_solid_round_rect(float x, float y, float w, float h, float r,
+                                  float cr, float cg, float cb, float ca)
+{
+    if (r > w / 2.0f) {
+        r = w / 2.0f;
+    }
+    if (r > h / 2.0f) {
+        r = h / 2.0f;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(cr, cg, cb, ca);
+
+    /* Two overlapping bands cover everything but the four corners. */
+    glBegin(GL_QUADS);
+    glVertex2f(x + r, y);
+    glVertex2f(x + w - r, y);
+    glVertex2f(x + w - r, y + h);
+    glVertex2f(x + r, y + h);
+
+    glVertex2f(x, y + r);
+    glVertex2f(x + w, y + r);
+    glVertex2f(x + w, y + h - r);
+    glVertex2f(x, y + h - r);
+    glEnd();
+
+    /* Quarter-circle fans fill the corners. */
+    const int seg = 6;
+    float corners[4][3] = {
+        { x + r,     y + r,     180.0f },
+        { x + w - r, y + r,     270.0f },
+        { x + w - r, y + h - r,   0.0f },
+        { x + r,     y + h - r,  90.0f },
+    };
+    for (int c = 0; c < 4; c++) {
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(corners[c][0], corners[c][1]);
+        for (int s = 0; s <= seg; s++) {
+            float a = (corners[c][2] + 90.0f * s / seg) *
+                      3.14159265358979f / 180.0f;
+            glVertex2f(corners[c][0] + r * cosf(a),
+                       corners[c][1] + r * sinf(a));
+        }
+        glEnd();
+    }
+
+    glEnable(GL_TEXTURE_2D);
+}
+
 static void draw_textured_quad(GLuint tex, float x, float y, float w, float h)
 {
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -863,12 +914,14 @@ static void draw_switcher(WmCompositor *comp)
     float panel_top = row_cy - box_h / 2.0f - frame_m - panel_pad;
     float panel_bottom = row_cy + box_h / 2.0f + SWITCHER_TITLE_PAD +
                          title_h + panel_pad;
+    float radius = 3.0f * comp->scale;
     unsigned int panel = scheme ? scheme->bg : 0x333333;
-    draw_solid_quad(center_x - clip_w / 2.0f - panel_pad, panel_top,
-                    clip_w + 2 * panel_pad, panel_bottom - panel_top,
-                    ((panel >> 16) & 0xFF) / 255.0f,
-                    ((panel >> 8) & 0xFF) / 255.0f,
-                    (panel & 0xFF) / 255.0f, 1.0f);
+    draw_solid_round_rect(center_x - clip_w / 2.0f - panel_pad, panel_top,
+                          clip_w + 2 * panel_pad, panel_bottom - panel_top,
+                          radius,
+                          ((panel >> 16) & 0xFF) / 255.0f,
+                          ((panel >> 8) & 0xFF) / 255.0f,
+                          (panel & 0xFF) / 255.0f, 1.0f);
 
     /* Clip horizontally to exactly SWITCHER_VISIBLE slots so the extra slots
      * drawn for a smooth slide stay hidden at rest.  Scissor is in framebuffer
@@ -889,13 +942,16 @@ static void draw_switcher(WmCompositor *comp)
         /* Stationary selection frame at the center slot, drawn slightly larger
          * than the thumbnail so a themed border shows around it. */
         if (o == 0 && scheme) {
-            float m = 4.0f;
+            float mx = 12.0f * comp->scale;  /* wider than the thumbnail */
+            float my = -6.0f * comp->scale;  /* shorter than the thumbnail */
+            float hw = box_w + 2 * mx;
+            float hh = box_h + 2 * my;
             unsigned int a = scheme->active;
-            draw_solid_quad(center_x - box_w / 2 - m, row_cy - box_h / 2 - m,
-                            box_w + 2 * m, box_h + 2 * m,
-                            ((a >> 16) & 0xFF) / 255.0f,
-                            ((a >> 8) & 0xFF) / 255.0f,
-                            (a & 0xFF) / 255.0f, 1.0f);
+            draw_solid_round_rect(center_x - hw / 2, row_cy - hh / 2, hw, hh,
+                                  radius,
+                                  ((a >> 16) & 0xFF) / 255.0f,
+                                  ((a >> 8) & 0xFF) / 255.0f,
+                                  (a & 0xFF) / 255.0f, 1.0f);
         }
 
         CompositorWindow *cw = find_comp_window(comp, comp->switcher_wins[idx]);
