@@ -706,7 +706,7 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
         return;
     }
     cw->mapped = mapped;
-    if (comp->slide_active) {
+    if (comp->slide_active && win != comp->slide_exclude) {
         /* During a desktop switch the window slides rather than fades: tag it
          * incoming/outgoing, keep it fully opaque, and suppress the fade.
          * An unmapped window keeps its snapshot so it can slide out. */
@@ -746,6 +746,11 @@ void wm_compositor_slide(WmCompositor *comp, int dx, int dy)
     comp->slide_last_ms = comp_now_ms();
     comp->slide_start_ms = comp->slide_last_ms;
     comp->needs_repaint = 1;
+}
+
+void wm_compositor_set_slide_exclude(WmCompositor *comp, xcb_window_t win)
+{
+    comp->slide_exclude = win;
 }
 
 /* ---------- Alt+Tab preview switcher ---------- */
@@ -1222,14 +1227,17 @@ void wm_compositor_paint(WmCompositor *comp)
 
             /* Desktop-switch slide offset.  Outgoing windows slide off toward
              * the travel edge; incoming windows slide in from the opposite
-             * edge.  Windows not in the slide (e.g. sticky panels) stay put. */
+             * edge.  Windows not in the slide (e.g. sticky panels, the switch
+             * OSD) stay put. */
             float ox = 0.0f, oy = 0.0f;
-            if (cw->slide_role > 0) {
+            int slide_part = (cw->slide_role != 0 &&
+                              cw->window != comp->slide_exclude);
+            if (slide_part && cw->slide_role > 0) {
                 ox = (1.0f - comp->slide_progress) * comp->slide_dx *
                      comp->screen->width_in_pixels;
                 oy = (1.0f - comp->slide_progress) * comp->slide_dy *
                      comp->screen->height_in_pixels;
-            } else if (cw->slide_role < 0) {
+            } else if (slide_part && cw->slide_role < 0) {
                 ox = -comp->slide_progress * comp->slide_dx *
                      comp->screen->width_in_pixels;
                 oy = -comp->slide_progress * comp->slide_dy *

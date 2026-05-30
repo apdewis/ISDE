@@ -284,5 +284,11 @@ void wm_desktops_show_osd(Wm *wm)
         paint_osd(wm, w, h);
     }
 
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        wm_compositor_set_slide_exclude(wm->compositor, wm->desk_osd);
+    }
+#endif
+
     wm->desk_osd_timer = wm_timer_add(wm, OSD_TIMEOUT, osd_hide_cb, wm);
 }

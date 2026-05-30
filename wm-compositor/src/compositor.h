@@ -50,6 +50,7 @@ typedef struct WmCompositor {
     double              scale;           /* desktop scale factor (HiDPI) */
 
     int                 slide_active;    /* a desktop-switch slide is in progress */
+    xcb_window_t        slide_exclude;   /* window kept out of the slide (OSD) */
     int                 slide_dx, slide_dy; /* slide direction, each in {-1,0,+1} */
     float               slide_progress;  /* 0..1 */
     uint64_t            slide_last_ms;    /* timestamp of last slide advance */
@@ -76,6 +77,7 @@ void  wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
 void  wm_compositor_paint(WmCompositor *comp);
 int   wm_compositor_animating(WmCompositor *comp);
 void  wm_compositor_slide(WmCompositor *comp, int dx, int dy);
+void  wm_compositor_set_slide_exclude(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
                                    int count, int sel, const char *sel_title);
 void  wm_compositor_switcher_update(WmCompositor *comp, int sel, int dir,
