@@ -843,20 +843,36 @@ static void draw_switcher(WmCompositor *comp)
     int H = comp->screen->height_in_pixels;
     const IsdeColorScheme *scheme = isde_theme_current();
 
-    draw_solid_quad(0, 0, W, H, 0.0f, 0.0f, 0.0f, 0.55f);
-
     float pitch = W * SWITCHER_SLOT_W;
     float box_h = H * SWITCHER_THUMB_H;
     float box_w = pitch * 0.88f;
     float row_cy = H * 0.46f;
     float center_x = W * 0.5f;
     float xoff = comp->switcher_anim_dir * pitch * comp->switcher_anim;
+    float frame_m = 4.0f;
+    float panel_pad = 16.0f * comp->scale;
+
+    int clip_w = (int)(pitch * SWITCHER_VISIBLE);
+    int clip_x = (int)(center_x - clip_w / 2.0f);
+
+    /* Dim the whole screen, then draw one panel behind the entire switcher
+     * (preview row plus the title beneath it). */
+    draw_solid_quad(0, 0, W, H, 0.0f, 0.0f, 0.0f, 0.55f);
+
+    float title_h = comp->switcher_title_tex ? (float)comp->switcher_title_h : 0.0f;
+    float panel_top = row_cy - box_h / 2.0f - frame_m - panel_pad;
+    float panel_bottom = row_cy + box_h / 2.0f + SWITCHER_TITLE_PAD +
+                         title_h + panel_pad;
+    unsigned int panel = scheme ? scheme->bg : 0x333333;
+    draw_solid_quad(center_x - clip_w / 2.0f - panel_pad, panel_top,
+                    clip_w + 2 * panel_pad, panel_bottom - panel_top,
+                    ((panel >> 16) & 0xFF) / 255.0f,
+                    ((panel >> 8) & 0xFF) / 255.0f,
+                    (panel & 0xFF) / 255.0f, 1.0f);
 
     /* Clip horizontally to exactly SWITCHER_VISIBLE slots so the extra slots
      * drawn for a smooth slide stay hidden at rest.  Scissor is in framebuffer
      * coords (origin bottom-left). */
-    int clip_w = (int)(pitch * SWITCHER_VISIBLE);
-    int clip_x = (int)(center_x - clip_w / 2.0f);
     glEnable(GL_SCISSOR_TEST);
     glScissor(clip_x, 0, clip_w, H);
 
