@@ -71,6 +71,16 @@ static void deferred_icon_load(IswPointer client_data, IswIntervalId *id)
     load_tray_icon(tm);
 }
 
+/* Re-rasterise the icon when the tray manager resizes our window, so it
+ * stays crisp across the initial dock and any panel-height/DPI change. */
+static void on_icon_resize(IswTrayIcon icon, unsigned int w, unsigned int h,
+                           IswPointer closure)
+{
+    (void)icon; (void)w; (void)h;
+    TrayMount *tm = (TrayMount *)closure;
+    load_tray_icon(tm);
+}
+
 /* ---------- click callback ---------- */
 
 static void on_icon_click(IswTrayIcon icon, int button, IswPointer closure)
@@ -178,6 +188,7 @@ int tray_mount_init(TrayMount *tm, int *argc, char **argv)
      * to rasterize the SVG crisply. */
     if (tm->tray_icon) {
         IswTrayIconAddClickCallback(tm->tray_icon, on_icon_click, tm);
+        IswTrayIconSetResizeCallback(tm->tray_icon, on_icon_resize, tm);
         IswAppAddTimeOut(tm->app, 100, deferred_icon_load, tm);
     }
 

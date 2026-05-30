@@ -112,6 +112,16 @@ void tray_audio_update_icon(TrayAudio *ta)
         load_tray_icon(ta);
 }
 
+/* Re-rasterise the icon when the tray manager resizes our window, so it
+ * stays crisp across the initial dock and any panel-height/DPI change. */
+static void on_icon_resize(IswTrayIcon icon, unsigned int w, unsigned int h,
+                           IswPointer closure)
+{
+    (void)icon; (void)w; (void)h;
+    TrayAudio *ta = (TrayAudio *)closure;
+    load_tray_icon(ta);
+}
+
 /* ---------- click callback ---------- */
 
 static void on_icon_click(IswTrayIcon icon, int button, IswPointer closure)
@@ -214,6 +224,7 @@ int tray_audio_init(TrayAudio *ta, int *argc, char **argv)
 
     if (ta->tray_icon) {
         IswTrayIconAddClickCallback(ta->tray_icon, on_icon_click, ta);
+        IswTrayIconSetResizeCallback(ta->tray_icon, on_icon_resize, ta);
         IswAppAddTimeOut(ta->app, 100, deferred_icon_load, ta);
     }
 

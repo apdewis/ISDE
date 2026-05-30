@@ -111,6 +111,16 @@ void tray_battery_update_icon(TrayBattery *tb)
     }
 }
 
+/* Re-rasterise the icon when the tray manager resizes our window, so it
+ * stays crisp across the initial dock and any panel-height/DPI change. */
+static void on_icon_resize(IswTrayIcon icon, unsigned int w, unsigned int h,
+                           IswPointer closure)
+{
+    (void)icon; (void)w; (void)h;
+    TrayBattery *tb = (TrayBattery *)closure;
+    load_tray_icon(tb);
+}
+
 /* ---------- poll timer ---------- */
 
 static void poll_timer_cb(IswPointer client_data, IswIntervalId *id)
@@ -222,6 +232,7 @@ int tray_battery_init(TrayBattery *tb, int *argc, char **argv)
 
     if (tb->tray_icon) {
         IswTrayIconAddClickCallback(tb->tray_icon, on_icon_click, tb);
+        IswTrayIconSetResizeCallback(tb->tray_icon, on_icon_resize, tb);
         IswAppAddTimeOut(tb->app, 100, deferred_icon_load, tb);
     }
 

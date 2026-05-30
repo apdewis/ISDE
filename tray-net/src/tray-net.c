@@ -130,6 +130,16 @@ void tray_net_update_icon(TrayNet *tn)
     }
 }
 
+/* Re-rasterise the icon when the tray manager resizes our window, so it
+ * stays crisp across the initial dock and any panel-height/DPI change. */
+static void on_icon_resize(IswTrayIcon icon, unsigned int w, unsigned int h,
+                           IswPointer closure)
+{
+    (void)icon; (void)w; (void)h;
+    TrayNet *tn = (TrayNet *)closure;
+    load_icon(tn, tn->icon_state);
+}
+
 /* ---------- click callback ---------- */
 
 static void on_icon_click(IswTrayIcon icon, int button, IswPointer closure)
@@ -250,6 +260,7 @@ int tray_net_init(TrayNet *tn, int *argc, char **argv)
 
     if (tn->tray_icon) {
         IswTrayIconAddClickCallback(tn->tray_icon, on_icon_click, tn);
+        IswTrayIconSetResizeCallback(tn->tray_icon, on_icon_resize, tn);
         IswAppAddTimeOut(tn->app, 100, deferred_icon_load, tn);
     }
 
