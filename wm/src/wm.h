@@ -88,6 +88,7 @@ typedef struct WmClient {
     int          skip_pager;   /* _NET_WM_STATE_SKIP_PAGER */
     int          demands_attention; /* _NET_WM_STATE_DEMANDS_ATTENTION */
     int          hidden;       /* WM-initiated unmap (desktop switch) */
+    int          ignore_unmap; /* count of pending self-induced client unmaps */
     int          decorated;     /* 0 = CSD/no frame chrome */
     int          mapped;       /* frame is mapped */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */

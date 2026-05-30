@@ -90,6 +90,7 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
 
         if (c->desktop == old && c->desktop != desktop) {
             c->hidden = 1;
+            c->ignore_unmap++;
             xcb_unmap_window(wm->conn, c->client);
             if (c->frame && c->mapped) {
                 xcb_unmap_window(wm->conn, c->frame);

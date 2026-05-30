@@ -1131,6 +1131,7 @@ void wm_minimize_client(Wm *wm, WmClient *c)
         c->mapped = 0;
     }
 
+    c->ignore_unmap++;
     xcb_unmap_window(wm->conn, c->client);
     xcb_flush(wm->conn);
 
@@ -1241,6 +1242,7 @@ void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
 
     if (visible_before && !visible_now) {
         c->hidden = 1;
+        c->ignore_unmap++;
         xcb_unmap_window(wm->conn, c->client);
         if (c->frame && c->mapped) {
             xcb_unmap_window(wm->conn, c->frame);
@@ -1707,7 +1709,8 @@ static void on_unmap_notify(Wm *wm, xcb_unmap_notify_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c && c->frame && ev->event == c->frame) {
-        if (c->hidden) {
+        if (c->ignore_unmap > 0) {
+            c->ignore_unmap--;
             return;
         }
         wm_remove_client(wm, c);
@@ -2053,6 +2056,7 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
                                   desk == 0xFFFFFFFF);
                 if (was_visible && !is_visible) {
                     c->hidden = 1;
+                    c->ignore_unmap++;
                     xcb_unmap_window(wm->conn, c->client);
                     if (c->frame && c->mapped) {
                         xcb_unmap_window(wm->conn, c->frame);
