@@ -308,7 +308,6 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
     wm->dbus = isde_dbus_init();
     if (wm->dbus) {
-        isde_theme_watch(wm->dbus, wm->toplevel, wm_on_theme_changed, wm);
         isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
     }
 
