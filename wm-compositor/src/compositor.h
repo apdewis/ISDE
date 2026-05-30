@@ -47,12 +47,23 @@ typedef struct WmCompositor {
 
     CompositorWindow   *windows;
     int                 needs_repaint;
+    double              scale;           /* desktop scale factor (HiDPI) */
 
     int                 slide_active;    /* a desktop-switch slide is in progress */
     int                 slide_dx, slide_dy; /* slide direction, each in {-1,0,+1} */
     float               slide_progress;  /* 0..1 */
     uint64_t            slide_last_ms;    /* timestamp of last slide advance */
     uint64_t            slide_start_ms;   /* slide begin time, for the pre-tag wait cap */
+
+    int                 switcher_active;     /* Alt+Tab preview row is shown */
+    xcb_window_t       *switcher_wins;       /* owned, ordered list to preview */
+    int                 switcher_count;
+    int                 switcher_sel;        /* index of centered/selected window */
+    float               switcher_anim;       /* cycle progress remaining, 1->0 */
+    int                 switcher_anim_dir;   /* +1/-1 direction of the in-flight cycle */
+    uint64_t            switcher_anim_last_ms;
+    GLuint              switcher_title_tex;  /* texture of the centered title */
+    int                 switcher_title_w, switcher_title_h;
 } WmCompositor;
 
 struct Wm;
@@ -65,6 +76,11 @@ void  wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
 void  wm_compositor_paint(WmCompositor *comp);
 int   wm_compositor_animating(WmCompositor *comp);
 void  wm_compositor_slide(WmCompositor *comp, int dx, int dy);
+void  wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
+                                   int count, int sel, const char *sel_title);
+void  wm_compositor_switcher_update(WmCompositor *comp, int sel, int dir,
+                                    const char *sel_title);
+void  wm_compositor_switcher_end(WmCompositor *comp);
 void  wm_compositor_handle_damage(WmCompositor *comp,
                                    xcb_damage_notify_event_t *ev);
 void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,

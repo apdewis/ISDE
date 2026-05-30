@@ -17,6 +17,10 @@
 #include <EGL/eglext.h>
 #include <GL/gl.h>
 
+#include <cairo/cairo.h>
+#include "render.h"
+#include "isde/isde-theme.h"
+
 /* EGL / GL extension function pointers (zero-copy path) */
 static PFNEGLCREATEIMAGEKHRPROC   pfn_eglCreateImageKHR;
 static PFNEGLDESTROYIMAGEKHRPROC  pfn_eglDestroyImageKHR;
@@ -375,6 +379,7 @@ int wm_compositor_init(Wm *wm)
     WmCompositor *comp = calloc(1, sizeof(*comp));
     comp->conn = wm->conn;
     comp->screen = wm->screen;
+    comp->scale = wm->scale_factor;
     comp->damage_event_base = dmg_ext->first_event;
     comp->composite_major = cv->major_version;
     comp->composite_minor = cv->minor_version;
@@ -567,6 +572,10 @@ void wm_compositor_destroy(WmCompositor *comp)
     if (comp->snapshot_fbo) {
         pfn_glDeleteFramebuffers(1, &comp->snapshot_fbo);
     }
+    if (comp->switcher_title_tex) {
+        glDeleteTextures(1, &comp->switcher_title_tex);
+    }
+    free(comp->switcher_wins);
 
     eglMakeCurrent(comp->egl_display, EGL_NO_SURFACE,
                     EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -586,6 +595,13 @@ void wm_compositor_destroy(WmCompositor *comp)
 
 #define FADE_DURATION_MS 150
 #define SLIDE_DURATION_MS 250
+
+/* Alt+Tab preview row. */
+#define SWITCHER_VISIBLE   5      /* odd: the center slot is the selection */
+#define SWITCHER_CYCLE_MS  150
+#define SWITCHER_SLOT_W    0.16f  /* slot pitch as a fraction of screen width */
+#define SWITCHER_THUMB_H   0.20f  /* thumbnail box height as a fraction of screen height */
+#define SWITCHER_TITLE_PAD 12     /* gap below the row, before the title (px) */
 
 static uint64_t comp_now_ms(void)
 {
@@ -731,6 +747,221 @@ void wm_compositor_slide(WmCompositor *comp, int dx, int dy)
     comp->needs_repaint = 1;
 }
 
+/* ---------- Alt+Tab preview switcher ---------- */
+
+/* Render the centered window's title to a cairo image surface and upload it as
+ * an opaque GL texture.  Opaque background avoids premultiplied-alpha edge
+ * artifacts and gives the label a readable plate. */
+static void make_switcher_title_texture(WmCompositor *comp, const char *text)
+{
+    if (comp->switcher_title_tex) {
+        glDeleteTextures(1, &comp->switcher_title_tex);
+        comp->switcher_title_tex = 0;
+    }
+    if (!text || !*text) {
+        return;
+    }
+
+    const IsdeColorScheme *scheme = isde_theme_current();
+    int font_px = (int)(isde_font_height("general", 4) * comp->scale + 0.5);
+    if (font_px < 10) {
+        font_px = 10;
+    }
+    int h = font_px + (int)(12 * comp->scale + 0.5);
+    int w = (int)(comp->screen->width_in_pixels * (SWITCHER_SLOT_W * SWITCHER_VISIBLE));
+    if (w < 1) {
+        w = 1;
+    }
+
+    cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
+        cairo_surface_destroy(surf);
+        return;
+    }
+    cairo_t *cr = cairo_create(surf);
+    unsigned int bg = scheme ? scheme->bg : 0x333333;
+    unsigned int fg = scheme ? scheme->fg_light : 0xFFFFFF;
+    render_fill_rect(cr, bg, 0, 0, w, h);
+    render_text_centered(cr, text, fg, 0, 0, w, h, font_px);
+    cairo_destroy(cr);
+    cairo_surface_flush(surf);
+
+    unsigned char *data = cairo_image_surface_get_data(surf);
+    int stride = cairo_image_surface_get_stride(surf);
+
+    glGenTextures(1, &comp->switcher_title_tex);
+    glBindTexture(GL_TEXTURE_2D, comp->switcher_title_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, stride / 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                 GL_BGRA, GL_UNSIGNED_BYTE, data);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    comp->switcher_title_w = w;
+    comp->switcher_title_h = h;
+    cairo_surface_destroy(surf);
+}
+
+static void draw_solid_quad(float x, float y, float w, float h,
+                            float r, float g, float b, float a)
+{
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(r, g, b, a);
+    glBegin(GL_QUADS);
+    glVertex2f(x, y);
+    glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h);
+    glVertex2f(x, y + h);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+}
+
+static void draw_textured_quad(GLuint tex, float x, float y, float w, float h)
+{
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(x + w, y);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(x + w, y + h);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + h);
+    glEnd();
+}
+
+static void draw_switcher(WmCompositor *comp)
+{
+    if (comp->switcher_count <= 0) {
+        return;
+    }
+
+    int W = comp->screen->width_in_pixels;
+    int H = comp->screen->height_in_pixels;
+    const IsdeColorScheme *scheme = isde_theme_current();
+
+    draw_solid_quad(0, 0, W, H, 0.0f, 0.0f, 0.0f, 0.55f);
+
+    float pitch = W * SWITCHER_SLOT_W;
+    float box_h = H * SWITCHER_THUMB_H;
+    float box_w = pitch * 0.88f;
+    float row_cy = H * 0.46f;
+    float center_x = W * 0.5f;
+    float xoff = comp->switcher_anim_dir * pitch * comp->switcher_anim;
+
+    /* Clip horizontally to exactly SWITCHER_VISIBLE slots so the extra slots
+     * drawn for a smooth slide stay hidden at rest.  Scissor is in framebuffer
+     * coords (origin bottom-left). */
+    int clip_w = (int)(pitch * SWITCHER_VISIBLE);
+    int clip_x = (int)(center_x - clip_w / 2.0f);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(clip_x, 0, clip_w, H);
+
+    int half = SWITCHER_VISIBLE / 2;
+    for (int o = -half - 1; o <= half + 1; o++) {
+        /* Always wrap so a short list cycles through its windows to fill the
+         * row, rather than leaving edge slots empty. */
+        int idx = comp->switcher_sel + o;
+        idx = ((idx % comp->switcher_count) + comp->switcher_count) %
+              comp->switcher_count;
+
+        float slot_cx = center_x + o * pitch + xoff;
+
+        /* Stationary selection frame at the center slot, drawn slightly larger
+         * than the thumbnail so a themed border shows around it. */
+        if (o == 0 && scheme) {
+            float m = 4.0f;
+            unsigned int a = scheme->active;
+            draw_solid_quad(center_x - box_w / 2 - m, row_cy - box_h / 2 - m,
+                            box_w + 2 * m, box_h + 2 * m,
+                            ((a >> 16) & 0xFF) / 255.0f,
+                            ((a >> 8) & 0xFF) / 255.0f,
+                            (a & 0xFF) / 255.0f, 1.0f);
+        }
+
+        CompositorWindow *cw = find_comp_window(comp, comp->switcher_wins[idx]);
+        if (cw && cw->snapshot && cw->snap_w && cw->snap_h) {
+            float s = box_w / cw->snap_w;
+            float sy = box_h / cw->snap_h;
+            if (sy < s) {
+                s = sy;
+            }
+            float dw = cw->snap_w * s;
+            float dh = cw->snap_h * s;
+            draw_textured_quad(cw->snapshot, slot_cx - dw / 2,
+                               row_cy - dh / 2, dw, dh);
+        } else {
+            draw_solid_quad(slot_cx - box_w / 2, row_cy - box_h / 2,
+                            box_w, box_h, 0.25f, 0.25f, 0.25f, 1.0f);
+        }
+    }
+
+    glDisable(GL_SCISSOR_TEST);
+
+    if (comp->switcher_title_tex) {
+        float tw = comp->switcher_title_w;
+        float th = comp->switcher_title_h;
+        draw_textured_quad(comp->switcher_title_tex, center_x - tw / 2,
+                           row_cy + box_h / 2 + SWITCHER_TITLE_PAD, tw, th);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
+                                  int count, int sel, const char *sel_title)
+{
+    free(comp->switcher_wins);
+    comp->switcher_wins = NULL;
+    comp->switcher_count = 0;
+
+    if (count > 0 && wins) {
+        comp->switcher_wins = malloc(count * sizeof(*comp->switcher_wins));
+        if (comp->switcher_wins) {
+            memcpy(comp->switcher_wins, wins, count * sizeof(*wins));
+            comp->switcher_count = count;
+        }
+    }
+
+    comp->switcher_active = 1;
+    comp->switcher_sel = sel;
+    comp->switcher_anim = 0.0f;
+    comp->switcher_anim_dir = 0;
+    make_switcher_title_texture(comp, sel_title);
+    comp->needs_repaint = 1;
+}
+
+void wm_compositor_switcher_update(WmCompositor *comp, int sel, int dir,
+                                   const char *sel_title)
+{
+    if (!comp->switcher_active) {
+        return;
+    }
+    comp->switcher_sel = sel;
+    comp->switcher_anim = 1.0f;
+    comp->switcher_anim_dir = dir;
+    comp->switcher_anim_last_ms = comp_now_ms();
+    make_switcher_title_texture(comp, sel_title);
+    comp->needs_repaint = 1;
+}
+
+void wm_compositor_switcher_end(WmCompositor *comp)
+{
+    comp->switcher_active = 0;
+    free(comp->switcher_wins);
+    comp->switcher_wins = NULL;
+    comp->switcher_count = 0;
+    comp->switcher_anim = 0.0f;
+    if (comp->switcher_title_tex) {
+        glDeleteTextures(1, &comp->switcher_title_tex);
+        comp->switcher_title_tex = 0;
+    }
+    comp->needs_repaint = 1;
+}
+
 void wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                       int16_t x, int16_t y,
                                       uint16_t width, uint16_t height,
@@ -870,6 +1101,19 @@ void wm_compositor_paint(WmCompositor *comp)
         }
     }
 
+    /* Advance the switcher cycle animation (row slides one slot on Tab). */
+    if (comp->switcher_anim > 0.0f) {
+        uint64_t now = comp_now_ms();
+        uint64_t dt = now - comp->switcher_anim_last_ms;
+        comp->switcher_anim_last_ms = now;
+        comp->switcher_anim -= (float)dt / SWITCHER_CYCLE_MS;
+        if (comp->switcher_anim <= 0.0f) {
+            comp->switcher_anim = 0.0f;
+        } else {
+            comp->needs_repaint = 1;
+        }
+    }
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -938,12 +1182,16 @@ void wm_compositor_paint(WmCompositor *comp)
         free(order);
     }
 
+    if (comp->switcher_active) {
+        draw_switcher(comp);
+    }
+
     eglSwapBuffers(comp->egl_display, comp->egl_surface);
 }
 
 int wm_compositor_animating(WmCompositor *comp)
 {
-    if (comp->slide_active) {
+    if (comp->slide_active || comp->switcher_anim > 0.0f) {
         return 1;
     }
     for (CompositorWindow *cw = comp->windows; cw; cw = cw->next) {

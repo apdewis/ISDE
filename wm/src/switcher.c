@@ -242,6 +242,23 @@ void wm_switcher_show(Wm *wm)
     wm->switcher_active = 1;
     wm->switcher_sel = 1;
 
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        xcb_window_t *wins = malloc(wm->switcher_count * sizeof(xcb_window_t));
+        if (wins) {
+            for (int i = 0; i < wm->switcher_count; i++) {
+                WmClient *c = wm->switcher_order[i];
+                wins[i] = c->frame ? c->frame : c->client;
+            }
+            wm_compositor_switcher_begin(wm->compositor, wins,
+                                         wm->switcher_count, wm->switcher_sel,
+                                         wm->switcher_labels[wm->switcher_sel]);
+            free(wins);
+        }
+        return;
+    }
+#endif
+
     create_osd(wm);
 }
 
@@ -254,6 +271,14 @@ void wm_switcher_next(Wm *wm)
         wm->switcher_sel = 0;
     }
 
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        wm_compositor_switcher_update(wm->compositor, wm->switcher_sel, 1,
+                                      wm->switcher_labels[wm->switcher_sel]);
+        return;
+    }
+#endif
+
     paint_switcher(wm);
 }
 
@@ -265,6 +290,14 @@ void wm_switcher_prev(Wm *wm)
     if (wm->switcher_sel < 0) {
         wm->switcher_sel = wm->switcher_count - 1;
     }
+
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        wm_compositor_switcher_update(wm->compositor, wm->switcher_sel, -1,
+                                      wm->switcher_labels[wm->switcher_sel]);
+        return;
+    }
+#endif
 
     paint_switcher(wm);
 }
@@ -279,6 +312,11 @@ void wm_switcher_commit(Wm *wm)
     }
 
     xcb_ungrab_keyboard(wm->conn, XCB_CURRENT_TIME);
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        wm_compositor_switcher_end(wm->compositor);
+    }
+#endif
     destroy_osd(wm);
     wm->switcher_active = 0;
 
@@ -295,6 +333,11 @@ void wm_switcher_cancel(Wm *wm)
     if (!wm->switcher_active) return;
 
     xcb_ungrab_keyboard(wm->conn, XCB_CURRENT_TIME);
+#ifdef ISDE_COMPOSITOR
+    if (wm->compositor) {
+        wm_compositor_switcher_end(wm->compositor);
+    }
+#endif
     destroy_osd(wm);
     wm->switcher_active = 0;
 }
