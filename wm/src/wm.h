@@ -307,6 +307,7 @@ void      frame_set_extents(Wm *wm, WmClient *c);
 int       frame_total_width(WmClient *c);
 int       frame_total_height(Wm *wm, WmClient *c);
 void      frame_apply_theme(Wm *wm, WmClient *c);
+void      frame_refresh_theme(Wm *wm, WmClient *c);
 void      frame_paint(Wm *wm, WmClient *c);
 void      wm_dismiss_menu(Wm *wm);
 void      frame_disambiguate_all(Wm *wm, const char *base_title,

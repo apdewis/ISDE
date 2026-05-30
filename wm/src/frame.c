@@ -16,6 +16,24 @@
 
 #define GRIP_SIZE 6
 
+/* Allocate an X pixel for a 0xRRGGBB colour from the default colormap. */
+static uint32_t frame_pixel(Wm *wm, unsigned int rgb)
+{
+    xcb_alloc_color_reply_t *r = xcb_alloc_color_reply(
+        wm->conn,
+        xcb_alloc_color(wm->conn, wm->screen->default_colormap,
+                        ((rgb >> 16) & 0xFF) * 257,
+                        ((rgb >> 8)  & 0xFF) * 257,
+                        ( rgb        & 0xFF) * 257),
+        NULL);
+    if (!r) {
+        return wm->screen->black_pixel;
+    }
+    uint32_t px = r->pixel;
+    free(r);
+    return px;
+}
+
 /* ---------- icon loading ---------- */
 
 void frame_init_icons(Wm *wm)
@@ -371,6 +389,21 @@ void frame_apply_theme(Wm *wm, WmClient *c)
     frame_paint(wm, c);
 }
 
+/* Re-read the active colour scheme into an existing frame after a live
+ * appearance change: refresh the X border pixel and repaint the title bar. */
+void frame_refresh_theme(Wm *wm, WmClient *c)
+{
+    const IsdeColorScheme *scheme = isde_theme_current();
+    if (scheme) {
+        uint32_t border_pixel = frame_pixel(wm, scheme->titlebar.border);
+        xcb_change_window_attributes(wm->conn, c->frame,
+                                     XCB_CW_BORDER_PIXEL, &border_pixel);
+    }
+    if (c->decorated) {
+        frame_paint(wm, c);
+    }
+}
+
 /* ---------- frame creation ---------- */
 
 WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
@@ -476,20 +509,9 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
     /* Allocate border pixel color */
     const IsdeColorScheme *scheme = isde_theme_current();
-    uint32_t border_pixel = wm->screen->black_pixel;
-    if (scheme) {
-        xcb_alloc_color_reply_t *cr = xcb_alloc_color_reply(
-            wm->conn,
-            xcb_alloc_color(wm->conn, wm->screen->default_colormap,
-                            ((scheme->titlebar.border >> 16) & 0xFF) * 257,
-                            ((scheme->titlebar.border >> 8)  & 0xFF) * 257,
-                            ( scheme->titlebar.border        & 0xFF) * 257),
-            NULL);
-        if (cr) {
-            border_pixel = cr->pixel;
-            free(cr);
-        }
-    }
+    uint32_t border_pixel = scheme
+        ? frame_pixel(wm, scheme->titlebar.border)
+        : wm->screen->black_pixel;
 
     /* Create override-redirect frame window */
     c->frame = xcb_generate_id(wm->conn);

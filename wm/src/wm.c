@@ -134,11 +134,26 @@ static void wm_on_settings_changed(const char *section, const char *key,
 {
     (void)key;
     Wm *wm = (Wm *)user_data;
-    if (strcmp(section, "appearance") == 0 ||
-        strcmp(section, "wm.desktops") == 0 ||
-        strcmp(section, "*") == 0) {
+
+    /* A desktop-count change needs a full re-init; restart for it. */
+    if (strcmp(section, "wm.desktops") == 0) {
         wm->running = 0;
         wm->restart = 1;
+        return;
+    }
+
+    /* Appearance/font changes are applied live: reload the colour scheme,
+     * re-tint the title-bar button icons, and refresh every frame. */
+    if (strcmp(section, "appearance") == 0 ||
+        strcmp(section, "fonts") == 0 ||
+        strcmp(section, "*") == 0) {
+        isde_config_invalidate_cache();
+        isde_theme_reload();
+        frame_init_icons(wm);
+        for (WmClient *c = wm->clients; c; c = c->next) {
+            frame_refresh_theme(wm, c);
+        }
+        xcb_flush(wm->conn);
     }
 }
 
