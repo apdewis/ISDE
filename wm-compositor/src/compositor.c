@@ -780,7 +780,7 @@ static void make_switcher_title_texture(WmCompositor *comp, const char *text)
     }
     cairo_t *cr = cairo_create(surf);
     unsigned int bg = scheme ? scheme->bg : 0x333333;
-    unsigned int fg = scheme ? scheme->fg_light : 0xFFFFFF;
+    unsigned int fg = scheme ? scheme->fg : 0xFFFFFF;
     render_fill_rect(cr, bg, 0, 0, w, h);
     render_text_centered(cr, text, fg, 0, 0, w, h, font_px);
     cairo_destroy(cr);

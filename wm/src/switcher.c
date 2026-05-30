@@ -127,7 +127,7 @@ static void paint_switcher(Wm *wm)
                              pad, y, label_w, row_h);
         }
 
-        unsigned int fg = scheme ? scheme->fg_light : 0xFFFFFF;
+        unsigned int fg = scheme ? scheme->fg : 0xFFFFFF;
         render_text(cr, wm->switcher_labels[idx], fg,
                     pad, y, label_w, row_h, font_px);
     }
