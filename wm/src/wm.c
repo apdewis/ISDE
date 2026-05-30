@@ -135,10 +135,9 @@ static void wm_on_settings_changed(const char *section, const char *key,
     (void)key;
     Wm *wm = (Wm *)user_data;
 
-    /* A desktop-count change needs a full re-init; restart for it. */
+    /* A desktop-count change is applied live by the desktops module. */
     if (strcmp(section, "wm.desktops") == 0) {
-        wm->running = 0;
-        wm->restart = 1;
+        wm_desktops_settings_changed(wm);
         return;
     }
 

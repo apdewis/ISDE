@@ -15,31 +15,37 @@
 
 /* ---------- config ---------- */
 
+/* Read the desktop grid from isde.toml; defaults to 1 row x 2 columns. */
+static void wm_desktops_read_config(int *rows, int *cols)
+{
+    *rows = 1;
+    *cols = 2;
+
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *wm_tbl = isde_config_table(root, "wm");
+        IsdeConfigTable *desk = wm_tbl ? isde_config_table(wm_tbl, "desktops") : NULL;
+        if (desk) {
+            int r = (int)isde_config_int(desk, "rows", 0);
+            int c = (int)isde_config_int(desk, "columns", 0);
+            if (r > 0) { *rows = r; }
+            if (c > 0) { *cols = c; }
+        }
+        isde_config_free(cfg);
+    }
+}
+
 void wm_desktops_init(Wm *wm)
 {
-    wm->desk_rows = 1;
-    wm->desk_cols = 2;
-
     int lo, lc, lr, lsc;
     if (isde_ewmh_get_desktop_layout(wm->ewmh, &lo, &lc, &lr, &lsc) &&
         lc > 0 && lr > 0) {
         wm->desk_cols = lc;
         wm->desk_rows = lr;
     } else {
-        char errbuf[256];
-        IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-        if (cfg) {
-            IsdeConfigTable *root = isde_config_root(cfg);
-            IsdeConfigTable *wm_tbl = isde_config_table(root, "wm");
-            IsdeConfigTable *desk = wm_tbl ? isde_config_table(wm_tbl, "desktops") : NULL;
-            if (desk) {
-                int r = (int)isde_config_int(desk, "rows", 0);
-                int c = (int)isde_config_int(desk, "columns", 0);
-                if (r > 0) { wm->desk_rows = r; }
-                if (c > 0) { wm->desk_cols = c; }
-            }
-            isde_config_free(cfg);
-        }
+        wm_desktops_read_config(&wm->desk_rows, &wm->desk_cols);
     }
 
     wm->num_desktops = wm->desk_rows * wm->desk_cols;
@@ -52,9 +58,107 @@ void wm_desktops_init(Wm *wm)
     xcb_flush(wm->conn);
 
     wm->desk_osd_timer = -1;
+    wm->desk_reload_tries = 0;
 
     fprintf(stderr, "isde-wm: desktops: %dx%d grid (%d total)\n",
             wm->desk_cols, wm->desk_rows, wm->num_desktops);
+}
+
+/* ---------- live reload ---------- */
+
+/* Bring every client's map state into line with the current desktop. */
+static void wm_desktops_sync_visibility(Wm *wm)
+{
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        int visible = (c->desktop == wm->current_desktop ||
+                       c->desktop == 0xFFFFFFFF);
+        if (visible && c->hidden) {
+            c->hidden = 0;
+            xcb_map_window(wm->conn, c->client);
+            if (c->frame) {
+                xcb_map_window(wm->conn, c->frame);
+                c->mapped = 1;
+            }
+        } else if (!visible && !c->hidden) {
+            c->hidden = 1;
+            c->ignore_unmap++;
+            xcb_unmap_window(wm->conn, c->client);
+            if (c->frame && c->mapped) {
+                xcb_unmap_window(wm->conn, c->frame);
+                c->mapped = 0;
+            }
+        }
+    }
+}
+
+/* Apply a new desktop grid live. Windows left on now-removed desktops are
+ * pulled onto the last desktop, and the current desktop is clamped into range. */
+static void wm_desktops_apply(Wm *wm, int rows, int cols)
+{
+    if (rows < 1) { rows = 1; }
+    if (cols < 1) { cols = 1; }
+
+    wm->desk_rows = rows;
+    wm->desk_cols = cols;
+    wm->num_desktops = rows * cols;
+
+    uint32_t last = (uint32_t)wm->num_desktops - 1;
+
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->desktop != 0xFFFFFFFF && c->desktop > last) {
+            c->desktop = last;
+            xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
+                                    c->client, last);
+        }
+    }
+
+    if (wm->current_desktop > last) {
+        wm->current_desktop = last;
+    }
+
+    wm_desktops_sync_visibility(wm);
+
+    isde_ewmh_set_number_of_desktops(wm->ewmh, wm->num_desktops);
+    isde_ewmh_set_current_desktop(wm->ewmh, wm->current_desktop);
+    xcb_flush(wm->conn);
+
+    fprintf(stderr, "isde-wm: desktops reloaded: %dx%d grid (%d total)\n",
+            wm->desk_cols, wm->desk_rows, wm->num_desktops);
+}
+
+/* The panel owns _NET_DESKTOP_LAYOUT; on a settings change it rewrites that
+ * property, but the D-Bus signal may reach us first. Poll the layout until it
+ * differs from our current grid, then apply it. If the panel never updates it
+ * (e.g. the WM is running standalone), fall back to reading the config file. */
+#define DESK_RELOAD_POLL_MS   50
+#define DESK_RELOAD_MAX_TRIES 40   /* ~2s before falling back to config */
+
+static void wm_desktops_reload_poll(void *data)
+{
+    Wm *wm = (Wm *)data;
+
+    int lo, lc, lr, lsc;
+    if (isde_ewmh_get_desktop_layout(wm->ewmh, &lo, &lc, &lr, &lsc) &&
+        lc > 0 && lr > 0 &&
+        (lc != wm->desk_cols || lr != wm->desk_rows)) {
+        wm_desktops_apply(wm, lr, lc);
+        return;
+    }
+
+    if (++wm->desk_reload_tries >= DESK_RELOAD_MAX_TRIES) {
+        int rows, cols;
+        wm_desktops_read_config(&rows, &cols);
+        wm_desktops_apply(wm, rows, cols);
+        return;
+    }
+
+    wm_timer_add(wm, DESK_RELOAD_POLL_MS, wm_desktops_reload_poll, wm);
+}
+
+void wm_desktops_settings_changed(Wm *wm)
+{
+    wm->desk_reload_tries = 0;
+    wm_timer_add(wm, DESK_RELOAD_POLL_MS, wm_desktops_reload_poll, wm);
 }
 
 /* ---------- switching ---------- */

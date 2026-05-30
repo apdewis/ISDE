@@ -440,6 +440,35 @@ void pager_init(Panel *p)
                    pager_input_cb, p);
 }
 
+void pager_reload_config(Panel *p)
+{
+    if (!p->pager_canvas) {
+        return;
+    }
+
+    load_pager_config(p);
+
+    isde_ewmh_set_desktop_layout(p->ewmh,
+                                 XCB_EWMH_WM_ORIENTATION_HORZ,
+                                 p->pager_cols, p->pager_rows,
+                                 XCB_EWMH_WM_TOPLEFT);
+
+    compute_cell_size(p);
+
+    int total_w = 2 * PAGER_PAD +
+                  p->pager_cols * pager_cell_w +
+                  (p->pager_cols - 1) * PAGER_GAP;
+
+    /* Tell the outer FlexBox our new size */
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgFlexBasis(&ab, total_w);
+    IswSetValues(p->pager_canvas, ab.args, ab.count);
+
+    p->pager_current = isde_ewmh_get_current_desktop(p->ewmh);
+    refresh_cache(p);
+    invalidate_pager(p);
+}
+
 void pager_update(Panel *p)
 {
     if (!p->pager_canvas) {

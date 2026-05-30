@@ -267,6 +267,7 @@ void  calendar_cleanup(Panel *p);
 
 /* ---------- pager.c ---------- */
 void  pager_init(Panel *p);
+void  pager_reload_config(Panel *p);
 void  pager_update(Panel *p);
 void  pager_cleanup(Panel *p);
 

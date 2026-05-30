@@ -482,6 +482,8 @@ static void on_panel_settings_changed(const char *section, const char *key,
         strcmp(section, "panel") == 0) {
         p->running = 0;
         p->restart = 1;
+    } else if (strcmp(section, "wm.desktops") == 0) {
+        pager_reload_config(p);
     }
 }
 

@@ -176,6 +176,7 @@ typedef struct Wm {
     uint32_t               current_desktop;
     xcb_window_t           desk_osd;       /* OSD popup window */
     int                    desk_osd_timer;  /* timer ID (-1 = none) */
+    int                    desk_reload_tries; /* EWMH-layout poll attempts */
 
     /* Window switcher (Alt+Tab) */
     xcb_window_t           switcher_shell;   /* OSD popup window */
@@ -353,6 +354,7 @@ void  wm_ewmh_set_allowed_actions(Wm *wm, WmClient *c);
 
 /* ---------- desktops.c — virtual desktop management ---------- */
 void  wm_desktops_init(Wm *wm);
+void  wm_desktops_settings_changed(Wm *wm);
 void  wm_desktops_switch(Wm *wm, uint32_t desktop);
 void  wm_desktops_move(Wm *wm, int dx, int dy);
 void  wm_desktops_show_osd(Wm *wm);
