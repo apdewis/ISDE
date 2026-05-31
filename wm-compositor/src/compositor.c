@@ -136,6 +136,14 @@ static void compositor_restack_from_tree(WmCompositor *comp)
         }
         CompositorWindow *cw = *pp;
         *pp = cw->next;
+        /* Refresh the cached above_sibling to the real lower neighbour from the
+         * tree (children run bottom-to-top, so children[i-1] sits directly
+         * below children[i]).  Without this the cache only ever updates for the
+         * window that received a ConfigureNotify, so it goes stale after a
+         * tree-driven reorder and the dedupe in wm_compositor_window_configured
+         * can falsely skip a needed rebuild, painting a window in a stale
+         * stacking position permanently. */
+        cw->above = (i > 0) ? children[i - 1] : XCB_NONE;
         /* Prepend while walking bottom-to-top, so the topmost child ends up
          * at the head. */
         cw->next = newlist;
@@ -721,6 +729,11 @@ void wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped)
         /* Re-fetch the storage pixmap on next paint — the old one is
          * stale after an unmap/remap cycle. */
         cw->dirty = 1;
+        /* The server raises a window to the top when it is mapped, but a plain
+         * remap (e.g. a desktop switch) carries no restack ConfigureNotify, so
+         * an already-tracked window would keep its stale paint position and
+         * render behind others.  Re-sync the paint order to the server tree. */
+        compositor_restack_from_tree(comp);
     }
     /* On unmap we keep the bound texture so the last frame can fade out;
      * the window stays in the paint list until its opacity reaches 0. */
