@@ -62,6 +62,7 @@ typedef struct Session {
 
     /* Power settings (cached from [power] config) */
     int               idle_suspend_sec;
+    int               screen_off_sec;   /* DPMS/screen-saver timeout to restore */
     LidAction         lid_action;
 
     /* Session settings */
@@ -77,9 +78,11 @@ typedef struct Session {
     /* D-Bus */
     IsdeDBus         *dbus;
     DBusConnection   *system_bus;     /* system bus for DM signals */
+    DBusConnection   *session_bus;    /* session bus for ScreenSaver inhibit */
 
     /* Screensaver inhibit (org.freedesktop.ScreenSaver) */
     uint32_t          inhibit_cookies[32];
+    char              inhibit_owners[32][64];  /* bus name that holds each cookie */
     int               inhibit_count;
     uint32_t          next_cookie;
 

@@ -185,6 +185,29 @@ static LidAction parse_lid_action(const char *s)
     return LID_ACTION_SUSPEND;
 }
 
+/* Apply screen-blanking state based on active inhibitors.  With one or more
+ * inhibitors held (e.g. a browser playing video) both DPMS and the X built-in
+ * screen saver are disabled; otherwise the configured screen_off timeout is
+ * restored. */
+static void update_blanking_inhibit(Session *s)
+{
+    if (!s->conn) {
+        return;
+    }
+
+    if (s->inhibit_count > 0) {
+        isde_dpms_set_timeouts(s->conn, 0, 0, 0);
+        xcb_set_screen_saver(s->conn, 0, 0,
+                             XCB_BLANKING_DEFAULT, XCB_EXPOSURES_DEFAULT);
+    } else {
+        isde_dpms_set_timeouts(s->conn, s->screen_off_sec,
+                               s->screen_off_sec, s->screen_off_sec);
+        xcb_set_screen_saver(s->conn, -1, 0,
+                             XCB_BLANKING_DEFAULT, XCB_EXPOSURES_DEFAULT);
+    }
+    xcb_flush(s->conn);
+}
+
 static void apply_power_settings(Session *s)
 {
     char errbuf[256];
@@ -241,10 +264,15 @@ screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
             return DBUS_HANDLER_RESULT_HANDLED;
         }
         uint32_t cookie = ++s->next_cookie;
-        s->inhibit_cookies[s->inhibit_count++] = cookie;
+        const char *sender = dbus_message_get_sender(msg);
+        int idx = s->inhibit_count++;
+        s->inhibit_cookies[idx] = cookie;
+        snprintf(s->inhibit_owners[idx], sizeof(s->inhibit_owners[idx]),
+                 "%s", sender ? sender : "");
         fprintf(stderr, "isde-session: screensaver inhibit by '%s': %s "
                 "(cookie %u, active %d)\n", app, reason, cookie,
                 s->inhibit_count);
+        update_blanking_inhibit(s);
 
         DBusMessage *reply = dbus_message_new_method_return(msg);
         dbus_message_append_args(reply,
@@ -264,11 +292,14 @@ screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
         }
         for (int i = 0; i < s->inhibit_count; i++) {
             if (s->inhibit_cookies[i] == cookie) {
-                s->inhibit_cookies[i] =
-                    s->inhibit_cookies[--s->inhibit_count];
+                int last = --s->inhibit_count;
+                s->inhibit_cookies[i] = s->inhibit_cookies[last];
+                memcpy(s->inhibit_owners[i], s->inhibit_owners[last],
+                       sizeof(s->inhibit_owners[i]));
                 fprintf(stderr, "isde-session: screensaver uninhibit "
                         "cookie %u (active %d)\n", cookie,
                         s->inhibit_count);
+                update_blanking_inhibit(s);
                 break;
             }
         }
@@ -284,6 +315,52 @@ screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
 static const DBusObjectPathVTable screensaver_vtable = {
     .message_function = screensaver_message_handler
 };
+
+/* Drop any inhibitors held by a bus name that has vanished (e.g. a browser
+ * that crashed without calling UnInhibit), so blanking is not wedged off. */
+static DBusHandlerResult
+session_bus_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
+{
+    (void)conn;
+    Session *s = (Session *)user_data;
+
+    if (dbus_message_is_signal(msg, DBUS_INTERFACE_DBUS, "NameOwnerChanged")) {
+        const char *name = NULL;
+        const char *old_owner = NULL;
+        const char *new_owner = NULL;
+        if (!dbus_message_get_args(msg, NULL,
+                                   DBUS_TYPE_STRING, &name,
+                                   DBUS_TYPE_STRING, &old_owner,
+                                   DBUS_TYPE_STRING, &new_owner,
+                                   DBUS_TYPE_INVALID)) {
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        }
+        if (new_owner && new_owner[0] != '\0') {
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;  /* name acquired */
+        }
+
+        int removed = 0;
+        for (int i = 0; i < s->inhibit_count; ) {
+            if (name && strcmp(s->inhibit_owners[i], name) == 0) {
+                fprintf(stderr, "isde-session: dropping inhibitor cookie %u "
+                        "(owner '%s' gone)\n", s->inhibit_cookies[i], name);
+                int last = --s->inhibit_count;
+                s->inhibit_cookies[i] = s->inhibit_cookies[last];
+                memcpy(s->inhibit_owners[i], s->inhibit_owners[last],
+                       sizeof(s->inhibit_owners[i]));
+                removed = 1;
+            } else {
+                i++;
+            }
+        }
+        if (removed) {
+            update_blanking_inhibit(s);
+        }
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
 
 static void init_screensaver_service(Session *s)
 {
@@ -308,12 +385,27 @@ static void init_screensaver_service(Session *s)
         return;
     }
 
+    dbus_connection_set_exit_on_disconnect(conn, FALSE);
+
     dbus_connection_register_object_path(conn, SCREENSAVER_DBUS_PATH,
                                          &screensaver_vtable, s);
     dbus_connection_register_object_path(conn, "/ScreenSaver",
                                          &screensaver_vtable, s);
-    dbus_connection_unref(conn);
-    dbus_error_free(&err);
+
+    /* Watch for inhibitor owners disconnecting (name-lost only). */
+    dbus_connection_add_filter(conn, session_bus_filter, s, NULL);
+    dbus_bus_add_match(conn,
+        "type='signal',"
+        "interface='" DBUS_INTERFACE_DBUS "',"
+        "member='NameOwnerChanged',"
+        "arg2=''",
+        &err);
+    if (dbus_error_is_set(&err)) {
+        fprintf(stderr, "isde-session: D-Bus match (owner): %s\n", err.message);
+        dbus_error_free(&err);
+    }
+
+    s->session_bus = conn;
     fprintf(stderr, "isde-session: screensaver inhibit service active\n");
 }
 
@@ -586,6 +678,19 @@ static void system_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
     }
 }
 
+static void session_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
+{
+    (void)fd; (void)id;
+    Session *s = (Session *)client_data;
+    if (s->session_bus) {
+        dbus_connection_read_write(s->session_bus, 0);
+        while (dbus_connection_dispatch(s->session_bus) ==
+               DBUS_DISPATCH_DATA_REMAINS) {
+            /* drain */
+        }
+    }
+}
+
 static void xcb_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 {
     (void)fd; (void)id;
@@ -819,6 +924,15 @@ void session_run(Session *s)
         }
     }
 
+    int sess_fd = -1;
+    if (s->session_bus) {
+        dbus_connection_get_unix_fd(s->session_bus, &sess_fd);
+        if (sess_fd >= 0) {
+            IswAppAddInput(s->app, sess_fd, (IswPointer)IswInputReadMask,
+                          session_bus_input_cb, s);
+        }
+    }
+
     if (xcb_fd >= 0) {
         IswAppAddInput(s->app, xcb_fd, (IswPointer)IswInputReadMask,
                       xcb_input_cb, s);
@@ -865,6 +979,10 @@ void session_cleanup(Session *s)
     if (s->system_bus) {
         dbus_connection_remove_filter(s->system_bus, system_bus_filter, s);
         dbus_connection_unref(s->system_bus);
+    }
+    if (s->session_bus) {
+        dbus_connection_remove_filter(s->session_bus, session_bus_filter, s);
+        dbus_connection_unref(s->session_bus);
     }
     if (s->toplevel) {
         IswDestroyWidget(s->toplevel);
