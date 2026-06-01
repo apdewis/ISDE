@@ -200,17 +200,26 @@ char *isde_icon_find(const char *category, const char *name)
         }
     }
 
-    /* Freedesktop fallback: /usr/share/pixmaps (unthemed legacy icons).
-     * Only check formats ISW can render (SVG and PNG). */
+    /* Freedesktop fallback: <data dir>/pixmaps (unthemed legacy icons).
+     * Walk XDG_DATA_DIRS so prefixes other than /usr (e.g. FreeBSD ports'
+     * /usr/local/share/pixmaps) are covered.  Only check formats ISW can
+     * render (SVG and PNG). */
     {
         const char *exts[] = { ".svg", ".png", NULL };
         char pix_path[512];
-        for (int i = 0; exts[i]; i++) {
-            snprintf(pix_path, sizeof(pix_path), "/usr/share/pixmaps/%s%s",
-                     name, exts[i]);
-            if (access(pix_path, R_OK) == 0) {
-                return strdup(pix_path);
+        const char *dirs = isde_xdg_data_dirs();
+        const char *p = dirs;
+        while (p && *p) {
+            const char *colon = strchr(p, ':');
+            size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
+            for (int i = 0; dlen > 0 && exts[i]; i++) {
+                snprintf(pix_path, sizeof(pix_path), "%.*s/pixmaps/%s%s",
+                         (int)dlen, p, name, exts[i]);
+                if (access(pix_path, R_OK) == 0) {
+                    return strdup(pix_path);
+                }
             }
+            p = colon ? colon + 1 : NULL;
         }
     }
 
