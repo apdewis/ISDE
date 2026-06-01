@@ -15,8 +15,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
-#include <dirent.h>
-#include <linux/input.h>
 
 /* ---------- signal self-pipe ---------- */
 
@@ -54,54 +52,15 @@ static int setup_signal_pipe(Dm *dm)
 
 /* ---------- lid switch detection ---------- */
 
-static int open_lid_switch(void)
-{
-    DIR *d = opendir("/dev/input");
-    if (!d) {
-        return -1;
-    }
-
-    struct dirent *de;
-    while ((de = readdir(d))) {
-        if (strncmp(de->d_name, "event", 5) != 0) {
-            continue;
-        }
-
-        char path[256];
-        snprintf(path, sizeof(path), "/dev/input/%s", de->d_name);
-
-        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (fd < 0) {
-            continue;
-        }
-
-        /* Check if this device has EV_SW with SW_LID */
-        unsigned long sw_bits[(SW_MAX + 7) / 8] = {0};
-        if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(sw_bits)), sw_bits) >= 0) {
-            if (sw_bits[SW_LID / 8] & (1 << (SW_LID % 8))) {
-                closedir(d);
-                fprintf(stderr, "isde-dm: lid switch found: %s\n", path);
-                return fd;
-            }
-        }
-        close(fd);
-    }
-    closedir(d);
-    return -1;
-}
-
 static void handle_lid_events(Dm *dm)
 {
-    struct input_event ev;
-    while (read(dm->lid_fd, &ev, sizeof(ev)) == (ssize_t)sizeof(ev)) {
-        if (ev.type == EV_SW && ev.code == SW_LID) {
-            int closed = ev.value ? 1 : 0;
-            if (closed != dm->lid_closed) {
-                dm->lid_closed = closed;
-                fprintf(stderr, "isde-dm: lid %s\n",
-                        closed ? "closed" : "opened");
-                dm_dbus_emit_lid_switch(dm, closed);
-            }
+    int closed;
+    while (dm->plat->lid_read(dm->lid_fd, &closed) == 1) {
+        if (closed != dm->lid_closed) {
+            dm->lid_closed = closed;
+            fprintf(stderr, "isde-dm: lid %s\n",
+                    closed ? "closed" : "opened");
+            dm_dbus_emit_lid_switch(dm, closed);
         }
     }
 }
@@ -267,7 +226,7 @@ int dm_init(Dm *dm)
 
     /* Lid switch monitoring */
     if (!dm->dev_mode) {
-        dm->lid_fd = open_lid_switch();
+        dm->lid_fd = dm->plat->lid_open();
         if (dm->lid_fd < 0) {
             fprintf(stderr, "isde-dm: no lid switch found (non-fatal)\n");
         }

@@ -5,11 +5,14 @@
 #include "platform.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <sys/ioctl.h>
 #include <sys/reboot.h>
 #include <sys/consio.h>
+#include <dev/evdev/input.h>
 
 static int freebsd_shutdown(void)
 {
@@ -71,6 +74,56 @@ static const char *freebsd_vt_device_path(int vt, char *buf, size_t buflen)
     return buf;
 }
 
+static int freebsd_lid_open(void)
+{
+    /* FreeBSD's evdev exposes /dev/input/eventN when the evdev module is
+     * loaded; absent that, opendir fails and we report no lid switch. */
+    DIR *d = opendir("/dev/input");
+    if (!d) {
+        return -1;
+    }
+
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        if (strncmp(de->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        char path[256];
+        snprintf(path, sizeof(path), "/dev/input/%s", de->d_name);
+
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) {
+            continue;
+        }
+
+        /* Check if this device has EV_SW with SW_LID */
+        unsigned long sw_bits[(SW_MAX + 7) / 8] = {0};
+        if (ioctl(fd, EVIOCGBIT(EV_SW, sizeof(sw_bits)), sw_bits) >= 0) {
+            if (sw_bits[SW_LID / 8] & (1 << (SW_LID % 8))) {
+                closedir(d);
+                fprintf(stderr, "isde-dm: lid switch found: %s\n", path);
+                return fd;
+            }
+        }
+        close(fd);
+    }
+    closedir(d);
+    return -1;
+}
+
+static int freebsd_lid_read(int fd, int *closed)
+{
+    struct input_event ev;
+    while (read(fd, &ev, sizeof(ev)) == (ssize_t)sizeof(ev)) {
+        if (ev.type == EV_SW && ev.code == SW_LID) {
+            *closed = ev.value ? 1 : 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static const DmPlatformOps freebsd_ops = {
     .shutdown       = freebsd_shutdown,
     .reboot         = freebsd_reboot,
@@ -78,6 +131,8 @@ static const DmPlatformOps freebsd_ops = {
     .vt_activate    = freebsd_vt_activate,
     .vt_wait_active = freebsd_vt_wait_active,
     .vt_device_path = freebsd_vt_device_path,
+    .lid_open       = freebsd_lid_open,
+    .lid_read       = freebsd_lid_read,
     .rundir         = "/var/run/isde-dm",
 };
 

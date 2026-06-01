@@ -24,6 +24,14 @@ typedef struct DmPlatformOps {
      * Writes into buf (buflen bytes).  Returns buf on success, NULL on error. */
     const char *(*vt_device_path)(int vt, char *buf, size_t buflen);
 
+    /* Laptop lid switch.
+     * lid_open() returns an open fd for the lid device, or -1 if none.
+     * lid_read() reads the next lid-state change from fd: returns 1 and sets
+     * *closed (1=closed, 0=open) when a lid event is available, or 0 when the
+     * fd is drained of lid events. */
+    int  (*lid_open)(void);
+    int  (*lid_read)(int fd, int *closed);
+
     /* Platform paths */
     const char *rundir;           /* "/run/isde-dm" or "/var/run/isde-dm" */
 } DmPlatformOps;
