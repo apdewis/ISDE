@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "isde/isde-xdg.h"
+
 /* ---------- icon loading ---------- */
 
 static const char *icon_name_for_state(int capacity, int charging)
@@ -54,16 +56,10 @@ static void load_tray_icon(TrayBattery *tb)
         fg_hex = hex_buf;
     }
 
-    char svg_file[512];
-    snprintf(svg_file, sizeof(svg_file), "%s.svg", name);
-
-    ISWSVGImage *svg = ISWSVGLoadFile(svg_file, "px", 96.0, fg_hex);
-    if (!svg) {
-        char path[1024];
-        snprintf(path, sizeof(path),
-                 "/usr/share/icons/isde-standard/status/%s.svg", name);
-        svg = ISWSVGLoadFile(path, "px", 96.0, fg_hex);
-    }
+    char *icon_path = isde_icon_find("status", name);
+    ISWSVGImage *svg = icon_path
+        ? ISWSVGLoadFile(icon_path, "px", 96.0, fg_hex) : NULL;
+    free(icon_path);
     if (!svg) {
         fprintf(stderr, "isde-tray-battery: cannot load icon %s\n", name);
         return;

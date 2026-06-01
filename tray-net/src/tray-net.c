@@ -12,25 +12,17 @@
 #include <string.h>
 
 #include "isde/isde-config.h"
+#include "isde/isde-xdg.h"
 
 /* ---------- icon names per state ---------- */
 
 static const char *icon_names[ICON_COUNT] = {
-    [ICON_DISCONNECTED]  = "network-offline.svg",
-    [ICON_WIRED]         = "network-wired.svg",
-    [ICON_WIFI_WEAK]     = "network-wireless-signal-weak.svg",
-    [ICON_WIFI_OK]       = "network-wireless-signal-ok.svg",
-    [ICON_WIFI_GOOD]     = "network-wireless-signal-good.svg",
-    [ICON_WIFI_EXCELLENT] = "network-wireless-signal-excellent.svg",
-};
-
-static const char *icon_fallback_paths[ICON_COUNT] = {
-    [ICON_DISCONNECTED]  = "/usr/share/icons/isde-standard/status/network-offline.svg",
-    [ICON_WIRED]         = "/usr/share/icons/isde-standard/status/network-wired.svg",
-    [ICON_WIFI_WEAK]     = "/usr/share/icons/isde-standard/status/network-wireless-signal-weak.svg",
-    [ICON_WIFI_OK]       = "/usr/share/icons/isde-standard/status/network-wireless-signal-ok.svg",
-    [ICON_WIFI_GOOD]     = "/usr/share/icons/isde-standard/status/network-wireless-signal-good.svg",
-    [ICON_WIFI_EXCELLENT] = "/usr/share/icons/isde-standard/status/network-wireless-signal-excellent.svg",
+    [ICON_DISCONNECTED]   = "network-offline",
+    [ICON_WIRED]          = "network-wired",
+    [ICON_WIFI_WEAK]      = "network-wireless-signal-weak",
+    [ICON_WIFI_OK]        = "network-wireless-signal-ok",
+    [ICON_WIFI_GOOD]      = "network-wireless-signal-good",
+    [ICON_WIFI_EXCELLENT] = "network-wireless-signal-excellent",
 };
 
 /* ---------- icon state computation ---------- */
@@ -83,9 +75,10 @@ static void load_icon(TrayNet *tn, int state)
         fg_hex = hex_buf;
     }
 
-    ISWSVGImage *svg = ISWSVGLoadFile(icon_names[state], "px", 96.0, fg_hex);
-    if (!svg)
-        svg = ISWSVGLoadFile(icon_fallback_paths[state], "px", 96.0, fg_hex);
+    char *icon_path = isde_icon_find("status", icon_names[state]);
+    ISWSVGImage *svg = icon_path
+        ? ISWSVGLoadFile(icon_path, "px", 96.0, fg_hex) : NULL;
+    free(icon_path);
     if (!svg) {
         fprintf(stderr, "isde-tray-net: cannot load icon %s\n",
                 icon_names[state]);

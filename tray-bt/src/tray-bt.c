@@ -12,19 +12,14 @@
 #include <string.h>
 
 #include "isde/isde-config.h"
+#include "isde/isde-xdg.h"
 
 /* ---------- icon names per state ---------- */
 
 static const char *icon_names[ICON_BT_COUNT] = {
-    [ICON_BT_DISABLED]  = "bluetooth-disabled.svg",
-    [ICON_BT_IDLE]      = "bluetooth-active.svg",
-    [ICON_BT_CONNECTED] = "bluetooth-connected.svg",
-};
-
-static const char *icon_fallback_paths[ICON_BT_COUNT] = {
-    [ICON_BT_DISABLED]  = "/usr/share/icons/isde-standard/status/bluetooth-disabled.svg",
-    [ICON_BT_IDLE]      = "/usr/share/icons/isde-standard/status/bluetooth-active.svg",
-    [ICON_BT_CONNECTED] = "/usr/share/icons/isde-standard/status/bluetooth-connected.svg",
+    [ICON_BT_DISABLED]  = "bluetooth-disabled",
+    [ICON_BT_IDLE]      = "bluetooth-active",
+    [ICON_BT_CONNECTED] = "bluetooth-connected",
 };
 
 /* ---------- icon state computation ---------- */
@@ -58,9 +53,10 @@ static void load_icon(TrayBt *tb, int state)
         fg_hex = hex_buf;
     }
 
-    ISWSVGImage *svg = ISWSVGLoadFile(icon_names[state], "px", 96.0, fg_hex);
-    if (!svg)
-        svg = ISWSVGLoadFile(icon_fallback_paths[state], "px", 96.0, fg_hex);
+    char *icon_path = isde_icon_find("status", icon_names[state]);
+    ISWSVGImage *svg = icon_path
+        ? ISWSVGLoadFile(icon_path, "px", 96.0, fg_hex) : NULL;
+    free(icon_path);
     if (!svg) {
         fprintf(stderr, "isde-tray-bt: cannot load icon %s\n",
                 icon_names[state]);

@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "isde/isde-config.h"
+#include "isde/isde-xdg.h"
 
 /* ---------- icon loading ---------- */
 
@@ -29,14 +30,10 @@ static void load_tray_icon(TrayMount *tm)
         fg_hex = hex_buf;
     }
 
-    ISWSVGImage *svg = ISWSVGLoadFile(
-        "drive-removable-media.svg", "px", 96.0, fg_hex);
-    if (!svg) {
-        /* Try absolute path as fallback */
-        svg = ISWSVGLoadFile(
-            "/usr/share/icons/isde-standard/devices/drive-removable-media.svg",
-            "px", 96.0, fg_hex);
-    }
+    char *icon_path = isde_icon_find("devices", "drive-removable-media");
+    ISWSVGImage *svg = icon_path
+        ? ISWSVGLoadFile(icon_path, "px", 96.0, fg_hex) : NULL;
+    free(icon_path);
     if (!svg) {
         fprintf(stderr, "isde-tray-mount: cannot load icon\n");
         return;
