@@ -599,6 +599,24 @@ static int find_all_theme_bases(const char *theme, char ***out)
         p = colon ? colon + 1 : NULL;
     }
 
+#ifdef ISDE_INSTALL_DATADIR
+    /* Install-prefix fallback: ISDE's own theme (isde-standard) lives here
+     * regardless of the session's XDG_DATA_DIRS. */
+    snprintf(path, sizeof(path), "%s/icons/%s/index.theme",
+             ISDE_INSTALL_DATADIR, theme);
+    if (access(path, R_OK) == 0) {
+        snprintf(path, sizeof(path), "%s/icons/%s", ISDE_INSTALL_DATADIR, theme);
+        int dup = 0;
+        for (int i = 0; i < n; i++) {
+            if (strcmp(bases[i], path) == 0) { dup = 1; break; }
+        }
+        if (!dup) {
+            if (n >= cap) { cap *= 2; bases = realloc(bases, cap * sizeof(char *)); }
+            bases[n++] = strdup(path);
+        }
+    }
+#endif
+
     if (n == 0) { free(bases); *out = NULL; return 0; }
     *out = bases;
     return n;
