@@ -24,6 +24,13 @@
 
 #include <libtsm.h>
 
+/* tsm_screen_draw_cb's cell-id parameter is uint32_t upstream, uint64_t in the
+ * Aetf fork; CMake detects which and defines TSM_DRAW_ID_TYPE.  Default to the
+ * fork's type if built without that detection. */
+#ifndef TSM_DRAW_ID_TYPE
+#define TSM_DRAW_ID_TYPE uint64_t
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -269,7 +276,7 @@ static void rgb_unpack(const uint8_t in[3], double out[3])
     out[2] = in[2] / 255.0;
 }
 
-static int draw_cell_cb(struct tsm_screen *con, uint64_t id,
+static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
                         const uint32_t *ch, size_t len, unsigned int width,
                         unsigned int posx, unsigned int posy,
                         const struct tsm_screen_attr *attr,
