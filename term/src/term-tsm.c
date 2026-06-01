@@ -24,6 +24,7 @@ int term_tsm_new(struct tsm_screen **screen_out, struct tsm_vte **vte_out,
 
 void term_tsm_apply_palette(struct tsm_vte *vte, const TermPalette *pal)
 {
+#ifdef HAVE_TSM_CUSTOM_PALETTE
     uint8_t colors[TSM_COLOR_NUM][3];
     memset(colors, 0, sizeof(colors));
     for (int i = 0; i < 16; i++) {
@@ -39,4 +40,10 @@ void term_tsm_apply_palette(struct tsm_vte *vte, const TermPalette *pal)
     colors[TSM_COLOR_BACKGROUND][2] = pal->rgb[17][2];
     tsm_vte_set_custom_palette(vte, colors);
     tsm_vte_set_palette(vte, "custom");
+#else
+    /* Upstream libtsm has no custom-palette API; fall back to its built-in
+     * default and ignore the configured colours. */
+    (void)pal;
+    tsm_vte_set_palette(vte, NULL);
+#endif
 }

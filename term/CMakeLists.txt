@@ -35,6 +35,16 @@ else()
     target_compile_definitions(isde-term PRIVATE TSM_DRAW_ID_TYPE=uint32_t)
 endif()
 
+# Custom RGB palettes (tsm_vte_set_custom_palette + the TSM_COLOR_* enum) are an
+# Aetf-fork extension; upstream libtsm only offers built-in named palettes.
+include(CheckSymbolExists)
+set(CMAKE_REQUIRED_LIBRARIES ISDE::TSM)
+check_symbol_exists(tsm_vte_set_custom_palette libtsm.h HAVE_TSM_CUSTOM_PALETTE)
+unset(CMAKE_REQUIRED_LIBRARIES)
+if(HAVE_TSM_CUSTOM_PALETTE)
+    target_compile_definitions(isde-term PRIVATE HAVE_TSM_CUSTOM_PALETTE)
+endif()
+
 target_link_libraries(isde-term
     isde
     ISDE::ISW
