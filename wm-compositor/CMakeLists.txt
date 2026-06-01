@@ -23,23 +23,23 @@ target_compile_definitions(isde-wm-compositor PRIVATE
 
 target_link_libraries(isde-wm-compositor
     isde
-    PkgConfig::XCB
-    PkgConfig::XCB_EWMH
-    PkgConfig::XCB_ICCCM
-    PkgConfig::XCB_KEYSYMS
-    PkgConfig::XCB_XRM
-    PkgConfig::XCB_UTIL
-    PkgConfig::CAIRO
-    PkgConfig::CAIRO_XCB
-    PkgConfig::FONTCONFIG
-    PkgConfig::FREETYPE
-    PkgConfig::XCB_CURSOR
-    PkgConfig::EGL
-    PkgConfig::GL
-    PkgConfig::XCB_PRESENT
-    PkgConfig::XCB_COMPOSITE
-    PkgConfig::XCB_DAMAGE
-    PkgConfig::XCB_RENDER
+    ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
+    ISDE::XCB_KEYSYMS
+    ISDE::XCB_XRM
+    ISDE::XCB_UTIL
+    ISDE::CAIRO
+    ISDE::CAIRO_XCB
+    ISDE::FONTCONFIG
+    ISDE::FREETYPE
+    ISDE::XCB_CURSOR
+    ISDE::EGL
+    ISDE::GL
+    ISDE::XCB_PRESENT
+    ISDE::XCB_COMPOSITE
+    ISDE::XCB_DAMAGE
+    ISDE::XCB_RENDER
     m
 )
 

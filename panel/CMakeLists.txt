@@ -13,15 +13,15 @@ target_compile_definitions(isde-panel PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_S
 
 target_link_libraries(isde-panel
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_EWMH
-    PkgConfig::XCB_ICCCM
-    PkgConfig::XCB_UTIL
-    PkgConfig::XCB_KEYSYMS
-    PkgConfig::XKBCOMMON
-    PkgConfig::CAIRO
-    PkgConfig::XCB_CURSOR
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
+    ISDE::XCB_UTIL
+    ISDE::XCB_KEYSYMS
+    ISDE::XKBCOMMON
+    ISDE::CAIRO
+    ISDE::XCB_CURSOR
 )
 
 install(TARGETS isde-panel RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

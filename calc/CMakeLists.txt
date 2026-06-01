@@ -8,9 +8,9 @@ target_compile_definitions(isde-calc PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SO
 
 target_link_libraries(isde-calc
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::DBUS
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::DBUS
     m
 )
 

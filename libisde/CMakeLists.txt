@@ -30,16 +30,16 @@ target_include_directories(isde
 
 target_link_libraries(isde
     PUBLIC
-        PkgConfig::XCB
-        PkgConfig::XCB_EWMH
-        PkgConfig::XCB_ICCCM
-        PkgConfig::XCB_UTIL
-        PkgConfig::XCB_RANDR
-        PkgConfig::ISW
+        ISDE::XCB
+        ISDE::XCB_EWMH
+        ISDE::XCB_ICCCM
+        ISDE::XCB_UTIL
+        ISDE::XCB_RANDR
+        ISDE::ISW
     PRIVATE
-        PkgConfig::DBUS
-        PkgConfig::XCB_DPMS
-        PkgConfig::FONTCONFIG
+        ISDE::DBUS
+        ISDE::XCB_DPMS
+        ISDE::FONTCONFIG
 )
 
 set_target_properties(isde PROPERTIES

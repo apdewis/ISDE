@@ -9,11 +9,11 @@ target_compile_definitions(isde-screenshot PRIVATE _POSIX_C_SOURCE=200809L _DEFA
 
 target_link_libraries(isde-screenshot
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_XFIXES
-    PkgConfig::CAIRO
-    PkgConfig::DBUS
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_XFIXES
+    ISDE::CAIRO
+    ISDE::DBUS
 )
 
 install(TARGETS isde-screenshot RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

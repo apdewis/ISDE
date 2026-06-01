@@ -13,10 +13,10 @@ target_compile_definitions(isde-tray-audio PRIVATE
 
 target_link_libraries(isde-tray-audio
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_UTIL
-    PkgConfig::PIPEWIRE
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_UTIL
+    ISDE::PIPEWIRE
     m
 )
 

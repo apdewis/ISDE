@@ -28,16 +28,16 @@ find_package(Threads REQUIRED)
 target_link_libraries(isde-fm
     isde
     isw-graph
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_EWMH
-    PkgConfig::XCB_ICCCM
-    PkgConfig::XCB_UTIL
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
+    ISDE::XCB_UTIL
     Threads::Threads
-    PkgConfig::DBUS
-    PkgConfig::CAIRO
-    PkgConfig::LIBJPEG
-    PkgConfig::XCB_CURSOR
+    ISDE::DBUS
+    ISDE::CAIRO
+    ISDE::LIBJPEG
+    ISDE::XCB_CURSOR
 )
 
 install(TARGETS isde-fm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

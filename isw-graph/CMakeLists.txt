@@ -42,8 +42,8 @@ target_include_directories(isw-graph
 
 target_link_libraries(isw-graph
     PUBLIC
-        PkgConfig::ISW
-        PkgConfig::CAIRO
+        ISDE::ISW
+        ISDE::CAIRO
     PRIVATE
         m
 )
@@ -69,4 +69,4 @@ install(DIRECTORY include/isw-graph/
 # --- Demo ---
 add_executable(isw-graph-demo demo/demo.c)
 target_link_libraries(isw-graph-demo
-    isw-graph PkgConfig::ISW PkgConfig::XCB_ICCCM m)
+    isw-graph ISDE::ISW ISDE::XCB_ICCCM m)

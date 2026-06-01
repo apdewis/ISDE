@@ -6,8 +6,8 @@ target_compile_definitions(isde-displayd PRIVATE _POSIX_C_SOURCE=200809L _DEFAUL
 
 target_link_libraries(isde-displayd
     isde
-    PkgConfig::XCB
-    PkgConfig::DBUS
+    ISDE::XCB
+    ISDE::DBUS
 )
 
 install(TARGETS isde-displayd RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

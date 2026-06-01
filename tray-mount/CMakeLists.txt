@@ -14,10 +14,10 @@ target_compile_definitions(isde-tray-mount PRIVATE
 
 target_link_libraries(isde-tray-mount
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_UTIL
-    PkgConfig::DBUS
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_UTIL
+    ISDE::DBUS
 )
 
 install(TARGETS isde-tray-mount RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

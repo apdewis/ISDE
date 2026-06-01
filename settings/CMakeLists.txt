@@ -16,12 +16,12 @@ target_compile_definitions(isde-settings PRIVATE _POSIX_C_SOURCE=200809L _DEFAUL
 
 target_link_libraries(isde-settings
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::DBUS
-    PkgConfig::XCB_XKB
-    PkgConfig::CAIRO
-    PkgConfig::FONTCONFIG
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::DBUS
+    ISDE::XCB_XKB
+    ISDE::CAIRO
+    ISDE::FONTCONFIG
     ${CMAKE_DL_LIBS}
 )
 

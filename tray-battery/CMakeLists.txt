@@ -12,9 +12,9 @@ target_compile_definitions(isde-tray-battery PRIVATE
 
 target_link_libraries(isde-tray-battery
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_UTIL
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_UTIL
 )
 
 install(TARGETS isde-tray-battery RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

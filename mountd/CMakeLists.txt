@@ -17,7 +17,7 @@ target_compile_definitions(isde-mountd PRIVATE
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(isde-mountd PRIVATE src/platform_linux.c)
     target_link_libraries(isde-mountd
-        PkgConfig::UDEV PkgConfig::CRYPTSETUP PkgConfig::BLKID)
+        ISDE::UDEV ISDE::CRYPTSETUP ISDE::BLKID)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     target_sources(isde-mountd PRIVATE src/platform_freebsd.c)
 else()
@@ -26,7 +26,7 @@ endif()
 
 target_link_libraries(isde-mountd
     isde
-    PkgConfig::DBUS
+    ISDE::DBUS
 )
 
 install(TARGETS isde-mountd RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

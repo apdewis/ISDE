@@ -31,9 +31,9 @@ endif()
 
 target_link_libraries(isde-dm
     isde
-    PkgConfig::XCB
-    PkgConfig::DBUS
-    PkgConfig::LIBSEAT
+    ISDE::XCB
+    ISDE::DBUS
+    ISDE::LIBSEAT
     pam_imported
 )
 
@@ -62,9 +62,9 @@ target_compile_definitions(isde-greeter PRIVATE
 
 target_link_libraries(isde-greeter
     isde
-    PkgConfig::ISW
-    PkgConfig::XCB
-    PkgConfig::XCB_UTIL
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_UTIL
 )
 
 install(TARGETS isde-greeter RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

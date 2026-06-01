@@ -18,17 +18,17 @@ target_compile_definitions(isde-wm PRIVATE _POSIX_C_SOURCE=200809L)
 
 target_link_libraries(isde-wm
     isde
-    PkgConfig::XCB
-    PkgConfig::XCB_EWMH
-    PkgConfig::XCB_ICCCM
-    PkgConfig::XCB_KEYSYMS
-    PkgConfig::XCB_XRM
-    PkgConfig::XCB_UTIL
-    PkgConfig::CAIRO
-    PkgConfig::CAIRO_XCB
-    PkgConfig::FONTCONFIG
-    PkgConfig::FREETYPE
-    PkgConfig::XCB_CURSOR
+    ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
+    ISDE::XCB_KEYSYMS
+    ISDE::XCB_XRM
+    ISDE::XCB_UTIL
+    ISDE::CAIRO
+    ISDE::CAIRO_XCB
+    ISDE::FONTCONFIG
+    ISDE::FREETYPE
+    ISDE::XCB_CURSOR
     m
 )
 
