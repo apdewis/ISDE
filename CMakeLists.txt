@@ -72,15 +72,17 @@ function(isde_dependency NAME)
 endfunction()
 
 # --- Core dependencies (all components) ---
-isde_dependency(ISW             PC isw>=0.7.0          LIBS ISW             HEADERS ISW/Intrinsic.h)
-
-# If libISW is not installed, allow overriding its include/lib paths.
-# Usage: cmake -B build -DISW_LOCAL_DIR=/home/user/libISW
+# If libISW is not installed, allow overriding its include/lib paths instead of
+# locating an installed copy.  Usage: cmake -B build -DISW_LOCAL_DIR=/home/user/libISW
 if(ISW_LOCAL_DIR)
+    add_library(ISDE::ISW INTERFACE IMPORTED GLOBAL)
     set_property(TARGET ISDE::ISW PROPERTY
         INTERFACE_INCLUDE_DIRECTORIES "${ISW_LOCAL_DIR}/include")
     set_property(TARGET ISDE::ISW PROPERTY
         INTERFACE_LINK_LIBRARIES "${ISW_LOCAL_DIR}/build/libISW.so")
+else()
+    isde_dependency(ISW         PC isw>=0.7.0          LIBS ISW
+        HEADERS ISW/Intrinsic.h  HEADER_PATHS /usr/local/include/isw)
 endif()
 isde_dependency(XCB             PC xcb                 LIBS xcb             HEADERS xcb/xcb.h)
 isde_dependency(XCB_EWMH        PC xcb-ewmh            LIBS xcb-ewmh        HEADERS xcb/xcb_ewmh.h)
