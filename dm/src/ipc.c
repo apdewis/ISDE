@@ -15,6 +15,7 @@
 #include <sys/un.h>
 
 #include "isde/isde-desktop.h"
+#include "isde/isde-xdg.h"
 
 int dm_ipc_init(Dm *dm)
 {
@@ -198,10 +199,30 @@ static void handle_session(Dm *dm, const char *args)
 
 static void handle_list_sessions(Dm *dm)
 {
-    /* Scan /usr/share/xsessions/ */
+    /* Scan <datadir>/xsessions across XDG_DATA_DIRS (FreeBSD ports install
+     * under /usr/local/share, not /usr/share). */
+    IsdeDesktopEntry **entries = NULL;
     int count = 0;
-    IsdeDesktopEntry **entries =
-        isde_desktop_scan_dir("/usr/share/xsessions", &count);
+    const char *dp = isde_xdg_data_dirs();
+    while (dp && *dp) {
+        const char *colon = strchr(dp, ':');
+        size_t dlen = colon ? (size_t)(colon - dp) : strlen(dp);
+        if (dlen > 0) {
+            char dir[512];
+            snprintf(dir, sizeof(dir), "%.*s/xsessions", (int)dlen, dp);
+            int n = 0;
+            IsdeDesktopEntry **e = isde_desktop_scan_dir(dir, &n);
+            if (e && n > 0) {
+                entries = realloc(entries,
+                                  (count + n) * sizeof(IsdeDesktopEntry *));
+                for (int i = 0; i < n; i++) {
+                    entries[count++] = e[i];
+                }
+            }
+            free(e);
+        }
+        dp = colon ? colon + 1 : NULL;
+    }
 
     char buf[DM_IPC_MAX_MSG];
     int off = snprintf(buf, sizeof(buf), "SESSIONS %d\n", count);
