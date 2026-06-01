@@ -112,17 +112,17 @@ add_library(isw-graph SHARED
     ${KPLOT_SOURCES}
 )
 
-# kplot sources get their feature-test macros from the generated config.h
-# (oconfigure design); _POSIX_C_SOURCE covers the Graph sources.
-target_compile_definitions(isw-graph PRIVATE
-    _POSIX_C_SOURCE=200809L
-)
-
-# On FreeBSD the kplot sources need _BSD_SOURCE to expose BSD extensions.
-if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-    set_source_files_properties(${KPLOT_SOURCES}
-        PROPERTIES COMPILE_DEFINITIONS _BSD_SOURCE)
-endif()
+# The Graph sources need _POSIX_C_SOURCE; the kplot sources must NOT get it.
+# kplot's config.h (included first in every kplot .c) sets the correct per-OS
+# feature macros itself (oconfigure design). Forcing _POSIX_C_SOURCE on them
+# defines it before config.h runs, which on FreeBSD clears __BSD_VISIBLE and
+# hides reallocarray (declared in <stdlib.h> under #if __BSD_VISIBLE).
+set_source_files_properties(
+    src/GraphCommon.c
+    src/GraphLine.c
+    src/GraphBar.c
+    src/GraphScatter.c
+    PROPERTIES COMPILE_DEFINITIONS _POSIX_C_SOURCE=200809L)
 
 target_include_directories(isw-graph
     PUBLIC
