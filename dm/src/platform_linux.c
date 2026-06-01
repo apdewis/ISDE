@@ -125,7 +125,8 @@ static const DmPlatformOps linux_ops = {
     .vt_device_path = linux_vt_device_path,
     .lid_open       = linux_lid_open,
     .lid_read       = linux_lid_read,
-    .rundir         = "/run/isde-dm",
+    .rundir           = "/run/isde-dm",
+    .runtime_dir_base = "/run/user",
 };
 
 const DmPlatformOps *dm_platform_ops(void)

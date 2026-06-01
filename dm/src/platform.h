@@ -34,6 +34,11 @@ typedef struct DmPlatformOps {
 
     /* Platform paths */
     const char *rundir;           /* "/run/isde-dm" or "/var/run/isde-dm" */
+
+    /* Base directory for the user session's XDG_RUNTIME_DIR; the per-user
+     * directory is "<runtime_dir_base>/<uid>" ("/run/user" on Linux,
+     * "/var/run/xdg" on FreeBSD). */
+    const char *runtime_dir_base;
 } DmPlatformOps;
 
 /* Returns the ops table for the compiled platform. */

@@ -326,13 +326,17 @@ int dm_session_start(Dm *dm, const char *username,
         snprintf(xdg_cfg, sizeof(xdg_cfg), "%s/.config", pw->pw_dir);
         snprintf(xdg_data, sizeof(xdg_data), "%s/.local/share", pw->pw_dir);
         snprintf(xdg_cache, sizeof(xdg_cache), "%s/.cache", pw->pw_dir);
-        snprintf(xdg_rt, sizeof(xdg_rt), "/run/user/%d", pw->pw_uid);
+        snprintf(xdg_rt, sizeof(xdg_rt), "%s/%d",
+                 dm->plat->runtime_dir_base, pw->pw_uid);
         setenv("XDG_CONFIG_HOME", xdg_cfg, 1);
         setenv("XDG_DATA_HOME", xdg_data, 1);
         setenv("XDG_CACHE_HOME", xdg_cache, 1);
         setenv("XDG_RUNTIME_DIR", xdg_rt, 1);
 
-        /* Ensure XDG_RUNTIME_DIR exists */
+        /* Ensure XDG_RUNTIME_DIR exists.  Create the base too (root-owned,
+         * world-traversable) since it may not exist (e.g. /var/run/xdg on
+         * FreeBSD); /run/user on Linux already exists so this is a no-op. */
+        mkdir(dm->plat->runtime_dir_base, 0755);
         mkdir(xdg_rt, 0700);
         chown(xdg_rt, pw->pw_uid, pw->pw_gid);
 

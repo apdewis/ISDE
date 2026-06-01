@@ -140,7 +140,8 @@ static const DmPlatformOps freebsd_ops = {
     .vt_device_path = freebsd_vt_device_path,
     .lid_open       = freebsd_lid_open,
     .lid_read       = freebsd_lid_read,
-    .rundir         = "/var/run/isde-dm",
+    .rundir           = "/var/run/isde-dm",
+    .runtime_dir_base = "/var/run/xdg",
 };
 
 const DmPlatformOps *dm_platform_ops(void)
