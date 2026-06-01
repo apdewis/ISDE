@@ -118,6 +118,12 @@ target_compile_definitions(isw-graph PRIVATE
     _POSIX_C_SOURCE=200809L
 )
 
+# On FreeBSD the kplot sources need _BSD_SOURCE to expose BSD extensions.
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    set_source_files_properties(${KPLOT_SOURCES}
+        PROPERTIES COMPILE_DEFINITIONS _BSD_SOURCE)
+endif()
+
 target_include_directories(isw-graph
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
