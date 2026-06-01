@@ -30,6 +30,7 @@ else()
 endif()
 
 target_link_libraries(isde-dm
+    PRIVATE
     isde
     ISDE::XCB
     ISDE::DBUS
