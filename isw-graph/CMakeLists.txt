@@ -139,6 +139,7 @@ target_link_libraries(isw-graph
         ISDE::ISW
         ISDE::CAIRO
     PRIVATE
+        ISDE::XCB
         m
 )
 
