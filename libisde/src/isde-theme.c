@@ -58,6 +58,13 @@ static char *find_theme_file(const char *rel)
     char *path = isde_xdg_find_data(rel);
     if (path) { return path; }
 
+#ifdef ISDE_INSTALL_DATADIR
+    /* Installed-location fallback: found regardless of XDG_DATA_DIRS. */
+    char ip[512];
+    snprintf(ip, sizeof(ip), "%s/isde/%s", ISDE_INSTALL_DATADIR, rel);
+    if (access(ip, R_OK) == 0) { return strdup(ip); }
+#endif
+
     /* Dev build fallback: check relative to executable */
     char exe_dir[512] = {0};
     ssize_t len = readlink("/proc/self/exe", exe_dir, sizeof(exe_dir) - 1);

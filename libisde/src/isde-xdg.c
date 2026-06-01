@@ -10,11 +10,32 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__FreeBSD__)
+#include <sys/sysctl.h>
+#endif
 
 static const char *get_home(void)
 {
     const char *h = getenv("HOME");
     return h ? h : "/tmp";
+}
+
+const char *isde_xdg_executable_dir(char *buf, size_t buflen)
+{
+#if defined(__FreeBSD__)
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    size_t sz = buflen;
+    if (sysctl(mib, 4, buf, &sz, NULL, 0) != 0 || sz == 0) { return NULL; }
+    buf[buflen - 1] = '\0';
+#else
+    ssize_t len = readlink("/proc/self/exe", buf, buflen - 1);
+    if (len <= 0) { return NULL; }
+    buf[len] = '\0';
+#endif
+    char *slash = strrchr(buf, '/');
+    if (!slash) { return NULL; }
+    *slash = '\0';
+    return buf;
 }
 
 const char *isde_xdg_config_home(void)

@@ -18,7 +18,13 @@ add_library(isde SHARED
     vendor/tomlc99/toml.c
 )
 
-target_compile_definitions(isde PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_definitions(isde PRIVATE
+    _POSIX_C_SOURCE=200809L
+    # Absolute install locations, used as a guaranteed fallback when the
+    # session's XDG_CONFIG_DIRS/XDG_DATA_DIRS omit the install prefix
+    # (e.g. /usr/local on FreeBSD).
+    ISDE_INSTALL_SYSCONFDIR="${CMAKE_INSTALL_FULL_SYSCONFDIR}"
+    ISDE_INSTALL_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}")
 
 target_include_directories(isde
     PUBLIC

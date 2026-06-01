@@ -77,6 +77,18 @@ IsdeConfig *isde_config_load_xdg(const char *name, char *errbuf, int errbufsz)
 {
     char *path = isde_xdg_find_config(name);
 
+#ifdef ISDE_INSTALL_SYSCONFDIR
+    /* Installed-location fallback: found regardless of XDG_CONFIG_DIRS, which a
+     * session may export without the install prefix. */
+    if (!path) {
+        char ip[512];
+        snprintf(ip, sizeof(ip), "%s/xdg/isde/%s", ISDE_INSTALL_SYSCONFDIR, name);
+        if (access(ip, R_OK) == 0) {
+            path = strdup(ip);
+        }
+    }
+#endif
+
     /* Dev build fallback: check relative to executable */
     if (!path) {
         char exe_dir[512] = {0};
