@@ -1,4 +1,6 @@
+#ifdef __linux__
 #define _POSIX_C_SOURCE 200809L
+#endif
 /*
  * devices.c — device list management
  */
@@ -6,6 +8,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef __linux__
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
 
 Device *mountd_find_device(MountDaemon *md, const char *dev_path)
 {
@@ -76,6 +82,7 @@ void mountd_refresh_mount_state(MountDaemon *md)
         }
     }
 
+#ifdef __linux__
     /* Scan /proc/mounts for our tracked devices */
     FILE *fp = fopen("/proc/mounts", "r");
     if (!fp) {
@@ -108,4 +115,29 @@ void mountd_refresh_mount_state(MountDaemon *md)
     }
 
     fclose(fp);
+#else
+    /* Query the kernel mount table directly */
+    struct statfs *mnts = NULL;
+    int count = getmntinfo(&mnts, MNT_NOWAIT);
+    for (int i = 0; i < count; i++) {
+        const char *dev = mnts[i].f_mntfromname;
+        const char *mp  = mnts[i].f_mntonname;
+
+        Device *d = mountd_find_device(md, dev);
+        if (d) {
+            d->is_mounted = 1;
+            snprintf(d->mount_point, sizeof(d->mount_point), "%s", mp);
+            continue;
+        }
+        for (int j = 0; j < md->ndevices; j++) {
+            d = &md->devices[j];
+            if (d->is_luks && d->dm_path[0] &&
+                strcmp(d->dm_path, dev) == 0) {
+                d->is_mounted = 1;
+                snprintf(d->mount_point, sizeof(d->mount_point), "%s", mp);
+                break;
+            }
+        }
+    }
+#endif
 }

@@ -1,4 +1,6 @@
+#ifdef __linux__
 #define _POSIX_C_SOURCE 200809L
+#endif
 /*
  * mount_ops.c — mount/unmount/eject operations
  */
@@ -12,6 +14,10 @@
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <pwd.h>
+#ifndef __linux__
+#include <sys/param.h>
+#include <sys/uio.h>
+#endif
 
 /* ---------- helpers ---------- */
 
@@ -61,6 +67,107 @@ static int mkdir_p(const char *path, mode_t mode)
     }
     return mkdir(tmp, mode) < 0 && errno != EEXIST ? -1 : 0;
 }
+
+/* ---------- platform mount ---------- */
+
+#ifdef __linux__
+
+static int plat_mount(const char *src, const char *tgt, const char *fs,
+                      int is_fat, uid_t uid, gid_t gid,
+                      char *errbuf, size_t errlen)
+{
+    char opts[256];
+    if (is_fat) {
+        snprintf(opts, sizeof(opts), "uid=%lu,gid=%lu",
+                 (unsigned long)uid, (unsigned long)gid);
+    } else {
+        opts[0] = '\0';
+    }
+
+    unsigned long flags = MS_NOSUID | MS_NODEV | MS_RELATIME;
+    if (is_fat) {
+        flags |= MS_NOEXEC;
+    }
+
+    if (mount(src, tgt, fs, flags, opts) != 0) {
+        snprintf(errbuf, errlen, "mount failed: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+#else /* FreeBSD */
+
+/* Translate a Linux-style fs name to a FreeBSD nmount vfstype.  exfat and
+ * ntfs require FUSE userspace helpers and have no in-kernel mount, so they
+ * return NULL — the daemon does not fork helpers. */
+static const char *fbsd_vfstype(const char *fs)
+{
+    if (strcmp(fs, "vfat") == 0) {
+        return "msdosfs";
+    }
+    if (strcmp(fs, "iso9660") == 0) {
+        return "cd9660";
+    }
+    if (strcmp(fs, "udf") == 0) {
+        return "udf";
+    }
+    if (strcmp(fs, "ext2") == 0 || strcmp(fs, "ext3") == 0 ||
+        strcmp(fs, "ext4") == 0) {
+        return "ext2fs";
+    }
+    return NULL;
+}
+
+static void add_iov(struct iovec *iov, int *n, const char *name, char *val)
+{
+    iov[*n].iov_base = (void *)name;
+    iov[*n].iov_len  = strlen(name) + 1;
+    (*n)++;
+    iov[*n].iov_base = val;
+    iov[*n].iov_len  = val ? strlen(val) + 1 : 0;
+    (*n)++;
+}
+
+static int plat_mount(const char *src, const char *tgt, const char *fs,
+                      int is_fat, uid_t uid, gid_t gid,
+                      char *errbuf, size_t errlen)
+{
+    const char *vfs = fbsd_vfstype(fs);
+    if (!vfs) {
+        snprintf(errbuf, errlen,
+                 "Filesystem %s needs a userspace helper; "
+                 "unsupported on FreeBSD", fs);
+        return -1;
+    }
+
+    struct iovec iov[16];
+    int n = 0;
+    char uidbuf[32], gidbuf[32];
+
+    add_iov(iov, &n, "fstype", (char *)vfs);
+    add_iov(iov, &n, "fspath", (char *)tgt);
+    add_iov(iov, &n, "from", (char *)src);
+    if (is_fat) {
+        snprintf(uidbuf, sizeof(uidbuf), "%lu", (unsigned long)uid);
+        snprintf(gidbuf, sizeof(gidbuf), "%lu", (unsigned long)gid);
+        add_iov(iov, &n, "uid", uidbuf);
+        add_iov(iov, &n, "gid", gidbuf);
+    }
+
+    int flags = MNT_NOSUID;
+    if (is_fat) {
+        flags |= MNT_NOEXEC;
+    }
+
+    if (nmount(iov, n, flags) != 0) {
+        snprintf(errbuf, errlen, "nmount failed: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+#endif
 
 /* ---------- mount ---------- */
 
@@ -165,25 +272,11 @@ int mountd_do_mount(MountDaemon *md, const char *dev_path,
         return -1;
     }
 
-    /* Determine mount options based on filesystem type */
-    char opts[256];
+    /* Mount (FAT types get uid/gid ownership remapped to the caller) */
     int is_fat = (strcmp(fs, "vfat") == 0 || strcmp(fs, "exfat") == 0);
 
-    if (is_fat) {
-        snprintf(opts, sizeof(opts), "uid=%lu,gid=%lu",
-                 caller_uid, (unsigned long)pw->pw_gid);
-    } else {
-        opts[0] = '\0';
-    }
-
-    /* Mount */
-    unsigned long flags = MS_NOSUID | MS_NODEV | MS_RELATIME;
-    if (is_fat) {
-        flags |= MS_NOEXEC;
-    }
-
-    if (mount(mount_dev, mp, fs, flags, opts) != 0) {
-        snprintf(errbuf, errlen, "mount failed: %s", strerror(errno));
+    if (plat_mount(mount_dev, mp, fs, is_fat,
+                   caller_uid, pw->pw_gid, errbuf, errlen) != 0) {
         rmdir(mp);
         if (dev->is_luks && dev->luks_opened_by_us) {
             char closeerr[128];
@@ -219,10 +312,17 @@ int mountd_do_unmount(MountDaemon *md, const char *dev_path,
         return -1;
     }
 
+#ifdef __linux__
     if (umount(dev->mount_point) != 0) {
         snprintf(errbuf, errlen, "umount failed: %s", strerror(errno));
         return -1;
     }
+#else
+    if (unmount(dev->mount_point, 0) != 0) {
+        snprintf(errbuf, errlen, "unmount failed: %s", strerror(errno));
+        return -1;
+    }
+#endif
 
     /* Remove mount point directory (best effort) */
     rmdir(dev->mount_point);

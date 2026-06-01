@@ -9,17 +9,18 @@ add_executable(isde-mountd
     src/luks.c
 )
 
-target_compile_definitions(isde-mountd PRIVATE
-    _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE
-)
-
-# Platform-specific source selection
+# Platform-specific source selection.  On FreeBSD the source files rely on
+# BSD-visible APIs (nmount, getmntinfo, GEOM, CAM, devd) and must NOT define
+# _POSIX_C_SOURCE, which would hide them; the defines below are Linux-only.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(isde-mountd PRIVATE
+        _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
     target_sources(isde-mountd PRIVATE src/platform_linux.c)
     target_link_libraries(isde-mountd
         ISDE::UDEV ISDE::CRYPTSETUP ISDE::BLKID)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     target_sources(isde-mountd PRIVATE src/platform_freebsd.c)
+    target_link_libraries(isde-mountd geom cam)
 else()
     message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
 endif()
