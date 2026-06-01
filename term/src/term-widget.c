@@ -849,6 +849,7 @@ static void input_cb(Widget w, IswPointer cd, IswPointer call)
 
 /* ---------- OSC (Operating System Command) ---------- */
 
+#ifdef HAVE_TSM_OSC_CB
 static Widget find_shell_ancestor(Widget w)
 {
     while (w && !IswIsShell(w))
@@ -888,6 +889,7 @@ static void osc_cb(struct tsm_vte *vte, const char *u8, size_t len, void *data)
     }
     free(title);
 }
+#endif /* HAVE_TSM_OSC_CB */
 
 /* ---------- VTE write -> PTY ---------- */
 
@@ -916,7 +918,9 @@ TermWidget *term_widget_create(Widget parent, const char *name,
         return NULL;
     }
     tsm_screen_set_max_sb(t->screen, cfg->scrollback);
+#ifdef HAVE_TSM_OSC_CB
     tsm_vte_set_osc_cb(t->vte, osc_cb, t);
+#endif
     term_tsm_apply_palette(t->vte, &cfg->palette);
 
     IswArgBuilder ab = IswArgBuilderInit();

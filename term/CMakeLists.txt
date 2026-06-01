@@ -40,9 +40,15 @@ endif()
 include(CheckSymbolExists)
 set(CMAKE_REQUIRED_LIBRARIES ISDE::TSM)
 check_symbol_exists(tsm_vte_set_custom_palette libtsm.h HAVE_TSM_CUSTOM_PALETTE)
+# The OSC callback (used for terminal-driven window titles) is likewise an
+# Aetf-fork extension absent from upstream libtsm.
+check_symbol_exists(tsm_vte_set_osc_cb libtsm.h HAVE_TSM_OSC_CB)
 unset(CMAKE_REQUIRED_LIBRARIES)
 if(HAVE_TSM_CUSTOM_PALETTE)
     target_compile_definitions(isde-term PRIVATE HAVE_TSM_CUSTOM_PALETTE)
+endif()
+if(HAVE_TSM_OSC_CB)
+    target_compile_definitions(isde-term PRIVATE HAVE_TSM_OSC_CB)
 endif()
 
 target_link_libraries(isde-term
