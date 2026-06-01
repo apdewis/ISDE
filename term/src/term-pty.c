@@ -1,10 +1,24 @@
+#if defined(__FreeBSD__)
+/* forkpty/winsize/TIOCSWINSZ live in the BSD namespace, which the build's
+ * -D_POSIX_C_SOURCE would otherwise hide.  Drop the strict feature macros so
+ * __BSD_VISIBLE is enabled for this translation unit. */
+#undef _POSIX_C_SOURCE
+#undef _XOPEN_SOURCE
+#else
+/* glibc exposes forkpty/winsize under _DEFAULT_SOURCE (set by the build) plus
+ * POSIX.1-2008 via _XOPEN_SOURCE. */
 #define _XOPEN_SOURCE 700
-#define _DEFAULT_SOURCE
+#endif
 #include "term.h"
 
 #include <errno.h>
 #include <fcntl.h>
+#if defined(__FreeBSD__)
+#include <sys/types.h>
+#include <libutil.h>
+#else
 #include <pty.h>
+#endif
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
