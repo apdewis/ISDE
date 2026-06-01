@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <fnmatch.h>
+#include <limits.h>
 
 /* Parse a semicolon-delimited value into a NULL-terminated string array. */
 static char **parse_list(const char *value)
