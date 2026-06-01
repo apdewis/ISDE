@@ -47,25 +47,18 @@ function(isde_dependency NAME)
         set_property(TARGET ISDE::${NAME} PROPERTY
             INTERFACE_LINK_LIBRARIES PkgConfig::${NAME})
     else()
-        set(_libs "")
-        foreach(_lib IN LISTS DEP_LIBS)
-            find_library(ISDE_${NAME}_${_lib}_LIB ${_lib}
-                PATHS /usr/local/lib REQUIRED)
-            list(APPEND _libs "${ISDE_${NAME}_${_lib}_LIB}")
-        endforeach()
-        set(_incs "")
-        set(_i 0)
-        foreach(_hdr IN LISTS DEP_HEADERS)
-            find_path(ISDE_${NAME}_INC_${_i} NAMES ${_hdr}
-                PATHS /usr/local/include ${DEP_HEADER_PATHS} REQUIRED)
-            list(APPEND _incs "${ISDE_${NAME}_INC_${_i}}")
-            math(EXPR _i "${_i}+1")
-        endforeach()
-        if(_incs)
-            list(REMOVE_DUPLICATES _incs)
-        endif()
+        # FreeBSD: ports install under /usr/local.  Link by name through
+        # /usr/local/lib and expose /usr/local/include plus any package-specific
+        # include dirs (HEADER_PATHS); the compiler and linker resolve the rest.
+        # This avoids per-dependency find_library/find_path name guessing, which
+        # breaks the moment any single library's .so name or header layout
+        # differs from the guess.
+        set(_incs /usr/local/include ${DEP_HEADER_PATHS})
+        list(REMOVE_DUPLICATES _incs)
         set_property(TARGET ISDE::${NAME} PROPERTY
-            INTERFACE_LINK_LIBRARIES "${_libs}")
+            INTERFACE_LINK_LIBRARIES "${DEP_LIBS}")
+        set_property(TARGET ISDE::${NAME} PROPERTY
+            INTERFACE_LINK_DIRECTORIES /usr/local/lib)
         set_property(TARGET ISDE::${NAME} PROPERTY
             INTERFACE_INCLUDE_DIRECTORIES "${_incs}")
     endif()
