@@ -1,7 +1,14 @@
-#define _POSIX_C_SOURCE 200809L
 /*
  * platform_freebsd.c — FreeBSD platform ops for isde-dm
+ *
+ * The build forces -D_POSIX_C_SOURCE on every dm source, but FreeBSD's
+ * console/evdev headers (<sys/consio.h>, <dev/evdev/input.h>) use BSD types
+ * such as u_short that <sys/types.h> only exposes when __BSD_VISIBLE is set —
+ * i.e. when no strict POSIX feature macro is defined.  Undefine it here so
+ * this translation unit sees the full BSD namespace.
  */
+#undef _POSIX_C_SOURCE
+
 #include "platform.h"
 
 #include <stdio.h>
