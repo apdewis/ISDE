@@ -1,0 +1,102 @@
+.Dd $Mdocdate: July 6 2015 $
+.Dt KDATA_ARRAY_FILL 3
+.Os
+.Sh NAME
+.Nm kdata_array_add ,
+.Nm kdata_array_fill ,
+.Nm kdata_array_fill_ydoubles ,
+.Nm kdata_array_fill_ysizes ,
+.Nm kdata_array_set
+.Nd modify array data source
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft int
+.Fo kdata_array_add
+.Fa "struct kdata *data"
+.Fa "size_t pos"
+.Fa "double y"
+.Fc
+.Ft int
+.Fo kdata_array_fill
+.Fa "struct kdata *data"
+.Fa "void *arg"
+.Fa "void (*fp)(size_t, struct kpair *, void *)"
+.Fc
+.Ft int
+.Fo kdata_array_fill_ydoubles
+.Fa "struct kdata *data"
+.Fa "const double *ys"
+.Fc
+.Ft int
+.Fo kdata_array_fill_ysizes
+.Fa "struct kdata *data"
+.Fa "const size_t *ys"
+.Fc
+.Ft int
+.Fo kdata_array_set
+.Fa "struct kdata *data"
+.Fa "size_t pos"
+.Fa "double x"
+.Fa "double y"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm kdata_array_add ,
+.Nm kdata_array_fill ,
+.Nm kdata_array_fill_ydoubles ,
+.Nm kdata_array_fill_ysizes ,
+and
+.Nm kdata_array_set
+functions modify the buffers of a data source created by
+.Xr kdata_array_alloc 3 .
+.Nm kdata_array_fill
+invokes the
+.Fa fp
+function with each bucket provided by
+.Xr kdata_array_alloc ,
+while
+.Nm kdata_array_add
+and
+.Nm kdata_array_fill
+directly modify the buckets at position
+.Fa pos .
+The
+.Nm kdata_array_fill_ydoubles
+and
+.Nm kdata_array_fill_ysizes
+set values to the corresponding array indices, which are assumed to be
+the same length as the data source (else the behaviour is undefined).
+.Sh RETURN VALUES
+.Nm kdata_array_fill ,
+.Nm kdata_array_fill_ydoubles ,
+.Nm kdata_array_fill_ysizes ,
+and
+.Nm kdata_array_set
+return 0 if they have any dependants whose update fails, the positions
+fall outside of the allocated boundaries, or the data source was not
+created with
+.Xr kdata_array_alloc 3 ;
+otherwise they return 1.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kdata_array_alloc 3 ,
+.Xr kplot 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

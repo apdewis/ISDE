@@ -1,0 +1,65 @@
+.Dd $Mdocdate: January 31 2015 $
+.Dt KDATA_VECTOR_ADD 3
+.Os
+.Sh NAME
+.Nm kdata_vector_append ,
+.Nm kdata_vector_set
+.Nd modify data of a vector data source
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft int
+.Fo kdata_vector_append
+.Fa "struct kdata *data"
+.Fa "double x"
+.Fa "double y"
+.Fc
+.Ft int
+.Fo kdata_vector_set
+.Fa "struct kdata *data"
+.Fa "size_t pos"
+.Fa "double x"
+.Fa "double y"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm
+function sets the
+.Fa x
+and
+.Fa y
+values the pairs at
+.Fa pos ,
+or in the event of
+.Nm kdata_vector_append ,
+after growing vector data source allocated with
+.Xr kdata_vector_alloc 3 .
+.Sh RETURN VALUES
+.Nm
+returns 0 if the vector reallocation failed, the data source was not
+created with
+.Xr kdata_vector_alloc 3 ,
+or if dependent data sources fail.
+Otherwise it returns non-zero.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kdata_vector_alloc 3 ,
+.Xr kplot 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

@@ -1,0 +1,201 @@
+.Dd $Mdocdate: November 3 2016 $
+.Dt KPLOT_ATTACH_DATA 3
+.Os
+.Sh NAME
+.Nm kplot_attach_data
+.Nd assign plot data to plotting context
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft int
+.Fo kplot_attach_data
+.Fa "const struct kplot *p"
+.Fa "struct kdata *d"
+.Fa "enum kplottype t"
+.Fa "const struct kdatacfg *cfg"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm
+function assigns a data source
+.Fa d
+to a plotting context
+.Fa p ,
+reference-counting the data source in the process.
+The plot style assigned to the plot is
+.Fa t .
+The style may be one of the following:
+.Bl -tag -width Ds
+.It Dv KPLOT_POINTS
+Points (really circles of a given radius).
+.It Dv KPLOT_MARKS
+Marks in the form of x's of a given width.
+.It Dv KPLOT_LINES
+Smooth lines.
+.It Dv KPLOT_LINESPOINTS
+A combination of
+.Dv KPLOT_LINES
+and
+.Dv KPLOT_POINTS .
+.It Dv KPLOT_LINESMARKS
+A combination of
+.Dv KPLOT_LINES
+and
+.Dv KPLOT_MARKS .
+.El
+.Pp
+The options provided via the
+.Fa cfg
+object are as follows:
+.Bl -tag -width Ds
+.It Va point
+The configuration for
+.Dv KPLOT_POINTS ,
+.Dv KPLOT_MARKS ,
+.Dv KPLOT_LINESMARKS ,
+and
+.Dv KPLOT_LINESPOINTS
+plots.
+.It Va line
+The configuration for
+.Dv KPLOT_LINES
+.Dv KPLOT_LINESMARKS
+and
+.Dv KPLOT_LINESPOINTS
+types.
+.El
+.Pp
+The
+.Vt "struct kplotline"
+structure is arranged as follows:
+.Bl -tag -width Ds
+.It Va sz
+The diameter of the line in pixels as defined by Cairo's
+.Fn cairo_set_line_width .
+By default, this is 1.0.
+.It Va dashes
+A dash configuration as described by Cairo's
+.Fn cairo_set_dash
+function.
+By default, solid lines are used.
+.It Va dashesz
+See
+.Va dashes .
+.It Va dashoff
+See
+.Va dashoff .
+.It Va join
+The line join as defined by Cairo's
+.Fn cairo_set_line_join .
+By default, use
+.Dv CAIRO_LINE_JOIN_ROUND .
+.It Va clr
+The colour configuration.
+By default, use
+.Dv KPLOTCTYPE_DEFAULT .
+.El
+.Pp
+The
+.Vt "struct kplotpoint"
+structure is arranged as follows:
+.Bl -tag -width Ds
+.It Va sz
+The diameter of the point line in pixels as defined by Cairo's
+.Fn cairo_set_line_width .
+By default, this is 1.0.
+.It Va radius
+The circle radius defaulting to 3.0.
+It is also used for the mark width.
+.It Va dashes
+A dash configuration as described by Cairo's
+.Fn cairo_set_dash
+function.
+By default, solid lines are used.
+.It Va dashesz
+See
+.Va dashes .
+.It Va dashoff
+See
+.Va dashoff .
+.It Va clr
+The colour configuration.
+By default, use
+.Dv KPLOTCTYPE_DEFAULT .
+.El
+.Pp
+Line-drawing colours are dictated by
+.Vt "struct kplotccfg" ,
+which is defined as follows:
+.Bl -tag -width Ds
+.It Va type
+The type of colour.
+If set to
+.Dv KPLOTCTYPE_DEFAULT
+.Pq the default ,
+the
+.Dv KPLOTCTYPE_RGBA
+option will be set during
+.Xr kplot_draw 3
+to the index of the line in the set of lines.
+If
+.Dv KPLOTCTYPE_PALETTE ,
+.Va palette
+is used as an index into the colour palette matrix.
+This is clamped (modulo) to the palette size.
+The
+.Dv KPLOTCTYPE_PATTERN
+will have use
+.Va pattern ,
+which may not be
+.Dv NULL .
+The pattern is referenced when attached and dereferenced when the data
+source is removed from the plot.
+Lastly,
+.Dv KPLOTCTYPE_RGBA
+will use the RGBA entries (in the unit interval) of
+.Va rgba
+to set colours.
+This is the preferred method, as it does not involve any dynamic memory
+allocation overhead.
+.It Va pattern
+The pattern used with
+.Dv KPLOTCTYPE_PATTERN .
+.It Va rgba
+The RGBA (in the unit interval) used with
+.Dv KPLOTCTYPE_RGBA .
+.It Va palette
+The palette index used for
+.Dv KPLOTCTYPE_PALETTE .
+.El
+.Pp
+If
+.Dv NULL
+is passed as a configuration, the defaults will be used.
+.Sh RETURN VALUES
+.Nm
+returns 0 if allocation of internal structures fails due to memory
+exhaustion.
+In this case, all allocations and references will be dropped.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kplot 3 ,
+.Xr kplot_attach_datas 3 ,
+.Xr kplot_attach_smooth 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

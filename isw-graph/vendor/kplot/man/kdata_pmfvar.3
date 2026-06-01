@@ -1,0 +1,46 @@
+.Dd $Mdocdate: January 29 2015 $
+.Dt KDATA_PMFVAR 3
+.Os
+.Sh NAME
+.Nm kdata_pmfvar
+.Nd compute probability mass function variance of data
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft double
+.Fo kdata_pmfmean
+.Fa "const struct kdata *data"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm kdata_pmfmean
+function compute the variance of its data as if it were a probability
+mass function.
+.Sh RETURN VALUES
+If the data source has zero entries or the sum of the y values is 0.0,
+.Nm kdata_pmfmean
+returns 0.0.
+Otherwise, it returns the variance.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kdata_pmfmean 3 ,
+.Xr kdata_pmfstddev 3 ,
+.Xr kplot 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

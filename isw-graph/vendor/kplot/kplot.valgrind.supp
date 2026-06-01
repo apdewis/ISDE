@@ -1,0 +1,24 @@
+{
+   xml
+   Memcheck:Leak
+   ...
+   fun:XML_ParseBuffer
+}
+{
+   font_create
+   Memcheck:Leak
+   ...
+   fun:cairo_scaled_font_create
+}
+{
+   fcinit
+   Memcheck:Leak
+   ...
+   fun:FcInitLoadConfigAndFonts
+}
+{
+   pixman
+   Memcheck:Leak
+   ...
+   obj:/usr/lib/x86_64-linux-gnu/libpixman-1.so.*
+}

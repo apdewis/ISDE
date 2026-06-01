@@ -1,0 +1,60 @@
+.Dd $Mdocdate$
+.Dt KPLOTFONT_DEFAULTS 3
+.Os
+.Sh NAME
+.Nm kplotfont_defaults
+.Nd set default font information
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft void
+.Fo kplotfont_defaults
+.Fa "struct kplotfont *font"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm
+function sets the default values used internally on a
+.Vt "struct kplotfont" .
+.Pp
+The members and their defaults are as follows:
+.Bl -tag -width Ds
+.It Fa "const char *family"
+Font family.
+Set to serif.
+.It Fa "double sz"
+Font size in points.
+Set to 12.
+.It Fa "cairo_font_slant_t slant"
+Slant status.
+Set to normal.
+.It Fa "cairo_font_weight_t weight"
+Weight status.
+Set to normal.
+.It Fa "struct kplotccfg clr"
+Font colour.
+Zeroed and thus default values.
+.El
+.\" .Sh RETURN VALUES
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kplot 3 ,
+.Xr kplotcfg_defaults 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

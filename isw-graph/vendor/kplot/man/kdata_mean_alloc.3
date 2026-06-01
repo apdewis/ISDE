@@ -1,0 +1,78 @@
+.Dd $Mdocdate: January 16 2015 $
+.Dt KDATA_MEAN_ALLOC 3
+.Os
+.Sh NAME
+.Nm kdata_mean_alloc
+.Nd allocate mean data for plotting
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft "struct kdata *"
+.Fo kdata_mean_alloc
+.Fa "struct kdata *source"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm kdata_mean_alloc
+creates a reference-counted data sources for
+.Xr kplot 3 .
+It attaches to zero or more existing data sources and, when they update
+their values per-index, tracks the mean of the sequence of updated
+values.
+Thus, if a mean data source is attached to two sources, its y-value for
+pair zero will reflect the mean of all values set to pair zero's
+y-value in the sources.
+Note that the indexing is absolute: if attached to a bucket or
+histogram, pair index zero refers to the first internal data storage,
+not storage mapped from the bucket or histogram.
+.Pp
+If
+.Fa source
+is not
+.Dv NULL ,
+the internal buffer is initialised to the size of the source and all of
+its x values.
+The mean is initialised to zero with zero updates.
+Otherwise, the internal buffer is sized to zero.
+.Pp
+Further data sources may be attached with
+.Xr kdata_mean_attach 3 .
+.Sh RETURN VALUES
+.Nm
+returns
+.Dv NULL
+if memory allocation failed.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kdata_mean_attach 3 ,
+.Xr kplot 3
+.Rs
+.%A Donald E. Knuth
+.%B The Art of Computer Programming: Seminumerical Algorithms, 3rd Edition
+.%C Boston
+.%D 1998
+.%I Addison-Wesley
+.%P 232
+.%V Volume 2
+.Re
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.Sh CAVEATS
+The per-bucket mean value can process a maximum number of
+.Dv SIZE_MAX
+updates.
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

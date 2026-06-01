@@ -1,0 +1,104 @@
+.Dd $Mdocdate: January 26 2015 $
+.Dt KPLOT_ATTACH_DATAS 3
+.Os
+.Sh NAME
+.Nm kplot_attach_datas
+.Nd assign multi-plot data to plotting context
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft int
+.Fo kplot_attach_datas
+.Fa "const struct kplot *p"
+.Fa "size_t sz"
+.Fa "struct kdata **d"
+.Fa "const enum kplottype *t"
+.Fa "const struct kdatacfg *const *cfg"
+.Fa "enum kplotstype st"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm
+function assigns a
+.Qq multi-data
+source set
+.Fa d
+to a plotting context
+.Fa p ,
+reference-counting the data sources in the process.
+See
+.Xr kplot_attach_data 3
+for a more general description of attaching data.
+Multi-data source sets consist of a baseline and one or more pair lines,
+for example, a curve and its error bars.
+The most common usage is for graphing mean (the baseline) and standard
+deviation above and below (pair lines) via
+.Xr kdata_mean_alloc 3
+and
+.Xr kdata_stddev_alloc 3 .
+The order in which you arrange the array parameters
+.Fa d ,
+.Fa t ,
+and
+.Fa cfg :
+the first is for the baseline, subsequent are for pair lines as defined
+by
+.Fa st .
+The
+.Fa cfg
+argument can be
+.Dv NULL
+.Pq as can individual array entries ;
+all other parameters and indexes must not be
+.Dv NULL .
+The plot types are as follows:
+.Bl -tag -width Ds
+.It Dv KPLOTS_YERRORLINE
+Draw a baseline (or points) using the first element in
+.Fa d .
+The next element is used to draw error lines (or points) above (adding
+to the y-position) and below (subtracting) the baseline.
+Subsequent lines are ignored.
+Data sources are matched by bucket index,
+.Em not
+x-axis value, which is ignored for all pair data sources.
+.It Dv KPLOTS_YERRORBAR
+Draw a baseline (or points) using the first element in
+.Fa d .
+The next element is used to draw error lines (or point) above (adding to
+the y-position) and below (subtracting) the baseline.
+A bar is then drawn between these points using the line configuration of
+this element.
+Subsequent lines are ignored.
+Data sources are matched by bucket index,
+.Em not
+x-axis value, which is ignored for all pair data sources.
+.El
+.Sh RETURN VALUES
+.Nm
+returns 0 if allocation of internal structures fails due to memory
+exhaustion, or not enough data sources have been provided.
+In this case, all allocations and references will be dropped.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kplot 3 ,
+.Xr kplot_attach_data 3 ,
+.Xr kplot_attach_smooth 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.

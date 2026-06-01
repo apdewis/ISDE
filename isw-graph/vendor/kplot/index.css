@@ -1,0 +1,86 @@
+body			{ margin: 0; 
+			  font-family: "Fira Sans", sans-serif;
+			  font-size: 12pt;
+			  font-style: normal;
+			  font-variant: normal;
+			  font-weight: 300;
+			  line-height: 18pt; }
+h1 			{ font-family: "Fira Sans", sans-serif;
+			  font-size: 24pt;
+			  font-style: normal;
+			  font-variant: normal;
+			  margin-bottom: 8pt;
+			  font-weight: 300; }
+pre			{ padding: 1em 4%; 
+			  background-color: #333; 
+			  font-family: "Fira Mono", monospace;
+			  color: #eee; }
+.nm			{ font-style: italic; }
+header .nm		{ font-style: normal;
+			  color: #333; }
+header nav span	+ span	{ border-left: thin solid #888; 
+			  margin-left: 1ex;
+			  padding-left: 1ex; }
+header nav a		{ color: #222; 
+			  display: inline-block;
+			  margin-right: 1ex;
+			  text-shadow: 1px 1px #ccc; }
+header nav a:hover	{ color: #000;
+			  text-shadow: 1px 1px #eee; }
+a			{ text-decoration: none; }		  
+pre.prettyprint		{ border: none; 
+			  line-height: 130%;
+			  margin: 0; 
+			  overflow: hidden;
+			  padding: 4pt 12%; 
+			  width: auto; }
+pre.prettyprint 	{ line-height: 150%; }
+pre.prettyprint a	{ font-style: italic; }
+pre.prettyprint a:hover	{ font-style: italic; }
+pre, code		{ font-size: 10pt; 
+			  font-family: "Fira Mono", monospace; }
+pre			{ margin: 0; }
+pre a			{ color: yellow; }
+header			{ background-color: #eee;
+			  padding: 48pt 15% 12pt 15%; }
+header > div > *	{ display: inline-block; 
+			  margin: 0; }
+p.intro			{ padding: 8pt 15%;
+			  font-size: 16pt;
+			  line-height: 20pt; }
+nav[data-sblg-nav], p	{ padding: 0 15%; 
+			  line-height: 16pt; }
+figure			{ margin: 0; }
+#gallery		{ display: table; 
+			  background-color: #eee;
+			  padding-top: 1ex;
+			  text-align: center; }
+#gallery div		{ display: table-cell; 
+			  text-align: center;
+			  width: 16.6%; }
+#gallery a:hover img	{ box-shadow: 1px 1px 2px #333; }
+#gallery img		{ background-color: #fff; 
+			  border-radius: 4px;
+			  border: thin solid silver;
+			  box-shadow: 1px 1px 2px #aaa;
+			  width: 85%; }
+figcaption		{ background-color: #ddd; 
+			  padding: 1ex 4%; }
+footer			{ text-align: center;
+			  color: #666;
+			  line-height: 15pt;
+			  font-size: 11pt;
+			  padding: 1em 0; }
+footer a		{ color: #000; }
+nav[data-sblg-nav] ul	{ list-style-type: none; 
+			  padding: 0;
+			  margin: 0; }
+nav[data-sblg-nav] li	{ margin-bottom: 1em; }
+nav[data-sblg-nav] li > div:last-child
+			{ margin-left: 3ex; }
+footer img		{ margin-bottom: -8px; }
+@media only screen and (max-width: 480px), only screen and (max-device-width: 480px) {
+h1			{ font-size: 17pt; }
+nav a span		{ display: none; }
+pre			{ font-size: 8pt; }
+}

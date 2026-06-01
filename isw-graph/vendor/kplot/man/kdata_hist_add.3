@@ -1,0 +1,67 @@
+.Dd $Mdocdate: January 30 2015 $
+.Dt KDATA_HIST_INCREMENT 3
+.Os
+.Sh NAME
+.Nm kdata_hist_add
+.Nm kdata_hist_set
+.Nd modify histogram data values
+.Sh LIBRARY
+.Lb libkplot
+.Sh SYNOPSIS
+.In cairo.h
+.In kplot.h
+.Ft int
+.Fo kdata_hist_add
+.Fa "struct kdata *d"
+.Fa "double x"
+.Fa "double y"
+.Fc
+.Ft int
+.Fo kdata_hist_set
+.Fa "struct kdata *d"
+.Fa "double x"
+.Fa "double y"
+.Fc
+.Sh DESCRIPTION
+The
+.Nm kdata_hist_add
+and
+.Nm kdata_hist_set
+set or add
+.Fa y
+to the position mapped from
+.Fa x
+after checking that
+.Fa x
+lies in the range provided to
+.Xr kdata_hist_alloc 3 .
+.Sh RETURN VALUES
+.Nm kdata_hist_add
+and
+.Nm kdata_hist_set
+return 0 if
+.Fa x
+is outside of the histogram range, the source was not created with
+.Xr kdata_hist_alloc 3 ,
+or if dependent data sources fail.
+Otherwise it returns non-zero.
+.\" .Sh ENVIRONMENT
+.\" For sections 1, 6, 7, and 8 only.
+.\" .Sh FILES
+.\" .Sh EXIT STATUS
+.\" For sections 1, 6, and 8 only.
+.\" .Sh EXAMPLES
+.\" .Sh DIAGNOSTICS
+.\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
+.\" .Sh ERRORS
+.\" For sections 2, 3, 4, and 9 errno settings only.
+.Sh SEE ALSO
+.Xr kdata_hist_alloc 3 ,
+.Xr kplot 3
+.\" .Sh STANDARDS
+.\" .Sh HISTORY
+.\" .Sh AUTHORS
+.\" .Sh CAVEATS
+.\" .Sh BUGS
+.\" .Sh SECURITY CONSIDERATIONS
+.\" Not used in OpenBSD.
