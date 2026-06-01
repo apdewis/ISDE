@@ -59,7 +59,9 @@ const char *isde_xdg_cache_home(void)
 const char *isde_xdg_config_dirs(void)
 {
     const char *v = getenv("XDG_CONFIG_DIRS");
-    return (v && v[0]) ? v : "/etc/xdg";
+    /* Include /usr/local/etc/xdg so FreeBSD ports configs (installed under the
+     * /usr/local prefix) are found, mirroring the data-dirs default below. */
+    return (v && v[0]) ? v : "/usr/local/etc/xdg:/etc/xdg";
 }
 
 const char *isde_xdg_data_dirs(void)

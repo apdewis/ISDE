@@ -21,7 +21,7 @@ const char *isde_xdg_data_home(void);
 const char *isde_xdg_cache_home(void);
 
 /* Return a colon-separated list of XDG config directories
- * (/etc/xdg by default).  Owned by libisde. */
+ * (/usr/local/etc/xdg:/etc/xdg by default).  Owned by libisde. */
 const char *isde_xdg_config_dirs(void);
 
 /* Return a colon-separated list of XDG data directories
