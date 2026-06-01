@@ -4,6 +4,7 @@
  */
 #include "dm.h"
 #include "isde/isde-desktop.h"
+#include "isde/isde-xdg.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -214,19 +215,27 @@ int dm_xserver_ready(Dm *dm)
 
 static char *find_session_exec(const char *desktop_name)
 {
-    /* Look up the .desktop file in /usr/share/xsessions/ */
-    char path[512];
-    snprintf(path, sizeof(path), "/usr/share/xsessions/%s", desktop_name);
-
-    IsdeDesktopEntry *entry = isde_desktop_load(path);
-    if (!entry) {
-        return NULL;
+    /* Look up the .desktop file in <datadir>/xsessions across XDG_DATA_DIRS
+     * (FreeBSD ports install under /usr/local/share, not /usr/share). */
+    const char *dp = isde_xdg_data_dirs();
+    while (dp && *dp) {
+        const char *colon = strchr(dp, ':');
+        size_t dlen = colon ? (size_t)(colon - dp) : strlen(dp);
+        if (dlen > 0) {
+            char path[512];
+            snprintf(path, sizeof(path), "%.*s/xsessions/%s",
+                     (int)dlen, dp, desktop_name);
+            IsdeDesktopEntry *entry = isde_desktop_load(path);
+            if (entry) {
+                const char *exec = isde_desktop_exec(entry);
+                char *result = exec ? strdup(exec) : NULL;
+                isde_desktop_free(entry);
+                return result;
+            }
+        }
+        dp = colon ? colon + 1 : NULL;
     }
-
-    const char *exec = isde_desktop_exec(entry);
-    char *result = exec ? strdup(exec) : NULL;
-    isde_desktop_free(entry);
-    return result;
+    return NULL;
 }
 
 int dm_session_start(Dm *dm, const char *username,
