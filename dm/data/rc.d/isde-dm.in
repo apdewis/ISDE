@@ -19,6 +19,6 @@ load_rc_config $name
 
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-f -p ${pidfile} -r @CMAKE_INSTALL_FULL_BINDIR@/isde-dm"
+command_args="-f -P ${pidfile} -r @CMAKE_INSTALL_FULL_BINDIR@/isde-dm"
 
 run_rc_command "$1"
