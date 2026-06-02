@@ -138,6 +138,7 @@ static const DmPlatformOps freebsd_ops = {
     .vt_activate    = freebsd_vt_activate,
     .vt_wait_active = freebsd_vt_wait_active,
     .vt_device_path = freebsd_vt_device_path,
+    .xserver_vt     = 9,  /* /dev/ttyv8 — ttyv0..ttyv7 carry gettys */
     .lid_open       = freebsd_lid_open,
     .lid_read       = freebsd_lid_read,
     .rundir           = "/var/run/isde-dm",

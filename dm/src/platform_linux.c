@@ -123,6 +123,7 @@ static const DmPlatformOps linux_ops = {
     .vt_activate    = linux_vt_activate,
     .vt_wait_active = linux_vt_wait_active,
     .vt_device_path = linux_vt_device_path,
+    .xserver_vt     = 7,
     .lid_open       = linux_lid_open,
     .lid_read       = linux_lid_read,
     .rundir           = "/run/isde-dm",

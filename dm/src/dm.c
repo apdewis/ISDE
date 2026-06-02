@@ -245,7 +245,7 @@ int dm_init(Dm *dm)
     }
 
     /* Start X server on greeter VT (no VT arg in dev mode) */
-    dm->greeter_vt = dm->dev_mode ? 0 : 7;
+    dm->greeter_vt = dm->dev_mode ? 0 : dm->plat->xserver_vt;
     if (dm_xserver_start(dm, dm->greeter_vt) != 0) {
         fprintf(stderr, "isde-dm: cannot start X server\n");
         return -1;

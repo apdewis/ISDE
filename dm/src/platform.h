@@ -20,6 +20,11 @@ typedef struct DmPlatformOps {
     int  (*vt_activate)(int vt);
     int  (*vt_wait_active)(int vt);
 
+    /* VT to run the X server on (1-based, matching Xorg's "vtN" argument and
+     * the VT_ACTIVATE ioctl index).  Linux: 7 (the traditional free tty7).
+     * FreeBSD: 9, i.e. /dev/ttyv8 — ttyv0..ttyv7 carry gettys from /etc/ttys. */
+    int xserver_vt;
+
     /* Return the device path for a VT number.
      * Writes into buf (buflen bytes).  Returns buf on success, NULL on error. */
     const char *(*vt_device_path)(int vt, char *buf, size_t buflen);
