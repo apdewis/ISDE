@@ -175,7 +175,8 @@ int dm_init(Dm *dm)
     /* Defaults */
     dm->greeter_cmd    = strdup("isde-greeter");
     dm->default_session = strdup("isde.desktop");
-    dm->xserver_cmd    = strdup("/usr/bin/Xorg");
+    /* Bare name: execlp() resolves it via PATH when not configured. */
+    dm->xserver_cmd    = strdup("Xorg");
     dm->allow_shutdown = 1;
     dm->allow_reboot   = 1;
     dm->allow_suspend  = 1;
