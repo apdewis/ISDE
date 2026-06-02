@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# PROVIDE: isde_dm
+# REQUIRE: LOGIN dbus
+# KEYWORD: shutdown
+#
+# To enable the ISDE display manager, add to /etc/rc.conf:
+#   isde_dm_enable="YES"
+
+. /etc/rc.subr
+
+name="isde_dm"
+desc="ISDE Display Manager"
+rcvar="isde_dm_enable"
+
+load_rc_config $name
+
+: ${isde_dm_enable:="NO"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-f -p ${pidfile} -r @CMAKE_INSTALL_FULL_BINDIR@/isde-dm"
+
+run_rc_command "$1"

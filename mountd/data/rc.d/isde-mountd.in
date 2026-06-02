@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# PROVIDE: isde_mountd
+# REQUIRE: dbus
+# KEYWORD: shutdown
+#
+# To enable the ISDE mount daemon, add to /etc/rc.conf:
+#   isde_mountd_enable="YES"
+
+. /etc/rc.subr
+
+name="isde_mountd"
+desc="ISDE Mount Daemon"
+rcvar="isde_mountd_enable"
+
+load_rc_config $name
+
+: ${isde_mountd_enable:="NO"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-f -p ${pidfile} -r @CMAKE_INSTALL_FULL_BINDIR@/isde-mountd"
+
+run_rc_command "$1"

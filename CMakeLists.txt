@@ -12,11 +12,13 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
 # Service unit install destinations (used by dm/ and mountd/ for the optional
-# `install-systemd` and `install-runit` components).
+# `install-systemd`, `install-runit` and `install-rc_d` components).
 set(ISDE_SYSTEMD_UNIT_DIR "${CMAKE_INSTALL_PREFIX}/lib/systemd/system"
     CACHE PATH "systemd system unit directory")
 set(ISDE_RUNIT_SERVICE_DIR "/etc/sv"
     CACHE PATH "runit service directory (sv tree)")
+set(ISDE_RC_D_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/rc.d"
+    CACHE PATH "FreeBSD rc.d service directory")
 
 # Dependencies are resolved into ISDE::<NAME> imported targets.  On Linux this
 # is done via pkg-config; on FreeBSD (which we build without pkg-config) the
@@ -160,6 +162,7 @@ endif()
 # These are NOT part of `make install`. Invoke explicitly:
 #   cmake --build build --target install-systemd
 #   cmake --build build --target install-runit
+#   cmake --build build --target install-rc_d      # FreeBSD
 
 add_custom_target(install-systemd
     COMMAND "${CMAKE_COMMAND}"
@@ -172,3 +175,9 @@ add_custom_target(install-runit
             -DCMAKE_INSTALL_COMPONENT=runit
             -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
     COMMENT "Installing runit service files")
+
+add_custom_target(install-rc_d
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=rc_d
+            -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+    COMMENT "Installing FreeBSD rc.d service scripts")

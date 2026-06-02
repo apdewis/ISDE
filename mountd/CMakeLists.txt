@@ -45,3 +45,10 @@ install(PROGRAMS data/runit/run
         DESTINATION "${ISDE_RUNIT_SERVICE_DIR}/isde-mountd"
         COMPONENT runit
         EXCLUDE_FROM_ALL)
+
+configure_file(data/rc.d/isde-mountd.in
+        "${CMAKE_CURRENT_BINARY_DIR}/rc.d/isde-mountd" @ONLY)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/rc.d/isde-mountd"
+        DESTINATION "${ISDE_RC_D_DIR}"
+        COMPONENT rc_d
+        EXCLUDE_FROM_ALL)
