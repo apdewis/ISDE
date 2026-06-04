@@ -40,6 +40,7 @@ target_link_libraries(isde-wm-compositor
     ISDE::XCB_COMPOSITE
     ISDE::XCB_DAMAGE
     ISDE::XCB_RENDER
+    ISDE::XCB_SHAPE
     m
 )
 
