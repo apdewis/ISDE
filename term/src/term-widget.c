@@ -422,10 +422,14 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
 static void request_redraw(TermWidget *t)
 {
     if (!IswIsRealized(t->canvas)) return;
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_window_t win = IswWindow(t->canvas);
-    xcb_clear_area(c, 1, win, 0, 0, 0, 0);
-    xcb_flush(c);
+    /* expose_cb repaints the whole canvas (cairo_paint), so no X clear is
+       needed — and the canvas is windowless, so an xcb_clear_area would
+       wrongly clear the shared windowed ancestor.  Drive the expose proc
+       directly, as the pager canvas does. */
+    IswExposeProc expose = IswClass(t->canvas)->core_class.expose;
+    if (expose) {
+        expose(t->canvas, NULL, 0);
+    }
 }
 
 /* ---------- resize ---------- */
