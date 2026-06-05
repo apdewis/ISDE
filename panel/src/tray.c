@@ -49,6 +49,55 @@ static void send_xembed_notify(Panel *p, xcb_window_t icon)
                    XCB_EVENT_MASK_NO_EVENT, (const char *)&ev);
 }
 
+/* Expand 8-bit channel to 16-bit (0xFF -> 0xFFFF) */
+static uint32_t expand8to16(unsigned int c8)
+{
+    return (c8 << 8) | c8;
+}
+
+/* Allocate the tray container's background pixel (the taskbar bar colour). */
+static int tray_bg_pixel(Panel *p, Pixel *out)
+{
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s)
+        return 0;
+
+    unsigned int rgb = s->taskbar.bg;
+    xcb_alloc_color_reply_t *r = xcb_alloc_color_reply(p->conn,
+        xcb_alloc_color(p->conn, p->screen->default_colormap,
+                        expand8to16((rgb >> 16) & 0xFF),
+                        expand8to16((rgb >>  8) & 0xFF),
+                        expand8to16( rgb        & 0xFF)),
+        NULL);
+    if (!r)
+        return 0;
+    *out = r->pixel;
+    free(r);
+    return 1;
+}
+
+/*
+ * Set the docked icons' window backgrounds to the container colour.  Icons
+ * reparent into the shell window, so without this they would inherit the
+ * shell's background instead of the tray container's; XEmbed icons that fill
+ * with their parent's background (or expose transparent regions) then show
+ * the wrong colour.
+ */
+void tray_apply_bg(Panel *p)
+{
+    Pixel bg;
+    if (!tray_bg_pixel(p, &bg))
+        return;
+    for (int i = 0; i < p->ntray; i++) {
+        xcb_change_window_attributes(p->conn, p->tray_icons[i],
+                                     XCB_CW_BACK_PIXEL, &bg);
+        /* Clear to the new background and send an Expose so the icon
+         * redraws its content over it (exposures = 1). */
+        xcb_clear_area(p->conn, 1, p->tray_icons[i], 0, 0, 0, 0);
+    }
+    xcb_flush(p->conn);
+}
+
 /*
  * Accumulate the tray_box's position, in logical pixels, relative to its
  * nearest windowed ancestor.  With windowless interior widgets the tray_box
@@ -130,6 +179,12 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
 
     /* Reparent new icon into the tray_box's windowed ancestor */
     xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box), 0, 0);
+
+    /* Give the icon the container's background, not the shell's */
+    Pixel bg;
+    if (tray_bg_pixel(p, &bg)) {
+        xcb_change_window_attributes(p->conn, icon, XCB_CW_BACK_PIXEL, &bg);
+    }
 
     /* Resize the icon to fit */
     uint32_t vals[] = { phys_icon, phys_icon };
@@ -289,11 +344,6 @@ static void traybox_event_handler(Widget w, IswPointer closure,
 }
 
 /* Claim (or reclaim) the tray selection and announce to clients */
-/* Expand 8-bit channel to 16-bit (0xFF -> 0xFFFF) */
-static uint32_t expand8to16(unsigned int c8)
-{
-    return (c8 << 8) | c8;
-}
 
 void tray_set_colors(Panel *p)
 {
@@ -328,6 +378,8 @@ void tray_set_colors(Panel *p)
                         IswWindow(p->shell), atom, XCB_ATOM_CARDINAL,
                         32, 12, colors);
 
+    /* Update docked icons' window backgrounds to the new container colour */
+    tray_apply_bg(p);
 }
 
 static void tray_claim_selection(Panel *p)
