@@ -49,6 +49,55 @@ static void send_xembed_notify(Panel *p, xcb_window_t icon)
                    XCB_EVENT_MASK_NO_EVENT, (const char *)&ev);
 }
 
+/*
+ * Accumulate the tray_box's position, in logical pixels, relative to its
+ * nearest windowed ancestor.  With windowless interior widgets the tray_box
+ * has no window of its own — icons are reparented into the windowed ancestor
+ * (the shell) and must be offset by the tray_box's position within it.
+ * Mirrors libISW's own windowless-chain offset accumulation.
+ */
+static void tray_box_offset(Panel *p, int *off_x, int *off_y)
+{
+    int x = 0, y = 0;
+    Widget w = p->tray_box;
+    while (w != NULL && IswIsWidget(w) && w->core.windowless) {
+        x += w->core.x + w->core.border_width;
+        y += w->core.y + w->core.border_width;
+        w = w->core.parent;
+    }
+    *off_x = x;
+    *off_y = y;
+}
+
+/*
+ * Position every docked icon left-to-right within the windowed ancestor,
+ * offset by the tray_box's current position.  Called on dock, undock, and
+ * whenever the windowless container is relaid out (e.g. panel reconfigure).
+ */
+void tray_reposition_all(Panel *p)
+{
+    int icon_size = PANEL_HEIGHT / 2 - 2;
+    int stride = icon_size + 2;
+
+    double sf = ISWScaleFactor(p->toplevel);
+    int phys_stride = (int)(stride * sf + 0.5);
+
+    int off_x = 0, off_y = 0;
+    tray_box_offset(p, &off_x, &off_y);
+    int phys_off_x = (int)(off_x * sf + 0.5);
+    int phys_off_y = (int)(off_y * sf + 0.5);
+
+    for (int i = 0; i < p->ntray; i++) {
+        uint32_t xy[] = {
+            (uint32_t)(phys_off_x + i * phys_stride),
+            (uint32_t)phys_off_y
+        };
+        xcb_configure_window(p->conn, p->tray_icons[i],
+                             XCB_CONFIG_WINDOW_X |
+                             XCB_CONFIG_WINDOW_Y, xy);
+    }
+}
+
 static void tray_dock_icon(Panel *p, xcb_window_t icon)
 {
     /* Check for duplicates */
@@ -69,7 +118,8 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     int stride = icon_size + 2;
     int tray_w = p->ntray * stride + 2;
 
-    /* Tell the outer FlexBox our new size */
+    /* Tell the outer FlexBox our new size — this relayouts the windowless
+     * container, so the tray_box offset must be read after this call. */
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgFlexBasis(&ab, tray_w);
     IswSetValues(p->tray_area, ab.args, ab.count);
@@ -77,17 +127,18 @@ static void tray_dock_icon(Panel *p, xcb_window_t icon)
     /* Get physical dimensions after relayout */
     double sf = ISWScaleFactor(p->toplevel);
     int phys_icon = (int)(icon_size * sf + 0.5);
-    int phys_stride = (int)(stride * sf + 0.5);
 
-    /* Reparent new icon and position all icons left-to-right */
-    xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box),
-                        (p->ntray - 1) * phys_stride, 0);
+    /* Reparent new icon into the tray_box's windowed ancestor */
+    xcb_reparent_window(p->conn, icon, IswWindow(p->tray_box), 0, 0);
 
     /* Resize the icon to fit */
     uint32_t vals[] = { phys_icon, phys_icon };
     xcb_configure_window(p->conn, icon,
                          XCB_CONFIG_WINDOW_WIDTH |
                          XCB_CONFIG_WINDOW_HEIGHT, vals);
+
+    /* Position all icons, offset by the container's place in the ancestor */
+    tray_reposition_all(p);
 
     /* Register icon window into Xt dispatch so events reach our handler */
     IswRegisterDrawable(p->conn, icon, p->tray_box);
@@ -132,16 +183,7 @@ static void tray_undock_icon(Panel *p, xcb_window_t icon)
     IswArgFlexBasis(&ab, tray_w);
     IswSetValues(p->tray_area, ab.args, ab.count);
 
-    double sf = ISWScaleFactor(p->toplevel);
-    int phys_stride = (int)(stride * sf + 0.5);
-
-    for (int i = 0; i < p->ntray; i++) {
-        uint32_t xy[] = { i * phys_stride, 0 };
-        //#FIXME stop using direct XCB calls to manipulate ISW widgets
-        xcb_configure_window(p->conn, p->tray_icons[i],
-                             XCB_CONFIG_WINDOW_X |
-                             XCB_CONFIG_WINDOW_Y, xy);
-    }
+    tray_reposition_all(p);
 
     xcb_flush(p->conn);
 
@@ -369,16 +411,7 @@ void tray_check_icons(Panel *p)
         IswArgFlexBasis(&ab, tray_w);
         IswSetValues(p->tray_area, ab.args, ab.count);
 
-        double sf = ISWScaleFactor(p->toplevel);
-        int phys_stride = (int)(stride * sf + 0.5);
-
-        for (int i = 0; i < p->ntray; i++) {
-            uint32_t xy[] = { i * phys_stride, 0 };
-            //#FIXME stop using direct XCB calls to manipulate ISW widgets
-            xcb_configure_window(p->conn, p->tray_icons[i],
-                                 XCB_CONFIG_WINDOW_X |
-                                 XCB_CONFIG_WINDOW_Y, xy);
-        }
+        tray_reposition_all(p);
         xcb_flush(p->conn);
     }
 }

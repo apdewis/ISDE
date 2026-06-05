@@ -412,6 +412,10 @@ static void panel_reconfigure(Panel *p)
 
     IswConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
 
+    /* The width change relaid out the panel FlexBox, shifting the windowless
+     * tray container; re-offset the reparented icons to track it. */
+    tray_reposition_all(p);
+
     /* Update strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
     xcb_ewmh_wm_strut_partial_t strut;
