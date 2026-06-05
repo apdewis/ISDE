@@ -41,7 +41,6 @@ int  term_tsm_new(struct tsm_screen **s, struct tsm_vte **v,
 void term_tsm_apply_palette(struct tsm_vte *vte, const TermPalette *pal);
 
 struct TermWidget;
-static void suppress_bg_clear(struct TermWidget *t);
 static void ensure_atoms(TermWidget *t);
 static void copy_selection_to(TermWidget *t, xcb_atom_t which);
 static void request_paste(TermWidget *t, xcb_atom_t which);
@@ -70,7 +69,6 @@ struct TermWidget {
     unsigned           cols;
     unsigned           rows;
     tsm_age_t          last_age;
-    int                bg_suppressed;
 
     xcb_key_symbols_t *key_syms;
 
@@ -410,11 +408,6 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     cairo_t *cr = (cairo_t *)ISWRenderGetCairoContext(d->render_ctx);
     if (!cr) return;
 
-    if (!t->bg_suppressed) {
-        suppress_bg_clear(t);
-        t->bg_suppressed = 1;
-    }
-
     /* Clear with background */
     double bg[3];
     rgb_unpack(t->cfg.palette.rgb[17], bg);
@@ -424,15 +417,6 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     DrawCtx ctx = { t, cr };
     t->last_age = tsm_screen_draw(t->screen, draw_cell_cb, &ctx);
     draw_cursor(t, cr);
-}
-
-static void suppress_bg_clear(TermWidget *t)
-{
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_window_t win = IswWindow(t->canvas);
-    uint32_t values[1] = { XCB_BACK_PIXMAP_NONE };
-    xcb_change_window_attributes(c, win, XCB_CW_BACK_PIXMAP, values);
-    xcb_flush(c);
 }
 
 static void request_redraw(TermWidget *t)
@@ -706,7 +690,11 @@ static void ensure_selection_handler(TermWidget *t)
 {
     if (selection_handler_installed) return;
     selection_handler_installed = 1;
-    IswAddEventHandler(t->canvas, (EventMask)0, True,
+    /* The canvas is windowless: selection events arrive on the shared
+       windowed-ancestor window and are dispatched to that ancestor widget,
+       not to the canvas.  Register the handler there so SelectionRequest/
+       Notify/Clear reach us. */
+    IswAddEventHandler(_IswWindowedAncestor(t->canvas), (EventMask)0, True,
                        selection_event_handler, t);
 }
 
