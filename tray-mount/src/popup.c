@@ -278,10 +278,10 @@ void tm_popup_show(TrayMount *tm)
         tm->popup_listbox = IswCreateManagedWidget("deviceList",
                                                 listBoxWidgetClass,
                                                 tm->popup_viewport,
-                                                ab.args, ab.count);  
-    }
+                                                ab.args, ab.count);
 
-    populate_device_list(tm);
+        populate_device_list(tm);
+    }
 
     IswRealizeWidget(tm->popup_shell);
     position_popup(tm);
