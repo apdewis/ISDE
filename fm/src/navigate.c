@@ -130,6 +130,9 @@ void fm_navigate(Fm *fm, const char *path)
 
     fm_update_title(fm);
     fileview_populate(fm);
+    /* New directory starts at the top; reset any scroll carried over from the
+       previous directory so the viewport recomputes its scrollbar cleanly. */
+    IswViewportSetLocation(fm->viewport, 0.0f, 0.0f);
     navbar_update(fm);
 }
 
