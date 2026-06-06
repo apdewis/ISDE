@@ -227,64 +227,59 @@ void tm_popup_show(TrayMount *tm)
         return;
     }
 
-    if (tm->popup_shell) {
-        IswDestroyWidget(tm->popup_shell);
-        tm->popup_shell = NULL;
-        tm->popup_outer = NULL;
-        tm->popup_viewport = NULL;
-    }
-
     nactions = 0;
 
-    IswArgBuilder ab = IswArgBuilderInit();
+    if (!tm->popup_shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell */
-    IswArgWidth(&ab, 400);
-    IswArgHeight(&ab, 400);
-    tm->popup_shell = IswCreatePopupShell("mountPopup",
-                                          overrideShellWidgetClass,
-                                          tm->toplevel, ab.args, ab.count);
+        /* Override shell */
+        IswArgWidth(&ab, 400);
+        IswArgHeight(&ab, 400);
+        tm->popup_shell = IswCreatePopupShell("mountPopup",
+                                            overrideShellWidgetClass,
+                                            tm->toplevel, ab.args, ab.count);
 
-    /* Outer vertical FlexBox */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
-    IswArgBorderWidth(&ab, 0);
-    tm->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
-                                              tm->popup_shell,
-                                              ab.args, ab.count);
-
-    /* Toggle row: horizontal Box */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgFlexBasis(&ab, 50);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
-                                                tm->popup_outer,
+        /* Outer vertical FlexBox */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientVertical);
+        IswArgBorderWidth(&ab, 0);
+        tm->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                                tm->popup_shell,
                                                 ab.args, ab.count);
 
-    /* Viewport — fills remaining space */
-    IswArgBuilderReset(&ab);
-    IswArgFlexGrow(&ab, 1);
-    IswArgForceBars(&ab, True);
-    IswArgBorderWidth(&ab, 0);
-    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
-    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
-    tm->popup_viewport = IswCreateManagedWidget("viewport",
-                                                 viewportWidgetClass,
-                                                 tm->popup_outer,
-                                                 ab.args, ab.count);
+        /* Toggle row: horizontal Box */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgFlexBasis(&ab, 50);
+        IswArgBorderWidth(&ab, 1);
+        IswArgBackground(&ab, scheme->bg_light);
+        Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                    tm->popup_outer,
+                                                    ab.args, ab.count);
 
-    /* ListBox inside viewport */
-    IswArgBuilderReset(&ab);
-    IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgRowSpacing(&ab, 0);
-    IswArgBorderWidth(&ab, 0);
-    tm->popup_listbox = IswCreateManagedWidget("deviceList",
-                                               listBoxWidgetClass,
-                                               tm->popup_viewport,
-                                               ab.args, ab.count);
+        /* Viewport — fills remaining space */
+        IswArgBuilderReset(&ab);
+        IswArgFlexGrow(&ab, 1);
+        IswArgForceBars(&ab, True);
+        IswArgBorderWidth(&ab, 0);
+        IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+        IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+        IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+        tm->popup_viewport = IswCreateManagedWidget("viewport",
+                                                    viewportWidgetClass,
+                                                    tm->popup_outer,
+                                                    ab.args, ab.count);
+
+        /* ListBox inside viewport */
+        IswArgBuilderReset(&ab);
+        IswArgSelectionMode(&ab, IswListBoxSelectNone);
+        IswArgRowSpacing(&ab, 0);
+        IswArgBorderWidth(&ab, 0);
+        tm->popup_listbox = IswCreateManagedWidget("deviceList",
+                                                listBoxWidgetClass,
+                                                tm->popup_viewport,
+                                                ab.args, ab.count);  
+    }
 
     populate_device_list(tm);
 

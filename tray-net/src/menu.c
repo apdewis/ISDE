@@ -336,100 +336,95 @@ void tn_menu_show(TrayNet *tn)
         return;
     }
 
-    if (tn->popup_shell) {
-        IswDestroyWidget(tn->popup_shell);
-        tn->popup_shell = NULL;
-        tn->popup_outer = NULL;
-        tn->popup_viewport = NULL;
-        tn->popup_listbox = NULL;
-    }
+    
 
     nactions = 0;
     ntoggles = 0;
 
-    IswArgBuilder ab = IswArgBuilderInit();
+    if (!tn->popup_shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell */
-    IswArgWidth(&ab, 400);
-    IswArgHeight(&ab, 400);
-    tn->popup_shell = IswCreatePopupShell("netPopup",
-                                           overrideShellWidgetClass,
-                                           tn->toplevel, ab.args, ab.count);
+        /* Override shell */
+        IswArgWidth(&ab, 400);
+        IswArgHeight(&ab, 400);
+        tn->popup_shell = IswCreatePopupShell("netPopup",
+                                               overrideShellWidgetClass,
+                                               tn->toplevel, ab.args, ab.count);
 
-    /* Outer vertical FlexBox */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
-    IswArgBorderWidth(&ab, 0);
-    tn->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
-                                              tn->popup_shell,
-                                              ab.args, ab.count);    
-
-    /* Toggle row: horizontal Box with WiFi power toggles */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgFlexBasis(&ab, 50);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
-                                                tn->popup_outer,
-                                                ab.args, ab.count);
-    
-    for (int i = 0; i < tn->ntechs; i++) {
-        TechInfo *t = &tn->techs[i];
-        if (strcmp(t->type, "wifi") != 0)
-            continue;
-
-        ToggleData *td = alloc_toggle(tn, t->path);
-
+        /* Outer vertical FlexBox */
         IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, t->name);
-        IswArgState(&ab, t->powered ? True : False);
-        IswArgJustify(&ab, IswJustifyLeft);
+        IswArgOrientation(&ab, IswOrientVertical);
+        IswArgBorderWidth(&ab, 0);
+        tn->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                                  tn->popup_shell,
+                                                  ab.args, ab.count);    
+
+        /* Toggle row: horizontal Box with WiFi power toggles */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgFlexBasis(&ab, 50);
+        IswArgBorderWidth(&ab, 1);
         IswArgBackground(&ab, scheme->bg_light);
-        Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
-                                            toggle_area, ab.args, ab.count);
-        IswAddCallback(tw, IswNcallback, on_tech_toggled, td);
+        Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                    tn->popup_outer,
+                                                    ab.args, ab.count);
+    
+        for (int i = 0; i < tn->ntechs; i++) {
+            TechInfo *t = &tn->techs[i];
+            if (strcmp(t->type, "wifi") != 0)
+                continue;
+
+            ToggleData *td = alloc_toggle(tn, t->path);
+
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, t->name);
+            IswArgState(&ab, t->powered ? True : False);
+            IswArgJustify(&ab, IswJustifyLeft);
+            IswArgBackground(&ab, scheme->bg_light);
+            Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
+                                                toggle_area, ab.args, ab.count);
+            IswAddCallback(tw, IswNcallback, on_tech_toggled, td);
+        }
+
+        /* Viewport — fills remaining space */
+        IswArgBuilderReset(&ab);
+        IswArgFlexGrow(&ab, 1);
+        IswArgForceBars(&ab, True);
+        IswArgBorderWidth(&ab, 0);
+        IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+        IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+        IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+        tn->popup_viewport = IswCreateManagedWidget("viewport",
+                                                     viewportWidgetClass,
+                                                     tn->popup_outer,
+                                                     ab.args, ab.count);
+
+        /* ListBox inside viewport */
+        IswArgBuilderReset(&ab);
+        IswArgBuilderAdd(&ab, IswNselectionMode,
+                         (IswArgVal)IswListBoxSelectNone);
+        IswArgBuilderAdd(&ab, IswNshowSeparators, (IswArgVal)True);
+        IswArgBuilderAdd(&ab, IswNrowSpacing, (IswArgVal)2);
+        tn->popup_listbox = IswCreateManagedWidget("netList",
+                                                    listBoxWidgetClass,
+                                                    tn->popup_viewport,
+                                                    ab.args, ab.count);
+        build_content(tn);
+    } else {
+        tn_menu_rebuild(tn);
     }
-
-    /* Viewport — fills remaining space */
-    IswArgBuilderReset(&ab);
-    IswArgFlexGrow(&ab, 1);
-    IswArgForceBars(&ab, True);
-    IswArgBorderWidth(&ab, 0);
-    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
-    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
-    tn->popup_viewport = IswCreateManagedWidget("viewport",
-                                                 viewportWidgetClass,
-                                                 tn->popup_outer,
-                                                 ab.args, ab.count);
-
-    /* ListBox inside viewport */
-    IswArgBuilderReset(&ab);
-    IswArgBuilderAdd(&ab, IswNselectionMode,
-                     (IswArgVal)IswListBoxSelectNone);
-    IswArgBuilderAdd(&ab, IswNshowSeparators, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNrowSpacing, (IswArgVal)2);
-    tn->popup_listbox = IswCreateManagedWidget("netList",
-                                                listBoxWidgetClass,
-                                                tn->popup_viewport,
-                                                ab.args, ab.count);
-
-    build_content(tn);
-
+    
     IswRealizeWidget(tn->popup_shell);
     position_popup(tn);
     IswPopup(tn->popup_shell, IswGrabNone);
 
-    {
-        xcb_connection_t *conn = IswDisplay(tn->toplevel);
-        xcb_grab_pointer(conn, True, IswWindow(tn->popup_shell),
-                         XCB_EVENT_MASK_BUTTON_PRESS |
-                         XCB_EVENT_MASK_BUTTON_RELEASE,
-                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-        xcb_flush(conn);
-    }
+    xcb_connection_t *conn = IswDisplay(tn->toplevel);
+    xcb_grab_pointer(conn, True, IswWindow(tn->popup_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
 
     IswAddEventHandler(tn->popup_shell, POPUP_DISMISS_MASK, False,
                        popup_outside_handler, tn);

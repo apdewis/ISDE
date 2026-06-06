@@ -407,91 +407,86 @@ void ta_popup_show(TrayAudio *ta)
         return;
     }
 
-    /* Destroy old popup if any */
-    if (ta->popup_shell) {
-        IswDestroyWidget(ta->popup_shell);
-        ta->popup_shell = NULL;
-        ta->popup_outer = NULL;
-    }
-
     /* Reset row allocations */
     nrows = 0;
 
-    IswArgBuilder ab = IswArgBuilderInit();
+    if (!ta->popup_shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell for popup — border via theme resources */
-    IswArgWidth(&ab, 400);
-    IswArgHeight(&ab, 400);
-    ta->popup_shell = IswCreatePopupShell("audioPopup",
-                                          overrideShellWidgetClass,
-                                          ta->toplevel, ab.args, ab.count);
+        /* Override shell for popup — border via theme resources */
+        IswArgWidth(&ab, 400);
+        IswArgHeight(&ab, 400);
+        ta->popup_shell = IswCreatePopupShell("audioPopup",
+                                            overrideShellWidgetClass,
+                                            ta->toplevel, ab.args, ab.count);
 
-    /* Outer vertical FlexBox */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
-    IswArgBorderWidth(&ab, 0);
-    ta->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
-                                              ta->popup_shell,
-                                              ab.args, ab.count);
-
-    /* Toggle row: horizontal Box */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgFlexBasis(&ab, 50);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
-                                                ta->popup_outer,
+        /* Outer vertical FlexBox */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientVertical);
+        IswArgBorderWidth(&ab, 0);
+        ta->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                                ta->popup_shell,
                                                 ab.args, ab.count);
 
-    /* Tabs container */
-    IswArgBuilderReset(&ab);
-    IswArgFlexGrow(&ab, 1);
-    ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
-                                      ta->popup_outer, ab.args, ab.count);
+        /* Toggle row: horizontal Box */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgFlexBasis(&ab, 50);
+        IswArgBorderWidth(&ab, 1);
+        IswArgBackground(&ab, scheme->bg_light);
+        Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                    ta->popup_outer,
+                                                    ab.args, ab.count);
 
-    /* Outputs tab */
-    IswArgBuilderReset(&ab);
-    IswArgTabLabel(&ab, "Outputs");
-    IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgRowSpacing(&ab, 0);
-    IswArgBorderWidth(&ab, 0);
-    if (ta->small_font)
-        IswArgFont(&ab, ta->small_font);
-    ta->output_page = IswCreateManagedWidget("outputPage",
-                                             listBoxWidgetClass,
-                                             ta->tabs, ab.args, ab.count);
+        /* Tabs container */
+        IswArgBuilderReset(&ab);
+        IswArgFlexGrow(&ab, 1);
+        ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
+                                        ta->popup_outer, ab.args, ab.count);
 
-    /* Inputs tab */
-    IswArgBuilderReset(&ab);
-    IswArgTabLabel(&ab, "Inputs");
-    IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgBorderWidth(&ab, 0);
-    IswArgRowSpacing(&ab, 0);
-    if (ta->small_font)
-        IswArgFont(&ab, ta->small_font);
-    ta->input_page = IswCreateManagedWidget("inputPage",
+        /* Outputs tab */
+        IswArgBuilderReset(&ab);
+        IswArgTabLabel(&ab, "Outputs");
+        IswArgSelectionMode(&ab, IswListBoxSelectNone);
+        IswArgRowSpacing(&ab, 0);
+        IswArgBorderWidth(&ab, 0);
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
+        ta->output_page = IswCreateManagedWidget("outputPage",
+                                                listBoxWidgetClass,
+                                                ta->tabs, ab.args, ab.count);
+
+        /* Inputs tab */
+        IswArgBuilderReset(&ab);
+        IswArgTabLabel(&ab, "Inputs");
+        IswArgSelectionMode(&ab, IswListBoxSelectNone);
+        IswArgBorderWidth(&ab, 0);
+        IswArgRowSpacing(&ab, 0);
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
+        ta->input_page = IswCreateManagedWidget("inputPage",
+                                                listBoxWidgetClass,
+                                                ta->tabs, ab.args, ab.count);
+
+        /* Applications tab — created empty, populated on tab switch */
+        IswArgBuilderReset(&ab);
+        IswArgTabLabel(&ab, "Applications");
+        IswArgSelectionMode(&ab, IswListBoxSelectNone);
+        IswArgBorderWidth(&ab, 0);
+        IswArgRowSpacing(&ab, 0);
+        if (ta->small_font)
+            IswArgFont(&ab, ta->small_font);
+        ta->app_page = IswCreateManagedWidget("appPage",
                                             listBoxWidgetClass,
                                             ta->tabs, ab.args, ab.count);
 
-    /* Applications tab — created empty, populated on tab switch */
-    IswArgBuilderReset(&ab);
-    IswArgTabLabel(&ab, "Applications");
-    IswArgSelectionMode(&ab, IswListBoxSelectNone);
-    IswArgBorderWidth(&ab, 0);
-    IswArgRowSpacing(&ab, 0);
-    if (ta->small_font)
-        IswArgFont(&ab, ta->small_font);
-    ta->app_page = IswCreateManagedWidget("appPage",
-                                          listBoxWidgetClass,
-                                          ta->tabs, ab.args, ab.count);
-
-    /* Show the outputs tab by default */
-    IswTabsSetTop(ta->tabs, ta->output_page);
-    IswAddCallback(ta->tabs, IswNtabCallback, on_tab_changed, ta);
+        /* Show the outputs tab by default */
+        IswTabsSetTop(ta->tabs, ta->output_page);
+        IswAddCallback(ta->tabs, IswNtabCallback, on_tab_changed, ta); 
+    }
 
     /* Pop up without Xt grab — we handle dismissal ourselves,
-     * matching the MenuBar.c pattern. */
+    * matching the MenuBar.c pattern. */
     IswRealizeWidget(ta->popup_shell);
     position_popup(ta);
     IswPopup(ta->popup_shell, IswGrabNone);
@@ -502,15 +497,15 @@ void ta_popup_show(TrayAudio *ta)
     /* Server pointer grab with owner_events=True so events still
      * reach the natural target window (child widgets work normally)
      * but clicks outside any of our windows come to the grab window. */
-    {
-        xcb_connection_t *conn = IswDisplay(ta->toplevel);
-        xcb_grab_pointer(conn, True, IswWindow(ta->popup_shell),
-                         XCB_EVENT_MASK_BUTTON_PRESS |
-                         XCB_EVENT_MASK_BUTTON_RELEASE,
-                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-        xcb_flush(conn);
-    }
+    
+    xcb_connection_t *conn = IswDisplay(ta->toplevel);
+    xcb_grab_pointer(conn, True, IswWindow(ta->popup_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
+    
 
     /* Install click-outside handler on the popup shell — with
      * owner_events=True, clicks outside all our windows are

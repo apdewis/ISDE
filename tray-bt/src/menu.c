@@ -383,106 +383,97 @@ void tb_menu_show(TrayBt *tb)
         return;
     }
 
-    if (tb->popup_shell) {
-        IswDestroyWidget(tb->popup_shell);
-        tb->popup_shell = NULL;
-        tb->popup_outer = NULL;
-        tb->popup_viewport = NULL;
-        tb->popup_listbox = NULL;
-    }
-
     nactions = 0;
 
-    IswArgBuilder ab = IswArgBuilderInit();
+    if (!tb->popup_shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
 
-    /* Override shell */
-    IswArgWidth(&ab, 300);
-    IswArgHeight(&ab, 400);
-    tb->popup_shell = IswCreatePopupShell("btPopup",
-                                           overrideShellWidgetClass,
-                                           tb->toplevel, ab.args, ab.count);
+        /* Override shell */
+        IswArgWidth(&ab, 300);
+        IswArgHeight(&ab, 400);
+        tb->popup_shell = IswCreatePopupShell("btPopup",
+                                            overrideShellWidgetClass,
+                                            tb->toplevel, ab.args, ab.count);
 
-    /* Outer vertical FlexBox */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientVertical);
-    IswArgBorderWidth(&ab, 0);
-    tb->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
-                                              tb->popup_shell,
-                                              ab.args, ab.count);
-
-    /* Toggle row */
-    IswArgBuilderReset(&ab);
-    IswArgOrientation(&ab, IswOrientHorizontal);
-    IswArgFlexBasis(&ab, 50);
-    IswArgBorderWidth(&ab, 1);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
-                                                tb->popup_outer,
-                                                ab.args, ab.count);
-
-    /* Bluetooth power toggle */
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, "Bluetooth");
-    IswArgState(&ab, (tb->has_adapter && tb->adapter.powered) ? True : False);
-    IswArgJustify(&ab, IswJustifyLeft);
-    IswArgBackground(&ab, scheme->bg_light);
-    Widget tw = IswCreateManagedWidget("btToggle", toggleWidgetClass,
-                                        toggle_area, ab.args, ab.count);
-    IswAddCallback(tw, IswNcallback, on_power_toggled, tb);
-
-    /* Scan button */
-    if (tb->has_adapter && tb->adapter.powered) {
+        /* Outer vertical FlexBox */
         IswArgBuilderReset(&ab);
-        IswArgLabel(&ab, tb->adapter.discovering ? "Stop Scan" : "Scan");
-        IswArgJustify(&ab, IswJustifyRight);
-        IswArgBackground(&ab, scheme->bg_light);
-        IswArgBuilderAdd(&ab, IswNfromHoriz, (IswArgVal)tw);
-        Widget scan_btn = IswCreateManagedWidget("scanBtn",
-                                                  commandWidgetClass,
-                                                  toggle_area,
-                                                  ab.args, ab.count);
-        IswAddCallback(scan_btn, IswNcallback, on_scan, tb);
-    }
-
-    /* Viewport — fills remaining space */
-    IswArgBuilderReset(&ab);
-    IswArgFlexGrow(&ab, 1);
-    IswArgForceBars(&ab, True);
-    IswArgBorderWidth(&ab, 0);
-    IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
-    IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
-    tb->popup_viewport = IswCreateManagedWidget("viewport",
-                                                 viewportWidgetClass,
-                                                 tb->popup_outer,
-                                                 ab.args, ab.count);
-
-    /* ListBox inside viewport */
-    IswArgBuilderReset(&ab);
-    IswArgBuilderAdd(&ab, IswNselectionMode,
-                     (IswArgVal)IswListBoxSelectNone);
-    IswArgBuilderAdd(&ab, IswNshowSeparators, (IswArgVal)True);
-    IswArgBuilderAdd(&ab, IswNrowSpacing, (IswArgVal)2);
-    tb->popup_listbox = IswCreateManagedWidget("btList",
-                                                listBoxWidgetClass,
-                                                tb->popup_viewport,
+        IswArgOrientation(&ab, IswOrientVertical);
+        IswArgBorderWidth(&ab, 0);
+        tb->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
+                                                tb->popup_shell,
                                                 ab.args, ab.count);
 
-    build_content(tb);
+        /* Toggle row */
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgFlexBasis(&ab, 50);
+        IswArgBorderWidth(&ab, 1);
+        IswArgBackground(&ab, scheme->bg_light);
+        Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
+                                                    tb->popup_outer,
+                                                    ab.args, ab.count);
+
+        /* Bluetooth power toggle */
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "Bluetooth");
+        IswArgState(&ab, (tb->has_adapter && tb->adapter.powered) ? True : False);
+        IswArgJustify(&ab, IswJustifyLeft);
+        IswArgBackground(&ab, scheme->bg_light);
+        Widget tw = IswCreateManagedWidget("btToggle", toggleWidgetClass,
+                                            toggle_area, ab.args, ab.count);
+        IswAddCallback(tw, IswNcallback, on_power_toggled, tb);
+
+        /* Scan button */
+        if (tb->has_adapter && tb->adapter.powered) {
+            IswArgBuilderReset(&ab);
+            IswArgLabel(&ab, tb->adapter.discovering ? "Stop Scan" : "Scan");
+            IswArgJustify(&ab, IswJustifyRight);
+            IswArgBackground(&ab, scheme->bg_light);
+            IswArgBuilderAdd(&ab, IswNfromHoriz, (IswArgVal)tw);
+            Widget scan_btn = IswCreateManagedWidget("scanBtn",
+                                                    commandWidgetClass,
+                                                    toggle_area,
+                                                    ab.args, ab.count);
+            IswAddCallback(scan_btn, IswNcallback, on_scan, tb);
+        }
+
+        /* Viewport — fills remaining space */
+        IswArgBuilderReset(&ab);
+        IswArgFlexGrow(&ab, 1);
+        IswArgForceBars(&ab, True);
+        IswArgBorderWidth(&ab, 0);
+        IswArgBuilderAdd(&ab, IswNallowVert, (IswArgVal)True);
+        IswArgBuilderAdd(&ab, IswNallowHoriz, (IswArgVal)False);
+        IswArgBuilderAdd(&ab, IswNuseRight, (IswArgVal)True);
+        tb->popup_viewport = IswCreateManagedWidget("viewport",
+                                                    viewportWidgetClass,
+                                                    tb->popup_outer,
+                                                    ab.args, ab.count);
+
+        /* ListBox inside viewport */
+        IswArgBuilderReset(&ab);
+        IswArgBuilderAdd(&ab, IswNselectionMode,
+                        (IswArgVal)IswListBoxSelectNone);
+        IswArgBuilderAdd(&ab, IswNshowSeparators, (IswArgVal)True);
+        IswArgBuilderAdd(&ab, IswNrowSpacing, (IswArgVal)2);
+        tb->popup_listbox = IswCreateManagedWidget("btList",
+                                                    listBoxWidgetClass,
+                                                    tb->popup_viewport,
+                                                    ab.args, ab.count);
+        build_content(tb);
+    }
 
     IswRealizeWidget(tb->popup_shell);
     position_popup(tb);
     IswPopup(tb->popup_shell, IswGrabNone);
 
-    {
-        xcb_connection_t *conn = IswDisplay(tb->toplevel);
-        xcb_grab_pointer(conn, True, IswWindow(tb->popup_shell),
-                         XCB_EVENT_MASK_BUTTON_PRESS |
-                         XCB_EVENT_MASK_BUTTON_RELEASE,
-                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                         XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-        xcb_flush(conn);
-    }
+    xcb_connection_t *conn = IswDisplay(tb->toplevel);
+    xcb_grab_pointer(conn, True, IswWindow(tb->popup_shell),
+                     XCB_EVENT_MASK_BUTTON_PRESS |
+                     XCB_EVENT_MASK_BUTTON_RELEASE,
+                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+    xcb_flush(conn);
 
     IswAddEventHandler(tb->popup_shell, POPUP_DISMISS_MASK, False,
                        popup_outside_handler, tb);

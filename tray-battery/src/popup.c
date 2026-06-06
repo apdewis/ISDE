@@ -126,131 +126,128 @@ void tb_popup_init(TrayBattery *tb)
 void tb_popup_show(TrayBattery *tb)
 {
     const IsdeColorScheme *scheme = isde_theme_current();
+    const IsdeBattery *bat = isde_power_get_battery(tb->power, 0);
 
     if (tb->popup_visible) {
         tb_popup_hide(tb);
         return;
     }
 
-    if (tb->popup_shell) {
-        IswDestroyWidget(tb->popup_shell);
-        tb->popup_shell = NULL;
-    }
+    if (!tb->popup_shell) {
+        IswArgBuilder ab = IswArgBuilderInit();
 
-    const IsdeBattery *bat = isde_power_get_battery(tb->power, 0);
-    IswArgBuilder ab = IswArgBuilderInit();
+        /* Override shell */
+        IswArgWidth(&ab, 280);
+        IswArgHeight(&ab, 220);
+        tb->popup_shell = IswCreatePopupShell("batteryPopup",
+                                            overrideShellWidgetClass,
+                                            tb->toplevel, ab.args, ab.count);
 
-    /* Override shell */
-    IswArgWidth(&ab, 280);
-    IswArgHeight(&ab, 220);
-    tb->popup_shell = IswCreatePopupShell("batteryPopup",
-                                          overrideShellWidgetClass,
-                                          tb->toplevel, ab.args, ab.count);
-
-    /* Form layout */
-    IswArgBuilderReset(&ab);
-    IswArgDefaultDistance(&ab, 8);
-    IswArgBorderWidth(&ab, 0);
-    tb->popup_form = IswCreateManagedWidget("popupForm", formWidgetClass,
-                                             tb->popup_shell,
-                                             ab.args, ab.count);
-
-    /* Capacity label */
-    char cap_text[64];
-    snprintf(cap_text, sizeof(cap_text), "Battery: %d%%",
-             bat ? bat->capacity : 0);
-    IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, cap_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgJustify(&ab, IswJustifyLeft);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    tb->capacity_label = IswCreateManagedWidget("capLabel", labelWidgetClass,
-                                                 tb->popup_form,
-                                                 ab.args, ab.count);
-
-    /* Progress bar */
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, tb->capacity_label);
-    IswArgMinimumValue(&ab, 0);
-    IswArgMaximumValue(&ab, 100);
-    IswArgSliderValue(&ab, bat ? bat->capacity : 0);
-    IswArgWidth(&ab, 250);
-    IswArgHeight(&ab, 16);
-    IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    tb->capacity_bar = IswCreateManagedWidget("capBar", progressBarWidgetClass,
-                                               tb->popup_form,
-                                               ab.args, ab.count);
-
-    /* Time remaining */
-    char time_text[64];
-    format_time_remaining(bat, time_text, sizeof(time_text));
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, tb->capacity_bar);
-    IswArgLabel(&ab, time_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgJustify(&ab, IswJustifyLeft);
-    if (scheme) { IswArgForeground(&ab, scheme->fg_dim); }
-    if (tb->small_font) { IswArgFont(&ab, tb->small_font); }
-    IswArgLeft(&ab, IswChainLeft);
-    tb->time_label = IswCreateManagedWidget("timeLabel", labelWidgetClass,
-                                             tb->popup_form,
-                                             ab.args, ab.count);
-
-    /* AC/charging status */
-    const char *st = status_text(bat ? bat->status : ISDE_BAT_NOT_PRESENT,
-                                 isde_power_on_ac(tb->power));
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, tb->time_label);
-    IswArgLabel(&ab, st);
-    IswArgBorderWidth(&ab, 0);
-    IswArgJustify(&ab, IswJustifyLeft);
-    if (scheme) { IswArgForeground(&ab, scheme->fg_dim); }
-    if (tb->small_font) { IswArgFont(&ab, tb->small_font); }
-    IswArgLeft(&ab, IswChainLeft);
-    tb->status_label = IswCreateManagedWidget("statusLabel", labelWidgetClass,
-                                               tb->popup_form,
-                                               ab.args, ab.count);
-
-    /* Performance profile radio buttons */
-    if (isde_cpufreq_available()) {
-        IsdeCpuProfile current = isde_cpufreq_get_profile();
-        Widget prev_radio = NULL;
-        Widget above = tb->status_label;
-
-        /* Section label */
+        /* Form layout */
         IswArgBuilderReset(&ab);
-        IswArgFromVert(&ab, above);
-        IswArgVertDistance(&ab, 16);
-        IswArgLabel(&ab, "Performance");
+        IswArgDefaultDistance(&ab, 8);
+        IswArgBorderWidth(&ab, 0);
+        tb->popup_form = IswCreateManagedWidget("popupForm", formWidgetClass,
+                                                tb->popup_shell,
+                                                ab.args, ab.count);
+
+        /* Capacity label */
+        char cap_text[64];
+        snprintf(cap_text, sizeof(cap_text), "Battery: %d%%",
+                bat ? bat->capacity : 0);
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, cap_text);
         IswArgBorderWidth(&ab, 0);
         IswArgJustify(&ab, IswJustifyLeft);
         IswArgLeft(&ab, IswChainLeft);
-        Widget section_lbl = IswCreateManagedWidget("sectionHd", labelWidgetClass,
-                                                     tb->popup_form,
-                                                     ab.args, ab.count);
-        above = section_lbl;
+        IswArgRight(&ab, IswChainRight);
+        tb->capacity_label = IswCreateManagedWidget("capLabel", labelWidgetClass,
+                                                    tb->popup_form,
+                                                    ab.args, ab.count);
 
-        for (int i = 0; i < 3; i++) {
+        /* Progress bar */
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, tb->capacity_label);
+        IswArgMinimumValue(&ab, 0);
+        IswArgMaximumValue(&ab, 100);
+        IswArgSliderValue(&ab, bat ? bat->capacity : 0);
+        IswArgWidth(&ab, 250);
+        IswArgHeight(&ab, 16);
+        IswArgBorderWidth(&ab, 0);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainRight);
+        tb->capacity_bar = IswCreateManagedWidget("capBar", progressBarWidgetClass,
+                                                tb->popup_form,
+                                                ab.args, ab.count);
+
+        /* Time remaining */
+        char time_text[64];
+        format_time_remaining(bat, time_text, sizeof(time_text));
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, tb->capacity_bar);
+        IswArgLabel(&ab, time_text);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+        if (scheme) { IswArgForeground(&ab, scheme->fg_dim); }
+        if (tb->small_font) { IswArgFont(&ab, tb->small_font); }
+        IswArgLeft(&ab, IswChainLeft);
+        tb->time_label = IswCreateManagedWidget("timeLabel", labelWidgetClass,
+                                                tb->popup_form,
+                                                ab.args, ab.count);
+
+        /* AC/charging status */
+        const char *st = status_text(bat ? bat->status : ISDE_BAT_NOT_PRESENT,
+                                    isde_power_on_ac(tb->power));
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, tb->time_label);
+        IswArgLabel(&ab, st);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+        if (scheme) { IswArgForeground(&ab, scheme->fg_dim); }
+        if (tb->small_font) { IswArgFont(&ab, tb->small_font); }
+        IswArgLeft(&ab, IswChainLeft);
+        tb->status_label = IswCreateManagedWidget("statusLabel", labelWidgetClass,
+                                                tb->popup_form,
+                                                ab.args, ab.count);
+
+        /* Performance profile radio buttons */
+        if (isde_cpufreq_available()) {
+            IsdeCpuProfile current = isde_cpufreq_get_profile();
+            Widget prev_radio = NULL;
+            Widget above = tb->status_label;
+
+            /* Section label */
             IswArgBuilderReset(&ab);
             IswArgFromVert(&ab, above);
-            IswArgLabel(&ab, profile_labels[i]);
+            IswArgVertDistance(&ab, 16);
+            IswArgLabel(&ab, "Performance");
             IswArgBorderWidth(&ab, 0);
-            IswArgState(&ab, (int)current == i ? True : False);
             IswArgJustify(&ab, IswJustifyLeft);
             IswArgLeft(&ab, IswChainLeft);
-            if (prev_radio) {
-                IswArgRadioGroup(&ab, prev_radio);
+            Widget section_lbl = IswCreateManagedWidget("sectionHd", labelWidgetClass,
+                                                        tb->popup_form,
+                                                        ab.args, ab.count);
+            above = section_lbl;
+
+            for (int i = 0; i < 3; i++) {
+                IswArgBuilderReset(&ab);
+                IswArgFromVert(&ab, above);
+                IswArgLabel(&ab, profile_labels[i]);
+                IswArgBorderWidth(&ab, 0);
+                IswArgState(&ab, (int)current == i ? True : False);
+                IswArgJustify(&ab, IswJustifyLeft);
+                IswArgLeft(&ab, IswChainLeft);
+                if (prev_radio) {
+                    IswArgRadioGroup(&ab, prev_radio);
+                }
+                tb->profile_radios[i] =
+                    IswCreateManagedWidget("profileRadio", toggleWidgetClass,
+                                        tb->popup_form, ab.args, ab.count);
+                IswAddCallback(tb->profile_radios[i], IswNcallback,
+                            on_profile_toggled, tb);
+                prev_radio = tb->profile_radios[i];
+                above = tb->profile_radios[i];
             }
-            tb->profile_radios[i] =
-                IswCreateManagedWidget("profileRadio", toggleWidgetClass,
-                                       tb->popup_form, ab.args, ab.count);
-            IswAddCallback(tb->profile_radios[i], IswNcallback,
-                          on_profile_toggled, tb);
-            prev_radio = tb->profile_radios[i];
-            above = tb->profile_radios[i];
         }
     }
 
