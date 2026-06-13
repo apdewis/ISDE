@@ -141,14 +141,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     isde_dependency(BLKID      PC blkid         LIBS blkid      HEADERS blkid/blkid.h)
 endif()
 add_subdirectory(mountd)
-add_subdirectory(tray-mount)
-isde_dependency(PIPEWIRE PC libpipewire-0.3 LIBS pipewire-0.3
-    HEADERS pipewire/pipewire.h spa/utils/defs.h
-    HEADER_PATHS /usr/local/include/pipewire-0.3 /usr/local/include/spa-0.2)
-add_subdirectory(tray-audio)
-add_subdirectory(tray-battery)
-add_subdirectory(tray-net)
-add_subdirectory(tray-bt)
+#add_subdirectory(tray-mount)
+#isde_dependency(PIPEWIRE PC libpipewire-0.3 LIBS pipewire-0.3
+#    HEADERS pipewire/pipewire.h spa/utils/defs.h
+#    HEADER_PATHS /usr/local/include/pipewire-0.3 /usr/local/include/spa-0.2)
+#add_subdirectory(tray-audio)
+#add_subdirectory(tray-battery)
+#add_subdirectory(tray-net)
+#add_subdirectory(tray-bt)
 add_subdirectory(term)
 add_subdirectory(isw-graph)
 add_subdirectory(calc)
