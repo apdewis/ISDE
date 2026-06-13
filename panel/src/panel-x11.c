@@ -172,7 +172,7 @@ void set_panel_cursor(Panel *p, xcb_cursor_t cursor)
     xcb_flush(ctx->conn);
 }
 
-static char *get_wm_class(Panel *p, xcb_window_t win)
+char *get_wm_class(Panel *p, xcb_window_t win)
 {
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
     char *instance = NULL, *class = NULL;

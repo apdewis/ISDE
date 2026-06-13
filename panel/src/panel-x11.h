@@ -52,5 +52,6 @@ void  set_panel_cursor(Panel *p, xcb_cursor_t cursor);
 void  panel_reconfigure(Panel *p);
 
 char *get_window_title(Panel *p, xcb_window_t win);
+char *get_wm_class(Panel *p, xcb_window_t win);
 
 #endif /* PANEL_X11_H */

@@ -9,6 +9,7 @@
  *   - Right-click: pin/unpin context menu
  */
 #include "panel.h"
+#include "panel-x11.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,13 +62,6 @@ static char *strip_field_codes(const char *src)
     out[pos] = '\0';
     return out;
 }
-
-/* ---------- helpers ---------- */
-
-static char *get_window_title(Panel *p, xcb_window_t win);
-//static Pixel taskbar_pixel(Panel *p, unsigned int rgb);
-
-
 
 /* ---------- callbacks ---------- */
 
@@ -781,83 +775,74 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
 
 static Pixel taskbar_pixel(Panel *p, unsigned int rgb)
 {
-    //xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-    //    p->conn,
-    //    xcb_alloc_color(p->conn, p->screen->default_colormap,
-    //                    ((rgb >> 16) & 0xFF) * 257,
-    //                    ((rgb >> 8)  & 0xFF) * 257,
-    //                    ( rgb        & 0xFF) * 257),
-    //    NULL);
-    //if (!reply) {
-    //    return p->screen->white_pixel;
-    //}
-    //Pixel px = reply->pixel;
-    //free(reply);
-    //return px;
+    return panel_color_pixel(p, rgb);
 }
 
 void taskbar_highlight_active(Panel *p)
 {
-    //const IsdeColorScheme *s = isde_theme_current();
-    //if (!s) {
-    //    return;
-    //}
-//
-    //xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
-    //char *active_class = NULL;
-    //if (active != XCB_WINDOW_NONE) {
-    //    active_class = get_wm_class(p, active);
-    //}
-//
-    //xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
-//
-    //for (TaskGroup *g = p->groups; g; g = g->next) {
-    //    if (!g->button) {
-    //        continue;
-    //    }
-//
-    //    int is_focused = (active_class && g->wm_class &&
-    //                      strcmp(g->wm_class, active_class) == 0);
-//
-    //    int urgent = 0;
-    //    if (!is_focused) {
-    //        for (int w = 0; w < g->nwindows; w++) {
-    //            xcb_ewmh_get_atoms_reply_t wm_state;
-    //            if (xcb_ewmh_get_wm_state_reply(ewmh,
-    //                    xcb_ewmh_get_wm_state(ewmh, g->windows[w]),
-    //                    &wm_state, NULL)) {
-    //                for (uint32_t a = 0; a < wm_state.atoms_len; a++) {
-    //                    if (wm_state.atoms[a] == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
-    //                        urgent = 1;
-    //                        break;
-    //                    }
-    //                }
-    //                xcb_ewmh_get_atoms_reply_wipe(&wm_state);
-    //            }
-    //            if (urgent) {
-    //                break;
-    //            }
-    //        }
-    //    }
-//
-    //    const IsdeElementColors *ec;
-    //    if (is_focused) {
-    //        ec = &s->taskbar_button_focus;
-    //    } else if (urgent) {
-    //        ec = &s->taskbar_button_urgent;
-    //    } else if (g->nwindows > 0) {
-    //        ec = &s->taskbar_button_active;
-    //    } else {
-    //        ec = &s->taskbar_button;
-    //    }
-//
-    //    IswArgBuilder ab = IswArgBuilderInit();
-    //    //IswArgBackground(&ab, taskbar_pixel(p, ec->bg));
-    //    //IswArgForeground(&ab, taskbar_pixel(p, ec->fg));
-    //    IswSetValues(g->button, ab.args, ab.count);
-    //}
-//
-    //free(active_class);
+    PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
+
+    const IsdeColorScheme *s = isde_theme_current();
+    if (!s) {
+        return;
+    }
+
+    xcb_window_t active = isde_ewmh_get_active_window(ctx->ewmh);
+    char *active_class = NULL;
+    if (active != XCB_WINDOW_NONE) {
+        active_class = get_wm_class(p, active);
+    }
+
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(ctx->ewmh);
+
+    for (TaskGroup *g = p->groups; g; g = g->next) {
+        if (!g->button) {
+            continue;
+        }
+
+        int is_focused = (active_class && g->wm_class &&
+                          strcmp(g->wm_class, active_class) == 0);
+
+        int urgent = 0;
+        if (!is_focused) {
+            for (int w = 0; w < g->nwindows; w++) {
+                xcb_window_t *wins = (xcb_window_t *)g->windows;
+                xcb_ewmh_get_atoms_reply_t wm_state;
+                if (xcb_ewmh_get_wm_state_reply(ewmh,
+                        xcb_ewmh_get_wm_state(ewmh, wins[w]),
+                        &wm_state, NULL)) {
+                    for (uint32_t a = 0; a < wm_state.atoms_len; a++) {
+                        if (wm_state.atoms[a] == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
+                            urgent = 1;
+                            break;
+                        }
+                    }
+                    xcb_ewmh_get_atoms_reply_wipe(&wm_state);
+                }
+                if (urgent) {
+                    break;
+                }
+            }
+        }
+
+        const IsdeElementColors *ec;
+        if (is_focused) {
+            ec = &s->taskbar_button_focus;
+        } else if (urgent) {
+            ec = &s->taskbar_button_urgent;
+        } else if (g->nwindows > 0) {
+            ec = &s->taskbar_button_active;
+        } else {
+            ec = &s->taskbar_button;
+        }
+
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgBackground(&ab, taskbar_pixel(p, ec->bg));
+        IswArgForeground(&ab, taskbar_pixel(p, ec->fg));
+        IswSetValues(g->button, ab.args, ab.count);
+    }
+
+    free(active_class);
 }
 
 /* ---------- init / cleanup ---------- */

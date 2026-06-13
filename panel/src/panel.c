@@ -305,7 +305,7 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
 
     //tray_check_icons(p);
     taskbar_update(p);
-    //taskbar_highlight_active(p);
+    taskbar_highlight_active(p);
     //pager_update(p);
 //
     //if (p->launch_id) {
@@ -328,8 +328,8 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     //} else {
     //    last_active = isde_ewmh_get_active_window(p->ewmh);
     //}
-//
-    //IswAppAddTimeOut(p->app, 50, poll_clients, p);
+
+    IswAppAddTimeOut(p->app, 50, poll_clients, p);
 }
 
 void panel_show_popup(Panel *p, Widget popup)
