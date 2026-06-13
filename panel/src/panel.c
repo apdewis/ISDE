@@ -394,19 +394,21 @@ void panel_clear_launch(Panel *p)
 void panel_launch_notify(Panel *p, IsdeDesktopEntry *de,
                          const char **files, int nfiles)
 {
-    //launch_cursor_init(p);
-    //panel_clear_launch(p);
-//
-    //char *id = NULL;
-    //isde_desktop_launch_notify(de, files, nfiles, p->ewmh, &id);
-    //if (id) {
-    //    p->launch_id = id;
-    //    if (p->cursor_watch) {
-    //        set_panel_cursor(p, p->cursor_watch);
-    //    }
-    //    p->launch_timer = IswAppAddTimeOut(p->app, LAUNCH_TIMEOUT_MS,
-    //                                       launch_timer_cb, p);
-    //}
+    PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
+
+    launch_cursor_init(p);
+    panel_clear_launch(p);
+
+    char *id = NULL;
+    isde_desktop_launch_notify(de, files, nfiles, ctx->ewmh, &id);
+    if (id) {
+        p->launch_id = id;
+        if (p->cursor_watch) {
+            set_panel_cursor(p, p->cursor_watch);
+        }
+        p->launch_timer = IswAppAddTimeOut(p->app, LAUNCH_TIMEOUT_MS,
+                                           launch_timer_cb, p);
+    }
 }
 
 void panel_launch_cmd_notify(Panel *p, const char *cmd)
