@@ -43,7 +43,7 @@ void isde_tray_position_popup(Widget toplevel, IswTrayIcon tray_icon,
 
     /* Find which monitor the tray icon is on */
     IsdeMonitor mon;
-    isde_randr_monitor_at(conn, root, scr, icon_x, icon_y, &mon);
+    //isde_randr_monitor_at(conn, root, scr, icon_x, icon_y, &mon);
 
     /* Panel top edge: use workarea if available, else monitor bottom */
     int panel_top = mon.y + mon.height;

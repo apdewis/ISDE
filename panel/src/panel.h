@@ -249,13 +249,13 @@ void  startmenu_reload_theme(Panel *p);
 void  startmenu_cleanup(Panel *p);
 
 /* ---------- tray.c ---------- */
-void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
-void  tray_init_selection(Panel *p); /* claim selection (after realize) */
-void  tray_check_icons(Panel *p);
-void  tray_reposition_all(Panel *p); /* re-offset icons after container resize */
-void  tray_apply_bg(Panel *p);       /* set icon bg to container colour */
-void  tray_set_colors(Panel *p);
-void  tray_cleanup(Panel *p);
+//void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
+//void  tray_init_selection(Panel *p); /* claim selection (after realize) */
+//void  tray_check_icons(Panel *p);
+//void  tray_reposition_all(Panel *p); /* re-offset icons after container resize */
+//void  tray_apply_bg(Panel *p);       /* set icon bg to container colour */
+//void  tray_set_colors(Panel *p);
+//void  tray_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */
 void  clock_init(Panel *p);

@@ -319,7 +319,7 @@ int panel_init(Panel *p, int *argc, char **argv)
                                    p->form, ab.args, ab.count);
 
     taskbar_init(p);
-    tray_init_widgets(p);
+    //tray_init_widgets(p);
     clock_init(p);
 
     IswRealizeWidget(p->shell);
@@ -348,7 +348,7 @@ int panel_init(Panel *p, int *argc, char **argv)
     IswMapWidget(p->shell);
 
     /* Claim system tray selection (needs realized window) */
-    tray_init_selection(p);
+    //tray_init_selection(p);
 
     /* Watch root for:
      *   PROPERTY_CHANGE — client list updates
@@ -414,7 +414,7 @@ static void panel_reconfigure(Panel *p)
 
     /* The width change relaid out the panel FlexBox, shifting the windowless
      * tray container; re-offset the reparented icons to track it. */
-    tray_reposition_all(p);
+    //tray_reposition_all(p);
 
     /* Update strut */
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
@@ -474,7 +474,7 @@ static void on_panel_theme_changed(void *user_data)
     taskbar_highlight_active(p);
     startmenu_reload_theme(p);
     calendar_reload_theme(p);
-    tray_set_colors(p);
+    //tray_set_colors(p);
 }
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -514,7 +514,7 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     /* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
-    tray_check_icons(p);
+    //tray_check_icons(p);
     taskbar_update(p);
     taskbar_highlight_active(p);
     pager_update(p);
@@ -669,7 +669,7 @@ void panel_cleanup(Panel *p)
 {
     panel_clear_launch(p);
     clock_cleanup(p);
-    tray_cleanup(p);
+    //tray_cleanup(p);
     taskbar_cleanup(p);
     pager_cleanup(p);
     startmenu_cleanup(p);
