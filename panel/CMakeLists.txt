@@ -1,6 +1,7 @@
 add_executable(isde-panel
     src/main.c
     src/panel.c
+    src/panel-x11.c
     src/taskbar.c
     src/startmenu.c
     #src/tray.c

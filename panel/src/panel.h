@@ -222,6 +222,10 @@ typedef struct Panel {
 /* ---------- panel.c ---------- */
 int   panel_init(Panel *p, int *argc, char **argv);
 void  panel_reload_desktop_entries(Panel *p);
+
+/* Raw root-window IPC ClientMessage handler (registered by panel-x11). */
+void  panel_ipc_event_handler(Widget w, IswPointer client_data,
+                              xcb_generic_event_t *xev, Boolean *cont);
 void  panel_show_popup(Panel *p, Widget popup);
 void  panel_dismiss_popup(Panel *p);
 void  panel_run(Panel *p);
