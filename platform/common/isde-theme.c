@@ -9,6 +9,7 @@
 
 #include <ISW/Intrinsic.h>
 #include <ISW/StringDefs.h>
+#include <ISW/ISWPlatform.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -907,10 +908,9 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
 
     for (int i = 0; i < g_nwatchers; i++) {
         ThemeWatchCtx *w = &g_watchers[i];
-        xcb_connection_t *conn = IswDisplay(w->toplevel);
-        xcb_screen_t *scr = IswScreen(w->toplevel);
-        isde_theme_set_resource_manager(conn, scr->root);
-        IswReloadScreenDatabase(scr);
+        IswDisplay dpy = IswDisplayOfObject(w->toplevel);
+        isde_theme_set_resource_manager(dpy, _IswDefaultRootWindow(dpy));
+        IswReloadScreenDatabase(IswScreenOfObject(w->toplevel));
         isde_theme_merge_xrm(w->toplevel);
         if (w->cb) {
             w->cb(w->user_data);
@@ -1257,17 +1257,16 @@ void isde_theme_merge_xrm(Widget toplevel)
     char **resources = isde_theme_build_resources();
     if (!resources) return;
 
-    xcb_xrm_database_t *db = IswDatabase(IswDisplay(toplevel));
+    IswDatabaseHandle db = IswDatabase(IswDisplayOfObject(toplevel));
     if (db) {
         for (int i = 0; resources[i]; i++)
-            xcb_xrm_database_put_resource_line(&db, resources[i]);
+            _IswPlatformResourcePutLine(&db, resources[i]);
     }
 
     isde_theme_free_resources(resources);
 }
 
-void isde_theme_set_resource_manager(xcb_connection_t *conn,
-                                     xcb_window_t root)
+void isde_theme_set_resource_manager(IswDisplay dpy, IswWindow root)
 {
     char **resources = isde_theme_build_resources();
     if (!resources) return;
@@ -1315,16 +1314,11 @@ void isde_theme_set_resource_manager(xcb_connection_t *conn,
     isde_theme_free_resources(resources);
 
     /* Write to root window RESOURCE_MANAGER property */
-    xcb_intern_atom_cookie_t ck =
-        xcb_intern_atom(conn, 0, strlen("RESOURCE_MANAGER"),
-                        "RESOURCE_MANAGER");
-    xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(conn, ck, NULL);
-    if (reply) {
-        xcb_change_property(conn, XCB_PROP_MODE_REPLACE, root,
-                            reply->atom, XCB_ATOM_STRING, 8,
-                            (uint32_t)(p - rdb), rdb);
-        xcb_flush(conn);
-        free(reply);
+    Atom rm_atom = _IswPlatformInternAtomOp(dpy, "RESOURCE_MANAGER", False);
+    if (rm_atom != ISW_ATOM_NONE) {
+        _IswPlatformChangeProperty(dpy, root, rm_atom, ISW_ATOM_STRING, 8,
+                                   ISW_PROP_MODE_REPLACE,
+                                   rdb, (uint32_t)(p - rdb));
     }
 
     free(rdb);
@@ -1332,9 +1326,9 @@ void isde_theme_set_resource_manager(xcb_connection_t *conn,
 
 void isde_xrm_put_line(Widget toplevel, const char *line)
 {
-    xcb_xrm_database_t *db = IswDatabase(IswDisplay(toplevel));
+    IswDatabaseHandle db = IswDatabase(IswDisplayOfObject(toplevel));
     if (db)
-        xcb_xrm_database_put_resource_line(&db, line);
+        _IswPlatformResourcePutLine(&db, line);
 }
 
 /* Cached font sizes — loaded once from config */

@@ -139,27 +139,10 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
     return NULL;
 }
 
-static void panel_reconfigure(Panel *p);
-
 /* Forward declarations */
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(IswPointer, int *, IswInputId *);
 static void on_panel_theme_changed(void *);
-
-void panel_ipc_event_handler(Widget w, IswPointer client_data,
-                             xcb_generic_event_t *xev, Boolean *cont)
-{
-    //(void)w; (void)cont;
-    //Panel *p = (Panel *)client_data;
-//
-    //uint32_t cmd;
-    //if (!isde_ipc_decode(p->ipc, xev, &cmd, NULL, NULL, NULL, NULL)) {
-    //    return;
-    //}
-    //if (cmd == ISDE_CMD_TOGGLE_START_MENU) {
-    //    startmenu_toggle(p);
-    //}
-}
 
 int panel_init(Panel *p, int *argc, char **argv)
 {
@@ -174,8 +157,10 @@ int panel_init(Panel *p, int *argc, char **argv)
         return -1;
     }
 
-    p->ewmh = isde_ewmh_init(p->conn, p->screen_num);
-    //p->ipc  = isde_ipc_init(p->conn, p->screen_num);
+    panel_init_platform(p);
+    panel_init_display_platform(p);
+   
+
 
     /* Load config and desktop entries */
     load_pinned(p);
@@ -193,9 +178,6 @@ int panel_init(Panel *p, int *argc, char **argv)
        (both operate in physical pixels). */
     p->phys_panel_h = (int)(PANEL_HEIGHT * sf + 0.5);
 
-    /* Create panel shell as OverrideShell for simple Xt geometry (no WM
-       negotiation), then clear override_redirect on the X window so the
-       WM receives MapRequest and can handle dock stacking. */
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgX(&ab, logical_mon_x);
     IswArgY(&ab, logical_mon_y + logical_mon_h - PANEL_HEIGHT);
@@ -203,7 +185,7 @@ int panel_init(Panel *p, int *argc, char **argv)
     IswArgHeight(&ab, PANEL_HEIGHT);
     IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 0);
-    p->shell = IswCreatePopupShell("panel", overrideShellWidgetClass,
+    p->shell = IswCreatePopupShell("panel", applicationShellWidgetClass,
                                   p->toplevel, ab.args, ab.count);
 
     /* FlexBox layout: start button | taskbar box | tray | clock */
@@ -238,8 +220,6 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Claim system tray selection (needs realized window) */
     //tray_init_selection(p);
 
-    panel_init_platform(p);
-
     /* D-Bus settings notifications */
     p->dbus = isde_dbus_init();
     if (p->dbus) {
@@ -257,43 +237,10 @@ int panel_init(Panel *p, int *argc, char **argv)
     return 0;
 }
 
-/* ---------- reconfigure on monitor change ---------- */
-
-static void panel_reconfigure(Panel *p)
-{
-    int16_t  old_x = p->mon_x;
-    uint16_t old_w = p->mon_w, old_h = p->mon_h;
-
-    query_primary_monitor(p);
-
-    if (p->mon_x == old_x && p->mon_w == old_w && p->mon_h == old_h) {
-        return;
-    }
-
-    /* All IswConfigureWidget values must be logical — ISW scales internally */
-    double sf = ISWScaleFactor(p->toplevel);
-    int log_x = (int)(p->mon_x / sf + 0.5);
-    int log_w = (int)(p->mon_w / sf + 0.5);
-    int log_y = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
-
-    IswConfigureWidget(p->shell, log_x, log_y, log_w, PANEL_HEIGHT, 0);
-
-    /* The width change relaid out the panel FlexBox, shifting the windowless
-     * tray container; re-offset the reparented icons to track it. */
-    //tray_reposition_all(p);
-
-    /* Update strut */
-    panel_update_strut(p);
-
-    fprintf(stderr, "isde-panel: reconfigured for %dx%d+%d+%d\n",
-            p->mon_w, p->mon_h, p->mon_x, p->mon_y);
-}
-
 /* ---------- D-Bus settings reload ---------- */
 
 /* Theme colors are applied via Xresources (isde_theme_merge_xrm).
  * No manual IswSetValues needed — all widget names match resource specs. */
-
 
 static void on_panel_theme_changed(void *user_data)
 {
@@ -329,7 +276,7 @@ static void on_panel_settings_changed(const char *section, const char *key,
         p->running = 0;
         p->restart = 1;
     } else if (strcmp(section, "wm.desktops") == 0) {
-        pager_reload_config(p);
+        //pager_reload_config(p);
     }
 }
 
@@ -353,36 +300,36 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     (void)id;
     Panel *p = (Panel *)client_data;
 
-    /* Check for screen changes (RandR) */
+    //* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
     //tray_check_icons(p);
     taskbar_update(p);
-    taskbar_highlight_active(p);
-    pager_update(p);
-
-    if (p->launch_id) {
-        xcb_window_t *wins = NULL;
-        int n = isde_ewmh_get_client_list(p->ewmh, &wins);
-        free(wins);
-        if (n > prev_client_count) {
-            panel_clear_launch(p);
-        }
-        prev_client_count = n;
-    }
-
-    /* Dismiss popups when focus moves to a managed window */
-    if (p->active_popup) {
-        xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
-        if (active != XCB_WINDOW_NONE && active != last_active) {
-            panel_dismiss_popup(p);
-        }
-        last_active = active;
-    } else {
-        last_active = isde_ewmh_get_active_window(p->ewmh);
-    }
-
-    IswAppAddTimeOut(p->app, 50, poll_clients, p);
+    //taskbar_highlight_active(p);
+    //pager_update(p);
+//
+    //if (p->launch_id) {
+    //    xcb_window_t *wins = NULL;
+    //    int n = isde_ewmh_get_client_list(p->ewmh, &wins);
+    //    free(wins);
+    //    if (n > prev_client_count) {
+    //        panel_clear_launch(p);
+    //    }
+    //    prev_client_count = n;
+    //}
+//
+    ///* Dismiss popups when focus moves to a managed window */
+    //if (p->active_popup) {
+    //    xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
+    //    if (active != XCB_WINDOW_NONE && active != last_active) {
+    //        panel_dismiss_popup(p);
+    //    }
+    //    last_active = active;
+    //} else {
+    //    last_active = isde_ewmh_get_active_window(p->ewmh);
+    //}
+//
+    //IswAppAddTimeOut(p->app, 50, poll_clients, p);
 }
 
 void panel_show_popup(Panel *p, Widget popup)
@@ -400,17 +347,17 @@ void panel_dismiss_popup(Panel *p)
     panel_ungrab_popup(p);
 
     /* Reset start button to inactive state */
-    if (p->active_popup == p->start_shell) {
-        const IsdeColorScheme *s = isde_theme_current();
-        if (s) {
-            Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
-            Pixel bg = panel_color_pixel(p, s->taskbar_button.bg);
-            IswArgBuilder ab = IswArgBuilderInit();
-            IswArgForeground(&ab, fg);
-            IswArgBackground(&ab, bg);
-            IswSetValues(p->start_btn, ab.args, ab.count);
-        }
-    }
+    //if (p->active_popup == p->start_shell) {
+    //    const IsdeColorScheme *s = isde_theme_current();
+    //    if (s) {
+    //        Pixel fg = panel_color_pixel(p, s->taskbar_button.fg);
+    //        Pixel bg = panel_color_pixel(p, s->taskbar_button.bg);
+    //        IswArgBuilder ab = IswArgBuilderInit();
+    //        IswArgForeground(&ab, fg);
+    //        IswArgBackground(&ab, bg);
+    //        IswSetValues(p->start_btn, ab.args, ab.count);
+    //    }
+    //}
 
     ShellWidget sw = (ShellWidget)p->active_popup;
     if (sw->shell.popped_up) {
@@ -486,7 +433,7 @@ void panel_cleanup(Panel *p)
     clock_cleanup(p);
     //tray_cleanup(p);
     taskbar_cleanup(p);
-    pager_cleanup(p);
+    //pager_cleanup(p);
     startmenu_cleanup(p);
 
     for (int i = 0; i < p->ndesktop; i++) {
@@ -500,7 +447,5 @@ void panel_cleanup(Panel *p)
     free(p->pinned_classes);
 
     isde_dbus_free(p->dbus);
-    //isde_ipc_free(p->ipc);
-    isde_ewmh_free(p->ewmh);
     IswDestroyApplicationContext(p->app);
 }

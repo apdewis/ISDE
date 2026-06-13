@@ -3,6 +3,7 @@
  * calendar.c — calendar popup for the clock applet
  */
 #include "panel.h"
+#include "panel-x11.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -22,21 +23,6 @@ static const char *day_headers[CAL_COLS] = {
     "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"
 };
 
-static Pixel cal_color_pixel(Panel *p, unsigned int rgb)
-{
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        p->conn,
-        xcb_alloc_color(p->conn, p->screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply)
-        return p->screen->white_pixel;
-    Pixel px = reply->pixel;
-    free(reply);
-    return px;
-}
 
 static int days_in_month(int year, int mon)
 {
@@ -82,11 +68,11 @@ static void calendar_populate(Panel *p)
         today_day = tm->tm_mday;
 
     const IsdeColorScheme *s = isde_theme_current();
-    Pixel normal_bg = s ? cal_color_pixel(p, s->bg)       : p->screen->white_pixel;
-    Pixel normal_fg = s ? cal_color_pixel(p, s->fg)       : p->screen->black_pixel;
-    Pixel dim_fg    = s ? cal_color_pixel(p, s->fg_dim)   : p->screen->black_pixel;
-    Pixel sel_bg    = s ? cal_color_pixel(p, s->select_bg) : p->screen->black_pixel;
-    Pixel sel_fg    = s ? cal_color_pixel(p, s->select_fg) : p->screen->white_pixel;
+    Pixel normal_bg = s ? panel_color_pixel(p, s->bg)        : 1;
+    Pixel normal_fg = s ? panel_color_pixel(p, s->fg)        : 0;
+    Pixel dim_fg    = s ? panel_color_pixel(p, s->fg_dim)    : 0;
+    Pixel sel_bg    = s ? panel_color_pixel(p, s->select_bg) : 0;
+    Pixel sel_fg    = s ? panel_color_pixel(p, s->select_fg) : 1;
 
     int prev_ndays = days_in_month(
         p->cal_month == 0 ? p->cal_year - 1 : p->cal_year,
@@ -145,23 +131,21 @@ static void next_month_cb(Widget w, IswPointer client_data, IswPointer call_data
 }
 
 static void cal_button_handler(Widget w, IswPointer client_data,
-                               xcb_generic_event_t *xev, Boolean *cont)
-{
-    (void)cont;
-    Panel *p = (Panel *)client_data;
-    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS)
-        return;
-    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
-    if (bev->event == IswWindow(w))
-        panel_dismiss_popup(p);
-}
-
-static void cal_key_handler(Widget w, IswPointer client_data,
-                            xcb_generic_event_t *xev, Boolean *cont)
+                               IswEvent *event, Boolean *cont)
 {
     (void)w; (void)cont;
     Panel *p = (Panel *)client_data;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS)
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(p);
+}
+
+static void cal_key_handler(Widget w, IswPointer client_data,
+                            IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswKeyDown)
         return;
     panel_dismiss_popup(p);
 }
@@ -169,9 +153,9 @@ static void cal_key_handler(Widget w, IswPointer client_data,
 void calendar_init(Panel *p)
 {
     const IsdeColorScheme *s = isde_theme_current();
-    Pixel bg      = s ? cal_color_pixel(p, s->bg)       : p->screen->white_pixel;
-    Pixel fg      = s ? cal_color_pixel(p, s->fg)       : p->screen->black_pixel;
-    Pixel hdr_fg  = s ? cal_color_pixel(p, s->fg_dim)   : p->screen->black_pixel;
+    Pixel bg      = s ? panel_color_pixel(p, s->bg)     : 1;
+    Pixel fg      = s ? panel_color_pixel(p, s->fg)     : 0;
+    Pixel hdr_fg  = s ? panel_color_pixel(p, s->fg_dim) : 0;
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgWidth(&ab, CAL_W);
@@ -286,9 +270,9 @@ void calendar_init(Panel *p)
         above_row = p->cal_days[row * CAL_COLS];
     }
 
-    IswAddEventHandler(p->cal_shell, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(p->cal_shell, IswButtonPressMask, False,
                        cal_button_handler, p);
-    IswAddEventHandler(p->cal_shell, XCB_EVENT_MASK_KEY_PRESS, False,
+    IswAddEventHandler(p->cal_shell, IswKeyPressMask, False,
                        cal_key_handler, p);
 }
 
@@ -328,15 +312,12 @@ void calendar_toggle(Panel *p)
 
     panel_show_popup(p, p->cal_shell);
 
-    xcb_grab_keyboard(p->conn, 1, IswWindow(p->cal_shell),
-                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                      XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(p->conn, 1, IswWindow(p->cal_shell),
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(p->conn);
+    IswGrabKeyboard(p->cal_shell, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                    ISW_CURRENT_TIME);
+    IswGrabPointer(p->cal_shell, True,
+                   IswButtonPressMask | IswButtonReleaseMask,
+                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                   None, IswCursorNone, ISW_CURRENT_TIME);
 }
 
 void calendar_reload_theme(Panel *p)

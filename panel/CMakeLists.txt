@@ -7,7 +7,7 @@ add_executable(isde-panel-x11
     #src/tray.c
     src/clock.c
     src/calendar.c
-    src/pager.c
+    #src/pager.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
     ${CMAKE_SOURCE_DIR}/platform/common/dbus.c

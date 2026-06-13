@@ -11,6 +11,23 @@
 
 #include "panel.h"
 
+typedef struct {
+    /* XCB / EWMH */
+    xcb_connection_t  *conn;
+    xcb_screen_t      *screen;
+    xcb_window_t       root;
+    int                screen_num;
+    IsdeEwmh          *ewmh;
+    IsdeIpc           *ipc;
+    
+    /* Atoms */
+    xcb_atom_t         atom_net_wm_name;
+    xcb_atom_t         atom_net_wm_visible_name;
+    xcb_atom_t         atom_wm_name;
+} PanelX11ServerContext;
+
+void group_add_window(TaskGroup *g, xcb_window_t win);
+
 /* Acquire conn/screen/root/screen_num from the toplevel and intern the WM_NAME
  * atoms. Returns 0 on success, -1 if the connection is in error. */
 int   panel_init_display(Panel *p);
@@ -32,5 +49,8 @@ void  panel_ungrab_popup(Panel *p);
 
 void  launch_cursor_init(Panel *p);
 void  set_panel_cursor(Panel *p, xcb_cursor_t cursor);
+void  panel_reconfigure(Panel *p);
+
+char *get_window_title(Panel *p, xcb_window_t win);
 
 #endif /* PANEL_X11_H */

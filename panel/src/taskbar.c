@@ -16,38 +16,27 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <ISW/IswArgMacros.h>
-#include <xcb/xcb_keysyms.h>
-#include <X11/keysym.h>
-
-static xcb_key_symbols_t *tb_key_syms;
+#include <ISW/IswEvent.h>
 
 static void popup_button_handler(Widget w, IswPointer client_data,
-                                 xcb_generic_event_t *xev, Boolean *cont)
+                                 IswEvent *event, Boolean *cont)
 {
-    (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+    (void)w; (void)cont;
+    if (event->kind != IswButtonDown) {
         return;
     }
-    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
-    if (bev->event == IswWindow(w)) {
-        panel_dismiss_popup((Panel *)client_data);
-    }
+    panel_dismiss_popup((Panel *)client_data);
 }
 
 static void popup_key_handler(Widget w, IswPointer client_data,
-                              xcb_generic_event_t *xev, Boolean *cont)
+                              IswEvent *event, Boolean *cont)
 {
     (void)w; (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+    if (event->kind != IswKeyDown) {
         return;
     }
     Panel *p = (Panel *)client_data;
-    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-    if (!tb_key_syms) {
-        tb_key_syms = xcb_key_symbols_alloc(p->conn);
-    }
-    xcb_keysym_t sym = xcb_key_symbols_get_keysym(tb_key_syms, kev->detail, 0);
-    if (sym == XK_Escape) {
+    if (event->key.key == IswKeyEscape) {
         panel_dismiss_popup(p);
     }
 }
@@ -76,71 +65,9 @@ static char *strip_field_codes(const char *src)
 /* ---------- helpers ---------- */
 
 static char *get_window_title(Panel *p, xcb_window_t win);
-static Pixel taskbar_pixel(Panel *p, unsigned int rgb);
+//static Pixel taskbar_pixel(Panel *p, unsigned int rgb);
 
-static char *get_wm_class(Panel *p, xcb_window_t win)
-{
-    char *instance = NULL, *class = NULL;
-    if (isde_ewmh_get_wm_class(p->ewmh, win, &instance, &class)) {
-        if (class && *class) {
-            free(instance);
-            return class;
-        }
-        /* Class empty but instance available */
-        free(class);
-        if (instance && *instance) {
-            return instance;
-        }
-        free(instance);
-    }
 
-    /* Last resort: use the window title */
-    char *title = get_window_title(p, win);
-    return title;
-}
-
-static char *get_window_title(Panel *p, xcb_window_t win)
-{
-    xcb_get_property_reply_t *reply = xcb_get_property_reply(
-        p->conn,
-        xcb_get_property(p->conn, 0, win, p->atom_net_wm_visible_name,
-                         XCB_ATOM_ANY, 0, 256),
-        NULL);
-    if (reply && reply->value_len > 0) {
-        char *title = strndup(xcb_get_property_value(reply),
-                              reply->value_len);
-        free(reply);
-        return title;
-    }
-    free(reply);
-
-    reply = xcb_get_property_reply(
-        p->conn,
-        xcb_get_property(p->conn, 0, win, p->atom_net_wm_name,
-                         XCB_ATOM_ANY, 0, 256),
-        NULL);
-    if (reply && reply->value_len > 0) {
-        char *title = strndup(xcb_get_property_value(reply),
-                              reply->value_len);
-        free(reply);
-        return title;
-    }
-    free(reply);
-
-    reply = xcb_get_property_reply(
-        p->conn,
-        xcb_get_property(p->conn, 0, win, p->atom_wm_name,
-                         XCB_ATOM_ANY, 0, 256),
-        NULL);
-    if (reply && reply->value_len > 0) {
-        char *title = strndup(xcb_get_property_value(reply),
-                              reply->value_len);
-        free(reply);
-        return title;
-    }
-    free(reply);
-    return strdup("(untitled)");
-}
 
 /* ---------- callbacks ---------- */
 
@@ -153,13 +80,6 @@ typedef struct {
     Panel        *panel;
     xcb_window_t  window;
 } WindowClosure;
-
-static void focus_window(Panel *p, xcb_window_t win)
-{
-    /* Send _NET_ACTIVE_WINDOW — the WM should handle raising
-     * and unmapping minimized windows */
-    isde_ewmh_request_active_window(p->ewmh, win);
-}
 
 static void launch_app(Panel *p, TaskGroup *g)
 {
@@ -176,7 +96,7 @@ static void window_menu_callback(Widget w, IswPointer client_data,
     (void)w;
     (void)call_data;
     WindowClosure *wc = (WindowClosure *)client_data;
-    focus_window(wc->panel, wc->window);
+    //focus_window(wc->panel, wc->window);
 }
 
 /* State for tracking which group's window list is currently shown */
@@ -194,22 +114,20 @@ static void wl_select_callback(Widget w, IswPointer client_data,
         return;
     }
 
-    focus_window(wl_panel, wl_group->windows[ret->list_index]);
+    //focus_window(wl_panel, wl_group->windows[ret->list_index]);
     panel_dismiss_popup(wl_panel);
 }
 
 static void wl_motion_handler(Widget w, IswPointer client_data,
-                              xcb_generic_event_t *event, Boolean *cont)
+                              IswEvent *event, Boolean *cont)
 {
     (void)client_data;
     (void)cont;
-    xcb_motion_notify_event_t *ev = (xcb_motion_notify_event_t *)event;
     IswCallActionProc(w, "Set", event, NULL, 0);
-    (void)ev;
 }
 
 /* Free the backing title array for a group's window list */
-static void free_menu_titles(TaskGroup *g)
+void free_menu_titles(TaskGroup *g)
 {
     if (!g->menu_titles) {
         return;
@@ -257,13 +175,13 @@ static void create_window_menu(Panel *p, TaskGroup *g)
     IswOverrideTranslations(g->menu_list,
                            IswParseTranslationTable(wlTranslations));
 
-    IswAddEventHandler(g->menu_list, XCB_EVENT_MASK_POINTER_MOTION, False,
+    IswAddEventHandler(g->menu_list, IswPointerMotionMask, False,
                       wl_motion_handler, NULL);
 
     IswAddEventHandler(g->menu,
-                      XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS,
+                      IswButtonPressMask | IswKeyPressMask,
                       False, popup_button_handler, p);
-    IswAddEventHandler(g->menu, XCB_EVENT_MASK_KEY_PRESS,
+    IswAddEventHandler(g->menu, IswKeyPressMask,
                       False, popup_key_handler, p);
 }
 
@@ -278,7 +196,7 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     /* Build new title array — must stay alive while list is shown */
     g->menu_titles = malloc((g->nwindows + 1) * sizeof(String));
     for (int i = 0; i < g->nwindows; i++) {
-        g->menu_titles[i] = get_window_title(p, g->windows[i]);
+        //g->menu_titles[i] = get_window_title(p, g->windows[i]);
     }
     g->menu_titles[g->nwindows] = NULL;
 
@@ -314,20 +232,18 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 
     panel_show_popup(p, g->menu);
 
-    xcb_grab_keyboard(p->conn, 1, IswWindow(g->menu),
-                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                      XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(p->conn, 1, IswWindow(g->menu),
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(p->conn);
+    IswGrabKeyboard(g->menu, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                    ISW_CURRENT_TIME);
+    IswGrabPointer(g->menu, True,
+                   IswButtonPressMask | IswButtonReleaseMask,
+                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                   None, IswCursorNone, ISW_CURRENT_TIME);
 }
 
 static void taskbar_button_callback(Widget w, IswPointer client_data,
                                     IswPointer call_data)
 {
+    printf("button \n");
     (void)w;
     (void)call_data;
     TaskClosure *tc = (TaskClosure *)client_data;
@@ -339,7 +255,7 @@ static void taskbar_button_callback(Widget w, IswPointer client_data,
     if (g->nwindows == 0) {
         launch_app(p, g);
     } else if (g->nwindows == 1) {
-        focus_window(p, g->windows[0]);
+        //focus_window(p, g->windows[0]);
     }
 }
 
@@ -347,15 +263,16 @@ static void taskbar_button_callback(Widget w, IswPointer client_data,
  * on press (not release) lets the user drag into the list and release
  * to select, matching standard menu behaviour. */
 static void taskbar_press_handler(Widget w, IswPointer client_data,
-                                  xcb_generic_event_t *event, Boolean *cont)
+                                  IswEvent *event, Boolean *cont)
 {
+    printf("taskbar button pressed\n");
     (void)w;
     (void)cont;
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+    if (event->kind != IswButtonDown) {
         return;
     }
-    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 1 && ev->detail != 2) {
+    if (event->button.button != IswButtonLeft &&
+        event->button.button != IswButtonMiddle) {
         return;
     }
 
@@ -363,7 +280,7 @@ static void taskbar_press_handler(Widget w, IswPointer client_data,
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
 
-    if (ev->detail == 2) {
+    if (event->button.button == IswButtonMiddle) {
         launch_app(p, g);
         return;
     }
@@ -551,7 +468,7 @@ static void close_all_callback(Widget w, IswPointer client_data,
     TaskGroup *g = tc->group;
     panel_dismiss_popup(p);
     for (int i = 0; i < g->nwindows; i++) {
-        isde_ewmh_request_close_window(p->ewmh, g->windows[i]);
+        close_window(p->server_context, g, i);
     }
 }
 
@@ -634,9 +551,9 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
 
     IswAddEventHandler(g->ctx_menu,
-                      XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS,
+                      IswButtonPressMask | IswKeyPressMask,
                       False, popup_button_handler, p);
-    IswAddEventHandler(g->ctx_menu, XCB_EVENT_MASK_KEY_PRESS,
+    IswAddEventHandler(g->ctx_menu, IswKeyPressMask,
                       False, popup_key_handler, p);
 }
 
@@ -686,28 +603,24 @@ static void show_context_menu(Panel *p, TaskGroup *g)
 
     panel_show_popup(p, g->ctx_menu);
 
-    xcb_grab_keyboard(p->conn, 1, IswWindow(g->ctx_menu),
-                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                      XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(p->conn, 1, IswWindow(g->ctx_menu),
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(p->conn);
+    IswGrabKeyboard(g->ctx_menu, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                    ISW_CURRENT_TIME);
+    IswGrabPointer(g->ctx_menu, True,
+                   IswButtonPressMask | IswButtonReleaseMask,
+                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                   None, IswCursorNone, ISW_CURRENT_TIME);
 }
 
 static void context_menu_handler(Widget w, IswPointer client_data,
-                                 xcb_generic_event_t *event, Boolean *cont)
+                                 IswEvent *event, Boolean *cont)
 {
     (void)w;
     (void)cont;
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+    if (event->kind != IswButtonDown) {
         return;
     }
 
-    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3) {
+    if (event->button.button != IswButtonRight) {
         return;
     }
 
@@ -844,9 +757,9 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
 
     /* Button-press handler: left-click shows window list for multi-window
      * groups; right-click opens pin/unpin context menu */
-    IswAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(g->button, IswButtonPressMask, False,
                       taskbar_press_handler, tc);
-    IswAddEventHandler(g->button, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(g->button, IswButtonPressMask, False,
                       context_menu_handler, tc);
 
     /* Create persistent popup menus (shown/hidden, not recreated) */
@@ -864,179 +777,87 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     return g;
 }
 
-static void group_add_window(TaskGroup *g, xcb_window_t win)
-{
-    for (int i = 0; i < g->nwindows; i++) {
-        if (g->windows[i] == win) {
-            return;
-        }
-    }
-
-    if (g->nwindows >= g->cap_windows) {
-        g->cap_windows *= 2;
-        g->windows = realloc(g->windows,
-                             g->cap_windows * sizeof(xcb_window_t));
-    }
-    g->windows[g->nwindows++] = win;
-}
-
-/* ---------- update from EWMH ---------- */
-
-void taskbar_update(Panel *p)
-{
-    /* Clear window lists from all groups */
-    for (TaskGroup *g = p->groups; g; g = g->next) {
-        g->nwindows = 0;
-    }
-
-    /* Get current client list from WM */
-    xcb_window_t *wins = NULL;
-    int nwins = isde_ewmh_get_client_list(p->ewmh, &wins);
-    uint32_t cur_desk = isde_ewmh_get_current_desktop(p->ewmh);
-
-    xcb_ewmh_connection_t *ec = isde_ewmh_connection(p->ewmh);
-
-    for (int i = 0; i < nwins; i++) {
-        uint32_t win_desk = isde_ewmh_get_wm_desktop(p->ewmh, wins[i]);
-        if (win_desk != cur_desk && win_desk != 0xFFFFFFFF) {
-            continue;
-        }
-        xcb_ewmh_get_atoms_reply_t wm_state;
-        if (xcb_ewmh_get_wm_state_reply(ec,
-                xcb_ewmh_get_wm_state(ec, wins[i]),
-                &wm_state, NULL)) {
-            int skip = 0;
-            for (uint32_t s = 0; s < wm_state.atoms_len; s++) {
-                if (wm_state.atoms[s] == ec->_NET_WM_STATE_SKIP_TASKBAR) {
-                    skip = 1;
-                    break;
-                }
-            }
-            xcb_ewmh_get_atoms_reply_wipe(&wm_state);
-            if (skip) {
-                continue;
-            }
-        }
-        char *cls = get_wm_class(p, wins[i]);
-        TaskGroup *g = taskbar_find_group(p, cls);
-        if (!g) {
-            g = taskbar_add_group(p, cls);
-        }
-        group_add_window(g, wins[i]);
-        free(cls);
-    }
-    free(wins);
-
-    /* Remove non-pinned groups with 0 windows */
-    TaskGroup **pp = &p->groups;
-    while (*pp) {
-        TaskGroup *g = *pp;
-        if (g->nwindows == 0 && !g->pinned) {
-            *pp = g->next;
-            free_menu_titles(g);
-            if (g->menu) {
-                IswDestroyWidget(g->menu);
-            }
-            if (g->ctx_menu) {
-                IswDestroyWidget(g->ctx_menu);
-            }
-            if (g->button) {
-                IswDestroyWidget(g->button);
-            }
-            free(g->wm_class);
-            free(g->display_name);
-            free(g->desktop_exec);
-            free(g->desktop_icon);
-            free(g->icon_path);
-            free(g->windows);
-            free(g);
-        } else {
-            pp = &g->next;
-        }
-    }
-}
-
 /* ---------- active window highlight ---------- */
 
 static Pixel taskbar_pixel(Panel *p, unsigned int rgb)
 {
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        p->conn,
-        xcb_alloc_color(p->conn, p->screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply) {
-        return p->screen->white_pixel;
-    }
-    Pixel px = reply->pixel;
-    free(reply);
-    return px;
+    //xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
+    //    p->conn,
+    //    xcb_alloc_color(p->conn, p->screen->default_colormap,
+    //                    ((rgb >> 16) & 0xFF) * 257,
+    //                    ((rgb >> 8)  & 0xFF) * 257,
+    //                    ( rgb        & 0xFF) * 257),
+    //    NULL);
+    //if (!reply) {
+    //    return p->screen->white_pixel;
+    //}
+    //Pixel px = reply->pixel;
+    //free(reply);
+    //return px;
 }
 
 void taskbar_highlight_active(Panel *p)
 {
-    const IsdeColorScheme *s = isde_theme_current();
-    if (!s) {
-        return;
-    }
-
-    xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
-    char *active_class = NULL;
-    if (active != XCB_WINDOW_NONE) {
-        active_class = get_wm_class(p, active);
-    }
-
-    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
-
-    for (TaskGroup *g = p->groups; g; g = g->next) {
-        if (!g->button) {
-            continue;
-        }
-
-        int is_focused = (active_class && g->wm_class &&
-                          strcmp(g->wm_class, active_class) == 0);
-
-        int urgent = 0;
-        if (!is_focused) {
-            for (int w = 0; w < g->nwindows; w++) {
-                xcb_ewmh_get_atoms_reply_t wm_state;
-                if (xcb_ewmh_get_wm_state_reply(ewmh,
-                        xcb_ewmh_get_wm_state(ewmh, g->windows[w]),
-                        &wm_state, NULL)) {
-                    for (uint32_t a = 0; a < wm_state.atoms_len; a++) {
-                        if (wm_state.atoms[a] == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
-                            urgent = 1;
-                            break;
-                        }
-                    }
-                    xcb_ewmh_get_atoms_reply_wipe(&wm_state);
-                }
-                if (urgent) {
-                    break;
-                }
-            }
-        }
-
-        const IsdeElementColors *ec;
-        if (is_focused) {
-            ec = &s->taskbar_button_focus;
-        } else if (urgent) {
-            ec = &s->taskbar_button_urgent;
-        } else if (g->nwindows > 0) {
-            ec = &s->taskbar_button_active;
-        } else {
-            ec = &s->taskbar_button;
-        }
-
-        IswArgBuilder ab = IswArgBuilderInit();
-        IswArgBackground(&ab, taskbar_pixel(p, ec->bg));
-        IswArgForeground(&ab, taskbar_pixel(p, ec->fg));
-        IswSetValues(g->button, ab.args, ab.count);
-    }
-
-    free(active_class);
+    //const IsdeColorScheme *s = isde_theme_current();
+    //if (!s) {
+    //    return;
+    //}
+//
+    //xcb_window_t active = isde_ewmh_get_active_window(p->ewmh);
+    //char *active_class = NULL;
+    //if (active != XCB_WINDOW_NONE) {
+    //    active_class = get_wm_class(p, active);
+    //}
+//
+    //xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(p->ewmh);
+//
+    //for (TaskGroup *g = p->groups; g; g = g->next) {
+    //    if (!g->button) {
+    //        continue;
+    //    }
+//
+    //    int is_focused = (active_class && g->wm_class &&
+    //                      strcmp(g->wm_class, active_class) == 0);
+//
+    //    int urgent = 0;
+    //    if (!is_focused) {
+    //        for (int w = 0; w < g->nwindows; w++) {
+    //            xcb_ewmh_get_atoms_reply_t wm_state;
+    //            if (xcb_ewmh_get_wm_state_reply(ewmh,
+    //                    xcb_ewmh_get_wm_state(ewmh, g->windows[w]),
+    //                    &wm_state, NULL)) {
+    //                for (uint32_t a = 0; a < wm_state.atoms_len; a++) {
+    //                    if (wm_state.atoms[a] == ewmh->_NET_WM_STATE_DEMANDS_ATTENTION) {
+    //                        urgent = 1;
+    //                        break;
+    //                    }
+    //                }
+    //                xcb_ewmh_get_atoms_reply_wipe(&wm_state);
+    //            }
+    //            if (urgent) {
+    //                break;
+    //            }
+    //        }
+    //    }
+//
+    //    const IsdeElementColors *ec;
+    //    if (is_focused) {
+    //        ec = &s->taskbar_button_focus;
+    //    } else if (urgent) {
+    //        ec = &s->taskbar_button_urgent;
+    //    } else if (g->nwindows > 0) {
+    //        ec = &s->taskbar_button_active;
+    //    } else {
+    //        ec = &s->taskbar_button;
+    //    }
+//
+    //    IswArgBuilder ab = IswArgBuilderInit();
+    //    //IswArgBackground(&ab, taskbar_pixel(p, ec->bg));
+    //    //IswArgForeground(&ab, taskbar_pixel(p, ec->fg));
+    //    IswSetValues(g->button, ab.args, ab.count);
+    //}
+//
+    //free(active_class);
 }
 
 /* ---------- init / cleanup ---------- */

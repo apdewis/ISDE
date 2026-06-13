@@ -20,33 +20,11 @@
 #include <sys/inotify.h>
 #endif
 
-#include <xcb/xcb_keysyms.h>
-#include <xkbcommon/xkbcommon.h>
-#include <X11/keysym.h>
-
 static char *start_icon_path;
 static char *shutdown_icon_path;
 static char *reboot_icon_path;
 static char *logout_icon_path;
 
-static Pixel start_color_pixel(Panel *p, unsigned int rgb)
-{
-    xcb_connection_t *conn = IswDisplay(p->start_btn);
-    xcb_screen_t *screen = IswScreen(p->start_btn);
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        conn,
-        xcb_alloc_color(conn, screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply) {
-        return screen->white_pixel;
-    }
-    Pixel px = reply->pixel;
-    free(reply);
-    return px;
-}
 
 /* State-dependent: active inverts to show the menu is open */
 static void set_start_btn_active(Panel *p, int active)
@@ -56,14 +34,14 @@ static void set_start_btn_active(Panel *p, int active)
         return;
     }
     IswArgBuilder ab = IswArgBuilderInit();
-    if (active) {
-        IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.hover_fg));
-        IswArgBackground(&ab, start_color_pixel(p, s->active));
-    } else {
-        IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.fg));
-        IswArgBackground(&ab, start_color_pixel(p, s->taskbar_button.bg));
-    }
-    IswSetValues(p->start_btn, ab.args, ab.count);
+    //if (active) {
+    //    IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.hover_fg));
+    //    IswArgBackground(&ab, start_color_pixel(p, s->active));
+    //} else {
+    //    IswArgForeground(&ab, start_color_pixel(p, s->taskbar_button.fg));
+    //    IswArgBackground(&ab, start_color_pixel(p, s->taskbar_button.bg));
+    //}
+    //IswSetValues(p->start_btn, ab.args, ab.count);
 }
 
 #define MENU_WIDTH       600
@@ -355,51 +333,39 @@ static void launch_search_result(Panel *p, int index)
 
 /* ---------- keyboard navigation ---------- */
 
-static xcb_key_symbols_t *key_syms;
-
 static void menu_button_handler(Widget w, IswPointer client_data,
-                                xcb_generic_event_t *xev, Boolean *cont)
-{
-    (void)cont;
-    Panel *p = (Panel *)client_data;
-    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS) {
-        return;
-    }
-    xcb_button_press_event_t *bev = (xcb_button_press_event_t *)xev;
-    /* With owner_events=1 on the pointer grab, clicks inside our own
-     * windows deliver to those windows normally. Clicks outside deliver
-     * to the grab window (the shell). Dismiss on the latter. */
-    if (bev->event == IswWindow(w)) {
-        panel_dismiss_popup(p);
-    }
-}
-
-static void menu_key_handler(Widget w, IswPointer client_data,
-                             xcb_generic_event_t *xev, Boolean *cont)
+                                IswEvent *event, Boolean *cont)
 {
     (void)w; (void)cont;
     Panel *p = (Panel *)client_data;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+    if (event->kind != IswButtonDown) {
+        return;
+    }
+    /* With owner_events=True on the pointer grab, clicks inside our own
+     * windows deliver to those windows normally. Clicks outside deliver
+     * to the grab window (the shell), invoking this handler — dismiss. */
+    panel_dismiss_popup(p);
+}
+
+static void menu_key_handler(Widget w, IswPointer client_data,
+                             IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswKeyDown) {
         return;
     }
 
-    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-
-    if (!key_syms) {
-        key_syms = xcb_key_symbols_alloc(p->conn);
-    }
-
-    xcb_keysym_t sym = xcb_key_symbols_get_keysym(key_syms,
-                                                   kev->detail, 0);
+    uint32_t sym = event->key.key;
 
     /* Super always dismisses */
-    if (sym == XK_Super_L || sym == XK_Super_R) {
+    if (sym == IswKeySuper) {
         panel_dismiss_popup(p);
         return;
     }
 
     /* Escape: exit search mode first, then dismiss */
-    if (sym == XK_Escape) {
+    if (sym == IswKeyEscape) {
         if (p->search_active) {
             search_deactivate(p);
         } else {
@@ -409,7 +375,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
     }
 
     /* Backspace in search mode */
-    if (sym == XK_BackSpace) {
+    if (sym == IswKeyBackspace) {
         if (p->search_active) {
             if (p->search_len > 0) {
                 /* Remove one UTF-8 character from the end */
@@ -431,7 +397,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
 
     /* Up/Down navigate in search mode */
     if (p->search_active) {
-        if (sym == XK_Down) {
+        if (sym == IswKeyArrowDown) {
             int next = p->app_highlight + 1;
             if (next >= p->nsearch_results) {
                 next = p->nsearch_results - 1;
@@ -442,7 +408,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             }
             return;
         }
-        if (sym == XK_Up) {
+        if (sym == IswKeyArrowUp) {
             int next = p->app_highlight - 1;
             if (next < 0) {
                 next = 0;
@@ -451,7 +417,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             IswListHighlight(p->search_list, next);
             return;
         }
-        if (sym == XK_Return || sym == XK_KP_Enter) {
+        if (sym == IswKeyReturn) {
             launch_search_result(p, p->app_highlight);
             return;
         }
@@ -459,7 +425,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
 
     /* Normal category/app navigation */
     switch (sym) {
-    case XK_Down:
+    case IswKeyArrowDown:
         if (p->menu_focus == 0) {
             int next = p->cat_highlight + 1;
             if (next >= p->ncategories) {
@@ -484,7 +450,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         }
         break;
 
-    case XK_Up:
+    case IswKeyArrowUp:
         if (p->menu_focus == 0) {
             int next = p->cat_highlight - 1;
             if (next < 0) {
@@ -505,7 +471,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         }
         break;
 
-    case XK_Right:
+    case IswKeyArrowRight:
         if (p->menu_focus == 1 || p->active_cat < 0) {
             break;
         }
@@ -514,7 +480,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         IswListHighlight(p->app_box, 0);
         break;
 
-    case XK_Left:
+    case IswKeyArrowLeft:
         if (p->menu_focus == 0) {
             break;
         }
@@ -523,8 +489,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         IswListUnhighlight(p->app_box);
         break;
 
-    case XK_Return:
-    case XK_KP_Enter:
+    case IswKeyReturn:
         if (p->menu_focus == 0) {
             if (p->active_cat < 0) {
                 break;
@@ -538,12 +503,11 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         break;
 
     default: {
-        /* Printable character — activate search */
-        char utf8[8];
-        int len = xkb_keysym_to_utf8(sym, utf8, sizeof(utf8));
-        if (len > 1 && (unsigned char)utf8[0] >= 0x20) {
-            /* len includes null terminator from xkb_keysym_to_utf8 */
-            int charlen = len - 1;
+        /* Printable character — activate search.  The neutral event carries
+         * the UTF-8 the key produced ("" for non-text keys). */
+        const char *utf8 = event->key.text;
+        int charlen = (int)strlen(utf8);
+        if (charlen > 0 && (unsigned char)utf8[0] >= 0x20) {
             if (p->search_len + charlen < (int)sizeof(p->search_buf) - 1) {
                 if (!p->search_active) {
                     search_activate(p);
@@ -649,17 +613,15 @@ void startmenu_toggle(Panel *p)
     /* Highlight first category and grab keyboard */
     IswListHighlight(p->cat_box, 0);
     show_category(p, 0);
-    xcb_grab_keyboard(p->conn, 1, IswWindow(p->start_shell),
-                      XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                      XCB_GRAB_MODE_ASYNC);
-    /* owner_events=1 so clicks on our own child widgets still dispatch
+    IswGrabKeyboard(p->start_shell, True,
+                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                    ISW_CURRENT_TIME);
+    /* owner_events=True so clicks on our own child widgets still dispatch
      * normally; clicks outside deliver to the shell and dismiss. */
-    xcb_grab_pointer(p->conn, 1, IswWindow(p->start_shell),
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(p->conn);
+    IswGrabPointer(p->start_shell, True,
+                   IswButtonPressMask | IswButtonReleaseMask,
+                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                   None, IswCursorNone, ISW_CURRENT_TIME);
 }
 
 /* ---------- refresh / watch ---------- */
@@ -1011,9 +973,9 @@ void startmenu_init(Panel *p)
     IswUnmapWidget(p->search_viewport);
 
     /* Keyboard navigation via event handler on the shell */
-    IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_KEY_PRESS, False,
+    IswAddEventHandler(p->start_shell, IswKeyPressMask, False,
                       menu_key_handler, p);
-    IswAddEventHandler(p->start_shell, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(p->start_shell, IswButtonPressMask, False,
                       menu_button_handler, p);
 
     /* Bottom toolbar — right-aligned action buttons.
@@ -1123,9 +1085,4 @@ void startmenu_cleanup(Panel *p)
     reboot_icon_path = NULL;
     free(logout_icon_path);
     logout_icon_path = NULL;
-
-    if (key_syms) {
-        xcb_key_symbols_free(key_syms);
-        key_syms = NULL;
-    }
 }

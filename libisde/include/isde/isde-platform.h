@@ -199,6 +199,6 @@ void isde_display_flush(IsdeDisplay *d);
 IsdeWindow isde_display_root(IsdeDisplay *d);
 
 /* Convenience: clamp *w/*h so the window fits the current EWMH workarea. */
-void isde_clamp_to_workarea(IsdeDisplay *d, int *w, int *h);
+//void isde_clamp_to_workarea(IsdeDisplay *d, int *w, int *h);
 
 #endif /* ISDE_PLATFORM_H */

@@ -11,10 +11,10 @@
 #include <ISW/IswArgMacros.h>
 
 static void clock_clicked(Widget w, IswPointer client_data,
-                           xcb_generic_event_t *xev, Boolean *cont)
+                           IswEvent *event, Boolean *cont)
 {
     (void)w; (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_BUTTON_PRESS)
+    if (event->kind != IswButtonDown)
         return;
     calendar_toggle((Panel *)client_data);
 }
@@ -136,7 +136,7 @@ void clock_init(Panel *p)
         NULL);
 
     /* Click on clock area opens calendar popup */
-    IswAddEventHandler(p->clock_box, XCB_EVENT_MASK_BUTTON_PRESS, False,
+    IswAddEventHandler(p->clock_box, IswButtonPressMask, False,
                        clock_clicked, p);
 
     /* Calendar popup (created once, shown on click) */

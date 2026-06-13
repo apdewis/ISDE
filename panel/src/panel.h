@@ -51,7 +51,7 @@ typedef struct TaskGroup {
     char       *icon_path;         /* Resolved SVG path (or NULL) */
     int         desktop_index;     /* Index into Panel.desktop_entries, or -1 */
 
-    xcb_window_t *windows;         /* Array of managed windows in this group */
+    void       *windows;         /* Array of managed windows in this group */
     int           nwindows;
     int           cap_windows;
 
@@ -137,20 +137,20 @@ typedef struct Panel {
     String            *search_names;
 
     /* Desktop pager */
-    Widget             pager_canvas;     /* DrawingArea for grid rendering */
-    int                pager_rows;
-    int                pager_cols;
-    int                pager_ndesktops;
-    uint32_t           pager_current;    /* cached current desktop */
-    xcb_window_t      *pager_wins;       /* cached client list */
-    int                pager_nwins;
-
-    /* Pager drag state */
-    int                pager_dragging;
-    xcb_window_t       pager_drag_win;   /* window being dragged */
-    int                pager_drag_x;     /* current pointer x in canvas */
-    int                pager_drag_y;     /* current pointer y in canvas */
-    uint32_t           pager_drag_src;   /* source desktop */
+    //Widget             pager_canvas;     /* DrawingArea for grid rendering */
+    //int                pager_rows;
+    //int                pager_cols;
+    //int                pager_ndesktops;
+    //uint32_t           pager_current;    /* cached current desktop */
+    //xcb_window_t      *pager_wins;       /* cached client list */
+    //int                pager_nwins;
+//
+    ///* Pager drag state */
+    //int                pager_dragging;
+    //xcb_window_t       pager_drag_win;   /* window being dragged */
+    //int                pager_drag_x;     /* current pointer x in canvas */
+    //int                pager_drag_y;     /* current pointer y in canvas */
+    //uint32_t           pager_drag_src;   /* source desktop */
 
     /* Taskbar */
     TaskGroup         *groups;
@@ -168,13 +168,7 @@ typedef struct Panel {
     IswInputId         desktop_input_id;
     IswIntervalId      desktop_refresh_timer;
 
-    /* XCB / EWMH */
-    xcb_connection_t  *conn;
-    xcb_screen_t      *screen;
-    xcb_window_t       root;
-    int                screen_num;
-    IsdeEwmh          *ewmh;
-    IsdeIpc           *ipc;
+    void *server_context;
 
     /* Primary monitor geometry (physical pixels) */
     int16_t            mon_x;
@@ -184,22 +178,6 @@ typedef struct Panel {
 
     /* HiDPI: physical panel height (PANEL_HEIGHT * scale factor) */
     int                phys_panel_h;
-
-    /* Atoms */
-    xcb_atom_t         atom_net_wm_name;
-    xcb_atom_t         atom_net_wm_visible_name;
-    xcb_atom_t         atom_wm_name;
-
-    /* System tray */
-    Widget             tray_area;      /* Vertical FlexBox: spacer + tray_box + spacer */
-    Widget             tray_box;       /* Box widget for tray icons */
-    xcb_window_t      *tray_icons;     /* Embedded icon windows */
-    int                ntray;
-    int                cap_tray;
-    xcb_atom_t         atom_tray_sel;  /* _NET_SYSTEM_TRAY_S<n> */
-    xcb_atom_t         atom_tray_opcode; /* _NET_SYSTEM_TRAY_OPCODE */
-    xcb_atom_t         atom_xembed;
-    xcb_atom_t         atom_xembed_info;
 
     IswIntervalId       clock_timer;
 
@@ -223,9 +201,7 @@ typedef struct Panel {
 int   panel_init(Panel *p, int *argc, char **argv);
 void  panel_reload_desktop_entries(Panel *p);
 
-/* Raw root-window IPC ClientMessage handler (registered by panel-x11). */
-void  panel_ipc_event_handler(Widget w, IswPointer client_data,
-                              xcb_generic_event_t *xev, Boolean *cont);
+
 void  panel_show_popup(Panel *p, Widget popup);
 void  panel_dismiss_popup(Panel *p);
 void  panel_run(Panel *p);
@@ -279,4 +255,7 @@ void  pager_cleanup(Panel *p);
 
 /* platform specific init handler that the platform specific component must implement */
 int panel_init_platform(Panel *p);
+int panel_init_display_platform(Panel *p);
+
+void close_window(void *server_ctx, TaskGroup *g, int idx);
 #endif /* ISDE_PANEL_H */
