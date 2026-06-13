@@ -14,6 +14,7 @@ add_executable(isde-wm
     ${CMAKE_SOURCE_DIR}/platform/common/isde-config-write.c
     ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
 )
 

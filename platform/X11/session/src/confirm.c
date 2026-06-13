@@ -14,12 +14,11 @@
 #include <time.h>
 
 #include <xcb/xcb.h>
-#include <xcb/xcb_keysyms.h>
-#include <X11/keysym.h>
+#include <xcb/xcb_aux.h>
 
-#include "isde/isde-theme.h"
-#include "isde/isde-randr.h"
-#include "isde/isde-xdg.h"
+#include "isde-theme.h"
+#include "randr.h"
+#include "isde-xdg.h"
 
 #include <ISW/Shell.h>
 #include <ISW/StringDefs.h>
@@ -84,25 +83,18 @@ static void cancel_cb(Widget w, IswPointer cd, IswPointer call)
 }
 
 static void key_handler(Widget w, IswPointer cd,
-                        xcb_generic_event_t *xev, Boolean *cont)
+                        IswEvent *ev, Boolean *cont)
 {
     (void)w; (void)cd; (void)cont;
-    if ((xev->response_type & ~0x80) != XCB_KEY_PRESS) {
+    if (ev->kind != IswKeyDown) {
         return;
     }
-    xcb_key_press_event_t *kev = (xcb_key_press_event_t *)xev;
-    xcb_connection_t *conn = IswDisplay(w);
-    xcb_key_symbols_t *syms = xcb_key_symbols_alloc(conn);
-    if (syms) {
-        xcb_keysym_t sym = xcb_key_symbols_get_keysym(syms, kev->detail, 0);
-        xcb_key_symbols_free(syms);
-        if (sym == XK_Escape) {
-            result = 1;
-            IswAppSetExitFlag(app);
-        } else if (sym == XK_Return || sym == XK_KP_Enter) {
-            result = 0;
-            IswAppSetExitFlag(app);
-        }
+    if (ev->key.key == IswKeyEscape) {
+        result = 1;
+        IswAppSetExitFlag(app);
+    } else if (ev->key.key == IswKeyReturn) {
+        result = 0;
+        IswAppSetExitFlag(app);
     }
 }
 
@@ -169,13 +161,22 @@ int main(int argc, char **argv)
     IswSetValues(toplevel, ab.args, ab.count);
     IswRealizeWidget(toplevel);
 
-    xcb_screen_t *scr = IswScreen(toplevel);
-    xcb_connection_t *xconn = IswDisplay(toplevel);
+    /* Own X connection for the raw xcb work (RandR query, blank windows,
+     * grabs).  confirm is a separate process from the session core; it opens
+     * its own connection rather than reaching into ISW for the native one. */
+    int conn_screen;
+    xcb_connection_t *conn = xcb_connect(getenv("DISPLAY"), &conn_screen);
+    if (xcb_connection_has_error(conn)) {
+        fprintf(stderr, "isde-confirm: cannot connect to X\n");
+        return 1;
+    }
+    xcb_screen_t *scr = xcb_aux_get_screen(conn, conn_screen);
+
     double sf = ISWScaleFactor(toplevel);
     if (sf < 1.0) { sf = 1.0; }
 
     IsdeMonitor primary;
-    isde_randr_primary(xconn, scr->root, scr, &primary);
+    isde_randr_primary(conn, scr->root, scr, &primary);
     int scr_x = (int)(primary.x / sf + 0.5);
     int scr_y = (int)(primary.y / sf + 0.5);
     int scr_w = (int)(primary.width / sf + 0.5);
@@ -183,7 +184,6 @@ int main(int argc, char **argv)
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
-    xcb_connection_t *conn = IswDisplay(toplevel);
     Pixel overlay_bg = scr->black_pixel;
     Pixel form_bg = scr->white_pixel;
     Pixel form_fg = scr->black_pixel;
@@ -295,7 +295,7 @@ int main(int argc, char **argv)
     IswAddCallback(cancel_btn, IswNcallback, cancel_cb, NULL);
 
     /* Escape / Enter key handling */
-    IswAddEventHandler(shell, XCB_EVENT_MASK_KEY_PRESS, False,
+    IswAddEventHandler(shell, IswKeyPressMask, False,
                       key_handler, NULL);
 
     xcb_window_t *blank_wins = NULL;
@@ -309,8 +309,10 @@ int main(int argc, char **argv)
     int cy = (scr_h - dlg_h) / 2;
     IswConfigureWidget(dialog, cx, cy, dlg_w, dlg_h, 1);
 
-    /* Grab keyboard and pointer */
-    xcb_window_t grab_win = IswWindow(shell);
+    /* Grab keyboard and pointer on the root window — the overlay is a
+     * fullscreen modal, so grabbing root reliably captures all input without
+     * needing the ISW shell's native window id. */
+    xcb_window_t grab_win = scr->root;
     for (int attempt = 0; attempt < 50; attempt++) {
         xcb_grab_keyboard_reply_t *kr = xcb_grab_keyboard_reply(conn,
             xcb_grab_keyboard(conn, 1, grab_win,

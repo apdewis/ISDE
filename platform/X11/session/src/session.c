@@ -23,8 +23,8 @@
 #include <xcb/screensaver.h>
 #include <dbus/dbus.h>
 
-#include "isde/isde-theme.h"
-#include "isde/isde-dpms.h"
+#include "isde-theme.h"
+#include "dpms.h"
 
 /* ---------- monotonic clock helper ---------- */
 

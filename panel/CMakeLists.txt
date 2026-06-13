@@ -16,7 +16,13 @@ add_executable(isde-panel-x11
     ${CMAKE_SOURCE_DIR}/platform/common/isde-config-write.c
     ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
+)
+
+target_include_directories(isde-panel-x11 PRIVATE
+    ${CMAKE_SOURCE_DIR}/platform/common
+    ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
 target_compile_definitions(isde-panel-x11 PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

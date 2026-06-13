@@ -12,8 +12,8 @@
  * $XDG_CONFIG_DIRS/autostart/ per the Desktop Application Autostart spec.
  */
 #include "session.h"
-#include "isde/isde-desktop.h"
-#include "isde/isde-xdg.h"
+#include "desktop.h"
+#include "isde-xdg.h"
 
 #include <stdio.h>
 #include <stdlib.h>

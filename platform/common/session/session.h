@@ -5,9 +5,9 @@
 #define ISDE_SESSION_H
 
 
-#include "isde/isde-config.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-xdg.h"
+#include "isde-config.h"
+#include "dbus.h"
+#include "isde-xdg.h"
 
 #include <signal.h>
 #include <sys/types.h>

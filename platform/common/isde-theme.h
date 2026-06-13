@@ -9,6 +9,7 @@
 #define ISDE_THEME_H
 
 #include <ISW/Intrinsic.h>
+#include <xcb/xcb.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -155,10 +156,16 @@ void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);
  * and before creating child widgets. */
 void isde_theme_merge_xrm(Widget toplevel);
 
-/* Write the full theme (colours, fonts, cursor) to the root window
+/* Build the full theme RESOURCE_MANAGER payload (colours, fonts, cursor) as a
+ * newline-separated Xrm string.  Platform-agnostic; the X11 layer writes the
+ * result to the root window atom.  Caller frees the returned string. */
+char *isde_theme_build_resource_string(void);
+
+/* Write the full theme (colours, fonts, cursor) to the X11 root window
  * RESOURCE_MANAGER property so all Xt/libISW clients inherit the theme.
+ * X11-specific (interns/writes an atom); implemented in platform/X11/common.
  * Call from the session manager at startup and on appearance changes. */
-void isde_theme_set_resource_manager(IswDisplay dpy, IswWindow root);
+void isde_theme_set_resource_manager(xcb_connection_t *conn, xcb_window_t root);
 
 /* Put a single "resource: value" line into the per-screen Xrm database. */
 void isde_xrm_put_line(Widget toplevel, const char *line);

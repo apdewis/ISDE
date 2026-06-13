@@ -908,8 +908,14 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
 
     for (int i = 0; i < g_nwatchers; i++) {
         ThemeWatchCtx *w = &g_watchers[i];
+        /* Publish to the root RESOURCE_MANAGER atom via the X11 layer; resolve
+         * the native xcb handles here so this file stays atom-free. */
         IswDisplay dpy = IswDisplayOfObject(w->toplevel);
-        isde_theme_set_resource_manager(dpy, _IswDefaultRootWindow(dpy));
+        xcb_connection_t *conn =
+            (xcb_connection_t *)IswDisplayNativeHandle(dpy);
+        xcb_window_t root = (xcb_window_t)(uintptr_t)
+            IswWindowNativeHandle(_IswDefaultRootWindow(dpy));
+        isde_theme_set_resource_manager(conn, root);
         IswReloadScreenDatabase(IswScreenOfObject(w->toplevel));
         isde_theme_merge_xrm(w->toplevel);
         if (w->cb) {
@@ -1266,10 +1272,14 @@ void isde_theme_merge_xrm(Widget toplevel)
     isde_theme_free_resources(resources);
 }
 
-void isde_theme_set_resource_manager(IswDisplay dpy, IswWindow root)
+/* Build the full theme RESOURCE_MANAGER payload (colours, fonts, cursor) as a
+ * newline-separated Xrm string.  Platform-agnostic — writing it to the X11 root
+ * window's RESOURCE_MANAGER atom is the X11 layer's job
+ * (isde_theme_set_resource_manager in platform/X11/common).  Caller frees. */
+char *isde_theme_build_resource_string(void)
 {
     char **resources = isde_theme_build_resources();
-    if (!resources) return;
+    if (!resources) return NULL;
 
     /* Compute total length */
     size_t total = 0;
@@ -1295,7 +1305,7 @@ void isde_theme_set_resource_manager(IswDisplay dpy, IswWindow root)
     char *rdb = malloc(total + 1);
     if (!rdb) {
         isde_theme_free_resources(resources);
-        return;
+        return NULL;
     }
 
     char *p = rdb;
@@ -1312,16 +1322,7 @@ void isde_theme_set_resource_manager(IswDisplay dpy, IswWindow root)
     *p = '\0';
 
     isde_theme_free_resources(resources);
-
-    /* Write to root window RESOURCE_MANAGER property */
-    Atom rm_atom = _IswPlatformInternAtomOp(dpy, "RESOURCE_MANAGER", False);
-    if (rm_atom != ISW_ATOM_NONE) {
-        _IswPlatformChangeProperty(dpy, root, rm_atom, ISW_ATOM_STRING, 8,
-                                   ISW_PROP_MODE_REPLACE,
-                                   rdb, (uint32_t)(p - rdb));
-    }
-
-    free(rdb);
+    return rdb;
 }
 
 void isde_xrm_put_line(Widget toplevel, const char *line)
