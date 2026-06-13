@@ -4,6 +4,7 @@
 #ifndef ISDE_SESSION_H
 #define ISDE_SESSION_H
 
+
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
 #include "isde/isde-xdg.h"
@@ -11,7 +12,6 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <time.h>
-#include <xcb/xcb.h>
 #include <dbus/dbus.h>
 
 /* Lid close action */
@@ -21,6 +21,16 @@ typedef enum LidAction {
     LID_ACTION_LOCK,
     LID_ACTION_NOTHING
 } LidAction;
+
+/* ---------- Child process ---------- */
+typedef struct Child {
+    pid_t       pid;
+    char       *command;      /* Original command string */
+    int         respawn;      /* 1 if @-prefixed (restart on crash) */
+    int         is_wm;        /* 1 if this is the window manager */
+    int         is_panel;     /* 1 if this is the panel */
+    struct Child *next;
+} Child;
 
 /* ---------- Session state ---------- */
 typedef struct Session {
@@ -37,8 +47,7 @@ typedef struct Session {
     int        *autostart_respawn;
     int         autostart_count;
 
-    /* XCB connection (theme publish, DPMS, screensaver query) */
-    xcb_connection_t *conn;
+    void        *server_context;
     int               screen_num;
 
     /* Event loop: self-pipe carrying SIGCHLD notifications into poll() */
@@ -85,6 +94,14 @@ typedef struct Session {
     int         running;
 } Session;
 
+DBusHandlerResult
+session_bus_filter(DBusConnection *conn, DBusMessage *msg, void *user_data);
+void init_screensaver_service(Session *s);
+DBusHandlerResult
+screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
+                            void *user_data);
+void dm_dbus_call(const char *method);
+
 /* ---------- session.c ---------- */
 int  session_init(Session *s);
 void session_run(Session *s);
@@ -98,4 +115,6 @@ int  autostart_load(Session *s, const char *path);
 void autostart_load_xdg(Session *s);
 void autostart_free(Session *s);
 
+/* forward declarations for functions platform specific code must implement*/
+void update_blanking_inhibit(Session *s);
 #endif /* ISDE_SESSION_H */

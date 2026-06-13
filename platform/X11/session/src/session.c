@@ -2,7 +2,9 @@
 /*
  * session.c — session initialization, config loading, startup sequence, main loop
  */
-#include "session.h"
+#include "../../../common/session/session.h"
+#include "../../../common/session/child.h"
+#include "../../common/ewmh.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,34 +33,6 @@ static long long now_ms(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-}
-
-/* ---------- DM D-Bus helper ---------- */
-
-static void dm_dbus_call(const char *method)
-{
-    DBusError err;
-    dbus_error_init(&err);
-    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
-    if (!conn) {
-        fprintf(stderr, "isde-session: D-Bus: %s\n",
-                err.message ? err.message : "cannot connect");
-        dbus_error_free(&err);
-        return;
-    }
-
-    DBusMessage *msg = dbus_message_new_method_call(
-        "org.isde.DisplayManager",
-        "/org/isde/DisplayManager",
-        "org.isde.DisplayManager",
-        method);
-    if (msg) {
-        dbus_connection_send(conn, msg, NULL);
-        dbus_connection_flush(conn);
-        dbus_message_unref(msg);
-    }
-    dbus_connection_unref(conn);
-    dbus_error_free(&err);
 }
 
 /* ---------- apply input settings from config ---------- */
@@ -121,6 +95,7 @@ static void apply_appearance_settings(void)
 static void apply_input_settings(void)
 {
     char errbuf[256];
+
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (!cfg) { return; }
 
@@ -196,28 +171,30 @@ static LidAction parse_lid_action(const char *s)
  * inhibitors held (e.g. a browser playing video) both DPMS and the X built-in
  * screen saver are disabled; otherwise the configured screen_off timeout is
  * restored. */
-static void update_blanking_inhibit(Session *s)
+void update_blanking_inhibit(Session *s)
 {
-    if (!s->conn) {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
+    if (!conn) {
         return;
     }
 
     if (s->inhibit_count > 0) {
-        isde_dpms_set_timeouts(s->conn, 0, 0, 0);
-        xcb_set_screen_saver(s->conn, 0, 0,
+        isde_dpms_set_timeouts(conn, 0, 0, 0);
+        xcb_set_screen_saver(conn, 0, 0,
                              XCB_BLANKING_DEFAULT, XCB_EXPOSURES_DEFAULT);
     } else {
-        isde_dpms_set_timeouts(s->conn, s->screen_off_sec,
+        isde_dpms_set_timeouts(conn, s->screen_off_sec,
                                s->screen_off_sec, s->screen_off_sec);
-        xcb_set_screen_saver(s->conn, -1, 0,
+        xcb_set_screen_saver(conn, -1, 0,
                              XCB_BLANKING_DEFAULT, XCB_EXPOSURES_DEFAULT);
     }
-    xcb_flush(s->conn);
+    xcb_flush(conn);
 }
 
-static void apply_power_settings(Session *s)
+void apply_power_settings(Session *s)
 {
     char errbuf[256];
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (!cfg) { return; }
 
@@ -233,8 +210,8 @@ static void apply_power_settings(Session *s)
     isde_config_free(cfg);
 
     /* Apply DPMS timeouts on the session's XCB connection */
-    if (s->conn) {
-        isde_dpms_set_timeouts(s->conn, screen_off, screen_off, screen_off);
+    if (conn) {
+        isde_dpms_set_timeouts(conn, screen_off, screen_off, screen_off);
     }
 
     fprintf(stderr, "isde-session: power: screen_off=%d idle_suspend=%d "
@@ -242,204 +219,36 @@ static void apply_power_settings(Session *s)
             (int)s->lid_action);
 }
 
-/* ---------- org.freedesktop.ScreenSaver inhibit ---------- */
-
-#define SCREENSAVER_DBUS_IFACE "org.freedesktop.ScreenSaver"
-#define SCREENSAVER_DBUS_PATH  "/org/freedesktop/ScreenSaver"
-#define SCREENSAVER_DBUS_NAME  "org.freedesktop.ScreenSaver"
-
-static DBusHandlerResult
-screensaver_message_handler(DBusConnection *conn, DBusMessage *msg,
-                            void *user_data)
-{
-    Session *s = (Session *)user_data;
-
-    if (dbus_message_is_method_call(msg, SCREENSAVER_DBUS_IFACE, "Inhibit")) {
-        const char *app = NULL;
-        const char *reason = NULL;
-        if (!dbus_message_get_args(msg, NULL,
-                                   DBUS_TYPE_STRING, &app,
-                                   DBUS_TYPE_STRING, &reason,
-                                   DBUS_TYPE_INVALID)) {
-            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-        }
-        if (s->inhibit_count >= 32) {
-            DBusMessage *err = dbus_message_new_error(msg,
-                DBUS_ERROR_LIMITS_EXCEEDED, "too many inhibitors");
-            dbus_connection_send(conn, err, NULL);
-            dbus_message_unref(err);
-            return DBUS_HANDLER_RESULT_HANDLED;
-        }
-        uint32_t cookie = ++s->next_cookie;
-        const char *sender = dbus_message_get_sender(msg);
-        int idx = s->inhibit_count++;
-        s->inhibit_cookies[idx] = cookie;
-        snprintf(s->inhibit_owners[idx], sizeof(s->inhibit_owners[idx]),
-                 "%s", sender ? sender : "");
-        fprintf(stderr, "isde-session: screensaver inhibit by '%s': %s "
-                "(cookie %u, active %d)\n", app, reason, cookie,
-                s->inhibit_count);
-        update_blanking_inhibit(s);
-
-        DBusMessage *reply = dbus_message_new_method_return(msg);
-        dbus_message_append_args(reply,
-                                 DBUS_TYPE_UINT32, &cookie,
-                                 DBUS_TYPE_INVALID);
-        dbus_connection_send(conn, reply, NULL);
-        dbus_message_unref(reply);
-        return DBUS_HANDLER_RESULT_HANDLED;
-    }
-
-    if (dbus_message_is_method_call(msg, SCREENSAVER_DBUS_IFACE, "UnInhibit")) {
-        uint32_t cookie = 0;
-        if (!dbus_message_get_args(msg, NULL,
-                                   DBUS_TYPE_UINT32, &cookie,
-                                   DBUS_TYPE_INVALID)) {
-            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-        }
-        for (int i = 0; i < s->inhibit_count; i++) {
-            if (s->inhibit_cookies[i] == cookie) {
-                int last = --s->inhibit_count;
-                s->inhibit_cookies[i] = s->inhibit_cookies[last];
-                memcpy(s->inhibit_owners[i], s->inhibit_owners[last],
-                       sizeof(s->inhibit_owners[i]));
-                fprintf(stderr, "isde-session: screensaver uninhibit "
-                        "cookie %u (active %d)\n", cookie,
-                        s->inhibit_count);
-                update_blanking_inhibit(s);
-                break;
-            }
-        }
-        DBusMessage *reply = dbus_message_new_method_return(msg);
-        dbus_connection_send(conn, reply, NULL);
-        dbus_message_unref(reply);
-        return DBUS_HANDLER_RESULT_HANDLED;
-    }
-
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-}
-
 static const DBusObjectPathVTable screensaver_vtable = {
     .message_function = screensaver_message_handler
 };
-
-/* Drop any inhibitors held by a bus name that has vanished (e.g. a browser
- * that crashed without calling UnInhibit), so blanking is not wedged off. */
-static DBusHandlerResult
-session_bus_filter(DBusConnection *conn, DBusMessage *msg, void *user_data)
-{
-    (void)conn;
-    Session *s = (Session *)user_data;
-
-    if (dbus_message_is_signal(msg, DBUS_INTERFACE_DBUS, "NameOwnerChanged")) {
-        const char *name = NULL;
-        const char *old_owner = NULL;
-        const char *new_owner = NULL;
-        if (!dbus_message_get_args(msg, NULL,
-                                   DBUS_TYPE_STRING, &name,
-                                   DBUS_TYPE_STRING, &old_owner,
-                                   DBUS_TYPE_STRING, &new_owner,
-                                   DBUS_TYPE_INVALID)) {
-            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-        }
-        if (new_owner && new_owner[0] != '\0') {
-            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;  /* name acquired */
-        }
-
-        int removed = 0;
-        for (int i = 0; i < s->inhibit_count; ) {
-            if (name && strcmp(s->inhibit_owners[i], name) == 0) {
-                fprintf(stderr, "isde-session: dropping inhibitor cookie %u "
-                        "(owner '%s' gone)\n", s->inhibit_cookies[i], name);
-                int last = --s->inhibit_count;
-                s->inhibit_cookies[i] = s->inhibit_cookies[last];
-                memcpy(s->inhibit_owners[i], s->inhibit_owners[last],
-                       sizeof(s->inhibit_owners[i]));
-                removed = 1;
-            } else {
-                i++;
-            }
-        }
-        if (removed) {
-            update_blanking_inhibit(s);
-        }
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    }
-
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-}
-
-static void init_screensaver_service(Session *s)
-{
-    DBusError err;
-    dbus_error_init(&err);
-    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
-    if (!conn) {
-        fprintf(stderr, "isde-session: screensaver service: %s\n",
-                err.message ? err.message : "cannot connect");
-        dbus_error_free(&err);
-        return;
-    }
-
-    int ret = dbus_bus_request_name(conn, SCREENSAVER_DBUS_NAME,
-                                    DBUS_NAME_FLAG_DO_NOT_QUEUE, &err);
-    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-        fprintf(stderr, "isde-session: cannot own %s: %s\n",
-                SCREENSAVER_DBUS_NAME,
-                dbus_error_is_set(&err) ? err.message : "already owned");
-        dbus_error_free(&err);
-        dbus_connection_unref(conn);
-        return;
-    }
-
-    dbus_connection_set_exit_on_disconnect(conn, FALSE);
-
-    dbus_connection_register_object_path(conn, SCREENSAVER_DBUS_PATH,
-                                         &screensaver_vtable, s);
-    dbus_connection_register_object_path(conn, "/ScreenSaver",
-                                         &screensaver_vtable, s);
-
-    /* Watch for inhibitor owners disconnecting (name-lost only). */
-    dbus_connection_add_filter(conn, session_bus_filter, s, NULL);
-    dbus_bus_add_match(conn,
-        "type='signal',"
-        "interface='" DBUS_INTERFACE_DBUS "',"
-        "member='NameOwnerChanged',"
-        "arg2=''",
-        &err);
-    if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "isde-session: D-Bus match (owner): %s\n", err.message);
-        dbus_error_free(&err);
-    }
-
-    s->session_bus = conn;
-    fprintf(stderr, "isde-session: screensaver inhibit service active\n");
-}
 
 /* ---------- idle suspend timer ---------- */
 
 /* Resolve the root window of the session's XCB screen. */
 static xcb_window_t session_root(Session *s)
 {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     xcb_screen_iterator_t it =
-        xcb_setup_roots_iterator(xcb_get_setup(s->conn));
+        xcb_setup_roots_iterator(xcb_get_setup(conn));
     for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
     return it.data->root;
 }
 
 static void idle_timer_fire(Session *s)
 {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     s->idle_deadline_ms = now_ms() + 10000;  /* re-arm: poll every 10s */
 
     if (s->inhibit_count > 0) {
         return;
     }
 
-    if ((s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) && s->conn) {
+    if ((s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) && conn) {
         xcb_screensaver_query_info_cookie_t cookie =
-            xcb_screensaver_query_info(s->conn, session_root(s));
+            xcb_screensaver_query_info(conn, session_root(s));
         xcb_screensaver_query_info_reply_t *reply =
-            xcb_screensaver_query_info_reply(s->conn, cookie, NULL);
+            xcb_screensaver_query_info_reply(conn, cookie, NULL);
         if (reply) {
             int idle_sec = reply->ms_since_user_input / 1000;
             free(reply);
@@ -473,16 +282,6 @@ static void on_settings_changed(const char *section, const char *key,
     if (strcmp(section, "power") == 0 ||
         strcmp(section, "*") == 0) {
         s->reload_power = 1;
-    }
-}
-
-static void restart_ui_children(Session *s)
-{
-    /* SIGTERM the WM and panel — child_reap will respawn them */
-    for (Child *c = s->children; c; c = c->next) {
-        if (c->is_wm || c->is_panel) {
-            kill(c->pid, SIGTERM);
-        }
     }
 }
 
@@ -776,6 +575,7 @@ static void session_bus_input_ready(Session *s)
 
 static void check_timer_fire(Session *s)
 {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     s->check_deadline_ms = now_ms() + 500;  /* re-arm */
 
     if (s->reload_display) {
@@ -789,8 +589,8 @@ static void check_timer_fire(Session *s)
     if (s->reload_appearance) {
         s->reload_appearance = 0;
         isde_theme_reload();
-        if (s->conn) {
-            isde_theme_set_resource_manager(s->conn, session_root(s));
+        if (conn) {
+            isde_theme_set_resource_manager(conn, session_root(s));
         }
         fprintf(stderr, "isde-session: appearance changed\n");
     }
@@ -805,6 +605,7 @@ static void check_timer_fire(Session *s)
 
 int session_init(Session *s)
 {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     memset(s, 0, sizeof(*s));
     s->death_pipe[0] = s->death_pipe[1] = -1;
     s->sigchld_pipe[0] = s->sigchld_pipe[1] = -1;
@@ -892,15 +693,15 @@ int session_init(Session *s)
     init_session_command_service(s);
 
     /* XCB connection for theme publishing, DPMS, and screensaver query */
-    s->conn = xcb_connect(getenv("DISPLAY"), &s->screen_num);
-    if (!xcb_connection_has_error(s->conn)) {
+    s->server_context = (void *)xcb_connect(getenv("DISPLAY"), &s->screen_num);
+    if (!xcb_connection_has_error(conn)) {
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
-        isde_theme_set_resource_manager(s->conn, session_root(s));
+        isde_theme_set_resource_manager(conn, session_root(s));
 
-        xcb_flush(s->conn);
+        xcb_flush(s->server_context);
     } else {
-        xcb_disconnect(s->conn);
-        s->conn = NULL;
+        xcb_disconnect(s->server_context);
+        s->server_context = NULL;
     }
 
     /* Liveness pipe — children inherit the read end; EOF signals parent death */
@@ -911,6 +712,77 @@ int session_init(Session *s)
 
     s->running = 1;
     return 0;
+}
+
+void child_kill_all(Session *s)
+{
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
+    struct timespec ts = { 0, 50000000 }; /* 50ms */
+
+    /* Disable respawning */
+    for (Child *c = s->children; c; c = c->next) {
+        c->respawn = 0;
+    }
+
+    /* Phase 0: ask the WM to close every managed client via _NET_CLOSE_WINDOW.
+     * Daemonized apps (VSCodium, Electron apps that call setsid) escape our
+     * process group, so kill(0, SIGTERM) alone misses them. Closing them by
+     * their top-level window goes through the WM regardless of PID lineage
+     * and also gives apps a chance to save state before exiting. */
+    if (conn && !xcb_connection_has_error(conn)) {
+        IsdeEwmh *ewmh = isde_ewmh_init(conn, s->screen_num);
+        if (ewmh) {
+            xcb_window_t *wins = NULL;
+            int n = isde_ewmh_get_client_list(ewmh, &wins);
+            for (int i = 0; i < n; i++) {
+                isde_ewmh_request_close_window(ewmh, wins[i]);
+            }
+            free(wins);
+            xcb_flush(conn);
+            isde_ewmh_free(ewmh);
+
+            /* Give apps up to ~3 seconds to save state and exit cleanly. */
+            for (int i = 0; i < 60; i++) {
+                int status;
+                pid_t pid;
+                while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+                    Child *c = child_find_pid(s, pid);
+                    if (c) { child_remove(s, c); }
+                }
+                nanosleep(&ts, NULL);
+            }
+        }
+    }
+
+    /* Phase 1: SIGTERM everything in our process group */
+    kill(0, SIGTERM);
+
+    /* Phase 2: Poll for up to 2 seconds, reaping as children exit */
+    for (int i = 0; i < 40 && s->children; i++) {
+        int status;
+        pid_t pid;
+        while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            Child *c = child_find_pid(s, pid);
+            if (c) { child_remove(s, c); }
+        }
+        if (!s->children) { break; }
+        nanosleep(&ts, NULL);
+    }
+
+    /* Phase 3: SIGKILL everything in our process group, including us.
+     * Our job is done — the parent (display manager/init) reaps us. */
+    if (s->children) {
+        kill(0, SIGKILL);
+        /* unreachable */
+    }
+
+    /* All children exited cleanly — free any remaining list entries */
+    while (s->children) {
+        Child *c = s->children;
+        s->children = c->next;
+        free(c->command);
+        free(c);
+    }
 }
 
 void session_run(Session *s)
@@ -1056,6 +928,7 @@ void session_shutdown(Session *s)
 
 void session_cleanup(Session *s)
 {
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     if (s->confirm_pid > 0) {
         kill(s->confirm_pid, SIGTERM);
         waitpid(s->confirm_pid, NULL, 0);
@@ -1069,7 +942,7 @@ void session_cleanup(Session *s)
     if (s->sigchld_pipe[1] >= 0) { close(s->sigchld_pipe[1]); }
     autostart_free(s);
     isde_dbus_free(s->dbus);
-    if (s->conn) { xcb_disconnect(s->conn); }
+    if (conn) { xcb_disconnect(conn); }
     if (s->system_bus) {
         dbus_connection_remove_filter(s->system_bus, system_bus_filter, s);
         dbus_connection_unref(s->system_bus);

@@ -2,7 +2,7 @@
 /*
  * main.c — isde-session entry point
  */
-#include "session.h"
+#include "../../../common/session/session.h"
 
 #include <stdio.h>
 #include <string.h>

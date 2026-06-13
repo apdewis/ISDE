@@ -1,8 +1,11 @@
 add_executable(isde-session-x11
     src/main.c
     src/session.c
-    src/autostart.c
-    src/child.c
+    ${CMAKE_SOURCE_DIR}/platform/common/session/autostart.c
+    ${CMAKE_SOURCE_DIR}/platform/common/session/child.c
+    ${CMAKE_SOURCE_DIR}/platform/common/session/dbus.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/dpms.c
 )
 
 target_compile_definitions(isde-session-x11 PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
