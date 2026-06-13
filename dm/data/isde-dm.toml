@@ -8,7 +8,7 @@ greeter = "isde-greeter"
 xserver = "/usr/bin/Xorg"
 
 # Default session .desktop file (from /usr/share/xsessions/)
-default_session = "isde.desktop"
+default_session = "isde-x11.desktop"
 
 # Power buttons on greeter
 allow_shutdown = true

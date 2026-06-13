@@ -189,5 +189,4 @@ directly with `xcb-ewmh`/`xcb-randr`/`xcb-dpms`.
 
 - Modifying libISW (forbidden by CLAUDE.md).
 - Re-abstracting generic windowing primitives libISW already provides.
-- A Wayland backend now — the layer is shaped so one is *possible*, not built.
 - Touching WM/compositor core logic beyond their consumption of shared ops.

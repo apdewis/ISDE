@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=ISDE (X11)
+Comment=Infi Systems Desktop Environment on X11
+Exec=isde-session-x11
+TryExec=isde-session-x11
+DesktopNames=ISDE
+Type=XSession

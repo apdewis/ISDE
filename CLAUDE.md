@@ -11,8 +11,8 @@ ISDE (Infi Systems Desktop Environment) is a modular, lightweight X11 desktop en
 | Binary | Directory | Role |
 |---|---|---|
 | `libisde.so` | `libisde/` | Shared utility library: TOML config parser, XDG helpers, EWMH atom cache, .desktop parser |
-| `isde-session` | `session/` | Session manager: reads `isde.toml`, starts WM + autostart entries, respawns crashed children |
-| `isde-wm` | `wm/` | Window manager: frame decoration, focus, move/resize, EWMH/ICCCM, virtual desktops |
+| `isde-session-x11` | `platform/X11/session/` | Session manager (X11): reads `isde.toml`, starts WM + autostart entries, respawns crashed children |
+| `isde-wm` | `platform/X11/wm/` | Window manager: frame decoration, focus, move/resize, EWMH/ICCCM, virtual desktops |
 | `isde-panel` | `panel/` | Panel: taskbar, app menu (.desktop files), system tray (XEmbed), clock |
 | `isde-fm` | `fm/` | File manager: icon/list views, navigation, file ops, desktop icons, MIME associations |
 | `isde-term` | `term/` | Terminal emulator: VT100/xterm, PTY, scrollback, selection |

@@ -1,18 +1,18 @@
 add_executable(isde-wm-compositor
     src/main.c
     src/compositor.c
-    ${CMAKE_SOURCE_DIR}/wm/src/wm.c
-    ${CMAKE_SOURCE_DIR}/wm/src/frame.c
-    ${CMAKE_SOURCE_DIR}/wm/src/ewmh.c
-    ${CMAKE_SOURCE_DIR}/wm/src/placement.c
-    ${CMAKE_SOURCE_DIR}/wm/src/desktops.c
-    ${CMAKE_SOURCE_DIR}/wm/src/keys.c
-    ${CMAKE_SOURCE_DIR}/wm/src/switcher.c
-    ${CMAKE_SOURCE_DIR}/wm/src/render.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/wm.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/frame.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/ewmh.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/placement.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/desktops.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/keys.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/switcher.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/render.c
 )
 
 target_include_directories(isde-wm-compositor PRIVATE
-    ${CMAKE_SOURCE_DIR}/wm/src
+    ${CMAKE_SOURCE_DIR}/platform/X11/wm/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 

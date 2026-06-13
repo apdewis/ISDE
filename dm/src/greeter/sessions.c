@@ -45,7 +45,7 @@ void greeter_sessions_load(Greeter *g)
         fprintf(stderr, "isde-greeter: no sessions found\n");
         g->sessions = malloc(sizeof(GreeterSession));
         g->sessions[0].name = strdup("Default");
-        g->sessions[0].desktop_file = strdup("isde.desktop");
+        g->sessions[0].desktop_file = strdup("isde-x11.desktop");
         g->nsessions = 1;
     }
 

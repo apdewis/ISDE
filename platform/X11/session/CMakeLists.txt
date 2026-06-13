@@ -1,13 +1,13 @@
-add_executable(isde-session
+add_executable(isde-session-x11
     src/main.c
     src/session.c
     src/autostart.c
     src/child.c
 )
 
-target_compile_definitions(isde-session PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
+target_compile_definitions(isde-session-x11 PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
 
-target_link_libraries(isde-session
+target_link_libraries(isde-session-x11
     isde
     ISDE::XCB
     ISDE::XCB_XKB
@@ -30,4 +30,4 @@ target_link_libraries(isde-confirm
     ISDE::XCB_KEYSYMS
 )
 
-install(TARGETS isde-session isde-confirm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS isde-session-x11 isde-confirm RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

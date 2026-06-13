@@ -128,8 +128,8 @@ set_target_properties(pam_imported PROPERTIES
 
 # --- Subdirectories ---
 add_subdirectory(libisde)
-add_subdirectory(wm)
-add_subdirectory(session)
+add_subdirectory(platform/X11/wm)
+add_subdirectory(platform/X11/session)
 add_subdirectory(panel)
 add_subdirectory(fm)
 add_subdirectory(settings)
@@ -155,7 +155,7 @@ add_subdirectory(calc)
 add_subdirectory(screenshot)
 add_subdirectory(common)
 if(ISDE_BUILD_COMPOSITOR)
-    add_subdirectory(wm-compositor)
+    add_subdirectory(platform/X11/wm-compositor)
 endif()
 
 # --- Optional service-unit install targets ---------------------------------
