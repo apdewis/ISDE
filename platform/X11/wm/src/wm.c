@@ -336,7 +336,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
 
     /* EWMH, IPC, and D-Bus */
     wm->ewmh = isde_ewmh_init(wm->conn, wm->screen_num);
-    wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
+    //wm->ipc  = isde_ipc_init(wm->conn, wm->screen_num);
     wm->dbus = isde_dbus_init();
     if (wm->dbus) {
         isde_dbus_settings_subscribe(wm->dbus, wm_on_settings_changed, wm);
@@ -2228,12 +2228,12 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     uint8_t type = ev->response_type & ~0x80;
 
     uint32_t cmd;
-    if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
-        if (cmd == ISDE_CMD_QUIT) {
-            wm->running = 0;
-        }
-        return;
-    }
+    //if (isde_ipc_decode(wm->ipc, ev, &cmd, NULL, NULL, NULL, NULL)) {
+    //    if (cmd == ISDE_CMD_QUIT) {
+    //        wm->running = 0;
+    //    }
+    //    return;
+    //}
 
     /* Window menu handling */
     if (wm->win_menu && wm->menu_client) {
@@ -2505,7 +2505,7 @@ void wm_cleanup(Wm *wm)
         xcb_key_symbols_free(wm->keysyms);
     }
     isde_dbus_free(wm->dbus);
-    isde_ipc_free(wm->ipc);
+    //isde_ipc_free(wm->ipc);
     isde_ewmh_free(wm->ewmh);
 
     xcb_disconnect(wm->conn);

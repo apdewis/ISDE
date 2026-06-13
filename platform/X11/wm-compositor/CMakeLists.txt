@@ -9,6 +9,7 @@ add_executable(isde-wm-compositor
     ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/keys.c
     ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/switcher.c
     ${CMAKE_SOURCE_DIR}/platform/X11/wm/src/render.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
 )
 
 target_include_directories(isde-wm-compositor PRIVATE

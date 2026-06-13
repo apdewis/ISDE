@@ -8,6 +8,7 @@ add_executable(isde-wm
     src/keys.c
     src/switcher.c
     src/render.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
 )
 
 target_include_directories(isde-wm PRIVATE
