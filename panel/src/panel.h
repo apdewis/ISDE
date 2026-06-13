@@ -28,13 +28,13 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/randr.h>
 
-#include "isde/isde-ewmh.h"
 #include "isde/isde-ipc.h"
-#include "isde/isde-dbus.h"
 #include "isde/isde-theme.h"
 #include "isde/isde-desktop.h"
 #include "isde/isde-xdg.h"
 #include "isde/isde-config.h"
+
+#include "../../platform/common/dbus.h"
 
 /* ---------- Panel geometry (scaled) ---------- */
 #define PANEL_HEIGHT      40
@@ -277,4 +277,6 @@ void  pager_reload_config(Panel *p);
 void  pager_update(Panel *p);
 void  pager_cleanup(Panel *p);
 
+/* platform specific init handler that the platform specific component must implement */
+int panel_init_platform(Panel *p);
 #endif /* ISDE_PANEL_H */

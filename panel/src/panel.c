@@ -4,6 +4,7 @@
  */
 #include "panel.h"
 #include "panel-x11.h"
+#include "../../platform/common/dbus.h"
 #include <ISW/ShellP.h>
 #include <ISW/IswArgMacros.h>
 
@@ -148,16 +149,16 @@ static void on_panel_theme_changed(void *);
 void panel_ipc_event_handler(Widget w, IswPointer client_data,
                              xcb_generic_event_t *xev, Boolean *cont)
 {
-    (void)w; (void)cont;
-    Panel *p = (Panel *)client_data;
-
-    uint32_t cmd;
-    if (!isde_ipc_decode(p->ipc, xev, &cmd, NULL, NULL, NULL, NULL)) {
-        return;
-    }
-    if (cmd == ISDE_CMD_TOGGLE_START_MENU) {
-        startmenu_toggle(p);
-    }
+    //(void)w; (void)cont;
+    //Panel *p = (Panel *)client_data;
+//
+    //uint32_t cmd;
+    //if (!isde_ipc_decode(p->ipc, xev, &cmd, NULL, NULL, NULL, NULL)) {
+    //    return;
+    //}
+    //if (cmd == ISDE_CMD_TOGGLE_START_MENU) {
+    //    startmenu_toggle(p);
+    //}
 }
 
 int panel_init(Panel *p, int *argc, char **argv)
@@ -174,14 +175,11 @@ int panel_init(Panel *p, int *argc, char **argv)
     }
 
     p->ewmh = isde_ewmh_init(p->conn, p->screen_num);
-    p->ipc  = isde_ipc_init(p->conn, p->screen_num);
+    //p->ipc  = isde_ipc_init(p->conn, p->screen_num);
 
     /* Load config and desktop entries */
     load_pinned(p);
     load_desktop_entries(p);
-
-    /* Query primary monitor geometry */
-    query_primary_monitor(p);
 
     /* Convert monitor geometry to logical pixels — ISW scales shell
        dimensions during creation, so all sizes must be logical. */
@@ -218,7 +216,6 @@ int panel_init(Panel *p, int *argc, char **argv)
 
     /* Initialize applets — they create widgets inside p->form */
     startmenu_init(p);
-    pager_init(p);
 
     /* Taskbar box — flexGrow=1 fills remaining space */
     IswArgBuilderReset(&ab);
@@ -236,15 +233,12 @@ int panel_init(Panel *p, int *argc, char **argv)
     clock_init(p);
 
     IswRealizeWidget(p->shell);
-
-    /* Clear override-redirect, set dock type + strut, select root events,
-     * register the IPC handler, subscribe to RandR — all before mapping. */
-    panel_setup_dock_window(p);
-
     IswMapWidget(p->shell);
 
     /* Claim system tray selection (needs realized window) */
     //tray_init_selection(p);
+
+    panel_init_platform(p);
 
     /* D-Bus settings notifications */
     p->dbus = isde_dbus_init();
@@ -453,19 +447,19 @@ void panel_clear_launch(Panel *p)
 void panel_launch_notify(Panel *p, IsdeDesktopEntry *de,
                          const char **files, int nfiles)
 {
-    launch_cursor_init(p);
-    panel_clear_launch(p);
-
-    char *id = NULL;
-    isde_desktop_launch_notify(de, files, nfiles, p->ewmh, &id);
-    if (id) {
-        p->launch_id = id;
-        if (p->cursor_watch) {
-            set_panel_cursor(p, p->cursor_watch);
-        }
-        p->launch_timer = IswAppAddTimeOut(p->app, LAUNCH_TIMEOUT_MS,
-                                           launch_timer_cb, p);
-    }
+    //launch_cursor_init(p);
+    //panel_clear_launch(p);
+//
+    //char *id = NULL;
+    //isde_desktop_launch_notify(de, files, nfiles, p->ewmh, &id);
+    //if (id) {
+    //    p->launch_id = id;
+    //    if (p->cursor_watch) {
+    //        set_panel_cursor(p, p->cursor_watch);
+    //    }
+    //    p->launch_timer = IswAppAddTimeOut(p->app, LAUNCH_TIMEOUT_MS,
+    //                                       launch_timer_cb, p);
+    //}
 }
 
 void panel_launch_cmd_notify(Panel *p, const char *cmd)
@@ -506,7 +500,7 @@ void panel_cleanup(Panel *p)
     free(p->pinned_classes);
 
     isde_dbus_free(p->dbus);
-    isde_ipc_free(p->ipc);
+    //isde_ipc_free(p->ipc);
     isde_ewmh_free(p->ewmh);
     IswDestroyApplicationContext(p->app);
 }

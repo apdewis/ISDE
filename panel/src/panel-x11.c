@@ -6,6 +6,7 @@
  * moved out of panel.c. Function names are unchanged from panel.c.
  */
 #include "panel-x11.h"
+#include "../../platform/common/dbus.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,16 @@ static xcb_atom_t intern(xcb_connection_t *c, const char *name)
     xcb_atom_t a = r->atom;
     free(r);
     return a;
+}
+
+int panel_init_platform(Panel *p) {
+    /* Query primary monitor geometry */
+    query_primary_monitor(p);
+
+    /* Clear override-redirect, set dock type + strut, select root events,
+     * register the IPC handler, subscribe to RandR — all before mapping. */
+    panel_setup_dock_window(p);
+    pager_init(p);
 }
 
 int panel_init_display(Panel *p)

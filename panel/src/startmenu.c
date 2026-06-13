@@ -6,6 +6,7 @@
  *   Left:  category names — click to populate right pane
  *   Right: app names for selected category — click to launch
  */
+
 #include "panel.h"
 #include <ISW/ShellP.h>
 #include <ISW/List.h>
