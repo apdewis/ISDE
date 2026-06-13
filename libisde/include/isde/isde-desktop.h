@@ -8,11 +8,7 @@
 
 #include <sys/types.h>
 
-#include "isde-ewmh.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "isde-platform.h"
 
 typedef struct IsdeDesktopEntry IsdeDesktopEntry;
 
@@ -66,17 +62,17 @@ char *isde_desktop_build_exec(const IsdeDesktopEntry *e,
 pid_t isde_desktop_launch(const IsdeDesktopEntry *e,
                           const char **files, int nfiles);
 
-/* Launch with startup notification.  If ewmh is non-NULL and the entry has
+/* Launch with startup notification.  If d is non-NULL and the entry has
  * StartupNotify=true, sends _NET_STARTUP_INFO_BEGIN/INFO messages and sets
  * DESKTOP_STARTUP_ID in the child environment.  If id_out is non-NULL, the
  * caller receives ownership of the allocated startup ID string (NULL when
  * notification was not sent).  Caller should free *id_out. */
 pid_t isde_desktop_launch_notify(const IsdeDesktopEntry *e,
                                  const char **files, int nfiles,
-                                 IsdeEwmh *ewmh, char **id_out);
+                                 IsdeDisplay *d, char **id_out);
 
 /* Send a startup notification remove message for the given ID. */
-void isde_desktop_startup_remove(IsdeEwmh *ewmh, const char *id);
+void isde_desktop_startup_remove(IsdeDisplay *d, const char *id);
 
 /* Return the configured terminal emulator from [session] terminal in
  * isde.toml, falling back to "xterm". */
@@ -93,9 +89,5 @@ pid_t isde_desktop_launch_in_terminal(const char *cmd);
  * of IsdeDesktopEntry pointers (caller must free the array and each entry).
  * *count is set to the number of entries found. */
 IsdeDesktopEntry **isde_desktop_scan_dir(const char *dirpath, int *count);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* ISDE_DESKTOP_H */

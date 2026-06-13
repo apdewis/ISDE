@@ -3,18 +3,23 @@ add_library(isde SHARED
     src/isde-config-write.c
     src/isde-xdg.c
     src/isde-desktop.c
-    src/isde-ewmh.c
-    src/isde-ipc.c
     src/isde-dbus.c
     src/isde-mime.c
     src/isde-theme.c
     src/isde-dialog.c
     src/isde-filechooser.c
     src/isde-tray.c
-    src/isde-randr.c
     src/isde-power.c
-    src/isde-dpms.c
     src/isde-cpufreq.c
+    # Platform-abstraction layer (X11 backend) — absorbs the former
+    # isde-ewmh.c / isde-randr.c / isde-ipc.c / isde-dpms.c protocol code.
+    platform/X11/isde-platform-x11.c
+    platform/X11/isde-ewmh-x11.c
+    platform/X11/isde-display-x11.c
+    platform/X11/isde-power-x11.c
+    platform/X11/isde-ipc-x11.c
+    platform/X11/isde-startup-x11.c
+    platform/X11/isde-rootprop-x11.c
     vendor/tomlc99/toml.c
 )
 
@@ -32,6 +37,7 @@ target_include_directories(isde
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tomlc99
+        ${CMAKE_CURRENT_SOURCE_DIR}/platform/X11
 )
 
 target_link_libraries(isde
