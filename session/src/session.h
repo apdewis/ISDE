@@ -11,8 +11,8 @@
 
 #include <signal.h>
 #include <sys/types.h>
+#include <time.h>
 #include <xcb/xcb.h>
-#include <ISW/Intrinsic.h>
 #include <dbus/dbus.h>
 
 /* Lid close action */
@@ -53,12 +53,12 @@ typedef struct Session {
     int               screen_num;
     IsdeIpc          *ipc;
 
-    /* Xt */
-    IswAppContext      app;
-    Widget            toplevel;
-    IswSignalId        sigchld_id;     /* Xt signal handler for SIGCHLD */
-    IswIntervalId      check_timer;    /* periodic appearance check */
-    IswIntervalId      idle_timer;     /* idle suspend check */
+    /* Event loop: self-pipe carrying SIGCHLD notifications into poll() */
+    int               sigchld_pipe[2];
+
+    /* Timer deadlines (CLOCK_MONOTONIC, in milliseconds). 0 = disarmed. */
+    long long         check_deadline_ms;   /* periodic appearance check */
+    long long         idle_deadline_ms;    /* idle lock/suspend check */
 
     /* Power settings (cached from [power] config) */
     int               idle_suspend_sec;

@@ -9,7 +9,6 @@ target_compile_definitions(isde-session PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT
 
 target_link_libraries(isde-session
     isde
-    ISDE::ISW
     ISDE::XCB
     ISDE::XCB_XKB
     ISDE::XCB_KEYSYMS

@@ -10,21 +10,28 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <time.h>
+#include <poll.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <xcb/randr.h>
 #include <xcb/dpms.h>
 #include <xcb/screensaver.h>
-#include <ISW/IswArgMacros.h>
 #include <dbus/dbus.h>
 
 #include "isde/isde-theme.h"
 #include "isde/isde-dpms.h"
 
-#include <ISW/Shell.h>
-#include <ISW/StringDefs.h>
-#include <ISW/IntrinsicP.h>
+/* ---------- monotonic clock helper ---------- */
+
+static long long now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 /* ---------- DM D-Bus helper ---------- */
 
@@ -411,20 +418,26 @@ static void init_screensaver_service(Session *s)
 
 /* ---------- idle suspend timer ---------- */
 
-static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
+/* Resolve the root window of the session's XCB screen. */
+static xcb_window_t session_root(Session *s)
 {
-    (void)id;
-    Session *s = (Session *)client_data;
+    xcb_screen_iterator_t it =
+        xcb_setup_roots_iterator(xcb_get_setup(s->conn));
+    for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
+    return it.data->root;
+}
+
+static void idle_timer_fire(Session *s)
+{
+    s->idle_deadline_ms = now_ms() + 10000;  /* re-arm: poll every 10s */
 
     if (s->inhibit_count > 0) {
-        s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
         return;
     }
 
     if ((s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) && s->conn) {
         xcb_screensaver_query_info_cookie_t cookie =
-            xcb_screensaver_query_info(s->conn,
-                IswScreen(s->toplevel)->root);
+            xcb_screensaver_query_info(s->conn, session_root(s));
         xcb_screensaver_query_info_reply_t *reply =
             xcb_screensaver_query_info_reply(s->conn, cookie, NULL);
         if (reply) {
@@ -440,8 +453,6 @@ static void idle_timer_cb(IswPointer client_data, IswIntervalId *id)
             }
         }
     }
-
-    s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
 }
 
 /* ---------- D-Bus settings callback ---------- */
@@ -477,14 +488,18 @@ static void restart_ui_children(Session *s)
 
 /* ---------- SIGCHLD ---------- */
 
-static IswAppContext sigchld_app;
-static IswSignalId   sigchld_xt_id;
+/* Write end of the self-pipe used to wake poll() from the signal handler.
+ * -1 until the pipe is created in session_init(). */
+static volatile sig_atomic_t sigchld_write_fd = -1;
 
 static void sigchld_handler(int sig)
 {
     (void)sig;
-    if (sigchld_app) {
-        IswNoticeSignal(sigchld_xt_id);
+    int fd = sigchld_write_fd;
+    if (fd >= 0) {
+        char b = 0;
+        ssize_t n = write(fd, &b, 1);
+        (void)n;  /* a full pipe already has a pending wakeup byte */
     }
 }
 
@@ -521,10 +536,8 @@ static void confirm_reap(Session *s)
     s->confirm_action[0] = '\0';
 }
 
-static void sigchld_xt_cb(IswPointer client_data, IswSignalId *id)
+static void sigchld_dispatch(Session *s)
 {
-    (void)id;
-    Session *s = (Session *)client_data;
     confirm_reap(s);
     child_reap(s);
 }
@@ -654,21 +667,17 @@ static void init_system_bus(Session *s)
     dbus_error_free(&err);
 }
 
-/* ---------- Xt input callbacks ---------- */
+/* ---------- fd-ready dispatchers (driven by poll()) ---------- */
 
-static void dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
+static void dbus_input_ready(Session *s)
 {
-    (void)fd; (void)id;
-    Session *s = (Session *)client_data;
     if (s->dbus) {
         isde_dbus_dispatch(s->dbus);
     }
 }
 
-static void system_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
+static void system_bus_input_ready(Session *s)
 {
-    (void)fd; (void)id;
-    Session *s = (Session *)client_data;
     if (s->system_bus) {
         dbus_connection_read_write(s->system_bus, 0);
         while (dbus_connection_dispatch(s->system_bus) ==
@@ -678,10 +687,8 @@ static void system_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
     }
 }
 
-static void session_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
+static void session_bus_input_ready(Session *s)
 {
-    (void)fd; (void)id;
-    Session *s = (Session *)client_data;
     if (s->session_bus) {
         dbus_connection_read_write(s->session_bus, 0);
         while (dbus_connection_dispatch(s->session_bus) ==
@@ -691,11 +698,8 @@ static void session_bus_input_cb(IswPointer client_data, int *fd, IswInputId *id
     }
 }
 
-static void xcb_input_cb(IswPointer client_data, int *fd, IswInputId *id)
+static void xcb_input_ready(Session *s)
 {
-    (void)fd; (void)id;
-    Session *s = (Session *)client_data;
-
     xcb_generic_event_t *ev;
     while ((ev = xcb_poll_for_event(s->conn)) != NULL) {
         uint32_t cmd, d0, d1, d2, d3;
@@ -723,10 +727,9 @@ static void xcb_input_cb(IswPointer client_data, int *fd, IswInputId *id)
 
 /* ---------- Periodic check timer ---------- */
 
-static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
+static void check_timer_fire(Session *s)
 {
-    (void)id;
-    Session *s = (Session *)client_data;
+    s->check_deadline_ms = now_ms() + 500;  /* re-arm */
 
     if (s->reload_display) {
         s->reload_display = 0;
@@ -739,12 +742,8 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
     if (s->reload_appearance) {
         s->reload_appearance = 0;
         isde_theme_reload();
-        isde_theme_merge_xrm(s->toplevel);
         if (s->conn) {
-            xcb_screen_iterator_t it =
-                xcb_setup_roots_iterator(xcb_get_setup(s->conn));
-            for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
-            isde_theme_set_resource_manager(s->conn, it.data->root);
+            isde_theme_set_resource_manager(s->conn, session_root(s));
         }
         fprintf(stderr, "isde-session: appearance changed\n");
     }
@@ -753,9 +752,6 @@ static void check_timer_cb(IswPointer client_data, IswIntervalId *id)
         s->reload_power = 0;
         apply_power_settings(s);
     }
-
-    /* Re-arm the timer */
-    s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
 }
 
 /* ---------- public API ---------- */
@@ -764,6 +760,7 @@ int session_init(Session *s)
 {
     memset(s, 0, sizeof(*s));
     s->death_pipe[0] = s->death_pipe[1] = -1;
+    s->sigchld_pipe[0] = s->sigchld_pipe[1] = -1;
 
     /* Load isde.toml from XDG config dirs */
     char errbuf[256];
@@ -811,31 +808,25 @@ int session_init(Session *s)
     apply_input_settings();
     apply_power_settings(s);
 
-    /* Initialize Xt for confirmation dialogs */
-    int argc = 1;
-    char *argv[] = { "isde-session", NULL };
-    s->toplevel = IswAppInitialize(&s->app, "ISDE-Session",
-                                  NULL, 0, &argc, argv,
-                                  NULL, NULL, 0);
-    isde_theme_merge_xrm(s->toplevel);
-
-    /* Realize but don't map — needed as parent for popup shells */
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgMappedWhenManaged(&ab, False);
-    IswArgWidth(&ab, 1);
-    IswArgHeight(&ab, 1);
-    IswSetValues(s->toplevel, ab.args, ab.count);
-    IswRealizeWidget(s->toplevel);
-
-    /* Install SIGCHLD handler via Xt signal mechanism */
-    sigchld_app = s->app;
-    sigchld_xt_id = IswAppAddSignal(s->app, sigchld_xt_cb, s);
-    s->sigchld_id = sigchld_xt_id;
+    /* Self-pipe to deliver SIGCHLD into the poll() loop. Non-blocking so the
+     * handler never stalls and the drain never blocks. */
+    if (pipe(s->sigchld_pipe) < 0) {
+        perror("isde-session: sigchld pipe");
+        s->sigchld_pipe[0] = s->sigchld_pipe[1] = -1;
+    } else {
+        for (int i = 0; i < 2; i++) {
+            int fl = fcntl(s->sigchld_pipe[i], F_GETFL, 0);
+            fcntl(s->sigchld_pipe[i], F_SETFL, fl | O_NONBLOCK);
+            fl = fcntl(s->sigchld_pipe[i], F_GETFD, 0);
+            fcntl(s->sigchld_pipe[i], F_SETFD, fl | FD_CLOEXEC);
+        }
+        sigchld_write_fd = s->sigchld_pipe[1];
+    }
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = sigchld_handler;
-    sa.sa_flags = SA_NOCLDSTOP;
+    sa.sa_flags = SA_NOCLDSTOP | SA_RESTART;
     sigaction(SIGCHLD, &sa, NULL);
 
     /* D-Bus session bus for settings change notifications */
@@ -856,15 +847,13 @@ int session_init(Session *s)
         s->ipc = isde_ipc_init(s->conn, s->screen_num);
 
         /* Select StructureNotify on root so IPC ClientMessages are delivered */
-        xcb_screen_iterator_t it =
-            xcb_setup_roots_iterator(xcb_get_setup(s->conn));
-        for (int i = 0; i < s->screen_num; i++) { xcb_screen_next(&it); }
+        xcb_window_t root = session_root(s);
         uint32_t ev_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-        xcb_change_window_attributes(s->conn, it.data->root,
+        xcb_change_window_attributes(s->conn, root,
                                      XCB_CW_EVENT_MASK, &ev_mask);
 
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
-        isde_theme_set_resource_manager(s->conn, it.data->root);
+        isde_theme_set_resource_manager(s->conn, root);
 
         xcb_flush(s->conn);
     } else {
@@ -906,52 +895,119 @@ void session_run(Session *s)
         child_spawn(s, s->autostart_cmds[i], s->autostart_respawn[i], 0);
     }
 
-    /* Register fd-based input sources with Xt */
+    /* Collect fd-based input sources for poll() */
     int dbus_fd = s->dbus ? isde_dbus_get_fd(s->dbus) : -1;
     int xcb_fd  = s->conn ? xcb_get_file_descriptor(s->conn) : -1;
-
-    if (dbus_fd >= 0) {
-        IswAppAddInput(s->app, dbus_fd, (IswPointer)IswInputReadMask,
-                      dbus_input_cb, s);
-    }
 
     int sys_fd = -1;
     if (s->system_bus) {
         dbus_connection_get_unix_fd(s->system_bus, &sys_fd);
-        if (sys_fd >= 0) {
-            IswAppAddInput(s->app, sys_fd, (IswPointer)IswInputReadMask,
-                          system_bus_input_cb, s);
-        }
     }
 
     int sess_fd = -1;
     if (s->session_bus) {
         dbus_connection_get_unix_fd(s->session_bus, &sess_fd);
-        if (sess_fd >= 0) {
-            IswAppAddInput(s->app, sess_fd, (IswPointer)IswInputReadMask,
-                          session_bus_input_cb, s);
-        }
-    }
-
-    if (xcb_fd >= 0) {
-        IswAppAddInput(s->app, xcb_fd, (IswPointer)IswInputReadMask,
-                      xcb_input_cb, s);
     }
 
     /* Periodic timer for WM-alive check and appearance reload */
-    s->check_timer = IswAppAddTimeOut(s->app, 500, check_timer_cb, s);
+    s->check_deadline_ms = now_ms() + 500;
 
     /* Idle timer (polls every 10s) — lock and/or suspend */
     if (s->idle_lock_sec > 0 || s->idle_suspend_sec > 0) {
-        s->idle_timer = IswAppAddTimeOut(s->app, 10000, idle_timer_cb, s);
+        s->idle_deadline_ms = now_ms() + 10000;
     }
 
-    /* Xt event loop */
+    /* poll() event loop. Indices: 0 sigchld, then the optional fd sources. */
     while (s->running) {
-        IswAppProcessEvent(s->app, IswIMAll);
+        struct pollfd pfd[5];
+        int slot[5];   /* maps pfd index -> source kind */
+        enum { SRC_SIGCHLD, SRC_DBUS, SRC_SYSBUS, SRC_SESSBUS, SRC_XCB };
+        int n = 0;
 
-        if (IswAppGetExitFlag(s->app)) {
+        if (s->sigchld_pipe[0] >= 0) {
+            pfd[n].fd = s->sigchld_pipe[0]; pfd[n].events = POLLIN;
+            slot[n] = SRC_SIGCHLD; n++;
+        }
+        if (dbus_fd >= 0) {
+            pfd[n].fd = dbus_fd; pfd[n].events = POLLIN;
+            slot[n] = SRC_DBUS; n++;
+        }
+        if (sys_fd >= 0) {
+            pfd[n].fd = sys_fd; pfd[n].events = POLLIN;
+            slot[n] = SRC_SYSBUS; n++;
+        }
+        if (sess_fd >= 0) {
+            pfd[n].fd = sess_fd; pfd[n].events = POLLIN;
+            slot[n] = SRC_SESSBUS; n++;
+        }
+        if (xcb_fd >= 0) {
+            pfd[n].fd = xcb_fd; pfd[n].events = POLLIN;
+            slot[n] = SRC_XCB; n++;
+        }
+
+        /* Compute the poll timeout from the soonest armed timer. libdbus may
+         * hold buffered messages that won't re-trigger fd readability, so poll
+         * with no wait when either bus still has data to dispatch. */
+        long long now = now_ms();
+        long long deadline = -1;
+        if (s->check_deadline_ms > 0) { deadline = s->check_deadline_ms; }
+        if (s->idle_deadline_ms > 0 &&
+            (deadline < 0 || s->idle_deadline_ms < deadline)) {
+            deadline = s->idle_deadline_ms;
+        }
+        int timeout = -1;
+        if (deadline >= 0) {
+            timeout = (int)(deadline - now);
+            if (timeout < 0) { timeout = 0; }
+        }
+        if ((s->system_bus && dbus_connection_get_dispatch_status(s->system_bus)
+                == DBUS_DISPATCH_DATA_REMAINS) ||
+            (s->session_bus && dbus_connection_get_dispatch_status(s->session_bus)
+                == DBUS_DISPATCH_DATA_REMAINS)) {
+            timeout = 0;
+        }
+
+        int r = poll(pfd, n, timeout);
+        if (r < 0) {
+            if (errno == EINTR) { continue; }
+            perror("isde-session: poll");
             break;
+        }
+
+        for (int i = 0; i < n && r > 0; i++) {
+            if (!(pfd[i].revents & (POLLIN | POLLHUP | POLLERR))) { continue; }
+            switch (slot[i]) {
+            case SRC_SIGCHLD: {
+                char buf[64];
+                while (read(s->sigchld_pipe[0], buf, sizeof(buf)) > 0) {
+                    /* drain coalesced wakeups */
+                }
+                sigchld_dispatch(s);
+                break;
+            }
+            case SRC_DBUS:    dbus_input_ready(s); break;
+            case SRC_XCB:     xcb_input_ready(s); break;
+            /* The system/session buses are serviced unconditionally below so
+             * that libdbus-buffered messages are dispatched even when no new
+             * fd activity arrived; their poll wakeups need no separate case. */
+            case SRC_SYSBUS:
+            case SRC_SESSBUS:
+                break;
+            }
+        }
+
+        /* Service the D-Bus buses (drains the read fd and dispatches any
+         * messages libdbus already buffered in-process). */
+        system_bus_input_ready(s);
+        session_bus_input_ready(s);
+
+        /* Fire any expired timers. */
+        now = now_ms();
+        if (s->check_deadline_ms > 0 && now >= s->check_deadline_ms) {
+            check_timer_fire(s);
+        }
+        if (s->idle_deadline_ms > 0 && now >= s->idle_deadline_ms) {
+            idle_timer_fire(s);
         }
     }
 }
@@ -972,6 +1028,9 @@ void session_cleanup(Session *s)
     child_kill_all(s);
     if (s->death_pipe[0] >= 0) { close(s->death_pipe[0]); }
     if (s->death_pipe[1] >= 0) { close(s->death_pipe[1]); }
+    sigchld_write_fd = -1;
+    if (s->sigchld_pipe[0] >= 0) { close(s->sigchld_pipe[0]); }
+    if (s->sigchld_pipe[1] >= 0) { close(s->sigchld_pipe[1]); }
     autostart_free(s);
     isde_dbus_free(s->dbus);
     isde_ipc_free(s->ipc);
@@ -983,9 +1042,6 @@ void session_cleanup(Session *s)
     if (s->session_bus) {
         dbus_connection_remove_filter(s->session_bus, session_bus_filter, s);
         dbus_connection_unref(s->session_bus);
-    }
-    if (s->toplevel) {
-        IswDestroyWidget(s->toplevel);
     }
     free(s->wm_command);
     free(s->panel_command);
