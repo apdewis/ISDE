@@ -580,6 +580,80 @@ static void show_confirmation(Session *s, const char *action)
     fprintf(stderr, "isde-session: isde-confirm started (pid %d)\n", pid);
 }
 
+/* ---------- org.isde.Session command service ---------- */
+
+static DBusHandlerResult
+session_command_handler(DBusConnection *conn, DBusMessage *msg,
+                        void *user_data)
+{
+    (void)conn;
+    Session *s = (Session *)user_data;
+
+    if (dbus_message_is_method_call(msg, ISDE_SESSION_DBUS_INTERFACE,
+                                    "Logout")) {
+        fprintf(stderr, "isde-session: logout requested\n");
+        show_confirmation(s, "logout");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    if (dbus_message_is_method_call(msg, ISDE_SESSION_DBUS_INTERFACE,
+                                    "Shutdown")) {
+        fprintf(stderr, "isde-session: shutdown requested\n");
+        show_confirmation(s, "shutdown");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    if (dbus_message_is_method_call(msg, ISDE_SESSION_DBUS_INTERFACE,
+                                    "Reboot")) {
+        fprintf(stderr, "isde-session: reboot requested\n");
+        show_confirmation(s, "reboot");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    if (dbus_message_is_method_call(msg, ISDE_SESSION_DBUS_INTERFACE,
+                                    "Suspend")) {
+        fprintf(stderr, "isde-session: suspend requested\n");
+        show_confirmation(s, "suspend");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    if (dbus_message_is_method_call(msg, ISDE_SESSION_DBUS_INTERFACE,
+                                    "Lock")) {
+        fprintf(stderr, "isde-session: lock requested\n");
+        dm_dbus_call("Lock");
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+static const DBusObjectPathVTable session_command_vtable = {
+    .message_function = session_command_handler
+};
+
+/* Register the org.isde.Session object on the already-open session bus
+ * (shared with the screensaver inhibit service). */
+static void init_session_command_service(Session *s)
+{
+    if (!s->session_bus) {
+        return;
+    }
+
+    DBusError err;
+    dbus_error_init(&err);
+    int ret = dbus_bus_request_name(s->session_bus, ISDE_SESSION_DBUS_SERVICE,
+                                    DBUS_NAME_FLAG_DO_NOT_QUEUE, &err);
+    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+        fprintf(stderr, "isde-session: cannot own %s: %s\n",
+                ISDE_SESSION_DBUS_SERVICE,
+                dbus_error_is_set(&err) ? err.message : "already owned");
+        dbus_error_free(&err);
+        return;
+    }
+    dbus_error_free(&err);
+
+    dbus_connection_register_object_path(s->session_bus,
+                                         ISDE_SESSION_DBUS_PATH,
+                                         &session_command_vtable, s);
+    fprintf(stderr, "isde-session: command service active\n");
+}
+
 /* ---------- System bus: ConfirmationRequested signal ---------- */
 
 static DBusHandlerResult
@@ -695,33 +769,6 @@ static void session_bus_input_ready(Session *s)
                DBUS_DISPATCH_DATA_REMAINS) {
             /* drain */
         }
-    }
-}
-
-static void xcb_input_ready(Session *s)
-{
-    xcb_generic_event_t *ev;
-    while ((ev = xcb_poll_for_event(s->conn)) != NULL) {
-        uint32_t cmd, d0, d1, d2, d3;
-        if (isde_ipc_decode(s->ipc, ev, &cmd, &d0, &d1, &d2, &d3)) {
-            if (cmd == ISDE_CMD_LOGOUT) {
-                fprintf(stderr, "isde-session: logout requested\n");
-                show_confirmation(s, "logout");
-            } else if (cmd == ISDE_CMD_LOCK) {
-                fprintf(stderr, "isde-session: lock requested\n");
-                dm_dbus_call("Lock");
-            } else if (cmd == ISDE_CMD_SHUTDOWN) {
-                fprintf(stderr, "isde-session: shutdown requested\n");
-                show_confirmation(s, "shutdown");
-            } else if (cmd == ISDE_CMD_REBOOT) {
-                fprintf(stderr, "isde-session: reboot requested\n");
-                show_confirmation(s, "reboot");
-            } else if (cmd == ISDE_CMD_SUSPEND) {
-                fprintf(stderr, "isde-session: suspend requested\n");
-                show_confirmation(s, "suspend");
-            }
-        }
-        free(ev);
     }
 }
 
@@ -841,19 +888,14 @@ int session_init(Session *s)
     /* org.freedesktop.ScreenSaver inhibit service on session bus */
     init_screensaver_service(s);
 
-    /* XCB connection for IPC (ISDE_CMD_LOGOUT etc.) */
+    /* org.isde.Session command service on the same session bus */
+    init_session_command_service(s);
+
+    /* XCB connection for theme publishing, DPMS, and screensaver query */
     s->conn = xcb_connect(getenv("DISPLAY"), &s->screen_num);
     if (!xcb_connection_has_error(s->conn)) {
-        s->ipc = isde_ipc_init(s->conn, s->screen_num);
-
-        /* Select StructureNotify on root so IPC ClientMessages are delivered */
-        xcb_window_t root = session_root(s);
-        uint32_t ev_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-        xcb_change_window_attributes(s->conn, root,
-                                     XCB_CW_EVENT_MASK, &ev_mask);
-
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
-        isde_theme_set_resource_manager(s->conn, root);
+        isde_theme_set_resource_manager(s->conn, session_root(s));
 
         xcb_flush(s->conn);
     } else {
@@ -897,7 +939,6 @@ void session_run(Session *s)
 
     /* Collect fd-based input sources for poll() */
     int dbus_fd = s->dbus ? isde_dbus_get_fd(s->dbus) : -1;
-    int xcb_fd  = s->conn ? xcb_get_file_descriptor(s->conn) : -1;
 
     int sys_fd = -1;
     if (s->system_bus) {
@@ -919,9 +960,9 @@ void session_run(Session *s)
 
     /* poll() event loop. Indices: 0 sigchld, then the optional fd sources. */
     while (s->running) {
-        struct pollfd pfd[5];
-        int slot[5];   /* maps pfd index -> source kind */
-        enum { SRC_SIGCHLD, SRC_DBUS, SRC_SYSBUS, SRC_SESSBUS, SRC_XCB };
+        struct pollfd pfd[4];
+        int slot[4];   /* maps pfd index -> source kind */
+        enum { SRC_SIGCHLD, SRC_DBUS, SRC_SYSBUS, SRC_SESSBUS };
         int n = 0;
 
         if (s->sigchld_pipe[0] >= 0) {
@@ -939,10 +980,6 @@ void session_run(Session *s)
         if (sess_fd >= 0) {
             pfd[n].fd = sess_fd; pfd[n].events = POLLIN;
             slot[n] = SRC_SESSBUS; n++;
-        }
-        if (xcb_fd >= 0) {
-            pfd[n].fd = xcb_fd; pfd[n].events = POLLIN;
-            slot[n] = SRC_XCB; n++;
         }
 
         /* Compute the poll timeout from the soonest armed timer. libdbus may
@@ -986,7 +1023,6 @@ void session_run(Session *s)
                 break;
             }
             case SRC_DBUS:    dbus_input_ready(s); break;
-            case SRC_XCB:     xcb_input_ready(s); break;
             /* The system/session buses are serviced unconditionally below so
              * that libdbus-buffered messages are dispatched even when no new
              * fd activity arrived; their poll wakeups need no separate case. */
@@ -1033,7 +1069,6 @@ void session_cleanup(Session *s)
     if (s->sigchld_pipe[1] >= 0) { close(s->sigchld_pipe[1]); }
     autostart_free(s);
     isde_dbus_free(s->dbus);
-    isde_ipc_free(s->ipc);
     if (s->conn) { xcb_disconnect(s->conn); }
     if (s->system_bus) {
         dbus_connection_remove_filter(s->system_bus, system_bus_filter, s);

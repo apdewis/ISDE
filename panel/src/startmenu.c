@@ -563,7 +563,9 @@ static void shutdown_cb(Widget w, IswPointer client_data, IswPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_SHUTDOWN, 0, 0, 0, 0);
+    isde_dbus_call_method(p->dbus, ISDE_SESSION_DBUS_SERVICE,
+                          ISDE_SESSION_DBUS_PATH, ISDE_SESSION_DBUS_INTERFACE,
+                          "Shutdown");
 }
 
 static void reboot_cb(Widget w, IswPointer client_data, IswPointer call_data)
@@ -571,7 +573,9 @@ static void reboot_cb(Widget w, IswPointer client_data, IswPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_REBOOT, 0, 0, 0, 0);
+    isde_dbus_call_method(p->dbus, ISDE_SESSION_DBUS_SERVICE,
+                          ISDE_SESSION_DBUS_PATH, ISDE_SESSION_DBUS_INTERFACE,
+                          "Reboot");
 }
 
 static void logout_cb(Widget w, IswPointer client_data, IswPointer call_data)
@@ -579,7 +583,9 @@ static void logout_cb(Widget w, IswPointer client_data, IswPointer call_data)
     (void)w; (void)call_data;
     Panel *p = (Panel *)client_data;
     panel_dismiss_popup(p);
-    isde_ipc_send(p->ipc, ISDE_CMD_LOGOUT, 0, 0, 0, 0);
+    isde_dbus_call_method(p->dbus, ISDE_SESSION_DBUS_SERVICE,
+                          ISDE_SESSION_DBUS_PATH, ISDE_SESSION_DBUS_INTERFACE,
+                          "Logout");
 }
 
 /* ---------- toggle ---------- */

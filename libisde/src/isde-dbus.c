@@ -151,6 +151,23 @@ void isde_dbus_settings_notify(IsdeDBus *bus,
     dbus_message_unref(msg);
 }
 
+void isde_dbus_call_method(IsdeDBus *bus,
+                           const char *service,
+                           const char *path,
+                           const char *iface,
+                           const char *method)
+{
+    if (!bus || !bus->conn) { return; }
+
+    DBusMessage *msg = dbus_message_new_method_call(service, path,
+                                                    iface, method);
+    if (!msg) { return; }
+
+    dbus_connection_send(bus->conn, msg, NULL);
+    dbus_connection_flush(bus->conn);
+    dbus_message_unref(msg);
+}
+
 void isde_dbus_settings_subscribe(IsdeDBus *bus,
                                    IsdeSettingsChangedCb cb,
                                    void *user_data)

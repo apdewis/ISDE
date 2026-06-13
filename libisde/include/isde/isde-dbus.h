@@ -23,6 +23,11 @@ typedef struct IsdeDBus IsdeDBus;
 #define ISDE_DBUS_INTERFACE  "org.isde.Settings"
 #define ISDE_DBUS_SIGNAL     "SettingsChanged"
 
+/* Session command service (owned by isde-session). */
+#define ISDE_SESSION_DBUS_SERVICE   "org.isde.Session"
+#define ISDE_SESSION_DBUS_PATH      "/org/isde/Session"
+#define ISDE_SESSION_DBUS_INTERFACE "org.isde.Session"
+
 /* Connect to the session bus.  Returns NULL if D-Bus is unavailable. */
 IsdeDBus *isde_dbus_init(void);
 void      isde_dbus_free(IsdeDBus *bus);
@@ -33,6 +38,14 @@ int       isde_dbus_get_fd(IsdeDBus *bus);
 
 /* Process pending D-Bus messages.  Call when the fd is readable. */
 void      isde_dbus_dispatch(IsdeDBus *bus);
+
+/* Send a fire-and-forget method call (no arguments, reply ignored).
+ * Used to invoke methods such as org.isde.Session.Logout. */
+void      isde_dbus_call_method(IsdeDBus *bus,
+                                const char *service,
+                                const char *path,
+                                const char *iface,
+                                const char *method);
 
 /* --- Settings service (used by isde-settings) --- */
 

@@ -6,7 +6,6 @@
 
 #include "isde/isde-config.h"
 #include "isde/isde-dbus.h"
-#include "isde/isde-ipc.h"
 #include "isde/isde-xdg.h"
 
 #include <signal.h>
@@ -48,10 +47,9 @@ typedef struct Session {
     int        *autostart_respawn;
     int         autostart_count;
 
-    /* XCB / IPC */
+    /* XCB connection (theme publish, DPMS, screensaver query) */
     xcb_connection_t *conn;
     int               screen_num;
-    IsdeIpc          *ipc;
 
     /* Event loop: self-pipe carrying SIGCHLD notifications into poll() */
     int               sigchld_pipe[2];
