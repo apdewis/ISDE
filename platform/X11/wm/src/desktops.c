@@ -7,7 +7,7 @@
  * active desktop highlighted.
  */
 #include "wm.h"
-#include "isde/isde-config.h"
+#include "isde-config.h"
 
 #include <stdio.h>
 #include <stdlib.h>

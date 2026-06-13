@@ -12,11 +12,10 @@
 #include <cairo/cairo.h>
 #include <cairo/cairo-xcb.h>
 
-#include "isde/isde-ewmh.h"
-#include "isde/isde-ipc.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-xdg.h"
+#include "ewmh.h"
+#include "dbus.h"
+#include "isde-theme.h"
+#include "isde-xdg.h"
 
 #include "render.h"
 
@@ -25,7 +24,7 @@
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
 
-#include "isde/isde-randr.h"
+#include "randr.h"
 
 #ifdef ISDE_COMPOSITOR
 #include "compositor.h"
@@ -129,8 +128,9 @@ typedef struct Wm {
     /* EWMH / ICCCM */
     IsdeEwmh              *ewmh;
 
-    /* IPC */
-    IsdeIpc               *ipc;
+    /* IPC — disabled pending DBus replacement; field retained for the
+       commented call sites in wm.c/keys.c. */
+    //IsdeIpc               *ipc;
     IsdeDBus              *dbus;
 
     /* Key bindings */

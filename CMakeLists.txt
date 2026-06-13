@@ -127,7 +127,7 @@ set_target_properties(pam_imported PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${PAM_INCLUDE_DIR}")
 
 # --- Subdirectories ---
-add_subdirectory(libisde)
+#add_subdirectory(libisde)
 add_subdirectory(platform/X11/wm)
 add_subdirectory(platform/X11/session)
 add_subdirectory(panel)

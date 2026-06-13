@@ -13,10 +13,10 @@
 #include <time.h>
 #include <xcb/xcb_aux.h>
 
-#include <isde/isde-theme.h>
+#include "isde-theme.h"
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_xrm.h>
-#include "isde/isde-config.h"
+#include "isde-config.h"
 
 static Wm *wm_instance;
 
