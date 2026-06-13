@@ -12,6 +12,7 @@ target_compile_definitions(isde-session-x11 PRIVATE _POSIX_C_SOURCE=200809L _DEF
 
 target_link_libraries(isde-session-x11
     isde
+    ISDE::ISW
     ISDE::XCB
     ISDE::XCB_XKB
     ISDE::XCB_KEYSYMS
@@ -22,6 +23,8 @@ target_link_libraries(isde-session-x11
 
 add_executable(isde-confirm
     src/confirm.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
 )
 
 target_compile_definitions(isde-confirm PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
