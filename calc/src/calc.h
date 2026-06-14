@@ -130,7 +130,7 @@ extern void illerr(int sig);
 #endif
 
 /* main.c */
-extern void do_select(xcb_timestamp_t time);
+extern void do_select(IswTime time);
 extern void draw(char *string);
 extern void Quit(void);
 extern void ringbell(void);

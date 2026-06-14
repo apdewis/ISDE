@@ -19,20 +19,22 @@
 #include <ISW/Command.h>
 #include <ISW/Toggle.h>
 
-#include <isde/isde-theme.h>
-#include <isde/isde-dbus.h>
+
+#include "isde-theme.h"
+#include "dbus.h"
 #include <ISW/IswArgMacros.h>
+#include <ISW/IswDragDrop.h>
 
 #include "calc.h"
 
-static Boolean convert(Widget w, xcb_atom_t *selection, xcb_atom_t *target,
-                       xcb_atom_t *type, IswPointer *value,
+static Boolean convert(Widget w, Atom *selection, Atom *target,
+                       Atom *type, IswPointer *value,
                        unsigned long *length, int *format);
 static void create_keypad(Widget parent);
 static void create_display(Widget parent);
 static void create_calculator(Widget shell);
-static void done(Widget w, xcb_atom_t *selection, xcb_atom_t *target);
-static void lose(Widget w, xcb_atom_t *selection);
+static void done(Widget w, Atom *selection, Atom *target);
+static void lose(Widget w, Atom *selection);
 
 /* global data */
 int     rpn = 0;
@@ -189,22 +191,8 @@ main(int argc, char **argv)
     IswArgMaxHeight(&ab, cur_h);
     IswSetValues(toplevel, ab.args, ab.count);
 
-    /* WM_DELETE_WINDOW */
-    xcb_connection_t *conn = IswDisplay(toplevel);
-    xcb_intern_atom_cookie_t wm_c = xcb_intern_atom(conn, 0, 16,
-                                                     "WM_DELETE_WINDOW");
-    xcb_intern_atom_cookie_t pr_c = xcb_intern_atom(conn, 0, 12,
-                                                     "WM_PROTOCOLS");
-    xcb_intern_atom_reply_t *wm_r = xcb_intern_atom_reply(conn, wm_c, NULL);
-    xcb_intern_atom_reply_t *pr_r = xcb_intern_atom_reply(conn, pr_c, NULL);
-    if (wm_r && pr_r) {
-        xcb_change_property(conn, XCB_PROP_MODE_REPLACE,
-                            IswWindow(toplevel), pr_r->atom,
-                            XCB_ATOM_ATOM, 32, 1, &wm_r->atom);
-    }
-    free(wm_r);
-    free(pr_r);
-    xcb_flush(conn);
+    /* WM_DELETE_WINDOW — the shell's WM_PROTOCOLS translation (installed
+     * above) causes ISW to set this up during realize. */
 
     /* D-Bus theme watching */
     dbus_conn = isde_dbus_init();
@@ -421,9 +409,7 @@ void setflag(int indicator, Boolean on)
 
 void ringbell(void)
 {
-    xcb_connection_t *conn = IswDisplay(toplevel);
-    xcb_bell(conn, 0);
-    xcb_flush(conn);
+    /* TODO: needs a neutral ISW bell API */
 }
 
 void Quit(void)
@@ -437,13 +423,24 @@ void Quit(void)
 
 /* ---------- selection support ---------- */
 
-static Boolean convert(Widget w, xcb_atom_t *selection, xcb_atom_t *target,
-                       xcb_atom_t *type, IswPointer *value,
+static Atom atom_primary;
+static Atom atom_string;
+
+static void ensure_sel_atoms(void)
+{
+    if (atom_primary) return;
+    atom_primary = IswDndInternType(toplevel, "PRIMARY");
+    atom_string  = IswDndInternType(toplevel, "STRING");
+}
+
+static Boolean convert(Widget w, Atom *selection, Atom *target,
+                       Atom *type, IswPointer *value,
                        unsigned long *length, int *format)
 {
     (void)w; (void)selection;
-    if (*target == XCB_ATOM_STRING) {
-        *type = XCB_ATOM_STRING;
+    ensure_sel_atoms();
+    if (*target == atom_string) {
+        *type = atom_string;
         *length = strlen(dispstr);
         memcpy(selstr, dispstr, (size_t)(*length));
         *value = selstr;
@@ -453,19 +450,19 @@ static Boolean convert(Widget w, xcb_atom_t *selection, xcb_atom_t *target,
     return False;
 }
 
-static void lose(Widget w, xcb_atom_t *selection)
+static void lose(Widget w, Atom *selection)
 {
     (void)w; (void)selection;
     IswToggleUnsetCurrent(LCD);
 }
 
-static void done(Widget w, xcb_atom_t *selection, xcb_atom_t *target)
+static void done(Widget w, Atom *selection, Atom *target)
 {
     (void)w; (void)selection; (void)target;
     selstr[0] = '\0';
 }
 
-void do_select(xcb_timestamp_t time)
+void do_select(IswTime time)
 {
     Boolean state;
     IswArgBuilder ab = IswArgBuilderInit();
@@ -473,8 +470,9 @@ void do_select(xcb_timestamp_t time)
     IswArgState(&ab, &state);
     IswGetValues(LCD, ab.args, ab.count);
 
+    ensure_sel_atoms();
     if (state) {
-        IswOwnSelection(LCD, XCB_ATOM_PRIMARY, time, convert, lose, done);
+        IswOwnSelection(LCD, atom_primary, time, convert, lose, done);
     } else {
         selstr[0] = '\0';
     }
