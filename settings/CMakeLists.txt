@@ -1,4 +1,4 @@
-add_executable(isde-settings
+add_executable(isde-settings-x11
     src/main.c
     src/settings.c
     src/panel-input.c
@@ -24,14 +24,14 @@ add_executable(isde-settings
     ${CMAKE_SOURCE_DIR}/platform/common/isde-cpufreq.c
 )
 
-target_include_directories(isde-settings PRIVATE
+target_include_directories(isde-settings-x11 PRIVATE
     ${CMAKE_SOURCE_DIR}/platform/common
     ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
-target_compile_definitions(isde-settings PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
+target_compile_definitions(isde-settings-x11 PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
 
-target_link_libraries(isde-settings
+target_link_libraries(isde-settings-x11
     ISDE::ISW
     ISDE::XCB
     ISDE::XCB_EWMH
@@ -47,4 +47,4 @@ target_link_libraries(isde-settings
     ${CMAKE_DL_LIBS}
 )
 
-install(TARGETS isde-settings RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS isde-settings-x11 RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

@@ -5,7 +5,6 @@
 #include "fm.h"
 
 #include <stdio.h>
-#include "ewmh.h"
 #include "isde-dialog.h"
 #include <stdlib.h>
 #include <string.h>
@@ -252,11 +251,6 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
-    /* EWMH atoms (for startup notification) — pass native handle for
-     * isde's X11-specific EWMH library */
-    app->ewmh = isde_ewmh_init(
-        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(app->first_toplevel)), 0);
-
     /* Thumbnail cache */
     thumbs_init(app);
 
@@ -370,7 +364,7 @@ void fm_launch_notify(Fm *fm, IsdeDesktopEntry *de,
 
     char *id = NULL;
     isde_desktop_launch_notify(de, files, nfiles,
-                               fm->app_state->ewmh, &id);
+                               IswDisplayOf(fm->toplevel), &id);
     if (id) {
         fm->launch_id = id;
         if (fm_cursor_watch) {
@@ -401,9 +395,25 @@ Fm *fm_window_new(FmApp *app, const char *path)
      * subsequent windows create new application shells. */
     int fm_w = 700;
     int fm_h = 500;
-    isde_clamp_to_workarea(
-        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(app->first_toplevel)),
-        0, &fm_w, &fm_h);
+    IswDisplay dpy = IswDisplayOf(app->first_toplevel);
+    IswScreen scr = IswScreenOf(app->first_toplevel);
+    Atom wa_atom = _IswPlatformInternAtomOp(dpy, "_NET_WORKAREA", True);
+    if (wa_atom != None) {
+        IswProperty prop = {0};
+        if (_IswPlatformGetProperty(dpy, _IswDefaultRootWindow(dpy),
+                                    wa_atom, ISW_ATOM_CARDINAL,
+                                    0, 16, &prop) && prop.num_items >= 4) {
+            uint32_t *vals = (uint32_t *)prop.value;
+            if (fm_w > (int)vals[2]) fm_w = (int)vals[2];
+            if (fm_h > (int)vals[3]) fm_h = (int)vals[3];
+        }
+        _IswPlatformFreeProperty(&prop);
+    } else {
+        int sw = _IswPlatformScreenWidth(dpy, scr);
+        int sh = _IswPlatformScreenHeight(dpy, scr);
+        if (fm_w > sw) fm_w = sw;
+        if (fm_h > sh) fm_h = sh;
+    }
 
     if (app->nwindows == 0) {
         fm->toplevel = app->first_toplevel;
@@ -528,7 +538,6 @@ void fm_app_cleanup(FmApp *app)
 #endif
     jobqueue_shutdown(app);
     isde_dbus_free(app->dbus);
-    isde_ewmh_free(app->ewmh);
     icons_cleanup(app);
     thumbs_cleanup(app);
     actions_cleanup(app);

@@ -908,14 +908,7 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
 
     for (int i = 0; i < g_nwatchers; i++) {
         ThemeWatchCtx *w = &g_watchers[i];
-        /* Publish to the root RESOURCE_MANAGER atom via the X11 layer; resolve
-         * the native xcb handles here so this file stays atom-free. */
-        IswDisplay dpy = IswDisplayOfObject(w->toplevel);
-        xcb_connection_t *conn =
-            (xcb_connection_t *)IswDisplayNativeHandle(dpy);
-        xcb_window_t root = (xcb_window_t)(uintptr_t)
-            IswWindowNativeHandle(_IswDefaultRootWindow(dpy));
-        isde_theme_set_resource_manager(conn, root);
+        isde_theme_set_resource_manager(IswDisplayOfObject(w->toplevel));
         IswReloadScreenDatabase(IswScreenOfObject(w->toplevel));
         isde_theme_merge_xrm(w->toplevel);
         if (w->cb) {

@@ -3,7 +3,6 @@
  * isde-dialog.c — HIG-compliant dialog helpers and standard dialogs
  */
 #include "isde-dialog.h"
-#include "ewmh.h"
 #include "isde-xdg.h"
 
 #include <stdio.h>
@@ -25,8 +24,6 @@
 #include <ISW/IntrinsicP.h>
 #include <ISW/ISWRender.h>
 #include <ISW/ISWPlatform.h>
-#include <xcb/xcb.h>
-#include <xcb/xcb_ewmh.h>
 
 /* ================================================================
  * Internal: Xt action for dismiss (registered once)
@@ -103,16 +100,14 @@ void isde_dialog_popup(Widget shell, IswGrabKind grab)
 
     /* Set _NET_WM_STATE_ABOVE before mapping so the WM sees it */
     IswRealizeWidget(shell);
-    xcb_connection_t *conn =
-        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(shell));
-    IsdeEwmh *ewmh = isde_ewmh_init(conn, 0);
-    if (ewmh) {
-        xcb_ewmh_connection_t *ec = isde_ewmh_connection(ewmh);
-        xcb_atom_t above = ec->_NET_WM_STATE_ABOVE;
-        xcb_window_t win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
-            _IswPlatformWidgetWindow(IswDisplayOf(shell), shell));
-        xcb_ewmh_set_wm_state(ec, win, 1, &above);
-        xcb_flush(conn);
+    IswDisplay dpy = IswDisplayOf(shell);
+    IswWindow win = _IswPlatformWidgetWindow(dpy, shell);
+    Atom wm_state = _IswPlatformInternAtomOp(dpy, "_NET_WM_STATE", False);
+    Atom above = _IswPlatformInternAtomOp(dpy, "_NET_WM_STATE_ABOVE", False);
+    if (wm_state != None && above != None) {
+        _IswPlatformChangeProperty(dpy, win, wm_state, ISW_ATOM_ATOM,
+                                   32, ISW_PROP_MODE_REPLACE, &above, 1);
+        _IswPlatformFlush(dpy);
     }
 
     IswPopup(shell, grab);

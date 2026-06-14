@@ -35,6 +35,23 @@ static long long now_ms(void)
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+static void publish_theme_to_root(xcb_connection_t *conn, xcb_window_t root)
+{
+    char *rdb = isde_theme_build_resource_string();
+    if (!rdb) return;
+    xcb_intern_atom_cookie_t ck =
+        xcb_intern_atom(conn, 0, strlen("RESOURCE_MANAGER"), "RESOURCE_MANAGER");
+    xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(conn, ck, NULL);
+    if (reply) {
+        xcb_change_property(conn, XCB_PROP_MODE_REPLACE, root,
+                            reply->atom, XCB_ATOM_STRING, 8,
+                            (uint32_t)strlen(rdb), rdb);
+        xcb_flush(conn);
+        free(reply);
+    }
+    free(rdb);
+}
+
 /* ---------- apply input settings from config ---------- */
 
 static void apply_appearance_settings(void)
@@ -591,7 +608,7 @@ static void check_timer_fire(Session *s)
         s->reload_appearance = 0;
         isde_theme_reload();
         if (conn) {
-            isde_theme_set_resource_manager(conn, session_root(s));
+            publish_theme_to_root(conn, session_root(s));
         }
         fprintf(stderr, "isde-session: appearance changed\n");
     }
@@ -697,7 +714,7 @@ int session_init(Session *s)
     xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     if (!xcb_connection_has_error(conn)) {
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
-        isde_theme_set_resource_manager(conn, session_root(s));
+        publish_theme_to_root(conn, session_root(s));
 
         /* Apply DPMS/screensaver now that we have a connection */
         if (s->screen_off_sec > 0) {

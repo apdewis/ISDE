@@ -9,6 +9,7 @@
 #include "desktop.h"
 #include "ewmh.h"
 #include "../../common/isde-config.h"
+#include <ISW/ISWPlatform.h>
 
 #include <ctype.h>
 #include <dirent.h>
@@ -432,36 +433,34 @@ static char *generate_startup_id(void)
     return strdup(buf);
 }
 
-static void send_startup_message(IsdeEwmh *ewmh, const char *msg)
+static void send_startup_message(IswDisplay dpy, const char *msg)
 {
-    xcb_connection_t *conn = isde_ewmh_xcb(ewmh);
-    xcb_window_t root = isde_ewmh_root(ewmh);
-    xcb_atom_t begin_atom = isde_ewmh_atom_startup_info_begin(ewmh);
-    xcb_atom_t cont_atom = isde_ewmh_atom_startup_info(ewmh);
+    Atom begin_atom = _IswPlatformInternAtomOp(dpy,
+                          "_NET_STARTUP_INFO_BEGIN", False);
+    Atom cont_atom = _IswPlatformInternAtomOp(dpy,
+                          "_NET_STARTUP_INFO", False);
+    if (begin_atom == None || cont_atom == None) return;
 
+    IswWindow root = _IswDefaultRootWindow(dpy);
     size_t len = strlen(msg) + 1;
     const char *p = msg;
     int first = 1;
 
     while (len > 0) {
-        xcb_client_message_event_t ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.response_type = XCB_CLIENT_MESSAGE;
-        ev.window = root;
-        ev.type = first ? begin_atom : cont_atom;
-        ev.format = 8;
-
+        uint8_t data[20];
+        memset(data, 0, sizeof(data));
         size_t chunk = len > 20 ? 20 : len;
-        memcpy(ev.data.data8, p, chunk);
+        memcpy(data, p, chunk);
 
-        xcb_send_event(conn, 0, root,
-                       XCB_EVENT_MASK_PROPERTY_CHANGE,
-                       (const char *)&ev);
+        _IswPlatformSendMessage(dpy, root, root,
+                                first ? begin_atom : cont_atom,
+                                8, data, False,
+                                IswPropertyChangeMask);
         p += chunk;
         len -= chunk;
         first = 0;
     }
-    xcb_flush(conn);
+    _IswPlatformFlush(dpy);
 }
 
 static char *quote_value(const char *val)
@@ -497,28 +496,17 @@ static char *quote_value(const char *val)
     return out;
 }
 
-static void send_startup_new(IsdeEwmh *ewmh, const char *id,
+static void send_startup_new(IswDisplay dpy, const char *id,
                              const IsdeDesktopEntry *e)
 {
     char *qname = quote_value(e->name);
     char *qbin = quote_value(e->exec);
     char *qwmclass = quote_value(e->startup_wm_class);
 
-    int screen = 0;
-    xcb_screen_t *scr = isde_ewmh_screen(ewmh);
-    xcb_connection_t *conn = isde_ewmh_xcb(ewmh);
-    xcb_screen_iterator_t si = xcb_setup_roots_iterator(xcb_get_setup(conn));
-    for (int i = 0; si.rem; xcb_screen_next(&si), i++) {
-        if (si.data == scr) {
-            screen = i;
-            break;
-        }
-    }
-
     char msg[1024];
     int pos = snprintf(msg, sizeof(msg),
-                       "new: ID=%s NAME=%s SCREEN=%d",
-                       id, qname, screen);
+                       "new: ID=%s NAME=%s SCREEN=0",
+                       id, qname);
     if (e->exec) {
         pos += snprintf(msg + pos, sizeof(msg) - pos, " BIN=%s", qbin);
     }
@@ -532,14 +520,14 @@ static void send_startup_new(IsdeEwmh *ewmh, const char *id,
     free(qbin);
     free(qwmclass);
 
-    send_startup_message(ewmh, msg);
+    send_startup_message(dpy, msg);
 }
 
-void isde_desktop_startup_remove(IsdeEwmh *ewmh, const char *id)
+void isde_desktop_startup_remove(IswDisplay dpy, const char *id)
 {
     char msg[256];
     snprintf(msg, sizeof(msg), "remove: ID=%s", id);
-    send_startup_message(ewmh, msg);
+    send_startup_message(dpy, msg);
 }
 
 static pid_t launch_cmd_with_id(const char *cmd, const char *startup_id)
@@ -620,7 +608,7 @@ pid_t isde_desktop_launch(const IsdeDesktopEntry *e,
 
 pid_t isde_desktop_launch_notify(const IsdeDesktopEntry *e,
                                  const char **files, int nfiles,
-                                 IsdeEwmh *ewmh, char **id_out)
+                                 IswDisplay dpy, char **id_out)
 {
     if (id_out) {
         *id_out = NULL;
@@ -630,9 +618,9 @@ pid_t isde_desktop_launch_notify(const IsdeDesktopEntry *e,
     if (!cmd) return -1;
 
     char *startup_id = NULL;
-    if (ewmh && e->startup_notify) {
+    if (dpy && e->startup_notify) {
         startup_id = generate_startup_id();
-        send_startup_new(ewmh, startup_id, e);
+        send_startup_new(dpy, startup_id, e);
     }
 
     pid_t pid;
@@ -643,8 +631,8 @@ pid_t isde_desktop_launch_notify(const IsdeDesktopEntry *e,
     }
     free(cmd);
 
-    if (pid < 0 && startup_id && ewmh) {
-        isde_desktop_startup_remove(ewmh, startup_id);
+    if (pid < 0 && startup_id && dpy) {
+        isde_desktop_startup_remove(dpy, startup_id);
         free(startup_id);
     } else if (id_out && startup_id) {
         *id_out = startup_id;

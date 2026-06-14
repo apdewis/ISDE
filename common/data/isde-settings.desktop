@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=ISDE Settings
+Name=ISDE Settings (X11)
 GenericName=Settings
 Comment=Configure desktop appearance, display, and input
-Exec=isde-settings
+Exec=isde-settings-x11
 Icon=isde-settings
 Terminal=false
 Categories=Settings;DesktopSettings;System;

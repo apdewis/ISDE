@@ -8,7 +8,6 @@
 #include "settings.h"
 
 #include <stdio.h>
-#include "ewmh.h"
 #include <ISW/ISWPlatform.h>
 #include <stdlib.h>
 #include <string.h>
@@ -267,9 +266,19 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     int init_w = 960;
     int init_h = 450;
-    isde_clamp_to_workarea(
-        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(s->toplevel)),
-        0, &init_w, &init_h);
+    IswDisplay dpy = IswDisplayOf(s->toplevel);
+    Atom wa_atom = _IswPlatformInternAtomOp(dpy, "_NET_WORKAREA", True);
+    if (wa_atom != None) {
+        IswProperty prop = {0};
+        if (_IswPlatformGetProperty(dpy, _IswDefaultRootWindow(dpy),
+                                    wa_atom, ISW_ATOM_CARDINAL,
+                                    0, 16, &prop) && prop.num_items >= 4) {
+            uint32_t *vals = (uint32_t *)prop.value;
+            if (init_w > (int)vals[2]) init_w = (int)vals[2];
+            if (init_h > (int)vals[3]) init_h = (int)vals[3];
+        }
+        _IswPlatformFreeProperty(&prop);
+    }
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgWidth(&ab, init_w);

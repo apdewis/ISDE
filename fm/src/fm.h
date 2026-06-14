@@ -34,7 +34,6 @@
 
 #include "isde-config.h"
 #include "dbus.h"
-#include "ewmh.h"
 #include "isde-theme.h"
 #include "isde-xdg.h"
 #include "desktop.h"
@@ -182,8 +181,6 @@ typedef struct FmApp {
     int             worker_running;
     int             notify_pipe[2]; /* worker writes, main loop reads */
     IswInputId       notify_input_id;
-
-    IsdeEwmh      *ewmh;
 
     char          *initial_path;  /* from argv, used by fm_app_init */
 

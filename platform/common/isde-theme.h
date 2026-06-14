@@ -9,7 +9,6 @@
 #define ISDE_THEME_H
 
 #include <ISW/Intrinsic.h>
-#include <xcb/xcb.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -165,7 +164,7 @@ char *isde_theme_build_resource_string(void);
  * RESOURCE_MANAGER property so all Xt/libISW clients inherit the theme.
  * X11-specific (interns/writes an atom); implemented in platform/X11/common.
  * Call from the session manager at startup and on appearance changes. */
-void isde_theme_set_resource_manager(xcb_connection_t *conn, xcb_window_t root);
+void isde_theme_set_resource_manager(IswDisplay dpy);
 
 /* Put a single "resource: value" line into the per-screen Xrm database. */
 void isde_xrm_put_line(Widget toplevel, const char *line);

@@ -394,13 +394,12 @@ void panel_clear_launch(Panel *p)
 void panel_launch_notify(Panel *p, IsdeDesktopEntry *de,
                          const char **files, int nfiles)
 {
-    PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
-
     launch_cursor_init(p);
     panel_clear_launch(p);
 
     char *id = NULL;
-    isde_desktop_launch_notify(de, files, nfiles, ctx->ewmh, &id);
+    isde_desktop_launch_notify(de, files, nfiles,
+                               IswDisplayOf(p->toplevel), &id);
     if (id) {
         p->launch_id = id;
         if (p->cursor_watch) {
