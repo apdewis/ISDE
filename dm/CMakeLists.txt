@@ -66,7 +66,7 @@ install(FILES data/isde-dm.toml
 
 # --- isde-greeter (unprivileged UI) ---
 
-add_executable(isde-greeter
+add_executable(isde-greeter-x11
     src/greeter/main.c
     src/greeter/greeter.c
     src/greeter/clock.c
@@ -83,17 +83,17 @@ add_executable(isde-greeter
     ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
 )
 
-target_include_directories(isde-greeter PRIVATE
+target_include_directories(isde-greeter-x11 PRIVATE
     ${CMAKE_SOURCE_DIR}/platform/common
     ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
-target_compile_definitions(isde-greeter PRIVATE
+target_compile_definitions(isde-greeter-x11 PRIVATE
     _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE
     DM_CONFIG_PATH="${CMAKE_INSTALL_FULL_SYSCONFDIR}/isde/isde-dm.toml"
 )
 
-target_link_libraries(isde-greeter
+target_link_libraries(isde-greeter-x11
     ISDE::ISW
     ISDE::XCB
     ISDE::XCB_EWMH
@@ -104,7 +104,7 @@ target_link_libraries(isde-greeter
     ISDE::DBUS
 )
 
-install(TARGETS isde-greeter RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS isde-greeter-x11 RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 # --- Service unit files (opt-in install components) ---
 

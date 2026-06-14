@@ -2,7 +2,7 @@
 # System-wide config: /etc/isde/isde-dm.toml
 
 # Greeter binary
-greeter = "isde-greeter"
+greeter = "isde-greeter-x11"
 
 # X server binary (use "Xephyr" for development)
 xserver = "/usr/bin/Xorg"
