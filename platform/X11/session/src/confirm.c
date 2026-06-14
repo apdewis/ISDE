@@ -304,51 +304,38 @@ int main(int argc, char **argv)
 
     IswPopup(shell, IswGrabExclusive);
 
-    /* Center dialog — all values logical; ISW scales to physical internally */
+    /* Center dialog after popup so the shell's layout pass doesn't override it */
     int cx = (scr_w - dlg_w) / 2;
     int cy = (scr_h - dlg_h) / 2;
     IswConfigureWidget(dialog, cx, cy, dlg_w, dlg_h, 1);
 
-    /* Grab keyboard and pointer on the root window — the overlay is a
-     * fullscreen modal, so grabbing root reliably captures all input without
-     * needing the ISW shell's native window id. */
-    xcb_window_t grab_win = scr->root;
+    /* Active X server grab so the override-redirect overlay receives all
+     * input.  Must use the same connection ISW uses (via the separate conn
+     * the grab steals events from ISW's dispatch).  Grab the shell widget
+     * directly through IswGrabKeyboard/IswGrabPointer. */
     for (int attempt = 0; attempt < 50; attempt++) {
-        xcb_grab_keyboard_reply_t *kr = xcb_grab_keyboard_reply(conn,
-            xcb_grab_keyboard(conn, 1, grab_win,
-                              XCB_CURRENT_TIME, XCB_GRAB_MODE_ASYNC,
-                              XCB_GRAB_MODE_ASYNC), NULL);
-        int kb_ok = kr && kr->status == XCB_GRAB_STATUS_SUCCESS;
-        free(kr);
-
-        xcb_grab_pointer_reply_t *pr = xcb_grab_pointer_reply(conn,
-            xcb_grab_pointer(conn, 1, grab_win,
-                             XCB_EVENT_MASK_BUTTON_PRESS |
-                             XCB_EVENT_MASK_BUTTON_RELEASE |
-                             XCB_EVENT_MASK_POINTER_MOTION,
-                             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                             grab_win, XCB_NONE, XCB_CURRENT_TIME), NULL);
-        int ptr_ok = pr && pr->status == XCB_GRAB_STATUS_SUCCESS;
-        free(pr);
-
-        if (kb_ok && ptr_ok) {
+        int kb = IswGrabKeyboard(shell, True, 1 /* async */,
+                                 1 /* async */, 0);
+        int ptr = IswGrabPointer(shell, True,
+                                  IswButtonPressMask | IswButtonReleaseMask |
+                                  IswPointerMotionMask,
+                                  1 /* async */, 1 /* async */,
+                                  (IswWindow)None, (IswCursor)None, 0);
+        if (kb == IswGrabSuccess && ptr == IswGrabSuccess)
             break;
-        }
-        if (kb_ok) { xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME); }
-        if (ptr_ok) { xcb_ungrab_pointer(conn, XCB_CURRENT_TIME); }
+        if (kb == IswGrabSuccess) IswUngrabKeyboard(shell, 0);
+        if (ptr == IswGrabSuccess) IswUngrabPointer(shell, 0);
         struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000 };
         nanosleep(&ts, NULL);
     }
-    xcb_flush(conn);
 
     /* Event loop */
     while (!IswAppGetExitFlag(app)) {
         IswAppProcessEvent(app, IswIMAll);
     }
 
-    xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
-    xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
-    xcb_flush(conn);
+    IswUngrabKeyboard(shell, 0);
+    IswUngrabPointer(shell, 0);
 
     for (int i = 0; i < nblanks; i++)
         xcb_destroy_window(conn, blank_wins[i]);
