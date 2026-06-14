@@ -10,7 +10,7 @@ static IswResource resources[] = {
 
 static void Initialize(Widget, Widget, ArgList, Cardinal *);
 static void Destroy(Widget);
-static void Redisplay(Widget, xcb_generic_event_t *, xcb_xfixes_region_t);
+static void Redisplay(Widget, IswEvent *, IswRegion);
 static Boolean SetValues(Widget, Widget, Widget, ArgList, Cardinal *);
 
 #define SuperClass ((DrawingAreaWidgetClass)&drawingAreaClassRec)
@@ -84,7 +84,7 @@ Destroy(Widget w)
 }
 
 static void
-Redisplay(Widget w, xcb_generic_event_t *event, xcb_xfixes_region_t region)
+Redisplay(Widget w, IswEvent *event, IswRegion region)
 {
     GraphLineWidget glw = (GraphLineWidget) w;
     DrawingAreaWidget daw = (DrawingAreaWidget) w;

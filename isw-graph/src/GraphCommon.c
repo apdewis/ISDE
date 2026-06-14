@@ -1,33 +1,25 @@
 #include <ISW/IntrinsicP.h>
 #include <ISW/StringDefs.h>
 #include <ISW/ISWRender.h>
+#include <ISW/ISWPlatform.h>
 #include <isw-graph/GraphLineP.h>
 #include <isw-graph/GraphBarP.h>
 #include <isw-graph/GraphScatterP.h>
 #include <cairo/cairo.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 static void
 resolve_foreground(Widget w, GraphBasePart *gp)
 {
-    xcb_connection_t *conn = w->core.display;
-    xcb_colormap_t cmap = w->core.colormap;
-    uint32_t pixel = (uint32_t)gp->foreground;
-    xcb_query_colors_cookie_t cookie;
-    xcb_query_colors_reply_t *reply;
-    xcb_rgb_t *rgb;
+    IswColor color;
 
-    cookie = xcb_query_colors(conn, cmap, 1, &pixel);
-    reply = xcb_query_colors_reply(conn, cookie, NULL);
-    if (reply) {
-	rgb = xcb_query_colors_colors(reply);
-	if (xcb_query_colors_colors_length(reply) > 0) {
-	    gp->fg_r = (double)(rgb[0].red >> 8) / 255.0;
-	    gp->fg_g = (double)(rgb[0].green >> 8) / 255.0;
-	    gp->fg_b = (double)(rgb[0].blue >> 8) / 255.0;
-	}
-	free(reply);
+    if (_IswPlatformQueryColor(w->core.display, w->core.colormap,
+                               (unsigned long)gp->foreground, &color)) {
+	gp->fg_r = (double)(color.red >> 8) / 255.0;
+	gp->fg_g = (double)(color.green >> 8) / 255.0;
+	gp->fg_b = (double)(color.blue >> 8) / 255.0;
     }
 }
 
@@ -110,16 +102,64 @@ IswGraphBaseApplyConfig(Widget w, GraphBasePart *gp)
 void
 IswGraphBaseDraw(Widget w, GraphBasePart *gp, ISWRenderContext *render_ctx)
 {
-    cairo_t *cr;
-
     if (!gp->plot || !render_ctx)
 	return;
 
-    cr = ISWRenderGetCairoContext(render_ctx);
-    if (!cr)
+    int width  = (int)w->core.width;
+    int height = (int)w->core.height;
+    if (width <= 0 || height <= 0)
 	return;
 
-    kplot_draw(gp->plot, (double)w->core.width, (double)w->core.height, cr);
+    /* kplot draws only to a cairo context.  Render it to a standalone cairo
+     * image surface, then blit the result through ISW's backend-neutral
+     * RGBA path — the graph never assumes the widget's render backend is
+     * cairo. */
+    cairo_surface_t *surface =
+	cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+	cairo_surface_destroy(surface);
+	return;
+    }
+
+    cairo_t *cr = cairo_create(surface);
+    kplot_draw(gp->plot, (double)width, (double)height, cr);
+    cairo_destroy(cr);
+
+    cairo_surface_flush(surface);
+    const unsigned char *src = cairo_image_surface_get_data(surface);
+    int stride = cairo_image_surface_get_stride(surface);
+
+    /* Convert cairo's premultiplied native-endian ARGB32 to straight RGBA. */
+    unsigned char *rgba = malloc((size_t)width * height * 4);
+    if (rgba) {
+	for (int y = 0; y < height; y++) {
+	    const uint32_t *row = (const uint32_t *)(src + (size_t)y * stride);
+	    unsigned char *out = rgba + (size_t)y * width * 4;
+	    for (int x = 0; x < width; x++) {
+		uint32_t px = row[x];
+		unsigned a = (px >> 24) & 0xFF;
+		unsigned r = (px >> 16) & 0xFF;
+		unsigned g = (px >> 8)  & 0xFF;
+		unsigned b =  px        & 0xFF;
+		if (a != 0 && a != 0xFF) {
+		    r = (r * 255 + a / 2) / a;
+		    g = (g * 255 + a / 2) / a;
+		    b = (b * 255 + a / 2) / a;
+		}
+		out[x * 4 + 0] = (unsigned char)r;
+		out[x * 4 + 1] = (unsigned char)g;
+		out[x * 4 + 2] = (unsigned char)b;
+		out[x * 4 + 3] = (unsigned char)a;
+	    }
+	}
+	ISWRenderDrawImageRGBA(render_ctx, rgba,
+			       (unsigned int)width, (unsigned int)height,
+			       0, 0,
+			       (unsigned int)width, (unsigned int)height);
+	free(rgba);
+    }
+
+    cairo_surface_destroy(surface);
 }
 
 Boolean
@@ -232,14 +272,16 @@ IswGraphClearData(Widget w)
 void
 IswGraphRedraw(Widget w)
 {
-    xcb_connection_t *conn;
-
     if (!IswIsRealized(w))
 	return;
 
-    conn = IswDisplay(w);
-    xcb_clear_area(conn, 1, IswWindow(w), 0, 0, 0, 0);
-    xcb_flush(conn);
+    /* Repaint the widget's surface via its own expose proc, then composite
+     * the result up — the windowless equivalent of clearing the window to
+     * provoke an Expose. */
+    IswExposeProc expose = IswClass(w)->core_class.expose;
+    if (expose)
+	(*expose)(w, NULL, 0);
+    ISWRenderRequestComposite(w);
 }
 
 struct kplotcfg *
