@@ -13,9 +13,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-theme.h"
+#include "isde-config.h"
+#include "dbus.h"
+#include "isde-theme.h"
 
 struct tsm_screen;
 struct tsm_vte;

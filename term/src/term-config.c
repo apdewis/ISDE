@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "term.h"
-#include "isde/isde-config.h"
-#include "isde/isde-theme.h"
+#include "isde-config.h"
+#include "isde-theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>

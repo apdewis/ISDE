@@ -4,9 +4,19 @@ add_executable(isde-term
     src/term-pty.c
     src/term-tsm.c
     src/term-config.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c
+    ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
+    ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
 )
 
-target_include_directories(isde-term PRIVATE src)
+target_include_directories(isde-term PRIVATE
+    src
+    ${CMAKE_SOURCE_DIR}/platform/common
+    ${CMAKE_SOURCE_DIR}/platform/X11/common
+)
 
 target_compile_definitions(isde-term PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
 
@@ -52,10 +62,8 @@ if(HAVE_TSM_OSC_CB)
 endif()
 
 target_link_libraries(isde-term
-    isde
     ISDE::ISW
     ISDE::XCB
-    ISDE::XCB_KEYSYMS
     ISDE::XCB_ICCCM
     ISDE::CAIRO
     ISDE::CAIRO_XCB

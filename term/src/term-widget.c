@@ -6,6 +6,7 @@
 #include <ISW/DrawingArea.h>
 #include <ISW/StringDefs.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/IswDragDrop.h>
 
 #include <cairo/cairo.h>
 #include <cairo/cairo-xcb.h>
@@ -15,8 +16,6 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-#include <xcb/xcb.h>
-#include <xcb/xcb_keysyms.h>
 #define XK_MISCELLANY
 #define XK_LATIN1
 #define XK_XKB_KEYS
@@ -42,9 +41,10 @@ void term_tsm_apply_palette(struct tsm_vte *vte, const TermPalette *pal);
 
 struct TermWidget;
 static void ensure_atoms(TermWidget *t);
-static void copy_selection_to(TermWidget *t, xcb_atom_t which);
-static void request_paste(TermWidget *t, xcb_atom_t which);
-static void ensure_selection_handler(TermWidget *t);
+static void copy_selection_to(TermWidget *t, Atom which);
+static void request_paste(TermWidget *t, Atom which);
+
+static TermWidget *g_sel_owner;
 
 struct TermWidget {
     Widget      canvas;
@@ -70,8 +70,6 @@ struct TermWidget {
     unsigned           rows;
     tsm_age_t          last_age;
 
-    xcb_key_symbols_t *key_syms;
-
     /* selection (cell coords) */
     int  sel_active;      /* a selection currently exists on screen */
     int  sel_pressed;     /* left button held down */
@@ -82,18 +80,15 @@ struct TermWidget {
     /* clipboard */
     char *sel_text;       /* UTF-8 copy of current selection; owned, free() */
     size_t sel_len;
-    xcb_timestamp_t last_event_time; /* timestamp from most recent input event */
+    IswTime last_event_time;
 
     /* interned selection-related atoms (lazy) */
-    xcb_atom_t a_primary;
-    xcb_atom_t a_clipboard;
-    xcb_atom_t a_utf8_string;
-    xcb_atom_t a_targets;
-    xcb_atom_t a_text;
-    xcb_atom_t a_timestamp;
-    xcb_atom_t a_paste_prop;
-    xcb_timestamp_t sel_own_time; /* timestamp we claimed selection at */
-    int paste_fallback_used;
+    Atom a_primary;
+    Atom a_clipboard;
+    Atom a_utf8_string;
+    Atom a_targets;
+    Atom a_text;
+    Atom a_timestamp;
 
     /* preferred initial geometry */
     int  initial_cols;
@@ -405,8 +400,30 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     (void)w;
     ISWDrawingCallbackData *d = (ISWDrawingCallbackData *)call;
     TermWidget *t = (TermWidget *)cd;
-    cairo_t *cr = (cairo_t *)ISWRenderGetCairoContext(d->render_ctx);
-    if (!cr) return;
+    ISWRenderContext *rc = d->render_ctx;
+    if (!rc) return;
+
+    Dimension pw, ph;
+    IswArgBuilder qb = IswArgBuilderInit();
+    IswArgWidth(&qb, &pw);
+    IswArgHeight(&qb, &ph);
+    IswGetValues(t->canvas, qb.args, qb.count);
+    if (pw <= 0 || ph <= 0) return;
+
+    double sf = ISWScaleFactor(t->canvas);
+    if (sf < 1.0) sf = 1.0;
+    int width = (int)(pw * sf + 0.5);
+    int height = (int)(ph * sf + 0.5);
+
+    cairo_surface_t *surface =
+        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+        cairo_surface_destroy(surface);
+        return;
+    }
+
+    cairo_t *cr = cairo_create(surface);
+    cairo_scale(cr, sf, sf);
 
     /* Clear with background */
     double bg[3];
@@ -417,6 +434,42 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     DrawCtx ctx = { t, cr };
     t->last_age = tsm_screen_draw(t->screen, draw_cell_cb, &ctx);
     draw_cursor(t, cr);
+
+    cairo_destroy(cr);
+    cairo_surface_flush(surface);
+
+    const unsigned char *src = cairo_image_surface_get_data(surface);
+    int stride = cairo_image_surface_get_stride(surface);
+    unsigned char *rgba = malloc((size_t)width * height * 4);
+    if (rgba) {
+        for (int y = 0; y < height; y++) {
+            const uint32_t *row = (const uint32_t *)(src + (size_t)y * stride);
+            unsigned char *out = rgba + (size_t)y * width * 4;
+            for (int x = 0; x < width; x++) {
+                uint32_t px = row[x];
+                unsigned a = (px >> 24) & 0xFF;
+                unsigned r = (px >> 16) & 0xFF;
+                unsigned g = (px >> 8)  & 0xFF;
+                unsigned b =  px        & 0xFF;
+                if (a != 0 && a != 0xFF) {
+                    r = (r * 255 + a / 2) / a;
+                    g = (g * 255 + a / 2) / a;
+                    b = (b * 255 + a / 2) / a;
+                }
+                out[x * 4 + 0] = (unsigned char)r;
+                out[x * 4 + 1] = (unsigned char)g;
+                out[x * 4 + 2] = (unsigned char)b;
+                out[x * 4 + 3] = (unsigned char)a;
+            }
+        }
+        ISWRenderDrawImageRGBA(rc, rgba,
+                               (unsigned int)width, (unsigned int)height,
+                               0, 0,
+                               (unsigned int)pw, (unsigned int)ph);
+        free(rgba);
+    }
+
+    cairo_surface_destroy(surface);
 }
 
 static void request_redraw(TermWidget *t)
@@ -458,70 +511,101 @@ static void resize_cb(Widget w, IswPointer cd, IswPointer call)
 
 /* ---------- input ---------- */
 
-static unsigned mods_to_tsm(uint16_t xstate)
+static unsigned mods_to_tsm(uint16_t isw_mods)
 {
     unsigned m = 0;
-    if (xstate & XCB_MOD_MASK_SHIFT)   m |= TSM_SHIFT_MASK;
-    if (xstate & XCB_MOD_MASK_LOCK)    m |= TSM_LOCK_MASK;
-    if (xstate & XCB_MOD_MASK_CONTROL) m |= TSM_CONTROL_MASK;
-    if (xstate & XCB_MOD_MASK_1)       m |= TSM_ALT_MASK;
-    if (xstate & XCB_MOD_MASK_4)       m |= TSM_LOGO_MASK;
+    if (isw_mods & IswModShift)   m |= TSM_SHIFT_MASK;
+    if (isw_mods & IswModLock)    m |= TSM_LOCK_MASK;
+    if (isw_mods & IswModControl) m |= TSM_CONTROL_MASK;
+    if (isw_mods & IswModAlt)     m |= TSM_ALT_MASK;
+    if (isw_mods & IswModSuper)   m |= TSM_LOGO_MASK;
     return m;
 }
 
-static uint32_t keysym_to_unicode(xcb_keysym_t ks)
+static uint32_t iswkey_to_xkeysym(uint32_t key)
 {
-    /* Latin-1 range direct; extended XKB keysyms have Unicode in low 24 bits
-     * when above 0x01000000 (X11 convention). */
-    if (ks >= 0x20 && ks <= 0x7E) return ks;
-    if (ks >= 0xA0 && ks <= 0xFF) return ks;
-    if ((ks & 0xff000000) == 0x01000000) return ks & 0x00ffffff;
-    return TSM_VTE_INVALID;
+    if (key < 0x110000) return key;
+    switch (key) {
+    case IswKeyBackspace:  return XK_BackSpace;
+    case IswKeyTab:        return XK_Tab;
+    case IswKeyReturn:     return XK_Return;
+    case IswKeyEscape:     return XK_Escape;
+    case IswKeyDelete:     return XK_Delete;
+    case IswKeyHome:       return XK_Home;
+    case IswKeyEnd:        return XK_End;
+    case IswKeyArrowLeft:  return XK_Left;
+    case IswKeyArrowRight: return XK_Right;
+    case IswKeyArrowUp:    return XK_Up;
+    case IswKeyArrowDown:  return XK_Down;
+    case IswKeyPageUp:     return XK_Prior;
+    case IswKeyPageDown:   return XK_Next;
+    case IswKeyInsert:     return XK_Insert;
+    case IswKeyF1:         return XK_F1;
+    case IswKeyF2:         return XK_F2;
+    case IswKeyF3:         return XK_F3;
+    case IswKeyF4:         return XK_F4;
+    case IswKeyF5:         return XK_F5;
+    case IswKeyF6:         return XK_F6;
+    case IswKeyF7:         return XK_F7;
+    case IswKeyF8:         return XK_F8;
+    case IswKeyF9:         return XK_F9;
+    case IswKeyF10:        return XK_F10;
+    case IswKeyF11:        return XK_F11;
+    case IswKeyF12:        return XK_F12;
+    case IswKeyShift:      return XK_Shift_L;
+    case IswKeyControl:    return XK_Control_L;
+    case IswKeyAlt:        return XK_Alt_L;
+    case IswKeySuper:      return XK_Super_L;
+    case IswKeyMeta:       return XK_Meta_L;
+    case IswKeyCapsLock:   return XK_Caps_Lock;
+    case IswKeyNumLock:    return XK_Num_Lock;
+    case IswKeyMenu:       return XK_Menu;
+    case IswKeyPause:      return XK_Pause;
+    case IswKeyPrint:      return XK_Print;
+    default:               return XK_VoidSymbol;
+    }
 }
 
-static void handle_key_press(TermWidget *t, xcb_key_press_event_t *kev)
+static void handle_key_press(TermWidget *t, IswKeyEvent *kev)
 {
-    if (!t->key_syms) t->key_syms = xcb_key_symbols_alloc(IswDisplay(t->canvas));
-    int col = (kev->state & XCB_MOD_MASK_SHIFT) ? 1 : 0;
-    xcb_keysym_t sym = xcb_key_symbols_get_keysym(t->key_syms, kev->detail, col);
-    if (sym == XCB_NO_SYMBOL)
-        sym = xcb_key_symbols_get_keysym(t->key_syms, kev->detail, 0);
+    uint32_t sym = iswkey_to_xkeysym(kev->key);
+    uint32_t uc = kev->unicode;
+    uint16_t mods_mask = kev->modifiers;
 
-    /* Local hotkeys: Shift+PgUp/PgDn, Ctrl+Shift+C/V, Shift+Insert */
-    if ((kev->state & XCB_MOD_MASK_SHIFT) && sym == XK_Prior) {
+    /* Local hotkeys */
+    if ((mods_mask & IswModShift) && kev->key == IswKeyPageUp) {
         tsm_screen_sb_page_up(t->screen, 1);
         request_redraw(t);
         return;
     }
-    if ((kev->state & XCB_MOD_MASK_SHIFT) && sym == XK_Next) {
+    if ((mods_mask & IswModShift) && kev->key == IswKeyPageDown) {
         tsm_screen_sb_page_down(t->screen, 1);
         request_redraw(t);
         return;
     }
     {
-        bool ctrl  = (kev->state & XCB_MOD_MASK_CONTROL) != 0;
-        bool shift = (kev->state & XCB_MOD_MASK_SHIFT) != 0;
-        if (ctrl && shift && (sym == XK_C || sym == XK_c)) {
+        bool ctrl  = (mods_mask & IswModControl) != 0;
+        bool shift = (mods_mask & IswModShift) != 0;
+        if (ctrl && shift && (uc == 'C' || uc == 'c')) {
             ensure_atoms(t);
             copy_selection_to(t, t->a_clipboard);
             return;
         }
-        if (ctrl && shift && (sym == XK_V || sym == XK_v)) {
+        if (ctrl && shift && (uc == 'V' || uc == 'v')) {
             ensure_atoms(t);
             request_paste(t, t->a_clipboard);
             return;
         }
-        if (shift && sym == XK_Insert) {
-            request_paste(t, XCB_ATOM_PRIMARY);
+        if (shift && kev->key == IswKeyInsert) {
+            request_paste(t, t->a_primary);
             return;
         }
     }
 
-    unsigned mods = mods_to_tsm(kev->state);
-    uint32_t uc = keysym_to_unicode(sym);
+    unsigned mods = mods_to_tsm(mods_mask);
 
     bool consumed = tsm_vte_handle_keyboard(t->vte, sym,
-                                            uc == TSM_VTE_INVALID ? 0 : uc,
+                                            uc ? uc : 0,
                                             mods, uc);
     if (consumed) {
         tsm_screen_sb_reset(t->screen);
@@ -533,84 +617,56 @@ static void handle_key_press(TermWidget *t, xcb_key_press_event_t *kev)
     }
 }
 
-/* ---------- clipboard ---------- */
-
-/* Pure-XCB clipboard: own the selection with xcb_set_selection_owner, answer
- * SelectionRequest events ourselves, and issue paste via xcb_convert_selection.
- * No libISW selection API, no Xt dispatch subtleties. */
-
-static xcb_atom_t intern(xcb_connection_t *c, const char *name)
-{
-    xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, (uint16_t)strlen(name), name);
-    xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(c, ck, NULL);
-    xcb_atom_t a = r ? r->atom : XCB_ATOM_NONE;
-    free(r);
-    return a;
-}
+/* ---------- clipboard (Xt selection API) ---------- */
 
 static void ensure_atoms(TermWidget *t)
 {
     if (t->a_primary) return;
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    t->a_primary     = XCB_ATOM_PRIMARY;
-    t->a_clipboard   = intern(c, "CLIPBOARD");
-    t->a_utf8_string = intern(c, "UTF8_STRING");
-    t->a_targets     = intern(c, "TARGETS");
-    t->a_text        = intern(c, "TEXT");
-    t->a_timestamp   = intern(c, "TIMESTAMP");
-    t->a_paste_prop  = intern(c, "ISDE_TERM_PASTE");
+    Widget w = _IswWidgetAncestor(t->canvas);
+    t->a_primary     = IswDndInternType(w, "PRIMARY");
+    t->a_clipboard   = IswDndInternType(w, "CLIPBOARD");
+    t->a_utf8_string = IswDndInternType(w, "UTF8_STRING");
+    t->a_targets     = IswDndInternType(w, "TARGETS");
+    t->a_text        = IswDndInternType(w, "TEXT");
+    t->a_timestamp   = IswDndInternType(w, "TIMESTAMP");
 }
 
-static void send_selection_notify(xcb_connection_t *c,
-                                  xcb_selection_request_event_t *req,
-                                  xcb_atom_t property)
+static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
+                                 Atom *type_return, IswPointer *value_return,
+                                 unsigned long *length_return, int *format_return)
 {
-    xcb_selection_notify_event_t ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.response_type = XCB_SELECTION_NOTIFY;
-    ev.time      = req->time;
-    ev.requestor = req->requestor;
-    ev.selection = req->selection;
-    ev.target    = req->target;
-    ev.property  = property;
-    xcb_send_event(c, 0, req->requestor, 0, (const char *)&ev);
+    (void)selection;
+    (void)w;
+    TermWidget *t = g_sel_owner;
+    if (!t || !t->sel_text || !t->sel_len)
+        return False;
+
+    if (*target == t->a_targets) {
+        static Atom targets[3];
+        targets[0] = t->a_targets;
+        targets[1] = t->a_utf8_string;
+        targets[2] = t->a_text;
+        *type_return = t->a_targets;
+        *value_return = (IswPointer)targets;
+        *length_return = 3;
+        *format_return = 32;
+        return True;
+    }
+
+    if (*target == t->a_utf8_string || *target == t->a_text) {
+        *type_return = t->a_utf8_string;
+        *value_return = (IswPointer)t->sel_text;
+        *length_return = t->sel_len;
+        *format_return = 8;
+        return True;
+    }
+
+    return False;
 }
 
-static void handle_selection_request(TermWidget *t,
-                                     xcb_selection_request_event_t *req)
+static void lose_selection(Widget w, Atom *selection)
 {
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_atom_t property = req->property != XCB_ATOM_NONE ? req->property : req->target;
-
-    if (!t->sel_text || !t->sel_len) {
-        send_selection_notify(c, req, XCB_ATOM_NONE);
-        xcb_flush(c);
-        return;
-    }
-
-    if (req->target == t->a_targets) {
-        xcb_atom_t list[5] = { t->a_targets, t->a_timestamp,
-                               t->a_utf8_string, XCB_ATOM_STRING, t->a_text };
-        xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
-                            XCB_ATOM_ATOM, 32, 5, list);
-        send_selection_notify(c, req, property);
-    } else if (req->target == t->a_timestamp) {
-        uint32_t ts = t->sel_own_time;
-        xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
-                            XCB_ATOM_INTEGER, 32, 1, &ts);
-        send_selection_notify(c, req, property);
-    } else if (req->target == XCB_ATOM_STRING || req->target == t->a_text) {
-        xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
-                            XCB_ATOM_STRING, 8, t->sel_len, t->sel_text);
-        send_selection_notify(c, req, property);
-    } else if (req->target == t->a_utf8_string) {
-        xcb_change_property(c, XCB_PROP_MODE_REPLACE, req->requestor, property,
-                            t->a_utf8_string, 8, t->sel_len, t->sel_text);
-        send_selection_notify(c, req, property);
-    } else {
-        send_selection_notify(c, req, XCB_ATOM_NONE);
-    }
-    xcb_flush(c);
+    (void)w; (void)selection;
 }
 
 static void deliver_paste_bytes(TermWidget *t, const unsigned char *data,
@@ -621,8 +677,6 @@ static void deliver_paste_bytes(TermWidget *t, const unsigned char *data,
     size_t out = 0;
     for (unsigned long i = 0; i < len; i++) {
         unsigned char ch = data[i];
-        /* Drop C0 controls except tab/newline/carriage-return and DEL.
-         * Pass through all bytes >= 0x80 so UTF-8 sequences survive intact. */
         if (ch < 0x20) {
             if (ch != '\t' && ch != '\n' && ch != '\r') continue;
         } else if (ch == 0x7F) {
@@ -635,74 +689,19 @@ static void deliver_paste_bytes(TermWidget *t, const unsigned char *data,
     free(buf);
 }
 
-static void handle_selection_notify(TermWidget *t,
-                                    xcb_selection_notify_event_t *e)
+static void receive_paste(Widget w, IswPointer client_data,
+                          Atom *selection, Atom *type,
+                          IswPointer value, unsigned long *length,
+                          int *format)
 {
-    if (e->requestor != IswWindow(t->canvas)) return;
-    if (e->property == XCB_ATOM_NONE) {
-        /* Owner refused. Fall back once from UTF8_STRING → STRING. */
-        if (e->target == t->a_utf8_string && !t->paste_fallback_used) {
-            t->paste_fallback_used = 1;
-            xcb_convert_selection(IswDisplay(t->canvas),
-                                  IswWindow(t->canvas),
-                                  e->selection, XCB_ATOM_STRING,
-                                  t->a_paste_prop, XCB_CURRENT_TIME);
-            xcb_flush(IswDisplay(t->canvas));
-        }
+    (void)w; (void)selection; (void)format;
+    TermWidget *t = (TermWidget *)client_data;
+    if (!value || *length == 0 || *type == None)
         return;
-    }
-
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_window_t win = IswWindow(t->canvas);
-    xcb_get_property_cookie_t ck = xcb_get_property(c, 1, win, e->property,
-                                                    XCB_GET_PROPERTY_TYPE_ANY,
-                                                    0, UINT32_MAX / 4);
-    xcb_get_property_reply_t *r = xcb_get_property_reply(c, ck, NULL);
-    if (r) {
-        unsigned long len = xcb_get_property_value_length(r);
-        if (len > 0 && r->format == 8) {
-            deliver_paste_bytes(t, xcb_get_property_value(r), len);
-        }
-        free(r);
-    }
-    xcb_delete_property(c, win, e->property);
-    xcb_flush(c);
+    deliver_paste_bytes(t, (const unsigned char *)value, *length);
 }
 
-static void selection_event_handler(Widget w, IswPointer closure,
-                                    xcb_generic_event_t *event, Boolean *cont)
-{
-    (void)w; (void)cont;
-    TermWidget *t = (TermWidget *)closure;
-    if (!event) return;
-    uint8_t type = event->response_type & ~0x80;
-    switch (type) {
-    case XCB_SELECTION_REQUEST:
-        handle_selection_request(t, (xcb_selection_request_event_t *)event);
-        break;
-    case XCB_SELECTION_NOTIFY:
-        handle_selection_notify(t, (xcb_selection_notify_event_t *)event);
-        break;
-    case XCB_SELECTION_CLEAR:
-        /* We lost ownership. Nothing to do; keep sel_text visible on screen. */
-        break;
-    }
-}
-
-static int selection_handler_installed = 0;
-static void ensure_selection_handler(TermWidget *t)
-{
-    if (selection_handler_installed) return;
-    selection_handler_installed = 1;
-    /* The canvas is windowless: selection events arrive on the shared
-       windowed-ancestor window and are dispatched to that ancestor widget,
-       not to the canvas.  Register the handler there so SelectionRequest/
-       Notify/Clear reach us. */
-    IswAddEventHandler(_IswWindowedAncestor(t->canvas), (EventMask)0, True,
-                       selection_event_handler, t);
-}
-
-static void copy_selection_to(TermWidget *t, xcb_atom_t which)
+static void copy_selection_to(TermWidget *t, Atom which)
 {
     if (!t->sel_active || !t->screen) return;
     char *out = NULL;
@@ -719,50 +718,46 @@ static void copy_selection_to(TermWidget *t, xcb_atom_t which)
     t->sel_len  = len;
 
     ensure_atoms(t);
-    ensure_selection_handler(t);
-    t->sel_own_time = t->last_event_time;
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_set_selection_owner(c, IswWindow(t->canvas), which, t->last_event_time);
-    xcb_flush(c);
+    g_sel_owner = t;
+    Widget shell = _IswWidgetAncestor(t->canvas);
+    IswOwnSelection(shell, (Atom)which, t->last_event_time,
+                    convert_selection, lose_selection, NULL);
 }
 
-static void request_paste(TermWidget *t, xcb_atom_t which)
+static void request_paste(TermWidget *t, Atom which)
 {
     ensure_atoms(t);
-    ensure_selection_handler(t);
-    t->paste_fallback_used = 0;
     if (t->sel_active) {
         tsm_screen_selection_reset(t->screen);
         t->sel_active = 0;
         request_redraw(t);
     }
-    xcb_connection_t *c = IswDisplay(t->canvas);
-    xcb_convert_selection(c, IswWindow(t->canvas), which, t->a_utf8_string,
-                          t->a_paste_prop, XCB_CURRENT_TIME);
-    xcb_flush(c);
+    Widget shell = _IswWidgetAncestor(t->canvas);
+    IswGetSelectionValue(shell, (Atom)which, t->a_utf8_string,
+                        receive_paste, t, 0);
 }
 
-static void handle_button(TermWidget *t, xcb_button_press_event_t *bev, bool press)
+static void handle_button(TermWidget *t, IswButtonEvent *bev, bool press)
 {
-    int cx = (int)(bev->event_x / t->cell_w);
-    int cy = (int)(bev->event_y / t->cell_h);
+    int cx = (int)(bev->x / t->cell_w);
+    int cy = (int)(bev->y / t->cell_h);
     if (cx < 0) cx = 0;
     if (cy < 0) cy = 0;
 
-    if (bev->detail == 4 /* wheel up */) {
+    if (bev->button == IswButtonWheelUp) {
         if (!press) return;
         tsm_screen_sb_up(t->screen, 3);
         request_redraw(t);
         return;
     }
-    if (bev->detail == 5 /* wheel down */) {
+    if (bev->button == IswButtonWheelDown) {
         if (!press) return;
         tsm_screen_sb_down(t->screen, 3);
         request_redraw(t);
         return;
     }
 
-    if (bev->detail == 1 /* left */) {
+    if (bev->button == IswButtonLeft) {
         if (press) {
             t->sel_pressed = 1;
             t->sel_started = 0;
@@ -771,29 +766,27 @@ static void handle_button(TermWidget *t, xcb_button_press_event_t *bev, bool pre
         } else {
             t->sel_pressed = 0;
             if (!t->sel_started && t->sel_active) {
-                /* Simple click with no drag: clear any existing selection. */
                 tsm_screen_selection_reset(t->screen);
                 t->sel_active = 0;
                 request_redraw(t);
             } else if (t->sel_started && t->sel_active) {
-                /* Drag finalized: publish to PRIMARY. */
-                copy_selection_to(t, XCB_ATOM_PRIMARY);
+                copy_selection_to(t, t->a_primary);
             }
         }
         return;
     }
 
-    if (bev->detail == 2 /* middle — paste PRIMARY */) {
-        if (press) request_paste(t, XCB_ATOM_PRIMARY);
+    if (bev->button == IswButtonMiddle) {
+        if (press) request_paste(t, t->a_primary);
         return;
     }
 }
 
-static void handle_motion(TermWidget *t, xcb_motion_notify_event_t *mev)
+static void handle_motion(TermWidget *t, IswMotionEvent *mev)
 {
     if (!t->sel_pressed) return;
-    int cx = (int)(mev->event_x / t->cell_w);
-    int cy = (int)(mev->event_y / t->cell_h);
+    int cx = (int)(mev->x / t->cell_w);
+    int cy = (int)(mev->y / t->cell_h);
     if (cx < 0) cx = 0;
     if (cy < 0) cy = 0;
     if (!t->sel_started) {
@@ -811,29 +804,23 @@ static void input_cb(Widget w, IswPointer cd, IswPointer call)
     (void)w;
     TermWidget *t = (TermWidget *)cd;
     ISWDrawingCallbackData *d = (ISWDrawingCallbackData *)call;
-    if (!d->event) return;
-    uint8_t type = d->event->response_type & ~0x80;
-    switch (type) {
-    case XCB_KEY_PRESS: {
-        xcb_key_press_event_t *e = (xcb_key_press_event_t *)d->event;
-        t->last_event_time = e->time;
-        handle_key_press(t, e);
+    IswEvent *ev = d->event;
+    if (!ev) return;
+    switch (ev->kind) {
+    case IswKeyDown:
+        t->last_event_time = ev->any.time;
+        handle_key_press(t, &ev->key);
         break;
-    }
-    case XCB_BUTTON_PRESS: {
-        xcb_button_press_event_t *e = (xcb_button_press_event_t *)d->event;
-        t->last_event_time = e->time;
-        handle_button(t, e, true);
+    case IswButtonDown:
+        t->last_event_time = ev->any.time;
+        handle_button(t, &ev->button, true);
         break;
-    }
-    case XCB_BUTTON_RELEASE: {
-        xcb_button_press_event_t *e = (xcb_button_press_event_t *)d->event;
-        t->last_event_time = e->time;
-        handle_button(t, e, false);
+    case IswButtonUp:
+        t->last_event_time = ev->any.time;
+        handle_button(t, &ev->button, false);
         break;
-    }
-    case XCB_MOTION_NOTIFY:
-        handle_motion(t, (xcb_motion_notify_event_t *)d->event);
+    case IswMotion:
+        handle_motion(t, &ev->motion);
         break;
     default: break;
     }
@@ -945,7 +932,6 @@ void term_widget_destroy(TermWidget *t)
     if (t->vte) tsm_vte_unref(t->vte);
     if (t->screen) tsm_screen_unref(t->screen);
     term_fonts_clear(t);
-    if (t->key_syms) xcb_key_symbols_free(t->key_syms);
     free(t->sel_text);
     free(t);
 }

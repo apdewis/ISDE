@@ -13,7 +13,8 @@
 #include <xcb/xcb.h>
 #include <xcb/xcb_icccm.h>
 
-#include "isde/isde-theme.h"
+#include "isde-theme.h"
+#include <ISW/ISWPlatform.h>
 
 typedef struct {
     IswAppContext   app;
@@ -142,8 +143,11 @@ int main(int argc, char **argv)
     /* Set WM_CLASS so the panel/taskbar can group windows and resolve the
      * .desktop entry (which matches by exec basename = "isde-term"). */
     {
-        xcb_connection_t *c = IswDisplay(g_app.toplevel);
-        xcb_window_t win = IswWindow(g_app.toplevel);
+        xcb_connection_t *c = (xcb_connection_t *)IswDisplayNativeHandle(
+            IswDisplayOf(g_app.toplevel));
+        xcb_window_t win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+            _IswPlatformWidgetWindow(IswDisplayOf(g_app.toplevel),
+                                     g_app.toplevel));
         static const char cls[] = "isde-term\0isde-term";
         xcb_icccm_set_wm_class(c, win, sizeof(cls) - 1, cls);
         xcb_flush(c);
