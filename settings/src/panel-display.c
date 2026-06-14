@@ -10,17 +10,17 @@
 #include <ISW/Toggle.h>
 #include <ISW/DrawingArea.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/ISWPlatform.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <cairo/cairo.h>
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-randr.h"
+#include "isde-config.h"
+#include "randr.h"
 
 typedef struct {
     xcb_randr_mode_t id;
@@ -185,7 +185,9 @@ static void normalize_positions(void)
 static void request_canvas_redraw(void)
 {
     if (!layout_canvas || !IswIsRealized(layout_canvas)) return;
-    xcb_clear_area(display_conn, 1, IswWindow(layout_canvas), 0, 0, 0, 0);
+    xcb_window_t canvas_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(layout_canvas), layout_canvas));
+    xcb_clear_area(display_conn, 1, canvas_win, 0, 0, 0, 0);
     xcb_flush(display_conn);
 }
 
@@ -657,8 +659,8 @@ static void layout_expose_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)cd;
     ISWDrawingCallbackData *d = (ISWDrawingCallbackData *)call;
-    cairo_t *cr = (cairo_t *)ISWRenderGetCairoContext(d->render_ctx);
-    if (!cr) return;
+    ISWRenderContext *rc = d->render_ctx;
+    if (!rc) return;
 
     const IsdeColorScheme *scheme = isde_theme_current();
 
@@ -671,8 +673,8 @@ static void layout_expose_cb(Widget w, IswPointer cd, IswPointer call)
     /* Background */
     double r, g, b;
     isde_color_to_rgb(scheme ? scheme->bg : 0x333333, &r, &g, &b);
-    cairo_set_source_rgb(cr, r, g, b);
-    cairo_paint(cr);
+    ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+    ISWRenderPaint(rc);
 
     LayoutTransform lt = compute_layout_transform(cw, ch);
     if (!lt.valid) return;
@@ -695,35 +697,28 @@ static void layout_expose_cb(Widget w, IswPointer cd, IswPointer call)
         else
             fill_color = scheme ? scheme->bg_light : 0x555555;
         isde_color_to_rgb(fill_color, &r, &g, &b);
-        cairo_set_source_rgb(cr, r, g, b);
-        cairo_rectangle(cr, rx, ry, rw, rh);
-        cairo_fill(cr);
+        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        ISWRenderFillRectangle(rc, rx, ry, rw, rh);
 
         /* Border */
         isde_color_to_rgb(scheme ? scheme->border : 0x888888, &r, &g, &b);
-        cairo_set_source_rgb(cr, r, g, b);
-        cairo_set_line_width(cr, 1.0);
-        cairo_rectangle(cr, rx + 0.5, ry + 0.5, rw - 1, rh - 1);
-        cairo_stroke(cr);
+        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        ISWRenderSetLineWidth(rc, 1.0);
+        ISWRenderStrokeRectangle(rc, rx, ry, rw - 1, rh - 1);
 
         /* Label */
         isde_color_to_rgb(scheme ? scheme->fg_light : 0xFFFFFF, &r, &g, &b);
-        cairo_set_source_rgb(cr, r, g, b);
-        cairo_select_font_face(cr, "sans-serif",
-                               CAIRO_FONT_SLANT_NORMAL,
-                               CAIRO_FONT_WEIGHT_NORMAL);
-        cairo_set_font_size(cr, 11.0);
-        cairo_text_extents_t ext;
-        cairo_text_extents(cr, outputs[i].name, &ext);
-        int tx = rx + (rw - (int)ext.width) / 2;
-        int ty = ry + (rh + (int)ext.height) / 2;
-        cairo_move_to(cr, tx, ty);
-        cairo_show_text(cr, outputs[i].name);
+        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        int tw = ISWRenderTextWidth(rc, outputs[i].name,
+                                    strlen(outputs[i].name));
+        int th = ISWRenderTextHeight(rc);
+        int tx = rx + (rw - tw) / 2;
+        int ty = ry + (rh - th) / 2;
+        ISWRenderDrawString(rc, outputs[i].name,
+                            strlen(outputs[i].name), tx, ty);
 
         if (outputs[i].sel_primary) {
-            cairo_set_font_size(cr, 9.0);
-            cairo_move_to(cr, rx + 4, ry + 12);
-            cairo_show_text(cr, "P");
+            ISWRenderDrawString(rc, "P", 1, rx + 4, ry + 2);
         }
     }
 }
@@ -770,7 +765,7 @@ static void layout_input_cb(Widget w, IswPointer cd, IswPointer call)
     ISWDrawingCallbackData *d = (ISWDrawingCallbackData *)call;
     if (!d->event) return;
 
-    uint8_t type = d->event->response_type & ~0x80;
+    IswEvent *ev = d->event;
 
     Dimension cw, ch;
     IswArgBuilder qb = IswArgBuilderInit();
@@ -780,11 +775,12 @@ static void layout_input_cb(Widget w, IswPointer cd, IswPointer call)
 
     LayoutTransform lt = compute_layout_transform(cw, ch);
 
-    if (type == XCB_BUTTON_PRESS) {
-        xcb_button_press_event_t *bp = (xcb_button_press_event_t *)d->event;
-        if (bp->detail != 1) return;
+    if (ev->kind == IswButtonDown) {
+        if (ev->button.button != IswButtonLeft) return;
         if (!lt.valid) return;
 
+        int mx = ev->button.x;
+        int my = ev->button.y;
         drag_output = -1;
         for (int i = noutputs - 1; i >= 0; i--) {
             if (!outputs[i].sel_enabled || outputs[i].nmodes == 0) continue;
@@ -793,11 +789,11 @@ static void layout_input_cb(Widget w, IswPointer cd, IswPointer call)
             int ry = lt.off_y + (int)((outputs[i].sel_y - lt.bb_y0) * lt.scale);
             int rw = (int)(m->width * lt.scale);
             int rh = (int)(m->height * lt.scale);
-            if (bp->event_x >= rx && bp->event_x < rx + rw &&
-                bp->event_y >= ry && bp->event_y < ry + rh) {
+            if (mx >= rx && mx < rx + rw &&
+                my >= ry && my < ry + rh) {
                 drag_output = i;
-                drag_start_mx = bp->event_x;
-                drag_start_my = bp->event_y;
+                drag_start_mx = mx;
+                drag_start_my = my;
                 drag_start_ox = outputs[i].sel_x;
                 drag_start_oy = outputs[i].sel_y;
                 drag_scale = lt.scale;
@@ -813,15 +809,14 @@ static void layout_input_cb(Widget w, IswPointer cd, IswPointer call)
                 break;
             }
         }
-    } else if (type == XCB_MOTION_NOTIFY && drag_output >= 0) {
-        xcb_motion_notify_event_t *mn = (xcb_motion_notify_event_t *)d->event;
+    } else if (ev->kind == IswMotion && drag_output >= 0) {
         if (drag_scale <= 0) return;
-        int dx = (int)((mn->event_x - drag_start_mx) / drag_scale);
-        int dy = (int)((mn->event_y - drag_start_my) / drag_scale);
+        int dx = (int)((ev->motion.x - drag_start_mx) / drag_scale);
+        int dy = (int)((ev->motion.y - drag_start_my) / drag_scale);
         outputs[drag_output].sel_x = drag_start_ox + dx;
         outputs[drag_output].sel_y = drag_start_oy + dy;
         request_canvas_redraw();
-    } else if (type == XCB_BUTTON_RELEASE && drag_output >= 0) {
+    } else if (ev->kind == IswButtonUp && drag_output >= 0) {
         snap_output_edges(drag_output);
         normalize_positions();
         drag_output = -1;
@@ -944,8 +939,8 @@ static Widget display_create(Widget parent, IswAppContext app)
     Widget form = IswCreateWidget("displayForm", formWidgetClass,
                                  parent, ab.args, ab.count);
 
-    display_conn = IswDisplay(parent);
-    display_screen = IswScreen(parent);
+    display_conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(parent));
+    display_screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(parent));
     display_root = display_screen->root;
     query_outputs(display_conn, display_root);
     load_output_configs();

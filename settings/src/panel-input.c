@@ -8,6 +8,7 @@
 #include <string.h>
 #include <xcb/xcb.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/ISWPlatform.h>
 
 static Widget scale_dclick;
 static Widget scale_accel;
@@ -112,7 +113,8 @@ static Widget input_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
-    panel_conn = IswDisplay(IswParent(parent));
+    panel_conn = (xcb_connection_t *)IswDisplayNativeHandle(
+        IswDisplayOf(IswParent(parent)));
 
     saved_dclick = isde_config_double_click_ms();
     read_current_mouse();

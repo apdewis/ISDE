@@ -8,7 +8,8 @@
 #include "settings.h"
 
 #include <stdio.h>
-#include "isde/isde-ewmh.h"
+#include "ewmh.h"
+#include <ISW/ISWPlatform.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
@@ -266,7 +267,9 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     int init_w = 960;
     int init_h = 450;
-    isde_clamp_to_workarea(IswDisplay(s->toplevel), 0, &init_w, &init_h);
+    isde_clamp_to_workarea(
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(s->toplevel)),
+        0, &init_w, &init_h);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgWidth(&ab, init_w);

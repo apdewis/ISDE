@@ -8,6 +8,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/ISWPlatform.h>
 
 static Widget scale_repeat_delay;
 static Widget scale_repeat_interval;
@@ -113,7 +114,8 @@ static Widget keyboard_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
-    panel_conn = IswDisplay(IswParent(parent));
+    panel_conn = (xcb_connection_t *)IswDisplayNativeHandle(
+        IswDisplayOf(IswParent(parent)));
 
     read_current_keyboard();
 

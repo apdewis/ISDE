@@ -14,7 +14,7 @@
 #include <ISW/SpinBox.h>
 #include <ISW/IswArgMacros.h>
 #include <fontconfig/fontconfig.h>
-#include "isde/isde-dialog.h"
+#include "isde-dialog.h"
 
 #include <stdio.h>
 #include <stdlib.h>

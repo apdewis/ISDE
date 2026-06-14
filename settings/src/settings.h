@@ -22,11 +22,11 @@
 #include <ISW/Tabs.h>
 #include <ISW/Viewport.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-settings-plugin.h"
+#include "isde-config.h"
+#include "dbus.h"
+#include "isde-theme.h"
+#include "isde-xdg.h"
+#include "isde-settings-plugin.h"
 
 #define MAX_PANELS 32
 

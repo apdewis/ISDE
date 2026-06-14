@@ -10,8 +10,8 @@
 #include <ISW/IswArgMacros.h>
 #include <ISW/ComboBox.h>
 
-#include "isde/isde-dpms.h"
-#include "isde/isde-cpufreq.h"
+#include "dpms.h"
+#include "isde-cpufreq.h"
 
 static Widget scale_screen_off;
 static Widget scale_idle_suspend;

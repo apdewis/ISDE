@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "isde/isde-theme.h"
+#include "isde-theme.h"
 
 /* --- colour scheme --- */
 static Widget  scheme_list;
