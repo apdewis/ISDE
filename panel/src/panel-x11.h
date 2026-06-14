@@ -18,7 +18,7 @@ typedef struct {
     xcb_window_t       root;
     int                screen_num;
     IsdeEwmh          *ewmh;
-    IsdeIpc           *ipc;
+    //IsdeIpc           *ipc;
     
     /* Atoms */
     xcb_atom_t         atom_net_wm_name;

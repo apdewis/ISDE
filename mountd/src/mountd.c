@@ -14,8 +14,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
 
 /* ---------- signal self-pipe ---------- */
 

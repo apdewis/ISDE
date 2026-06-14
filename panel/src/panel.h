@@ -28,11 +28,10 @@
 #include <xcb/xcb_icccm.h>
 #include <xcb/randr.h>
 
-#include "isde/isde-ipc.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-desktop.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-config.h"
+#include "isde-theme.h"
+#include "desktop.h"
+#include "isde-xdg.h"
+#include "isde-config.h"
 
 #include "../../platform/common/dbus.h"
 

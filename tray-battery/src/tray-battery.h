@@ -23,12 +23,12 @@
 
 #include <xcb/xcb.h>
 
-#include "isde/isde-dbus.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-power.h"
-#include "isde/isde-cpufreq.h"
+#include "isde-dbus.h"
+#include "isde-theme.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
+#include "isde-power.h"
+#include "isde-cpufreq.h"
 
 /* ---------- applet state ---------- */
 

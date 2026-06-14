@@ -2,7 +2,7 @@
 /*
  * isde-ewmh.c — EWMH / ICCCM atom cache and helpers
  */
-#include "isde/isde-ewmh.h"
+#include "ewmh.h"
 
 #include <stdlib.h>
 #include <string.h>

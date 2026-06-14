@@ -2,8 +2,8 @@
 /*
  * isde-config.c — TOML config file loading via tomlc99
  */
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
 #include "vendor/tomlc99/toml.h"
 
 #include <stdio.h>

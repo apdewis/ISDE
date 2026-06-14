@@ -5,7 +5,7 @@
  * Reads an existing TOML file line by line, replaces or inserts a
  * key within a [section], and writes it back.
  */
-#include "isde/isde-config.h"
+#include "isde-config.h"
 
 #include <stdio.h>
 #include <stdlib.h>

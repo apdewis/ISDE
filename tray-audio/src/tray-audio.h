@@ -35,10 +35,10 @@
 #include <spa/pod/iter.h>
 #include <spa/param/param.h>
 
-#include "isde/isde-dbus.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
+#include "isde-dbus.h"
+#include "isde-theme.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
 
 /* ---------- limits ---------- */
 

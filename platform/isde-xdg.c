@@ -1,9 +1,9 @@
 /*
  * isde-xdg.c — XDG Base Directory Specification helpers
  */
-#include "isde/isde-xdg.h"
-#include "isde/isde-config.h"
-#include "isde/isde-theme.h"
+#include "isde-xdg.h"
+#include "isde-config.h"
+#include "isde-theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>

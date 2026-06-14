@@ -16,7 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "isde/isde-xdg.h"
+#include "isde-xdg.h"
 
 /* ---------- icon loading ---------- */
 

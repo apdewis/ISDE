@@ -7,6 +7,17 @@ add_executable(isde-mountd
     src/devices.c
     src/mount_ops.c
     src/luks.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c
+    ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
+    ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
+)
+
+target_include_directories(isde-mountd PRIVATE
+    ${CMAKE_SOURCE_DIR}/platform/common
+    ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
 # Platform-specific source selection.  On FreeBSD the source files rely on
@@ -26,7 +37,10 @@ else()
 endif()
 
 target_link_libraries(isde-mountd
-    isde
+    ISDE::ISW
+    ISDE::XCB
+    ISDE::XCB_ICCCM
+    ISDE::CAIRO
     ISDE::DBUS
 )
 

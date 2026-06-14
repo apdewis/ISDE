@@ -20,7 +20,7 @@
 
 #include <cairo/cairo.h>
 #include "render.h"
-#include "isde/isde-theme.h"
+#include "isde-theme.h"
 
 /* EGL / GL extension function pointers (zero-copy path) */
 static PFNEGLCREATEIMAGEKHRPROC   pfn_eglCreateImageKHR;
