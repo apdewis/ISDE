@@ -9,7 +9,7 @@
 
 /* ---------- action callbacks ---------- */
 
-static void act_copy(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_copy(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -18,7 +18,7 @@ static void act_copy(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
     }
 }
 
-static void act_cut(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_cut(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -27,7 +27,7 @@ static void act_cut(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
     }
 }
 
-static void act_paste(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_paste(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -36,7 +36,7 @@ static void act_paste(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
     }
 }
 
-static void act_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_delete(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -45,7 +45,7 @@ static void act_delete(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n
     }
 }
 
-static void act_delete_permanent(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_delete_permanent(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -54,7 +54,7 @@ static void act_delete_permanent(Widget w, xcb_generic_event_t *ev, String *p, C
     }
 }
 
-static void act_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_rename(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -63,7 +63,7 @@ static void act_rename(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n
     }
 }
 
-static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_go_up(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -82,7 +82,7 @@ static void act_go_up(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
     free(parent);
 }
 
-static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_go_back(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -95,7 +95,7 @@ static void act_go_back(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *
     fm_refresh(fm);
 }
 
-static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_go_fwd(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -108,7 +108,7 @@ static void act_go_fwd(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n
     fm_refresh(fm);
 }
 
-static void act_refresh(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_refresh(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -117,7 +117,7 @@ static void act_refresh(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *
     }
 }
 
-static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_open(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -130,7 +130,7 @@ static void act_open(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
     }
 }
 
-static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_toggle_hidden(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -141,7 +141,7 @@ static void act_toggle_hidden(Widget w, xcb_generic_event_t *ev, String *p, Card
     fm_refresh(fm);
 }
 
-static void act_toggle_view(Widget w, xcb_generic_event_t *ev, String *p, Cardinal *n)
+static void act_toggle_view(Widget w, IswEvent *ev, String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
     Fm *fm = fm_from_widget(w);
@@ -152,7 +152,7 @@ static void act_toggle_view(Widget w, xcb_generic_event_t *ev, String *p, Cardin
                          ? FM_VIEW_LIST : FM_VIEW_ICON);
 }
 
-static void act_update_status(Widget w, xcb_generic_event_t *ev,
+static void act_update_status(Widget w, IswEvent *ev,
                               String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
@@ -161,7 +161,7 @@ static void act_update_status(Widget w, xcb_generic_event_t *ev,
         fileview_update_status(fm);
 }
 
-static void act_new_window(Widget w, xcb_generic_event_t *ev,
+static void act_new_window(Widget w, IswEvent *ev,
                            String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;
@@ -171,7 +171,7 @@ static void act_new_window(Widget w, xcb_generic_event_t *ev,
     }
 }
 
-static void act_close_window(Widget w, xcb_generic_event_t *ev,
+static void act_close_window(Widget w, IswEvent *ev,
                              String *p, Cardinal *n)
 {
     (void)ev; (void)p; (void)n;

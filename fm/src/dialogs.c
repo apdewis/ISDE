@@ -18,7 +18,7 @@
 #include <ISW/Toggle.h>
 #include <ISW/ProgressBar.h>
 #include <isw-graph/GraphLine.h>
-#include "isde/isde-dialog.h"
+#include "isde-dialog.h"
 
 /* ---------- rename dialog ---------- */
 

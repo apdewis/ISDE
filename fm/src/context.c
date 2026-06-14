@@ -12,7 +12,8 @@
 #include <ISW/ISWRender.h>
 
 #include <ISW/IswArgMacros.h>
-#include "isde/isde-dialog.h"
+#include <ISW/ISWPlatform.h>
+#include "isde-dialog.h"
 
 /* ---------- context menu action wrappers ---------- */
 
@@ -365,14 +366,13 @@ static void ctx_build_menu(Fm *fm)
 }
 
 static void ctx_handler(Widget w, IswPointer client_data,
-                        xcb_generic_event_t *event, Boolean *cont)
+                        IswEvent *event, Boolean *cont)
 {
     (void)cont;
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS) {
+    if (event->kind != IswButtonDown) {
         return;
     }
-    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
-    if (ev->detail != 3) {
+    if (event->button.button != IswButtonRight) {
         return;
     }
 
@@ -381,21 +381,17 @@ static void ctx_handler(Widget w, IswPointer client_data,
     fm_dismiss_context(fm);
 
     Widget view = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    xcb_connection_t *conn = IswDisplay(view);
-    xcb_translate_coordinates_cookie_t tc =
-        xcb_translate_coordinates(conn, ev->event, IswWindow(view),
-                                  ev->event_x, ev->event_y);
-    xcb_translate_coordinates_reply_t *tr =
-        xcb_translate_coordinates_reply(conn, tc, NULL);
-    fm->ctx_target_index = -1;
-    if (tr) {
-        int vx = tr->dst_x;
-        int vy = tr->dst_y;
-        free(tr);
-        fm->ctx_target_index = (fm->view_mode == FM_VIEW_LIST)
-            ? IswListViewHitTest(fm->listview, vx, vy)
-            : IswIconViewHitTest(fm->iconview, vx, vy);
-    }
+
+    /* Translate click position from event widget to view widget coords */
+    Position w_rx, w_ry, v_rx, v_ry;
+    IswTranslateCoords(w, event->button.x, event->button.y, &w_rx, &w_ry);
+    IswTranslateCoords(view, 0, 0, &v_rx, &v_ry);
+    int vx = (int)w_rx - (int)v_rx;
+    int vy = (int)w_ry - (int)v_ry;
+
+    fm->ctx_target_index = (fm->view_mode == FM_VIEW_LIST)
+        ? IswListViewHitTest(fm->listview, vx, vy)
+        : IswIconViewHitTest(fm->iconview, vx, vy);
 
     /* Check if we're in trash */
     char *trash_path = fileops_trash_path();
@@ -411,9 +407,8 @@ static void ctx_handler(Widget w, IswPointer client_data,
         ctx_build_menu(fm);
     }
 
-    double sf = ISWScaleFactor(fm->toplevel);
-    Position px = ev->root_x;
-    Position py = ev->root_y;
+    Position px = event->button.root_x;
+    Position py = event->button.root_y;
 
     static char ctxTranslations[] =
         "<EnterWindow>: Set()\n"
@@ -446,9 +441,10 @@ static void ctx_handler(Widget w, IswPointer client_data,
 
     IswRealizeWidget(fm->ctx_shell);
 
-    xcb_screen_t *scr = IswScreen(fm->toplevel);
-    int scr_w = (int)(scr->width_in_pixels / sf);
-    int scr_h = (int)(scr->height_in_pixels / sf);
+    IswDisplay dpy = IswDisplayOf(fm->toplevel);
+    IswScreen scr = IswScreenOf(fm->toplevel);
+    int scr_w = (int)_IswPlatformScreenWidth(dpy, scr);
+    int scr_h = (int)_IswPlatformScreenHeight(dpy, scr);
     Dimension mw = fm->ctx_shell->core.width;
     Dimension mh = fm->ctx_shell->core.height;
     Dimension bw = fm->ctx_shell->core.border_width;
@@ -512,5 +508,5 @@ static void ctx_handler(Widget w, IswPointer client_data,
 
 void fm_register_context_menu(Fm *fm, Widget w)
 {
-    IswAddEventHandler(w, XCB_EVENT_MASK_BUTTON_PRESS, False, ctx_handler, fm);
+    IswAddEventHandler(w, IswButtonPressMask, False, ctx_handler, fm);
 }

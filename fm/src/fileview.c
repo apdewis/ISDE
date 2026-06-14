@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <xcb/xcb.h>
 #include <ISW/IswArgMacros.h>
 
 /* ---------- double-click tracking ---------- */
@@ -135,16 +134,15 @@ static void iconview_callback(Widget w, IswPointer client_data,
     fm_dismiss_context(fm);
 
     /* Check if triggered by keyboard (Enter/Return) — always open */
-    xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
+    IswEvent *ev = IswLastEventProcessed(IswDisplayOf(w));
     if (ev) {
-        uint8_t type = ev->response_type & ~0x80;
-        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+        if (ev->kind == IswKeyDown || ev->kind == IswKeyUp) {
             browser_open_entry(fm, d->index);
             return;
         }
-        /* Ignore callbacks fired from ButtonRelease (BandFinish deselect);
-         * only ButtonPress should count for double-click detection */
-        if (type == XCB_BUTTON_RELEASE)
+        /* Ignore callbacks fired from ButtonUp (BandFinish deselect);
+         * only ButtonDown should count for double-click detection */
+        if (ev->kind == IswButtonUp)
             return;
     }
 
@@ -169,14 +167,13 @@ static void listview_callback(Widget w, IswPointer client_data,
     if (d->row < 0 || d->row >= fm->nentries)
         return;
 
-    xcb_generic_event_t *ev = IswLastEventProcessed(IswDisplay(w));
+    IswEvent *ev = IswLastEventProcessed(IswDisplayOf(w));
     if (ev) {
-        uint8_t type = ev->response_type & ~0x80;
-        if (type == XCB_KEY_PRESS || type == XCB_KEY_RELEASE) {
+        if (ev->kind == IswKeyDown || ev->kind == IswKeyUp) {
             browser_open_entry(fm, d->row);
             return;
         }
-        if (type == XCB_BUTTON_RELEASE)
+        if (ev->kind == IswButtonUp)
             return;
     }
 

@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * dnd.c — XDND drag-and-drop for the file manager
+ * dnd.c — drag-and-drop for the file manager
  *
  * Registers both IconView and ListView as drag sources; the shell
  * is the drop target.
@@ -17,11 +17,11 @@
 #include "fm.h"
 
 #include <ISW/ISWRender.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <xcb/xcb.h>
 
 #define DND_THRESHOLD 5  /* pixels of motion before drag starts */
 
@@ -39,7 +39,7 @@ static void free_drag_paths(Fm *fm)
 
 /* ---------- drag source: convert callback ---------- */
 
-static Boolean drag_convert(Widget w, xcb_atom_t target_type,
+static Boolean drag_convert(Widget w, Atom target_type,
                             IswPointer *data_return,
                             unsigned long *length_return,
                             int *format_return,
@@ -48,7 +48,7 @@ static Boolean drag_convert(Widget w, xcb_atom_t target_type,
     (void)w;
     Fm *fm = (Fm *)client_data;
     Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    xcb_atom_t uri_atom = ISWXdndInternType(dnd_w, "text/uri-list");
+    Atom uri_atom = IswDndInternType(dnd_w, "text/uri-list");
 
     if (target_type != uri_atom) {
         return False;
@@ -129,12 +129,12 @@ static void start_drag(Fm *fm)
         return;
     }
 
-    static xcb_atom_t uri_type;
+    static Atom uri_type;
     Widget drag_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    uri_type = ISWXdndInternType(drag_w, "text/uri-list");
+    uri_type = IswDndInternType(drag_w, "text/uri-list");
 
     IswDndAction actions = ISW_DND_ACTION_COPY;
-    if (fm->dnd_saved_press.state & XCB_MOD_MASK_SHIFT)
+    if (IswEventModifiers(&fm->dnd_saved_press) & IswModShift)
         actions |= ISW_DND_ACTION_MOVE;
 
     IswDragSourceDesc desc;
@@ -146,7 +146,7 @@ static void start_drag(Fm *fm)
     desc.finished    = drag_finished;
     desc.client_data = fm;
 
-    ISWXdndStartDrag(drag_w, &fm->dnd_saved_press, &desc);
+    IswDndStartDrag(drag_w, &fm->dnd_saved_press, &desc);
 }
 
 /* ---------- Xt action procedures for drag initiation ---------- */
@@ -158,35 +158,33 @@ static void start_drag(Fm *fm)
  *
  * fm-dnd-press saves the button event; fm-dnd-check tests the drag
  * threshold and starts the drag if a selection exists.  If
- * ISWXdndStartDrag grabs the pointer, BandDrag becomes a no-op.
+ * IswDndStartDrag grabs the pointer, BandDrag becomes a no-op.
  * If the click was on empty space (rubber band), there's no selection
  * so fm-dnd-check does nothing and BandDrag handles it.
  */
 
-static void act_dnd_press(Widget w, xcb_generic_event_t *ev,
+static void act_dnd_press(Widget w, IswEvent *ev,
                           String *params, Cardinal *num_params)
 {
     (void)params; (void)num_params;
     Fm *fm = fm_from_widget(w);
     if (!fm) { return; }
 
-    uint8_t type = ev->response_type & ~0x80;
-    if (type != XCB_BUTTON_PRESS) {
+    if (ev->kind != IswButtonDown) {
         fm->dnd_press_valid = False;
         return;
     }
 
-    xcb_button_press_event_t *bp = (xcb_button_press_event_t *)ev;
-    if (bp->detail != 1) {
+    if (ev->button.button != IswButtonLeft) {
         fm->dnd_press_valid = False;
         return;
     }
 
-    memcpy(&fm->dnd_saved_press, bp, sizeof(fm->dnd_saved_press));
+    memcpy(&fm->dnd_saved_press, ev, sizeof(fm->dnd_saved_press));
     fm->dnd_press_valid = True;
 }
 
-static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
+static void act_dnd_check(Widget w, IswEvent *ev,
                           String *params, Cardinal *num_params)
 {
     (void)params; (void)num_params;
@@ -197,14 +195,12 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
         return;
     }
 
-    uint8_t type = ev->response_type & ~0x80;
-    if (type != XCB_MOTION_NOTIFY) {
+    if (ev->kind != IswMotion) {
         return;
     }
 
-    xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)ev;
-    int dx = motion->event_x - fm->dnd_saved_press.event_x;
-    int dy = motion->event_y - fm->dnd_saved_press.event_y;
+    int dx = ev->motion.x - fm->dnd_saved_press.button.x;
+    int dy = ev->motion.y - fm->dnd_saved_press.button.y;
     if (dx * dx + dy * dy < DND_THRESHOLD * DND_THRESHOLD) {
         return;
     }
@@ -221,10 +217,9 @@ static void act_dnd_check(Widget w, xcb_generic_event_t *ev,
         return;
     }
 
-    /* Use the motion event's timestamp for the grab — Xephyr rejects
-     * the original press timestamp because it matches the passive
-     * grab's activation time (not strictly "later than"). */
-    fm->dnd_saved_press.time = motion->time;
+    /* Update the saved press timestamp to the motion event's time —
+     * some servers reject grabs with the original press timestamp. */
+    fm->dnd_saved_press.any.time = ev->any.time;
 
     fm->dnd_press_valid = False;
     start_drag(fm);
@@ -325,24 +320,14 @@ static int hit_test_view(Fm *fm, int vp_x, int vp_y)
     else
         view = fm->iconview;
 
-    /* The viewport coords include the scrollbar offset and the clip
-     * position.  Translate directly between X windows to get view-
-     * relative coordinates regardless of widget nesting.
-     * xcb_translate_coordinates works in physical pixels, so scale
-     * the logical input coords and scale the result back. */
-    double sf = ISWScaleFactor(fm->viewport);
-    xcb_connection_t *conn = IswDisplay(fm->viewport);
-    xcb_translate_coordinates_cookie_t tc =
-        xcb_translate_coordinates(conn,
-            IswWindow(fm->viewport), IswWindow(view),
-            (int16_t)(vp_x * sf), (int16_t)(vp_y * sf));
-    xcb_translate_coordinates_reply_t *tr =
-        xcb_translate_coordinates_reply(conn, tc, NULL);
-    if (!tr)
-        return -1;
-    int vx = (int)(tr->dst_x / sf + 0.5);
-    int vy = (int)(tr->dst_y / sf + 0.5);
-    free(tr);
+    /* Convert viewport coords to view-widget coords by translating
+     * both widgets' origins to root coords and computing the delta. */
+    Position vp_rx, vp_ry, v_rx, v_ry;
+    IswTranslateCoords(fm->viewport, 0, 0, &vp_rx, &vp_ry);
+    IswTranslateCoords(view, 0, 0, &v_rx, &v_ry);
+
+    int vx = vp_x + (int)vp_rx - (int)v_rx;
+    int vy = vp_y + (int)vp_ry - (int)v_ry;
 
     if (fm->view_mode == FM_VIEW_LIST)
         return IswListViewHitTest(view, vx, vy);
@@ -393,7 +378,7 @@ static void drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
         action = ISW_DND_ACTION_COPY;
 
     Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    d->accepted_type   = ISWXdndInternType(dnd_w, "text/uri-list");
+    d->accepted_type   = IswDndInternType(dnd_w, "text/uri-list");
     d->accepted_action = action;
 }
 
@@ -450,13 +435,13 @@ void dnd_init(Fm *fm)
     /* Register the content viewport as drop target. The places viewport
      * is registered separately in places_init(). FindDropTarget walks
      * the widget tree and finds the correct target by position. */
-    xcb_atom_t uri_type = ISWXdndInternType(fm->viewport, "text/uri-list");
-    ISWXdndWidgetAcceptDrops(fm->viewport);
-    ISWXdndSetDropCallback(fm->viewport, drop_cb, fm);
-    ISWXdndSetDragMotionCallback(fm->viewport, drag_motion_cb, fm);
-    ISWXdndSetDragLeaveCallback(fm->viewport, drag_leave_cb, fm);
-    ISWXdndSetAcceptedTypes(fm->viewport, &uri_type, 1);
-    ISWXdndSetAcceptedActions(fm->viewport,
+    Atom uri_type = IswDndInternType(fm->viewport, "text/uri-list");
+    IswDndWidgetAcceptDrops(fm->viewport);
+    IswDndSetDropCallback(fm->viewport, drop_cb, fm);
+    IswDndSetDragMotionCallback(fm->viewport, drag_motion_cb, fm);
+    IswDndSetDragLeaveCallback(fm->viewport, drag_leave_cb, fm);
+    IswDndSetAcceptedTypes(fm->viewport, &uri_type, 1);
+    IswDndSetAcceptedActions(fm->viewport,
                               ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 
     /* Register drag actions and override translations on both views

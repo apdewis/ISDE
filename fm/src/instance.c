@@ -6,50 +6,46 @@
  * If another instance owns the selection, sends the requested path
  * via a property + ClientMessage and returns.  The owning instance
  * watches for the message and opens a new window.
+ *
+ * This module uses native XCB handles via IswDisplayNativeHandle()
+ * because single-instance coordination is an X11-protocol operation
+ * (selection ownership, properties, client messages) with no neutral
+ * ISW equivalent.
  */
 #include "fm.h"
+
+#include <ISW/ISWPlatform.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb.h>
 
-static xcb_atom_t atom_instance;   /* _ISDE_FM_INSTANCE */
-static xcb_atom_t atom_open_path;  /* _ISDE_FM_OPEN_PATH */
-
-static xcb_atom_t intern_atom(xcb_connection_t *conn, const char *name)
-{
-    xcb_intern_atom_cookie_t ck = xcb_intern_atom(conn, 0, strlen(name), name);
-    xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(conn, ck, NULL);
-    if (!r) { return XCB_ATOM_NONE; }
-    xcb_atom_t a = r->atom;
-    free(r);
-    return a;
-}
+static Atom atom_instance;   /* _ISDE_FM_INSTANCE */
+static Atom atom_open_path;  /* _ISDE_FM_OPEN_PATH */
 
 /* ---------- owning instance: handle incoming open-path request ---------- */
 
 static void instance_event_handler(Widget w, IswPointer closure,
-                                   xcb_generic_event_t *ev, Boolean *cont)
+                                   IswEvent *ev, Boolean *cont)
 {
     (void)cont;
     FmApp *app = (FmApp *)closure;
 
-    uint8_t type = ev->response_type & ~0x80;
-    if (type != XCB_CLIENT_MESSAGE) {
+    if (ev->kind != IswProtocol)
         return;
-    }
 
-    xcb_client_message_event_t *cm = (xcb_client_message_event_t *)ev;
-    if (cm->type != atom_open_path) {
+    if (ev->protocol.message_type != (IswProtocolId)atom_open_path)
         return;
-    }
 
     /* Read the path from the _ISDE_FM_OPEN_PATH property on our window */
-    xcb_connection_t *conn = IswDisplay(w);
+    xcb_connection_t *conn =
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(w));
+    xcb_window_t win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(w), w));
     xcb_get_property_cookie_t cookie =
-        xcb_get_property(conn, True, IswWindow(w),
-                         atom_open_path, XCB_ATOM_STRING, 0, 4096);
+        xcb_get_property(conn, True, win,
+                         (xcb_atom_t)atom_open_path, XCB_ATOM_STRING, 0, 4096);
     xcb_get_property_reply_t *reply = xcb_get_property_reply(conn, cookie, NULL);
     if (!reply) {
         return;
@@ -81,9 +77,10 @@ static Boolean instance_convert(Widget w, Atom *selection, Atom *target,
     (void)selection;
     /* Return our window ID so the sender knows where to set the property */
     if (*target == atom_instance) {
-        static xcb_window_t win_id;
-        win_id = IswWindow(w);
-        *type_return = XCB_ATOM_CARDINAL;
+        static uint32_t win_id;
+        win_id = (uint32_t)(uintptr_t)IswWindowNativeHandle(
+            _IswPlatformWidgetWindow(IswDisplayOf(w), w));
+        *type_return = IswDndInternType(w, "CARDINAL");
         *value_return = (IswPointer)&win_id;
         *length_return = 1;
         *format_return = 32;
@@ -95,7 +92,6 @@ static Boolean instance_convert(Widget w, Atom *selection, Atom *target,
 static void instance_lose(Widget w, Atom *selection)
 {
     (void)w; (void)selection;
-    /* Another instance took over — shouldn't happen, ignore */
 }
 
 /* ---------- public API ---------- */
@@ -107,12 +103,13 @@ static void instance_lose(Widget w, Atom *selection)
  */
 int instance_try_primary(FmApp *app, const char *path)
 {
-    xcb_connection_t *conn = IswDisplay(app->first_toplevel);
+    xcb_connection_t *conn =
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(app->first_toplevel));
     Widget shell = app->first_toplevel;
 
-    atom_instance  = intern_atom(conn, "_ISDE_FM_INSTANCE");
-    atom_open_path = intern_atom(conn, "_ISDE_FM_OPEN_PATH");
-    if (atom_instance == XCB_ATOM_NONE || atom_open_path == XCB_ATOM_NONE) {
+    atom_instance  = IswDndInternType(shell, "_ISDE_FM_INSTANCE");
+    atom_open_path = IswDndInternType(shell, "_ISDE_FM_OPEN_PATH");
+    if (atom_instance == None || atom_open_path == None) {
         return -1;
     }
 
@@ -121,9 +118,12 @@ int instance_try_primary(FmApp *app, const char *path)
         IswRealizeWidget(shell);
     }
 
+    xcb_window_t our_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(shell), shell));
+
     /* Check if another instance already owns the selection */
     xcb_get_selection_owner_cookie_t ck =
-        xcb_get_selection_owner(conn, atom_instance);
+        xcb_get_selection_owner(conn, (xcb_atom_t)atom_instance);
     xcb_get_selection_owner_reply_t *owner_reply =
         xcb_get_selection_owner_reply(conn, ck, NULL);
     if (!owner_reply) {
@@ -135,12 +135,12 @@ int instance_try_primary(FmApp *app, const char *path)
 
     if (owner == XCB_WINDOW_NONE) {
         /* No existing instance — claim ownership */
-        xcb_set_selection_owner(conn, IswWindow(shell), atom_instance,
+        xcb_set_selection_owner(conn, our_win, (xcb_atom_t)atom_instance,
                                 XCB_CURRENT_TIME);
         xcb_flush(conn);
 
         /* Verify we actually got it (another instance could race us) */
-        ck = xcb_get_selection_owner(conn, atom_instance);
+        ck = xcb_get_selection_owner(conn, (xcb_atom_t)atom_instance);
         owner_reply = xcb_get_selection_owner_reply(conn, ck, NULL);
         if (!owner_reply) {
             return -1;
@@ -148,34 +148,31 @@ int instance_try_primary(FmApp *app, const char *path)
         owner = owner_reply->owner;
         free(owner_reply);
 
-        if (owner != IswWindow(shell)) {
-            /* Lost the race — treat as secondary */
+        if (owner != our_win) {
             goto forward;
         }
 
         /* We are the primary instance — listen for open-path messages */
         IswAddEventHandler(shell, (EventMask)0, True,
                           instance_event_handler, app);
-        IswOwnSelection(shell, atom_instance, XCB_CURRENT_TIME,
+        IswOwnSelection(shell, atom_instance, 0 /* CurrentTime */,
                         instance_convert, instance_lose, NULL);
         return 1;
     }
 
 forward:
     /* Another instance owns the selection — forward the path */
-    /* Set the path as a property on the owner's window */
     xcb_change_property(conn, XCB_PROP_MODE_REPLACE, owner,
-                        atom_open_path, XCB_ATOM_STRING, 8,
+                        (xcb_atom_t)atom_open_path, XCB_ATOM_STRING, 8,
                         strlen(path), path);
 
-    /* Send a ClientMessage to notify the owner */
     xcb_client_message_event_t cm;
     memset(&cm, 0, sizeof(cm));
     cm.response_type = XCB_CLIENT_MESSAGE;
     cm.window = owner;
-    cm.type = atom_open_path;
+    cm.type = (xcb_atom_t)atom_open_path;
     cm.format = 32;
-    cm.data.data32[0] = IswWindow(shell);
+    cm.data.data32[0] = our_win;
 
     xcb_send_event(conn, False, owner, 0, (const char *)&cm);
     xcb_flush(conn);

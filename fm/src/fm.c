@@ -5,21 +5,23 @@
 #include "fm.h"
 
 #include <stdio.h>
-#include "isde/isde-ewmh.h"
-#include "isde/isde-dialog.h"
+#include "ewmh.h"
+#include "isde-dialog.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <xcb/xcb_cursor.h>
 
 #include <ISW/IswArgMacros.h>
 #include <ISW/ISWRender.h>
+#include <ISW/IntrinsicI.h>
+#include <ISW/SimpleP.h>
+#include <ISW/ISWPlatform.h>
 
 /* App-wide shared state (will move to separate allocation in phase 2) */
 static FmApp g_app;
 
-/* Context key for storing Fm* on shell windows */
-XContext fm_window_context = 0;
+/* Global pointer for fm_from_widget (defined in fm.h) */
+FmApp *fm_global_app = NULL;
 
 /* ---------- forward declarations ---------- */
 
@@ -166,8 +168,7 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
     memset(app, 0, sizeof(*app));
     app->mount_inotify_fd = -1;
 
-    /* Initialize context key for fm_from_widget lookups */
-    fm_window_context = IswUniqueContext();
+    fm_global_app = app;
 
     app->first_toplevel = IswAppInitialize(&app->app, "ISDE-FM",
                                           NULL, 0, argc, argv,
@@ -251,8 +252,10 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
         }
     }
 
-    /* EWMH atoms (for startup notification) */
-    app->ewmh = isde_ewmh_init(IswDisplay(app->first_toplevel), 0);
+    /* EWMH atoms (for startup notification) — pass native handle for
+     * isde's X11-specific EWMH library */
+    app->ewmh = isde_ewmh_init(
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(app->first_toplevel)), 0);
 
     /* Thumbnail cache */
     thumbs_init(app);
@@ -317,35 +320,26 @@ void fm_update_title(Fm *fm)
 
 #define FM_LAUNCH_TIMEOUT_MS 15000
 
-static xcb_cursor_t fm_cursor_watch;
-static xcb_cursor_t fm_cursor_default;
+static IswCursor fm_cursor_watch;
+static IswCursor fm_cursor_default;
 
 static void fm_cursor_init(Fm *fm)
 {
     if (fm_cursor_watch) {
         return;
     }
-    xcb_connection_t *conn = IswDisplay(fm->toplevel);
-    xcb_screen_t *scr = IswScreen(fm->toplevel);
-    xcb_cursor_context_t *ctx;
-    if (xcb_cursor_context_new(conn, scr, &ctx) < 0) {
-        return;
-    }
-    fm_cursor_watch = xcb_cursor_load_cursor(ctx, "watch");
-    fm_cursor_default = xcb_cursor_load_cursor(ctx, "left_ptr");
-    xcb_cursor_context_free(ctx);
+    IswDisplay dpy = IswDisplayOf(fm->toplevel);
+    IswScreen scr = IswScreenOf(fm->toplevel);
+    fm_cursor_watch = _IswLoadThemedCursor(dpy, scr, "watch", 0);
+    fm_cursor_default = _IswLoadThemedCursor(dpy, scr, "left_ptr", 0);
 }
 
-static void fm_set_cursor(Fm *fm, xcb_cursor_t cursor)
+static void fm_set_cursor(Fm *fm, IswCursor cursor)
 {
     if (!fm->toplevel || !IswIsRealized(fm->toplevel)) {
         return;
     }
-    xcb_connection_t *conn = IswDisplay(fm->toplevel);
-    uint32_t vals[] = { cursor };
-    xcb_change_window_attributes(conn, IswWindow(fm->toplevel),
-                                 XCB_CW_CURSOR, vals);
-    xcb_flush(conn);
+    _IswSetWindowCursor(fm->toplevel, cursor);
 }
 
 static void fm_launch_timer_cb(IswPointer cd, IswIntervalId *id)
@@ -407,7 +401,9 @@ Fm *fm_window_new(FmApp *app, const char *path)
      * subsequent windows create new application shells. */
     int fm_w = 700;
     int fm_h = 500;
-    isde_clamp_to_workarea(IswDisplay(app->first_toplevel), 0, &fm_w, &fm_h);
+    isde_clamp_to_workarea(
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(app->first_toplevel)),
+        0, &fm_w, &fm_h);
 
     if (app->nwindows == 0) {
         fm->toplevel = app->first_toplevel;
@@ -419,7 +415,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
         IswArgMinHeight(&ab, 300);
         fm->toplevel = IswAppCreateShell("isde-fm", "ISDE-FM",
                                         applicationShellWidgetClass,
-                                        IswDisplay(app->first_toplevel),
+                                        IswDisplayOf(app->first_toplevel),
                                         ab.args, ab.count);
     }
 
@@ -489,10 +485,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     IswRealizeWidget(fm->toplevel);
 
-    /* Store Fm* for fm_from_widget lookups */
-    fm_set_context(fm->toplevel, fm);
-
-    /* XDND init must be after realize — re-apply keyboard shortcuts
+    /* DnD init must be after realize — re-apply keyboard shortcuts
      * afterward since DnD translation overrides can clobber them. */
     dnd_init(fm);
     places_register_drop_targets(fm);
@@ -545,4 +538,6 @@ void fm_app_cleanup(FmApp *app)
     }
     free(app->desktop_entries);
     IswDestroyApplicationContext(app->app);
+
+    fm_global_app = NULL;
 }

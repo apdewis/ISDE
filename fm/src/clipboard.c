@@ -11,18 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ---------- helpers ---------- */
-
-static xcb_atom_t intern(xcb_connection_t *c, const char *name)
-{
-    xcb_intern_atom_cookie_t ck = xcb_intern_atom(c, 0, strlen(name), name);
-    xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(c, ck, NULL);
-    if (!r) { return XCB_ATOM_NONE; }
-    xcb_atom_t a = r->atom;
-    free(r);
-    return a;
-}
-
 /* Forward declarations for selection callbacks */
 static Boolean convert_selection(Widget, Atom *, Atom *, Atom *,
                                  IswPointer *, unsigned long *, int *);
@@ -104,7 +92,7 @@ static void clip_set_from_selection(Fm *fm, FmClipOp op)
 
     /* Own the CLIPBOARD selection via Xt so convert_selection is called */
     FmApp *app = fm->app_state;
-    IswOwnSelection(fm->toplevel, app->atom_clipboard, XCB_CURRENT_TIME,
+    IswOwnSelection(fm->toplevel, app->atom_clipboard, 0 /* CurrentTime */,
                     convert_selection, lose_selection, selection_done);
     app->clipboard_owner = fm;
 }
@@ -125,11 +113,11 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
     FmApp *app = fm->app_state;
 
     if (*target == app->atom_targets) {
-        static xcb_atom_t targets[3];
+        static Atom targets[3];
         targets[0] = app->atom_targets;
         targets[1] = app->atom_uri_list;
         targets[2] = app->atom_gnome_files;
-        *type_return = XCB_ATOM_ATOM;
+        *type_return = app->atom_targets; /* ATOM type */
         *value_return = (IswPointer)targets;
         *length_return = 3;
         *format_return = 32;
@@ -198,12 +186,12 @@ static void receive_paste(Widget w, IswPointer client_data,
     Fm *fm = (Fm *)client_data;
     FmApp *app = fm->app_state;
 
-    if (!value || *length == 0 || *type == XCB_ATOM_NONE) {
+    if (!value || *length == 0 || *type == None) {
         /* Try text/uri-list as fallback */
-        if (*type == XCB_ATOM_NONE || !value) {
+        if (*type == None || !value) {
             IswGetSelectionValue(fm->toplevel, app->atom_clipboard,
                                 app->atom_uri_list,
-                                receive_paste, fm, XCB_CURRENT_TIME);
+                                receive_paste, fm, 0 /* CurrentTime */);
         }
         return;
     }
@@ -256,16 +244,14 @@ static void receive_paste(Widget w, IswPointer client_data,
 
 void clipboard_init(Fm *fm)
 {
-    xcb_connection_t *conn = IswDisplay(fm->toplevel);
     FmApp *app = fm->app_state;
-    app->atom_clipboard   = intern(conn, "CLIPBOARD");
-    app->atom_targets     = intern(conn, "TARGETS");
-    app->atom_uri_list    = intern(conn, "text/uri-list");
-    app->atom_gnome_files = intern(conn, "x-special/gnome-copied-files");
-    app->atom_utf8_string = intern(conn, "UTF8_STRING");
-
-    /* Fm* is stored on the toplevel via fm_set_context in fm_init,
-     * recovered in convert_selection via fm_from_widget. */
+    /* Intern clipboard atoms using the DnD intern helper (works for
+     * any atom name, not just MIME types). */
+    app->atom_clipboard   = IswDndInternType(fm->toplevel, "CLIPBOARD");
+    app->atom_targets     = IswDndInternType(fm->toplevel, "TARGETS");
+    app->atom_uri_list    = IswDndInternType(fm->toplevel, "text/uri-list");
+    app->atom_gnome_files = IswDndInternType(fm->toplevel, "x-special/gnome-copied-files");
+    app->atom_utf8_string = IswDndInternType(fm->toplevel, "UTF8_STRING");
 }
 
 void clipboard_copy(Fm *fm)
@@ -294,7 +280,7 @@ void clipboard_paste(Fm *fm)
     /* Otherwise request from external clipboard owner */
     IswGetSelectionValue(fm->toplevel, app->atom_clipboard,
                         app->atom_gnome_files,
-                        receive_paste, fm, XCB_CURRENT_TIME);
+                        receive_paste, fm, 0 /* CurrentTime */);
 }
 
 void clipboard_cleanup(Fm *fm)

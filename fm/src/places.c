@@ -11,6 +11,7 @@
 #include <ISW/IswArgMacros.h>
 #include <ISW/ListBox.h>
 #include <ISW/ListBoxRow.h>
+#include <ISW/ISWPlatform.h>
 
 
 #include <stdio.h>
@@ -266,30 +267,17 @@ static void place_list_cb(Widget w, IswPointer cd, IswPointer call)
 
 /* ---------- places sidebar hit-test ---------- */
 
-/* Hit-test the places sidebar: query the pointer against each row widget
- * in the ListBox. Returns the target directory path, or NULL if no valid
- * place is under the cursor. If idx_out is non-NULL, receives the places
+/* Hit-test the places sidebar: walk row widgets and find which one
+ * contains the given y coordinate (widget-local to the listbox).
+ * Returns the target directory path, or NULL if no valid place is
+ * under the cursor. If idx_out is non-NULL, receives the places
  * array index for highlight purposes. */
 static const char *
-places_hit_test(Fm *fm, int *idx_out)
+places_hit_test_at_y(Fm *fm, int listbox_y, int *idx_out)
 {
     FmPlacesData *pd = fm->places_data;
-    if (!pd || !fm->places_listbox || !IswIsRealized(fm->places_listbox))
+    if (!pd || !fm->places_listbox)
         return NULL;
-
-    xcb_connection_t *conn = IswDisplay(fm->toplevel);
-    xcb_query_pointer_cookie_t qpc =
-        xcb_query_pointer(conn, IswWindow(fm->places_listbox));
-    xcb_query_pointer_reply_t *qpr =
-        xcb_query_pointer_reply(conn, qpc, NULL);
-    if (!qpr)
-        return NULL;
-
-    int wy = qpr->win_y;
-    free(qpr);
-
-    double sf = ISWScaleFactor(fm->toplevel);
-    wy = (int)(wy / sf + 0.5);
 
     for (int i = 0; i < pd->nplaces; i++) {
         Widget rw = pd->row_widgets[i];
@@ -297,7 +285,7 @@ places_hit_test(Fm *fm, int *idx_out)
             continue;
         int cy = rw->core.y;
         int ch = (int)rw->core.height + 2 * (int)rw->core.border_width;
-        if (wy >= cy && wy < cy + ch) {
+        if (listbox_y >= cy && listbox_y < cy + ch) {
             if (pd->places[i].is_header || !pd->places[i].path)
                 return NULL;
             if (idx_out) *idx_out = i;
@@ -321,10 +309,17 @@ static void places_drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
     (void)w;
     Fm *fm = (Fm *)cd;
     FmPlacesData *pd = fm->places_data;
-    (void)call;
+    IswDragOverCallbackData *d = (IswDragOverCallbackData *)call;
+
+    /* d->x, d->y are viewport-relative. Translate to listbox coords
+     * using IswTranslateCoords on both widgets. */
+    Position vp_rx, vp_ry, lb_rx, lb_ry;
+    IswTranslateCoords(fm->places_vp, 0, 0, &vp_rx, &vp_ry);
+    IswTranslateCoords(fm->places_listbox, 0, 0, &lb_rx, &lb_ry);
+    int lb_y = d->y + (int)vp_ry - (int)lb_ry;
 
     int idx = -1;
-    const char *target = places_hit_test(fm, &idx);
+    const char *target = places_hit_test_at_y(fm, lb_y, &idx);
 
     places_clear_drop_highlight(fm);
     if (target && idx >= 0 && idx < pd->nplaces && pd->row_widgets[idx])
@@ -347,7 +342,13 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 
     places_clear_drop_highlight(fm);
 
-    const char *target_dir = places_hit_test(fm, NULL);
+    /* Translate drop coords to listbox coords */
+    Position vp_rx, vp_ry, lb_rx, lb_ry;
+    IswTranslateCoords(fm->places_vp, 0, 0, &vp_rx, &vp_ry);
+    IswTranslateCoords(fm->places_listbox, 0, 0, &lb_rx, &lb_ry);
+    int lb_y = d->y + (int)vp_ry - (int)lb_ry;
+
+    const char *target_dir = places_hit_test_at_y(fm, lb_y, NULL);
     if (!target_dir)
         return;
 
@@ -409,7 +410,7 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 
 /* Forward declaration */
 static void places_row_button_handler(Widget w, IswPointer client_data,
-                                      xcb_generic_event_t *event, Boolean *cont);
+                                      IswEvent *event, Boolean *cont);
 
 /* Determine if places[idx] is the last non-header item before the next
  * header or end-of-list — used to set the separator constraint. */
@@ -489,7 +490,7 @@ static void rebuild_listbox_children(Fm *fm)
             IswArgBuilderAdd(&ab, IswNlistBoxRowHeight, (IswArgVal)8);
             IswArgBorderWidth(&ab, 0);
             IswArgSelectable(&ab, False);
-            
+
             pd->spacers = realloc(pd->spacers,
                                   (pd->nspacers + 1) * sizeof(Widget));
             pd->spacers[pd->nspacers++] =
@@ -546,12 +547,12 @@ static void rebuild_listbox_children(Fm *fm)
             IswManageChild(pd->row_widgets[i]);
 
             IswAddEventHandler(pd->row_widgets[i],
-                                  XCB_EVENT_MASK_BUTTON_PRESS,
+                                  IswButtonPressMask,
                                   False, places_row_button_handler, fm);
             if (icon_w)
-                IswAddEventHandler(icon_w, XCB_EVENT_MASK_BUTTON_PRESS,
+                IswAddEventHandler(icon_w, IswButtonPressMask,
                                       False, places_row_button_handler, fm);
-            IswAddEventHandler(label_w, XCB_EVENT_MASK_BUTTON_PRESS,
+            IswAddEventHandler(label_w, IswButtonPressMask,
                                   False, places_row_button_handler, fm);
         }
     }
@@ -592,13 +593,13 @@ void places_init(Fm *fm)
 
 void places_register_drop_targets(Fm *fm)
 {
-    xcb_atom_t uri_type = ISWXdndInternType(fm->places_vp, "text/uri-list");
-    ISWXdndWidgetAcceptDrops(fm->places_vp);
-    ISWXdndSetDropCallback(fm->places_vp, places_vp_drop_cb, fm);
-    ISWXdndSetDragMotionCallback(fm->places_vp, places_drag_motion_cb, fm);
-    ISWXdndSetDragLeaveCallback(fm->places_vp, places_drag_leave_cb, fm);
-    ISWXdndSetAcceptedTypes(fm->places_vp, &uri_type, 1);
-    ISWXdndSetAcceptedActions(fm->places_vp,
+    Atom uri_type = IswDndInternType(fm->places_vp, "text/uri-list");
+    IswDndWidgetAcceptDrops(fm->places_vp);
+    IswDndSetDropCallback(fm->places_vp, places_vp_drop_cb, fm);
+    IswDndSetDragMotionCallback(fm->places_vp, places_drag_motion_cb, fm);
+    IswDndSetDragLeaveCallback(fm->places_vp, places_drag_leave_cb, fm);
+    IswDndSetAcceptedTypes(fm->places_vp, &uri_type, 1);
+    IswDndSetAcceptedActions(fm->places_vp,
         ISW_DND_ACTION_COPY | ISW_DND_ACTION_MOVE);
 }
 
@@ -952,7 +953,6 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 
     dev_ctx_data.nlabels = pos;
 
-    double sf = ISWScaleFactor(fm->toplevel);
     Position px = root_x;
     Position py = root_y;
 
@@ -984,9 +984,10 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 
     IswRealizeWidget(fm->dev_ctx_shell);
 
-    xcb_screen_t *scr = IswScreen(fm->toplevel);
-    int scr_w = (int)(scr->width_in_pixels / sf);
-    int scr_h = (int)(scr->height_in_pixels / sf);
+    IswDisplay dpy = IswDisplayOf(fm->toplevel);
+    IswScreen scr = IswScreenOf(fm->toplevel);
+    int scr_w = (int)_IswPlatformScreenWidth(dpy, scr);
+    int scr_h = (int)_IswPlatformScreenHeight(dpy, scr);
     Dimension mw = fm->dev_ctx_shell->core.width;
     Dimension mh = fm->dev_ctx_shell->core.height;
     Dimension bw = fm->dev_ctx_shell->core.border_width;
@@ -1009,11 +1010,10 @@ static void dev_ctx_show(Fm *fm, int places_idx,
 /* ---------- right-click handler for device list ---------- */
 
 static void places_row_button_handler(Widget w, IswPointer client_data,
-                                      xcb_generic_event_t *event, Boolean *cont)
+                                      IswEvent *event, Boolean *cont)
 {
-    if ((event->response_type & ~0x80) != XCB_BUTTON_PRESS)
+    if (event->kind != IswButtonDown)
         return;
-    xcb_button_press_event_t *ev = (xcb_button_press_event_t *)event;
 
     Fm *fm = (Fm *)client_data;
     FmPlacesData *pd = fm->places_data;
@@ -1027,7 +1027,7 @@ static void places_row_button_handler(Widget w, IswPointer client_data,
     if (hit < 0)
         return;
 
-    if (ev->detail == 1) {
+    if (event->button.button == IswButtonLeft) {
         if (pd->places[hit].is_header || !pd->places[hit].path)
             return;
         IswListBoxSelectChild(fm->places_listbox, pd->row_widgets[hit]);
@@ -1035,13 +1035,13 @@ static void places_row_button_handler(Widget w, IswPointer client_data,
         if (stat(pd->places[hit].path, &st) != 0)
             mkdir(pd->places[hit].path, 0755);
         fm_navigate(fm, pd->places[hit].path);
-    } else if (ev->detail == 3) {
+    } else if (event->button.button == IswButtonRight) {
         int ds, de;
         devices_range(pd, &ds, &de);
         if (hit < ds || hit >= de)
             return;
         *cont = False;
-        dev_ctx_show(fm, hit, ev->root_x, ev->root_y);
+        dev_ctx_show(fm, hit, event->button.root_x, event->button.root_y);
     }
 }
 

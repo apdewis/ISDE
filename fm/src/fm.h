@@ -23,8 +23,7 @@
 #include <ISW/StatusBar.h>
 #include <ISW/Dialog.h>
 #include <ISW/ISWSVG.h>
-#include <ISW/ISWXdnd.h>
-#include <ISW/ISWContext.h>
+#include <ISW/IswDragDrop.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -33,13 +32,13 @@
 #include <stdatomic.h>
 #include <pthread.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-ewmh.h"
-#include "isde/isde-theme.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-desktop.h"
-#include "isde/isde-mime.h"
+#include "isde-config.h"
+#include "dbus.h"
+#include "ewmh.h"
+#include "isde-theme.h"
+#include "isde-xdg.h"
+#include "desktop.h"
+#include "isde-mime.h"
 
 #include <dbus/dbus.h>
 #include "fm_mountd.h"
@@ -163,11 +162,11 @@ typedef struct FmApp {
     int   cmime_icons;
 
     /* Clipboard atoms (per-display, shared) */
-    xcb_atom_t     atom_clipboard;
-    xcb_atom_t     atom_targets;
-    xcb_atom_t     atom_uri_list;
-    xcb_atom_t     atom_gnome_files;
-    xcb_atom_t     atom_utf8_string;
+    Atom           atom_clipboard;
+    Atom           atom_targets;
+    Atom           atom_uri_list;
+    Atom           atom_gnome_files;
+    Atom           atom_utf8_string;
 
     /* Window tracking */
     struct Fm    **windows;
@@ -315,7 +314,7 @@ typedef struct Fm {
     struct timespec last_click_time;
 
     /* DnD state (per-window) */
-    xcb_button_press_event_t dnd_saved_press;
+    IswEvent       dnd_saved_press;
     Boolean        dnd_press_valid;
     char         **dnd_drag_paths;
     int            dnd_ndrag_paths;
@@ -336,30 +335,26 @@ typedef struct Fm {
     IswIntervalId  cwd_refresh_timer;  /* debounce */
 } Fm;
 
-/* ---------- Context for storing Fm* on shell windows ---------- */
-extern XContext fm_window_context;  /* initialized once in fm_init */
+/* ---------- Recover Fm* from any widget ---------- */
 
-/* Store Fm* on a shell widget's window */
-static inline void fm_set_context(Widget shell, Fm *fm)
-{
-    IswSaveContext(IswDisplay(shell), IswWindow(shell),
-                   fm_window_context, (void *)fm);
-}
-
-/* Recover Fm* from any widget by walking up through shells ---------- */
+/* Recover Fm* by walking up to the toplevel shell and matching
+ * against the app's window list.  No XContext needed. */
 static inline Fm *fm_from_widget(Widget w)
 {
-    /* Walk up through the widget tree, checking each shell for
-     * a stored Fm context.  Transient/override shells (dialogs,
-     * context menus) won't have one, but their parent toplevel will. */
-    while (w) {
-        if (IswIsShell(w) && IswIsRealized(w)) {
-            void *data = NULL;
-            if (IswFindContext(IswDisplay(w), IswWindow(w),
-                               fm_window_context, &data) == 0 && data)
-                return (Fm *)data;
-        }
+    while (w && !IswIsShell(w))
         w = IswParent(w);
+    if (!w)
+        return NULL;
+    /* Walk up through transient/override shells to the toplevel */
+    while (IswParent(w) && IswIsShell(IswParent(w)))
+        w = IswParent(w);
+    /* This extern is defined in fm.c */
+    extern FmApp *fm_global_app;
+    if (!fm_global_app)
+        return NULL;
+    for (int i = 0; i < fm_global_app->nwindows; i++) {
+        if (fm_global_app->windows[i]->toplevel == w)
+            return fm_global_app->windows[i];
     }
     return NULL;
 }
