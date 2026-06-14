@@ -202,7 +202,7 @@ void apply_power_settings(Session *s)
     IsdeConfigTable *power = isde_config_table(root, "power");
     if (!power) { isde_config_free(cfg); return; }
 
-    int screen_off = (int)isde_config_int(power, "screen_off_sec", 600);
+    s->screen_off_sec = (int)isde_config_int(power, "screen_off_sec", 600);
     s->idle_suspend_sec = (int)isde_config_int(power, "idle_suspend_sec", 0);
     const char *la = isde_config_string(power, "lid_action", "suspend");
     s->lid_action = parse_lid_action(la);
@@ -211,11 +211,12 @@ void apply_power_settings(Session *s)
 
     /* Apply DPMS timeouts on the session's XCB connection */
     if (conn) {
-        isde_dpms_set_timeouts(conn, screen_off, screen_off, screen_off);
+        isde_dpms_set_timeouts(conn, s->screen_off_sec,
+                               s->screen_off_sec, s->screen_off_sec);
     }
 
     fprintf(stderr, "isde-session: power: screen_off=%d idle_suspend=%d "
-            "lid_action=%d\n", screen_off, s->idle_suspend_sec,
+            "lid_action=%d\n", s->screen_off_sec, s->idle_suspend_sec,
             (int)s->lid_action);
 }
 
@@ -605,7 +606,6 @@ static void check_timer_fire(Session *s)
 
 int session_init(Session *s)
 {
-    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     memset(s, 0, sizeof(*s));
     s->death_pipe[0] = s->death_pipe[1] = -1;
     s->sigchld_pipe[0] = s->sigchld_pipe[1] = -1;
@@ -638,7 +638,7 @@ int session_init(Session *s)
         s->wm_command = strdup("isde-wm");
     }
     if (!s->panel_command) {
-        s->panel_command = strdup("isde-panel");
+        s->panel_command = strdup("isde-panel-x11");
     }
 
     /* Load autostart file */
@@ -694,10 +694,16 @@ int session_init(Session *s)
 
     /* XCB connection for theme publishing, DPMS, and screensaver query */
     s->server_context = (void *)xcb_connect(getenv("DISPLAY"), &s->screen_num);
-    conn = (xcb_connection_t *)s->server_context;
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     if (!xcb_connection_has_error(conn)) {
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
         isde_theme_set_resource_manager(conn, session_root(s));
+
+        /* Apply DPMS/screensaver now that we have a connection */
+        if (s->screen_off_sec > 0) {
+            isde_dpms_set_timeouts(conn, s->screen_off_sec,
+                                   s->screen_off_sec, s->screen_off_sec);
+        }
 
         xcb_flush(conn);
     } else {
