@@ -93,6 +93,20 @@ struct TermWidget {
     /* preferred initial geometry */
     int  initial_cols;
     int  initial_rows;
+
+    /* redraw coalescing */
+    Boolean         dirty;
+    IswIntervalId   redraw_timer;
+
+    /* cached render surface */
+    cairo_surface_t *surf;
+    unsigned char   *rgba_buf;
+    int              surf_w;
+    int              surf_h;
+
+    /* previous cursor position for incremental redraw */
+    unsigned        prev_cx;
+    unsigned        prev_cy;
 };
 
 /* ---------- rendering ---------- */
@@ -260,6 +274,8 @@ static void recompute_metrics(TermWidget *t)
 typedef struct {
     TermWidget *t;
     cairo_t    *cr;
+    unsigned    cur_cx, cur_cy;
+    unsigned    prev_cx, prev_cy;
 } DrawCtx;
 
 static void rgb_unpack(const uint8_t in[3], double out[3])
@@ -275,8 +291,12 @@ static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
                         const struct tsm_screen_attr *attr,
                         tsm_age_t age, void *data)
 {
-    (void)con; (void)id; (void)age;
+    (void)con; (void)id;
     DrawCtx *dc = (DrawCtx *)data;
+
+    if (age != 0 && age <= dc->t->last_age &&
+        !(posx == dc->cur_cx && posy == dc->cur_cy) &&
+        !(posx == dc->prev_cx && posy == dc->prev_cy)) return 0;
     TermWidget *t = dc->t;
     cairo_t *cr = dc->cr;
 
@@ -415,74 +435,90 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     int width = (int)(pw * sf + 0.5);
     int height = (int)(ph * sf + 0.5);
 
-    cairo_surface_t *surface =
-        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(surface);
-        return;
+    if (t->surf_w != width || t->surf_h != height) {
+        if (t->surf) cairo_surface_destroy(t->surf);
+        free(t->rgba_buf);
+        t->surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+                                             width, height);
+        t->rgba_buf = malloc((size_t)width * height * 4);
+        t->surf_w = width;
+        t->surf_h = height;
+        t->last_age = 0;
     }
+    if (cairo_surface_status(t->surf) != CAIRO_STATUS_SUCCESS) return;
+    if (!t->rgba_buf) return;
 
-    cairo_t *cr = cairo_create(surface);
+    cairo_t *cr = cairo_create(t->surf);
     cairo_scale(cr, sf, sf);
 
-    /* Clear with background */
-    double bg[3];
-    rgb_unpack(t->cfg.palette.rgb[17], bg);
-    cairo_set_source_rgb(cr, bg[0], bg[1], bg[2]);
-    cairo_paint(cr);
-
-    DrawCtx ctx = { t, cr };
-    t->last_age = tsm_screen_draw(t->screen, draw_cell_cb, &ctx);
-    draw_cursor(t, cr);
-
-    cairo_destroy(cr);
-    cairo_surface_flush(surface);
-
-    const unsigned char *src = cairo_image_surface_get_data(surface);
-    int stride = cairo_image_surface_get_stride(surface);
-    unsigned char *rgba = malloc((size_t)width * height * 4);
-    if (rgba) {
-        for (int y = 0; y < height; y++) {
-            const uint32_t *row = (const uint32_t *)(src + (size_t)y * stride);
-            unsigned char *out = rgba + (size_t)y * width * 4;
-            for (int x = 0; x < width; x++) {
-                uint32_t px = row[x];
-                unsigned a = (px >> 24) & 0xFF;
-                unsigned r = (px >> 16) & 0xFF;
-                unsigned g = (px >> 8)  & 0xFF;
-                unsigned b =  px        & 0xFF;
-                if (a != 0 && a != 0xFF) {
-                    r = (r * 255 + a / 2) / a;
-                    g = (g * 255 + a / 2) / a;
-                    b = (b * 255 + a / 2) / a;
-                }
-                out[x * 4 + 0] = (unsigned char)r;
-                out[x * 4 + 1] = (unsigned char)g;
-                out[x * 4 + 2] = (unsigned char)b;
-                out[x * 4 + 3] = (unsigned char)a;
-            }
-        }
-        ISWRenderDrawImageRGBA(rc, rgba,
-                               (unsigned int)width, (unsigned int)height,
-                               0, 0,
-                               (unsigned int)pw, (unsigned int)ph);
-        free(rgba);
+    if (t->last_age == 0) {
+        double bg[3];
+        rgb_unpack(t->cfg.palette.rgb[17], bg);
+        cairo_set_source_rgb(cr, bg[0], bg[1], bg[2]);
+        cairo_paint(cr);
     }
 
-    cairo_surface_destroy(surface);
+    unsigned cx = tsm_screen_get_cursor_x(t->screen);
+    unsigned cy = tsm_screen_get_cursor_y(t->screen);
+    DrawCtx ctx = { t, cr, cx, cy, t->prev_cx, t->prev_cy };
+    t->last_age = tsm_screen_draw(t->screen, draw_cell_cb, &ctx);
+    draw_cursor(t, cr);
+    t->prev_cx = cx;
+    t->prev_cy = cy;
+
+    cairo_destroy(cr);
+    cairo_surface_flush(t->surf);
+
+    const unsigned char *src = cairo_image_surface_get_data(t->surf);
+    int stride = cairo_image_surface_get_stride(t->surf);
+    for (int y = 0; y < height; y++) {
+        const uint32_t *row = (const uint32_t *)(src + (size_t)y * stride);
+        unsigned char *out = t->rgba_buf + (size_t)y * width * 4;
+        for (int x = 0; x < width; x++) {
+            uint32_t px = row[x];
+            unsigned a = (px >> 24) & 0xFF;
+            unsigned r = (px >> 16) & 0xFF;
+            unsigned g = (px >> 8)  & 0xFF;
+            unsigned b =  px        & 0xFF;
+            if (a != 0 && a != 0xFF) {
+                r = (r * 255 + a / 2) / a;
+                g = (g * 255 + a / 2) / a;
+                b = (b * 255 + a / 2) / a;
+            }
+            out[x * 4 + 0] = (unsigned char)r;
+            out[x * 4 + 1] = (unsigned char)g;
+            out[x * 4 + 2] = (unsigned char)b;
+            out[x * 4 + 3] = (unsigned char)a;
+        }
+    }
+    ISWRenderDrawImageRGBA(rc, t->rgba_buf,
+                           (unsigned int)width, (unsigned int)height,
+                           0, 0,
+                           (unsigned int)pw, (unsigned int)ph);
+}
+
+static void redraw_timer_cb(IswPointer closure, IswIntervalId *id)
+{
+    (void)id;
+    TermWidget *t = (TermWidget *)closure;
+    t->redraw_timer = 0;
+    t->dirty = False;
+    if (t->pty) term_pty_resume(t->pty);
+    IswExposeProc expose = IswClass(t->canvas)->core_class.expose;
+    if (expose) {
+        expose(t->canvas, NULL, 0);
+    }
 }
 
 static void request_redraw(TermWidget *t)
 {
     if (!IswIsRealized(t->canvas)) return;
-    /* expose_cb repaints the whole canvas (cairo_paint), so no X clear is
-       needed — and the canvas is windowless, so an xcb_clear_area would
-       wrongly clear the shared windowed ancestor.  Drive the expose proc
-       directly, as the pager canvas does. */
-    IswExposeProc expose = IswClass(t->canvas)->core_class.expose;
-    if (expose) {
-        expose(t->canvas, NULL, 0);
-    }
+    if (t->dirty) return;
+    t->dirty = True;
+    if (t->pty) term_pty_pause(t->pty);
+    t->redraw_timer = IswAppAddTimeOut(
+        IswWidgetToApplicationContext(t->canvas),
+        16, redraw_timer_cb, (IswPointer)t);
 }
 
 /* ---------- resize ---------- */
@@ -929,6 +965,9 @@ TermWidget *term_widget_create(Widget parent, const char *name,
 void term_widget_destroy(TermWidget *t)
 {
     if (!t) return;
+    if (t->redraw_timer) IswRemoveTimeOut(t->redraw_timer);
+    if (t->surf) cairo_surface_destroy(t->surf);
+    free(t->rgba_buf);
     if (t->vte) tsm_vte_unref(t->vte);
     if (t->screen) tsm_screen_unref(t->screen);
     term_fonts_clear(t);
@@ -949,7 +988,7 @@ void term_widget_feed(TermWidget *t, const char *buf, size_t n)
     request_redraw(t);
 }
 
-void term_widget_invalidate(TermWidget *t) { request_redraw(t); }
+void term_widget_invalidate(TermWidget *t) { t->last_age = 0; request_redraw(t); }
 
 void term_widget_apply_config(TermWidget *t, const TermConfig *cfg)
 {
@@ -969,6 +1008,7 @@ void term_widget_apply_config(TermWidget *t, const TermConfig *cfg)
     tsm_screen_resize(t->screen, cols, rows);
     t->cols = cols; t->rows = rows;
     if (t->pty) term_pty_resize(t->pty, cols, rows, pw, ph);
+    t->last_age = 0;
     request_redraw(t);
 }
 

@@ -59,6 +59,8 @@ TermPty *term_pty_spawn(IswAppContext app,
 void     term_pty_write(TermPty *p, const char *data, size_t n);
 void     term_pty_resize(TermPty *p, unsigned cols, unsigned rows,
                          unsigned px_w, unsigned px_h);
+void     term_pty_pause(TermPty *p);
+void     term_pty_resume(TermPty *p);
 void     term_pty_close(TermPty *p);
 
 /* ---- Widget (created via DrawingArea + glue) ---- */

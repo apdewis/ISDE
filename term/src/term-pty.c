@@ -213,6 +213,21 @@ void term_pty_resize(TermPty *p, unsigned cols, unsigned rows,
     ioctl(p->fd, TIOCSWINSZ, &ws);
 }
 
+void term_pty_pause(TermPty *p)
+{
+    if (!p || !p->input_id) return;
+    IswRemoveInput(p->input_id);
+    p->input_id = 0;
+}
+
+void term_pty_resume(TermPty *p)
+{
+    if (!p || p->input_id || p->closed || p->fd < 0) return;
+    p->input_id = IswAppAddInput(p->app, p->fd,
+                                 (IswPointer)(intptr_t)IswInputReadMask,
+                                 pty_input_cb, p);
+}
+
 void term_pty_close(TermPty *p)
 {
     if (!p) return;
