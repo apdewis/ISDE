@@ -5,8 +5,8 @@
 #define ISDE_DM_H
 
 #include "platform.h"
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
 
 #include <sys/types.h>
 #include <signal.h>

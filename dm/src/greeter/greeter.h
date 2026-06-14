@@ -15,10 +15,10 @@
 #include <ISW/List.h>
 #include <ISW/ISWRender.h>
 
-#include "isde/isde-theme.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-config.h"
-#include "isde/isde-desktop.h"
+#include "isde-theme.h"
+#include "isde-xdg.h"
+#include "isde-config.h"
+#include "desktop.h"
 
 /* ---------- Session entry ---------- */
 typedef struct {

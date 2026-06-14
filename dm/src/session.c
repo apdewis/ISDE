@@ -3,8 +3,8 @@
  * session.c — X server and user session lifecycle
  */
 #include "dm.h"
-#include "isde/isde-desktop.h"
-#include "isde/isde-xdg.h"
+#include "desktop.h"
+#include "isde-xdg.h"
 
 #include <stdio.h>
 #include <stdlib.h>

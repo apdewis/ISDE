@@ -14,8 +14,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "isde/isde-desktop.h"
-#include "isde/isde-xdg.h"
+#include "desktop.h"
+#include "isde-xdg.h"
 
 int dm_ipc_init(Dm *dm)
 {

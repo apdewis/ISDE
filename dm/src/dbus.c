@@ -18,7 +18,7 @@
 #include <string.h>
 #include <dbus/dbus.h>
 
-#include "isde/isde-config.h"
+#include "isde-config.h"
 
 #define DM_DBUS_SERVICE   "org.isde.DisplayManager"
 #define DM_DBUS_PATH      "/org/isde/DisplayManager"

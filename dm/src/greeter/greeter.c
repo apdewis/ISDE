@@ -9,12 +9,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <ISW/IswArgMacros.h>
-#include "isde/isde-randr.h"
+#include <ISW/ISWPlatform.h>
+#include "randr.h"
 
 static void create_blank_screens(Greeter *g)
 {
-    xcb_connection_t *conn = IswDisplay(g->toplevel);
-    xcb_screen_t *scr = IswScreen(g->toplevel);
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_screen_t *scr = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
 
     IsdeMonitor *mons = NULL;
     int nmons = isde_randr_monitors(conn, scr->root, &mons);
@@ -60,7 +61,7 @@ static void create_blank_screens(Greeter *g)
 static void destroy_blank_screens(Greeter *g)
 {
     if (!g->blanks) return;
-    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
     for (int i = 0; i < g->nblanks; i++)
         xcb_destroy_window(conn, g->blanks[i]);
     xcb_flush(conn);
@@ -155,7 +156,7 @@ static void session_dropdown_cb(Widget w, IswPointer cd, IswPointer call)
 }
 
 /* Handle Enter key in password field → trigger login */
-static void pass_action(Widget w, xcb_generic_event_t *ev, String *params,
+static void pass_action(Widget w, IswEvent *ev, String *params,
                         Cardinal *nparams)
 {
     (void)ev; (void)params; (void)nparams;
@@ -779,8 +780,8 @@ int greeter_init(Greeter *g, int *argc, char **argv)
                     sizeof(greeter_actions) / sizeof(greeter_actions[0]));
 
     /* Get primary monitor geometry */
-    xcb_connection_t *conn = IswDisplay(g->toplevel);
-    xcb_screen_t *screen = IswScreen(g->toplevel);
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
     IsdeMonitor pm;
     isde_randr_primary(conn, screen->root, screen, &pm);
     g->screen_x = pm.x;
@@ -810,9 +811,12 @@ int greeter_init(Greeter *g, int *argc, char **argv)
 
     /* Override-redirect windows don't receive X focus automatically.
        Focus the text widget's window directly so key events reach it. */
-    xcb_connection_t *xc = IswDisplay(g->shell);
+    xcb_connection_t *xc =
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->shell));
+    xcb_window_t user_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(g->user_text), g->user_text));
     xcb_set_input_focus(xc, XCB_INPUT_FOCUS_PARENT,
-                        IswWindow(g->user_text), XCB_CURRENT_TIME);
+                        user_win, XCB_CURRENT_TIME);
     xcb_flush(xc);
 
     /* Connect to daemon IPC */
@@ -914,18 +918,20 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
      * Grab keyboard on the password field so key events are delivered
      * directly to it — grabbing on the shell would intercept events
      * before Xt can dispatch them to the text widget. */
-    xcb_connection_t *conn = IswDisplay(g->toplevel);
-    xcb_window_t win = IswWindow(g->shell);
-    xcb_window_t pass_win = IswWindow(g->pass_text);
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_window_t win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(g->shell), g->shell));
+    xcb_window_t pass_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(g->pass_text), g->pass_text));
 
     xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT,
                         pass_win, XCB_CURRENT_TIME);
     xcb_grab_keyboard(conn, 1, pass_win, XCB_CURRENT_TIME,
                       XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
     xcb_grab_pointer(conn, 1, win,
-                     XCB_EVENT_MASK_BUTTON_PRESS |
-                     XCB_EVENT_MASK_BUTTON_RELEASE |
-                     XCB_EVENT_MASK_POINTER_MOTION,
+                     IswButtonPressMask |
+                     IswButtonReleaseMask |
+                     IswPointerMotionMask,
                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                      win, XCB_NONE, XCB_CURRENT_TIME);
     xcb_flush(conn);
@@ -961,7 +967,7 @@ void greeter_enter_login_mode(Greeter *g)
     greeter_clear_error(g);
 
     /* Release grabs */
-    xcb_connection_t *conn = IswDisplay(g->toplevel);
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
     xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
     xcb_ungrab_pointer(conn, XCB_CURRENT_TIME);
     xcb_flush(conn);

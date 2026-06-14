@@ -10,6 +10,20 @@ add_executable(isde-dm
     src/greeter_proc.c
     src/power.c
     src/dbus.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-config-write.c
+    ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
+    ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/desktop.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
+)
+
+target_include_directories(isde-dm PRIVATE
+    ${CMAKE_SOURCE_DIR}/platform/common
+    ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
 target_compile_definitions(isde-dm PRIVATE
@@ -31,9 +45,13 @@ endif()
 
 target_link_libraries(isde-dm
     PRIVATE
-    isde
+    ISDE::ISW
     ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
+    ISDE::XCB_UTIL
     ISDE::DBUS
+    ISDE::CAIRO
     ISDE::LIBSEAT
     pam_imported
 )
@@ -54,6 +72,20 @@ add_executable(isde-greeter
     src/greeter/clock.c
     src/greeter/sessions.c
     src/greeter/ipc.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c
+    ${CMAKE_SOURCE_DIR}/platform/common/vendor/tomlc99/toml.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-xdg.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-theme.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/theme-x11.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/desktop.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
+    ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
+)
+
+target_include_directories(isde-greeter PRIVATE
+    ${CMAKE_SOURCE_DIR}/platform/common
+    ${CMAKE_SOURCE_DIR}/platform/X11/common
 )
 
 target_compile_definitions(isde-greeter PRIVATE
@@ -62,10 +94,14 @@ target_compile_definitions(isde-greeter PRIVATE
 )
 
 target_link_libraries(isde-greeter
-    isde
     ISDE::ISW
     ISDE::XCB
+    ISDE::XCB_EWMH
+    ISDE::XCB_ICCCM
     ISDE::XCB_UTIL
+    ISDE::XCB_RANDR
+    ISDE::CAIRO
+    ISDE::DBUS
 )
 
 install(TARGETS isde-greeter RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

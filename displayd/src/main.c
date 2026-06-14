@@ -16,10 +16,10 @@
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
 
-#include "isde/isde-config.h"
-#include "isde/isde-xdg.h"
-#include "isde/isde-dbus.h"
-#include "isde/isde-randr.h"
+#include "isde-config.h"
+#include "isde-xdg.h"
+#include "dbus.h"
+#include "randr.h"
 
 static volatile sig_atomic_t reload_flag;
 static volatile sig_atomic_t quit_flag;
