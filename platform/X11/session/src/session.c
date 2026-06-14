@@ -694,13 +694,14 @@ int session_init(Session *s)
 
     /* XCB connection for theme publishing, DPMS, and screensaver query */
     s->server_context = (void *)xcb_connect(getenv("DISPLAY"), &s->screen_num);
+    conn = (xcb_connection_t *)s->server_context;
     if (!xcb_connection_has_error(conn)) {
         /* Publish theme to RESOURCE_MANAGER so all X clients inherit it */
         isde_theme_set_resource_manager(conn, session_root(s));
 
-        xcb_flush(s->server_context);
+        xcb_flush(conn);
     } else {
-        xcb_disconnect(s->server_context);
+        xcb_disconnect(conn);
         s->server_context = NULL;
     }
 
