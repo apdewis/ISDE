@@ -108,7 +108,7 @@ static void wl_select_callback(Widget w, IswPointer client_data,
         return;
     }
 
-    //focus_window(wl_panel, wl_group->windows[ret->list_index]);
+    panel_focus_window(wl_panel, wl_group, ret->list_index);
     panel_dismiss_popup(wl_panel);
 }
 
@@ -190,7 +190,7 @@ static void show_window_menu(Panel *p, TaskGroup *g)
     /* Build new title array — must stay alive while list is shown */
     g->menu_titles = malloc((g->nwindows + 1) * sizeof(String));
     for (int i = 0; i < g->nwindows; i++) {
-        //g->menu_titles[i] = get_window_title(p, g->windows[i]);
+        g->menu_titles[i] = panel_get_window_title(p, g, i);
     }
     g->menu_titles[g->nwindows] = NULL;
 
@@ -249,7 +249,7 @@ static void taskbar_button_callback(Widget w, IswPointer client_data,
     if (g->nwindows == 0) {
         launch_app(p, g);
     } else if (g->nwindows == 1) {
-        //focus_window(p, g->windows[0]);
+        panel_focus_window(p, g, 0);
     }
 }
 

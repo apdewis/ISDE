@@ -219,6 +219,12 @@ void focus_window(Panel *p, xcb_window_t win)
     isde_ewmh_request_active_window(ctx->ewmh, win);
 }
 
+void panel_focus_window(Panel *p, TaskGroup *g, int idx)
+{
+    xcb_window_t *wins = (xcb_window_t *)g->windows;
+    focus_window(p, wins[idx]);
+}
+
 void panel_setup_dock_window(Panel *p)
 {
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
@@ -368,6 +374,12 @@ void close_window(void *server_ctx, TaskGroup *g, int idx) {
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)server_ctx;
     xcb_window_t *wins = (xcb_window_t *) g->windows;
     isde_ewmh_request_close_window(ctx->ewmh, wins[idx]);
+}
+
+char *panel_get_window_title(Panel *p, TaskGroup *g, int idx)
+{
+    xcb_window_t *wins = (xcb_window_t *)g->windows;
+    return get_window_title(p, wins[idx]);
 }
 
 Pixel panel_color_pixel(Panel *p, unsigned int rgb)

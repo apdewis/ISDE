@@ -257,4 +257,6 @@ int panel_init_platform(Panel *p);
 int panel_init_display_platform(Panel *p);
 
 void close_window(void *server_ctx, TaskGroup *g, int idx);
+char *panel_get_window_title(Panel *p, TaskGroup *g, int idx);
+void panel_focus_window(Panel *p, TaskGroup *g, int idx);
 #endif /* ISDE_PANEL_H */
