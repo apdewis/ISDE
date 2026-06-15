@@ -35,8 +35,12 @@
 
 #include "../../platform/common/dbus.h"
 
-/* Forward declaration — full definition in tray-net.h */
+/* Forward declarations — full definitions in tray-*.h */
 typedef struct TrayNet TrayNet;
+typedef struct TrayAudio TrayAudio;
+typedef struct TrayBattery TrayBattery;
+typedef struct TrayBt TrayBt;
+typedef struct TrayMount TrayMount;
 
 /* ---------- Panel geometry (scaled) ---------- */
 #define PANEL_HEIGHT      40
@@ -187,6 +191,10 @@ typedef struct Panel {
 
     /* Tray modules */
     TrayNet           *tray_net;
+    TrayAudio         *tray_audio;
+    TrayBattery       *tray_battery;
+    TrayBt            *tray_bt;
+    TrayMount         *tray_mount;
 
     /* D-Bus */
     IsdeDBus          *dbus;
@@ -244,6 +252,22 @@ void    panel_tray_cleanup(Panel *p);
 /* ---------- tray-net.c ---------- */
 void  tn_net_init(Panel *p);
 void  tn_net_cleanup(Panel *p);
+
+/* ---------- tray-audio.c ---------- */
+void  tn_audio_init(Panel *p);
+void  tn_audio_cleanup(Panel *p);
+
+/* ---------- tray-battery.c ---------- */
+void  tn_battery_init(Panel *p);
+void  tn_battery_cleanup(Panel *p);
+
+/* ---------- tray-bt.c ---------- */
+void  tn_bt_init(Panel *p);
+void  tn_bt_cleanup(Panel *p);
+
+/* ---------- tray-mount.c ---------- */
+void  tn_mount_init(Panel *p);
+void  tn_mount_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */
 void  clock_init(Panel *p);

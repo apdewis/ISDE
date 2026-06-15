@@ -5,6 +5,10 @@
 #include "panel.h"
 #include "panel-x11.h"
 #include "tray-net.h"
+#include "tray-audio.h"
+#include "tray-battery.h"
+#include "tray-bt.h"
+#include "tray-mount.h"
 #include "../../platform/common/dbus.h"
 #include <ISW/ShellP.h>
 #include <ISW/IswArgMacros.h>
@@ -215,6 +219,10 @@ int panel_init(Panel *p, int *argc, char **argv)
     taskbar_init(p);
     panel_tray_init(p);
     tn_net_init(p);
+    tn_audio_init(p);
+    tn_battery_init(p);
+    tn_bt_init(p);
+    tn_mount_init(p);
     clock_init(p);
 
     IswRealizeWidget(p->shell);
@@ -267,6 +275,14 @@ static void on_panel_theme_changed(void *user_data)
     calendar_reload_theme(p);
     if (p->tray_net)
         tn_net_reload_theme(p->tray_net);
+    if (p->tray_audio)
+        tn_audio_reload_theme(p->tray_audio);
+    if (p->tray_battery)
+        tn_battery_reload_theme(p->tray_battery);
+    if (p->tray_bt)
+        tn_bt_reload_theme(p->tray_bt);
+    if (p->tray_mount)
+        tn_mount_reload_theme(p->tray_mount);
 }
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -434,6 +450,10 @@ void panel_cleanup(Panel *p)
 {
     panel_clear_launch(p);
     clock_cleanup(p);
+    tn_mount_cleanup(p);
+    tn_bt_cleanup(p);
+    tn_battery_cleanup(p);
+    tn_audio_cleanup(p);
     tn_net_cleanup(p);
     panel_tray_cleanup(p);
     taskbar_cleanup(p);
