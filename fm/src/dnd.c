@@ -309,10 +309,10 @@ static int collect_paths(const char *const *uris, int num_uris,
 /* ---------- drop highlight helpers ---------- */
 
 /*
- * Translate viewport-relative coordinates to the active view widget
+ * Translate shell-relative coordinates to the active view widget
  * and return the item index under the pointer, or -1.
  */
-static int hit_test_view(Fm *fm, int vp_x, int vp_y)
+static int hit_test_view(Fm *fm, int shell_x, int shell_y)
 {
     Widget view;
     if (fm->view_mode == FM_VIEW_LIST)
@@ -320,14 +320,14 @@ static int hit_test_view(Fm *fm, int vp_x, int vp_y)
     else
         view = fm->iconview;
 
-    /* Convert viewport coords to view-widget coords by translating
-     * both widgets' origins to root coords and computing the delta. */
-    Position vp_rx, vp_ry, v_rx, v_ry;
-    IswTranslateCoords(fm->viewport, 0, 0, &vp_rx, &vp_ry);
+    /* DnD callbacks deliver shell-relative coords (single window per shell).
+     * Subtract the view widget's shell-relative origin to get view-local. */
+    Position shell_rx, shell_ry, v_rx, v_ry;
+    IswTranslateCoords(fm->toplevel, 0, 0, &shell_rx, &shell_ry);
     IswTranslateCoords(view, 0, 0, &v_rx, &v_ry);
 
-    int vx = vp_x + (int)vp_rx - (int)v_rx;
-    int vy = vp_y + (int)vp_ry - (int)v_ry;
+    int vx = shell_x + (int)shell_rx - (int)v_rx;
+    int vy = shell_y + (int)shell_ry - (int)v_ry;
 
     if (fm->view_mode == FM_VIEW_LIST)
         return IswListViewHitTest(view, vx, vy);
