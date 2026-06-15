@@ -44,10 +44,12 @@ void panel_tray_init(Panel *p)
 
 Widget panel_tray_add_icon(Panel *p, char *name, WidgetClass wclass)
 {
+    int icon_size = PANEL_ICON_SIZE;
+
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, PANEL_ICON_SIZE);
-    IswArgHeight(&ab, PANEL_ICON_SIZE);
+    IswArgResizable(&ab, 0);
+    IswArgFlexBasis(&ab, icon_size);
     Widget icon = IswCreateManagedWidget(name, wclass,
                                          p->tray_box, ab.args, ab.count);
 
@@ -58,7 +60,7 @@ Widget panel_tray_add_icon(Panel *p, char *name, WidgetClass wclass)
     ISW_ARG(&ab, IswNnumChildren, &nchildren);
     IswGetValues(p->tray_box, ab.args, ab.count);
 
-    int icon_stride = PANEL_ICON_SIZE + 2;
+    int icon_stride = icon_size + 2;
     int tray_w = nchildren * icon_stride + 2;
     IswArgBuilderReset(&ab);
     IswArgFlexBasis(&ab, tray_w);
@@ -69,6 +71,8 @@ Widget panel_tray_add_icon(Panel *p, char *name, WidgetClass wclass)
 
 void panel_tray_remove_icon(Panel *p, Widget icon)
 {
+    int icon_size = PANEL_ICON_SIZE;
+
     IswDestroyWidget(icon);
 
     int nchildren = 0;
@@ -78,7 +82,7 @@ void panel_tray_remove_icon(Panel *p, Widget icon)
     ISW_ARG(&ab, IswNnumChildren, &nchildren);
     IswGetValues(p->tray_box, ab.args, ab.count);
 
-    int icon_stride = PANEL_ICON_SIZE + 2;
+    int icon_stride = icon_size + 2;
     int tray_w = nchildren > 0 ? nchildren * icon_stride + 2 : 2;
     IswArgBuilderReset(&ab);
     IswArgFlexBasis(&ab, tray_w);
