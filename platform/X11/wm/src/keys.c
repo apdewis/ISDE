@@ -127,11 +127,14 @@ void wm_keys_handle(Wm *wm, xcb_key_press_event_t *ev)
     }
 
     /* Super+L — lock screen */
-    //#FIXME, this kind of thing should just be on DBUS
-    //if (sym == XK_l && (mod & MOD_SUPER)) {
-    //    isde_ipc_send(wm->ipc, ISDE_CMD_LOCK, 0, 0, 0, 0);
-    //    return;
-    //}
+    if (sym == XK_l && (mod & MOD_SUPER)) {
+        isde_dbus_call_method(wm->dbus,
+                              ISDE_SESSION_DBUS_SERVICE,
+                              ISDE_SESSION_DBUS_PATH,
+                              ISDE_SESSION_DBUS_INTERFACE,
+                              "Lock");
+        return;
+    }
 
     /* Ctrl+Super+Arrow — desktop navigation */
     uint16_t desk_mod = XCB_MOD_MASK_CONTROL | MOD_SUPER;
@@ -151,8 +154,11 @@ void wm_keys_handle_release(Wm *wm, xcb_key_release_event_t *ev)
     /* Super_L released while armed = tap — toggle start menu */
     if (sym == XK_Super_L && super_tap_armed) {
         super_tap_armed = 0;
-        //#FIXME, this kind of thing should just be on DBUS
-        //isde_ipc_send(wm->ipc, ISDE_CMD_TOGGLE_START_MENU, 0, 0, 0, 0);
+        isde_dbus_call_method(wm->dbus,
+                              ISDE_PANEL_DBUS_SERVICE,
+                              ISDE_PANEL_DBUS_PATH,
+                              ISDE_PANEL_DBUS_INTERFACE,
+                              "ToggleStartMenu");
         return;
     }
 

@@ -118,6 +118,11 @@ int isde_dbus_get_fd(IsdeDBus *bus)
     return bus ? bus->fd : -1;
 }
 
+void *isde_dbus_get_connection(IsdeDBus *bus)
+{
+    return bus ? bus->conn : NULL;
+}
+
 void isde_dbus_dispatch(IsdeDBus *bus)
 {
     if (!bus || !bus->conn) { return; }

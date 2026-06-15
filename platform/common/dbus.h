@@ -28,6 +28,11 @@ typedef struct IsdeDBus IsdeDBus;
 #define ISDE_SESSION_DBUS_PATH      "/org/isde/Session"
 #define ISDE_SESSION_DBUS_INTERFACE "org.isde.Session"
 
+/* Panel service (owned by isde-panel). */
+#define ISDE_PANEL_DBUS_SERVICE     "org.isde.Panel"
+#define ISDE_PANEL_DBUS_PATH        "/org/isde/Panel"
+#define ISDE_PANEL_DBUS_INTERFACE   "org.isde.Panel"
+
 /* Connect to the session bus.  Returns NULL if D-Bus is unavailable. */
 IsdeDBus *isde_dbus_init(void);
 void      isde_dbus_free(IsdeDBus *bus);
@@ -38,6 +43,10 @@ int       isde_dbus_get_fd(IsdeDBus *bus);
 
 /* Process pending D-Bus messages.  Call when the fd is readable. */
 void      isde_dbus_dispatch(IsdeDBus *bus);
+
+/* Get the underlying libdbus connection for service registration.
+ * Returns NULL if not connected. */
+void     *isde_dbus_get_connection(IsdeDBus *bus);
 
 /* Send a fire-and-forget method call (no arguments, reply ignored).
  * Used to invoke methods such as org.isde.Session.Logout. */

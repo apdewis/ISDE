@@ -13,6 +13,7 @@
 #include <ISW/ShellP.h>
 #include <ISW/IswArgMacros.h>
 
+#include <dbus/dbus.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -148,6 +149,7 @@ static IsdeDesktopEntry *find_desktop_for_class(Panel *p,
 static void on_panel_settings_changed(const char *, const char *, void *);
 static void panel_dbus_input_cb(IswPointer, int *, IswInputId *);
 static void on_panel_theme_changed(void *);
+static void panel_dbus_register_service(Panel *);
 
 int panel_init(Panel *p, int *argc, char **argv)
 {
@@ -235,6 +237,7 @@ int panel_init(Panel *p, int *argc, char **argv)
     if (p->dbus) {
         isde_theme_watch(p->dbus, p->toplevel, on_panel_theme_changed, p);
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
+        panel_dbus_register_service(p);
         int dbus_fd = isde_dbus_get_fd(p->dbus);
         if (dbus_fd >= 0) {
             IswAppAddInput(p->app, dbus_fd,
@@ -297,6 +300,54 @@ static void on_panel_settings_changed(const char *section, const char *key,
     } else if (strcmp(section, "wm.desktops") == 0) {
         //pager_reload_config(p);
     }
+}
+
+/* ---------- org.isde.Panel D-Bus service ---------- */
+
+static DBusHandlerResult
+panel_dbus_method_handler(DBusConnection *conn, DBusMessage *msg,
+                          void *user_data)
+{
+    Panel *p = (Panel *)user_data;
+
+    if (dbus_message_is_method_call(msg, ISDE_PANEL_DBUS_INTERFACE,
+                                    "ToggleStartMenu")) {
+        startmenu_toggle(p);
+        DBusMessage *reply = dbus_message_new_method_return(msg);
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+static const DBusObjectPathVTable panel_dbus_vtable = {
+    .message_function = panel_dbus_method_handler
+};
+
+static void panel_dbus_register_service(Panel *p)
+{
+    DBusConnection *conn = isde_dbus_get_connection(p->dbus);
+    if (!conn) {
+        return;
+    }
+
+    DBusError err;
+    dbus_error_init(&err);
+    int ret = dbus_bus_request_name(conn, ISDE_PANEL_DBUS_SERVICE,
+                                    DBUS_NAME_FLAG_DO_NOT_QUEUE, &err);
+    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+        fprintf(stderr, "isde-panel: cannot own %s: %s\n",
+                ISDE_PANEL_DBUS_SERVICE,
+                dbus_error_is_set(&err) ? err.message : "already owned");
+        dbus_error_free(&err);
+        return;
+    }
+    dbus_error_free(&err);
+
+    dbus_connection_register_object_path(conn, ISDE_PANEL_DBUS_PATH,
+                                         &panel_dbus_vtable, p);
 }
 
 static void panel_dbus_input_cb(IswPointer client_data, int *fd, IswInputId *id)
