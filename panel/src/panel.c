@@ -4,6 +4,7 @@
  */
 #include "panel.h"
 #include "panel-x11.h"
+#include "tray-net.h"
 #include "../../platform/common/dbus.h"
 #include <ISW/ShellP.h>
 #include <ISW/IswArgMacros.h>
@@ -212,14 +213,14 @@ int panel_init(Panel *p, int *argc, char **argv)
                                    p->form, ab.args, ab.count);
 
     taskbar_init(p);
-    //tray_init_widgets(p);
+    panel_tray_init(p);
+    tn_net_init(p);
     clock_init(p);
 
     IswRealizeWidget(p->shell);
     IswMapWidget(p->shell);
 
     /* Claim system tray selection (needs realized window) */
-    //tray_init_selection(p);
 
     /* D-Bus settings notifications */
     p->dbus = isde_dbus_init();
@@ -264,7 +265,8 @@ static void on_panel_theme_changed(void *user_data)
     taskbar_highlight_active(p);
     startmenu_reload_theme(p);
     calendar_reload_theme(p);
-    //tray_set_colors(p);
+    if (p->tray_net)
+        tn_net_reload_theme(p->tray_net);
 }
 
 static void on_panel_settings_changed(const char *section, const char *key,
@@ -304,7 +306,6 @@ static void poll_clients(IswPointer client_data, IswIntervalId *id)
     //* Check for screen changes (RandR) */
     panel_reconfigure(p);
 
-    //tray_check_icons(p);
     taskbar_update(p);
     taskbar_highlight_active(p);
     //pager_update(p);
@@ -433,7 +434,8 @@ void panel_cleanup(Panel *p)
 {
     panel_clear_launch(p);
     clock_cleanup(p);
-    //tray_cleanup(p);
+    tn_net_cleanup(p);
+    panel_tray_cleanup(p);
     taskbar_cleanup(p);
     //pager_cleanup(p);
     startmenu_cleanup(p);

@@ -35,6 +35,9 @@
 
 #include "../../platform/common/dbus.h"
 
+/* Forward declaration — full definition in tray-net.h */
+typedef struct TrayNet TrayNet;
+
 /* ---------- Panel geometry (scaled) ---------- */
 #define PANEL_HEIGHT      40
 #define PANEL_ICON_SIZE   22
@@ -102,6 +105,8 @@ typedef struct Panel {
     Widget             shutdown_btn;/* Shut Down button in toolbar */
     Widget             reboot_btn;  /* Reboot button in toolbar */
     Widget             logout_btn;  /* Logout button in toolbar */
+    Widget             tray_area;   /* Tray — outer vertical FlexBox */
+    Widget             tray_box;    /* Tray — inner horizontal FlexBox for module icons */
     Widget             clock_box;   /* Clock — vertical container */
     Widget             clock_time;  /* Clock — time label */
     Widget             clock_date;  /* Clock — date label */
@@ -180,6 +185,9 @@ typedef struct Panel {
 
     IswIntervalId       clock_timer;
 
+    /* Tray modules */
+    TrayNet           *tray_net;
+
     /* D-Bus */
     IsdeDBus          *dbus;
 
@@ -228,13 +236,14 @@ void  startmenu_reload_theme(Panel *p);
 void  startmenu_cleanup(Panel *p);
 
 /* ---------- tray.c ---------- */
-//void  tray_init_widgets(Panel *p);  /* create tray box, intern atoms */
-//void  tray_init_selection(Panel *p); /* claim selection (after realize) */
-//void  tray_check_icons(Panel *p);
-//void  tray_reposition_all(Panel *p); /* re-offset icons after container resize */
-//void  tray_apply_bg(Panel *p);       /* set icon bg to container colour */
-//void  tray_set_colors(Panel *p);
-//void  tray_cleanup(Panel *p);
+void    panel_tray_init(Panel *p);
+Widget  panel_tray_add_icon(Panel *p, char *name, WidgetClass wclass);
+void    panel_tray_remove_icon(Panel *p, Widget icon);
+void    panel_tray_cleanup(Panel *p);
+
+/* ---------- tray-net.c ---------- */
+void  tn_net_init(Panel *p);
+void  tn_net_cleanup(Panel *p);
 
 /* ---------- clock.c ---------- */
 void  clock_init(Panel *p);

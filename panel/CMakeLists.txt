@@ -4,10 +4,15 @@ add_executable(isde-panel-x11
     src/panel-x11.c
     src/taskbar.c
     src/startmenu.c
-    #src/tray.c
+    src/tray.c
+    src/tray-net.c
+    src/tray-net-connman.c
+    src/tray-net-agent.c
+    src/tray-net-menu.c
     src/clock.c
     src/calendar.c
     #src/pager.c
+    ${CMAKE_SOURCE_DIR}/platform/common/isde-dialog.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/isde-monitor-xcb.c
