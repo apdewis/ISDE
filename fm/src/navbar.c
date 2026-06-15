@@ -99,7 +99,7 @@ static Widget make_nav_button(Fm *fm, const char *name,
 void navbar_init(Fm *fm)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderBottom(&ab, 1);
     IswArgHSpace(&ab, 7);
     IswArgVSpace(&ab, 7);
     IswArgFlexBasis(&ab, 46);

@@ -570,7 +570,8 @@ void places_init(Fm *fm)
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, False);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
+    IswArgBorderRight(&ab, 1);
     IswArgFlexGrow(&ab, 0);
     IswArgWidth(&ab, 180);
     fm->places_vp = IswCreateManagedWidget("placesVp", viewportWidgetClass,
@@ -581,7 +582,7 @@ void places_init(Fm *fm)
     IswArgSelectionMode(&ab, IswListBoxSelectSingle);
     IswArgShowSeparators(&ab, True);
     IswArgRowSpacing(&ab, 1);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderRight(&ab, 1);
     fm->places_listbox = IswCreateManagedWidget("placesListBox",
                              listBoxWidgetClass, fm->places_vp,
                              ab.args, ab.count);

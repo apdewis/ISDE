@@ -843,7 +843,7 @@ void startmenu_init(Panel *p)
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderRight(&ab, 1);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     p->cat_viewport = IswCreateManagedWidget("catViewport",
@@ -863,7 +863,7 @@ void startmenu_init(Panel *p)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, CAT_PANE_WIDTH);
     IswArgCursor(&ab, None);
     p->cat_box = IswCreateManagedWidget("catList", listWidgetClass,
@@ -877,7 +877,7 @@ void startmenu_init(Panel *p)
     IswArgFromHoriz(&ab, p->cat_viewport);
     IswArgWidth(&ab, MENU_WIDTH - CAT_PANE_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, True);
@@ -894,7 +894,7 @@ void startmenu_init(Panel *p)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
     IswArgCursor(&ab, None);
     p->app_box = IswCreateManagedWidget("appList", listWidgetClass,
@@ -924,9 +924,9 @@ void startmenu_init(Panel *p)
     /* Search bar — label showing typed query, overlaps cat/app viewports */
     #define SEARCH_BAR_HEIGHT 28
     IswArgBuilderReset(&ab);
-    IswArgWidth(&ab, MENU_WIDTH - 2);
+    IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, SEARCH_BAR_HEIGHT);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderBottom(&ab, 1);
     IswArgLabel(&ab, "");
     ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
     IswArgInternalWidth(&ab, 6);
@@ -939,7 +939,7 @@ void startmenu_init(Panel *p)
     IswArgVertDistance(&ab, 0);
     IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT - SEARCH_BAR_HEIGHT);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderWidth(&ab, 0);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     p->search_viewport = IswCreateManagedWidget("searchViewport",
@@ -986,7 +986,7 @@ void startmenu_init(Panel *p)
     IswArgVertDistance(&ab, 0);
     IswArgWidth(&ab, MENU_WIDTH);
     IswArgHeight(&ab, TOOLBAR_HEIGHT);
-    IswArgBorderWidth(&ab, 1);
+    IswArgBorderTop(&ab, 1);
     p->menu_toolbar = IswCreateManagedWidget("menuToolbar", formWidgetClass,
                                             form, ab.args, ab.count);
 
