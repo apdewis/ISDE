@@ -146,14 +146,16 @@ static void deferred_icon_load(IswPointer client_data, IswIntervalId *id)
 
 void tn_battery_init(Panel *p)
 {
+    IsdePower *power = isde_power_init();
+    if (!power || isde_power_battery_count(power) == 0) {
+        isde_power_free(power);
+        return;
+    }
+
     TrayBattery *tb = calloc(1, sizeof(TrayBattery));
     p->tray_battery = tb;
     tb->panel = p;
-
-    tb->power = isde_power_init();
-    if (!tb->power || isde_power_battery_count(tb->power) == 0) {
-        fprintf(stderr, "isde-panel: tray-battery: no batteries found\n");
-    }
+    tb->power = power;
 
     tb->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(tb->icon, IswNcallback, on_icon_click, tb);
