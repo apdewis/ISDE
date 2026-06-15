@@ -173,7 +173,7 @@ int dm_init(Dm *dm)
     dm->display_num = 0;
 
     /* Defaults */
-    dm->greeter_cmd    = strdup("isde-greeter");
+    dm->greeter_cmd    = strdup("isde-greeter-x11");
     dm->default_session = strdup("isde-x11.desktop");
     /* Bare name: execlp() resolves it via PATH when not configured. */
     dm->xserver_cmd    = strdup("Xorg");
