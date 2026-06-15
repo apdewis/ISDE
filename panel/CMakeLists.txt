@@ -10,6 +10,7 @@ add_executable(isde-panel-x11
     #src/pager.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/isde-monitor-xcb.c
     ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/desktop.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c

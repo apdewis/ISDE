@@ -24,6 +24,7 @@
 #define WM_BORDER_WIDTH     0
 #define WM_BUTTON_SIZE     16
 
+#include "isde-monitor-xcb.h"
 #include "randr.h"
 
 #ifdef ISDE_COMPOSITOR
@@ -210,6 +211,10 @@ typedef struct Wm {
     xcb_window_t           snap_preview;   /* overlay window (0 = none) */
     int                    snap_pending;   /* pending snap zone */
     int                    snap_monitor;   /* monitor index for pending snap */
+
+    /* Monitor backend (vtable + context) */
+    const IsdeMonitorOps  *mon_ops;
+    IsdeMonitorXcbCtx      mon_ctx;
 
     /* Per-monitor geometry (physical pixels) */
     MonitorGeom           *monitors;

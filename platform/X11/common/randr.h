@@ -6,15 +6,11 @@
 
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
+#include "../../common/isde-monitor.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct {
-    int16_t  x, y;
-    uint16_t width, height;
-} IsdeMonitor;
 
 /* Compute refresh rate (Hz) from a RandR mode info struct. */
 double isde_randr_refresh(xcb_randr_mode_info_t *mi);

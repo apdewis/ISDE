@@ -349,7 +349,11 @@ int wm_init(Wm *wm, int *argc, char **argv)
     /* EWMH setup (advertise _NET_SUPPORTED, etc.) */
     wm_ewmh_setup(wm);
 
-    /* Monitor geometry (RandR) */
+    /* Monitor backend (RandR via xcb) */
+    wm->mon_ctx.conn   = wm->conn;
+    wm->mon_ctx.root   = wm->root;
+    wm->mon_ctx.screen = wm->screen;
+    wm->mon_ops = isde_monitor_xcb_probe(wm->conn);
     {
         const xcb_query_extension_reply_t *ext =
             xcb_get_extension_data(wm->conn, &xcb_randr_id);
@@ -738,8 +742,11 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 
 void wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh)
 {
-    IsdeMonitor pm;
-    isde_randr_primary(wm->conn, wm->root, wm->screen, &pm);
+    IsdeMonitor pm = { 0, 0, wm->screen->width_in_pixels,
+                             wm->screen->height_in_pixels };
+    if (wm->mon_ops) {
+        wm->mon_ops->get_primary(&wm->mon_ctx, &pm);
+    }
     *mx = pm.x;
     *my = pm.y;
     *mw = pm.width;
@@ -781,7 +788,10 @@ static void query_monitors(Wm *wm)
     wm->nmonitors = 0;
 
     IsdeMonitor *mons = NULL;
-    int n = isde_randr_monitors(wm->conn, wm->root, &mons);
+    int n = 0;
+    if (wm->mon_ops) {
+        n = wm->mon_ops->get_monitors(&wm->mon_ctx, &mons);
+    }
 
     if (n > 0) {
         wm->monitors = mons;

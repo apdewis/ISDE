@@ -9,6 +9,7 @@ add_executable(isde-wm
     src/switcher.c
     src/render.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/isde-monitor-xcb.c
     ${CMAKE_SOURCE_DIR}/platform/common/dbus.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-config.c
     ${CMAKE_SOURCE_DIR}/platform/common/isde-config-write.c

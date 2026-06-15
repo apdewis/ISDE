@@ -50,6 +50,7 @@ add_executable(isde-confirm
     src/confirm.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/ewmh.c
     ${CMAKE_SOURCE_DIR}/platform/X11/common/randr.c
+    ${CMAKE_SOURCE_DIR}/platform/X11/common/isde-monitor-xcb.c
     ${SESSION_PLATFORM_SRC}
 )
 

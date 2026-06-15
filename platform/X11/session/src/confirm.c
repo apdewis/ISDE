@@ -17,6 +17,7 @@
 #include <xcb/xcb_aux.h>
 
 #include "isde-theme.h"
+#include "isde-monitor-xcb.h"
 #include "randr.h"
 #include "isde-xdg.h"
 
@@ -29,14 +30,16 @@
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
 
-static int create_blank_screens(xcb_connection_t *conn, xcb_screen_t *scr,
+static int create_blank_screens(const IsdeMonitorOps *ops,
+                                 IsdeMonitorXcbCtx *mon_ctx,
+                                 xcb_connection_t *conn, xcb_screen_t *scr,
                                  IsdeMonitor *primary, uint32_t bg_pixel,
                                  xcb_window_t **out_wins)
 {
     *out_wins = NULL;
 
     IsdeMonitor *mons = NULL;
-    int nmons = isde_randr_monitors(conn, scr->root, &mons);
+    int nmons = ops ? ops->get_monitors(mon_ctx, &mons) : 0;
     if (nmons <= 0) { free(mons); return 0; }
 
     *out_wins = malloc(nmons * sizeof(xcb_window_t));
@@ -175,8 +178,13 @@ int main(int argc, char **argv)
     double sf = ISWScaleFactor(toplevel);
     if (sf < 1.0) { sf = 1.0; }
 
-    IsdeMonitor primary;
-    isde_randr_primary(conn, scr->root, scr, &primary);
+    const IsdeMonitorOps *mon_ops = isde_monitor_xcb_probe(conn);
+    IsdeMonitorXcbCtx mon_ctx = { conn, scr->root, scr };
+
+    IsdeMonitor primary = { 0, 0, scr->width_in_pixels, scr->height_in_pixels };
+    if (mon_ops) {
+        mon_ops->get_primary(&mon_ctx, &primary);
+    }
     int scr_x = (int)(primary.x / sf + 0.5);
     int scr_y = (int)(primary.y / sf + 0.5);
     int scr_w = (int)(primary.width / sf + 0.5);
@@ -299,8 +307,8 @@ int main(int argc, char **argv)
                       key_handler, NULL);
 
     xcb_window_t *blank_wins = NULL;
-    int nblanks = create_blank_screens(conn, scr, &primary, overlay_bg,
-                                       &blank_wins);
+    int nblanks = create_blank_screens(mon_ops, &mon_ctx, conn, scr,
+                                       &primary, overlay_bg, &blank_wins);
 
     IswPopup(shell, IswGrabExclusive);
 

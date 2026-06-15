@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <ISW/IswArgMacros.h>
 #include <ISW/ISWPlatform.h>
+#include "isde-monitor-xcb.h"
 #include "randr.h"
 
 static void create_blank_screens(Greeter *g)
@@ -17,8 +18,10 @@ static void create_blank_screens(Greeter *g)
     xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
     xcb_screen_t *scr = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
 
+    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(conn);
+    IsdeMonitorXcbCtx mon_ctx = { conn, scr->root, scr };
     IsdeMonitor *mons = NULL;
-    int nmons = isde_randr_monitors(conn, scr->root, &mons);
+    int nmons = ops ? ops->get_monitors(&mon_ctx, &mons) : 0;
     if (nmons <= 0) { free(mons); return; }
 
     g->blanks = malloc(nmons * sizeof(xcb_window_t));
@@ -782,8 +785,12 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     /* Get primary monitor geometry */
     xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
     xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
-    IsdeMonitor pm;
-    isde_randr_primary(conn, screen->root, screen, &pm);
+    IsdeMonitor pm = { 0, 0, screen->width_in_pixels, screen->height_in_pixels };
+    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(conn);
+    if (ops) {
+        IsdeMonitorXcbCtx mon_ctx = { conn, screen->root, screen };
+        ops->get_primary(&mon_ctx, &pm);
+    }
     g->screen_x = pm.x;
     g->screen_y = pm.y;
     g->screen_w = pm.width;

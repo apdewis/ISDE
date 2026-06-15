@@ -16,6 +16,7 @@
 #include <xcb/randr.h>
 
 #include <ISW/ISWPlatform.h>
+#include "../../platform/X11/common/isde-monitor-xcb.h"
 
 static xcb_atom_t intern(xcb_connection_t *c, const char *name)
 {
@@ -66,62 +67,29 @@ int panel_init_display(Panel *p)
     return 0;
 }
 
-/* Query primary monitor geometry via RandR.
- * Falls back to full screen if RandR is unavailable or no primary is set. */
 void query_primary_monitor(Panel *p)
 {
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
     xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle((IswScreenOf(p->toplevel)));
-    /* Default to full screen */
+
     p->mon_x = 0;
     p->mon_y = 0;
     p->mon_w = screen->width_in_pixels;
     p->mon_h = screen->height_in_pixels;
 
-    if(screen == NULL) return;
+    if (screen == NULL) return;
 
-    xcb_randr_get_output_primary_reply_t *primary =
-        xcb_randr_get_output_primary_reply(ctx->conn,
-           xcb_randr_get_output_primary(ctx->conn, screen->root) , NULL);
-    if (!primary) {
-        return;
+    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(ctx->conn);
+    if (ops) {
+        IsdeMonitorXcbCtx mon_ctx = { ctx->conn, screen->root, screen };
+        IsdeMonitor pm;
+        if (ops->get_primary(&mon_ctx, &pm)) {
+            p->mon_x = pm.x;
+            p->mon_y = pm.y;
+            p->mon_w = pm.width;
+            p->mon_h = pm.height;
+        }
     }
-
-    xcb_randr_output_t pout = primary->output;
-    free(primary);
-    return;
-    if (pout == XCB_NONE) {
-        return;
-    }
-
-    xcb_randr_get_output_info_reply_t *oinfo =
-        xcb_randr_get_output_info_reply(ctx->conn,
-            xcb_randr_get_output_info(ctx->conn, pout, XCB_CURRENT_TIME),
-            NULL);
-    if (!oinfo) {
-        return;
-    }
-
-    xcb_randr_crtc_t crtc = oinfo->crtc;
-    free(oinfo);
-
-    if (crtc == XCB_NONE) {
-        return;
-    }
-
-    xcb_randr_get_crtc_info_reply_t *cinfo =
-        xcb_randr_get_crtc_info_reply(ctx->conn,
-            xcb_randr_get_crtc_info(ctx->conn, crtc, XCB_CURRENT_TIME),
-            NULL);
-    if (!cinfo) {
-        return;
-    }
-
-    p->mon_x = cinfo->x;
-    p->mon_y = cinfo->y;
-    p->mon_w = cinfo->width;
-    p->mon_h = cinfo->height;
-    free(cinfo);
 }
 
 void panel_update_strut(Panel *p)
