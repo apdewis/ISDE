@@ -84,7 +84,7 @@ void tn_mount_init(Panel *p)
     p->tray_mount = tm;
     tm->panel = p;
 
-    tm->icon = panel_tray_add_icon(p, "mountIcon", commandWidgetClass);
+    tm->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(tm->icon, IswNcallback, on_icon_click, tm);
 
     tm_popup_init(tm);

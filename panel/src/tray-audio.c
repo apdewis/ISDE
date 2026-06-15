@@ -133,7 +133,7 @@ void tn_audio_init(Panel *p)
     p->tray_audio = ta;
     ta->panel = p;
 
-    ta->icon = panel_tray_add_icon(p, "audioIcon", commandWidgetClass);
+    ta->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(ta->icon, IswNcallback, on_icon_click, ta);
     IswAddEventHandler(ta->icon, IswButtonPressMask, False,
                        on_icon_event, ta);

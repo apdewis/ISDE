@@ -1065,6 +1065,7 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*Tabs.foreground", s->fg);
 
     /* Panel / Taskbar */
+    res[i++] = fmt_color("*panel.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelFlex.background", s->taskbar.bg);
     res[i++] = fmt_color("*panelBox.background", s->taskbar.bg);
     res[i++] = fmt_color("*trayArea.background", s->taskbar.bg);
@@ -1078,6 +1079,9 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*taskBtn.background", s->taskbar_button.bg);
     res[i++] = fmt_color("*taskBtn.foreground", s->taskbar_button.fg);
     res[i++] = fmt_color("*taskBtn.borderColor", s->taskbar_button.border);
+    res[i++] = fmt_color("*trayBtn.background", s->taskbar.bg);
+    res[i++] = fmt_color("*trayBtn.foreground", s->taskbar.fg);
+    res[i++] = fmt_color("*trayBtn.borderColor", s->taskbar.bg);
 
     /* Start menu */
     res[i++] = fmt_color("*startMenu.background", s->menu.bg);

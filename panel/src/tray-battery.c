@@ -155,7 +155,7 @@ void tn_battery_init(Panel *p)
         fprintf(stderr, "isde-panel: tray-battery: no batteries found\n");
     }
 
-    tb->icon = panel_tray_add_icon(p, "batteryIcon", commandWidgetClass);
+    tb->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(tb->icon, IswNcallback, on_icon_click, tb);
     IswAddEventHandler(tb->icon, IswButtonPressMask, False,
                        on_icon_right_click, tb);

@@ -139,7 +139,7 @@ void tn_bt_init(Panel *p)
     p->tray_bt = tb;
     tb->panel = p;
 
-    tb->icon = panel_tray_add_icon(p, "btIcon", commandWidgetClass);
+    tb->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(tb->icon, IswNcallback, on_icon_click, tb);
 
     tb_menu_init(tb);

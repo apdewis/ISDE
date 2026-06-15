@@ -163,7 +163,7 @@ void tn_net_init(Panel *p)
     tn->panel = p;
     snprintf(tn->manager_state, sizeof(tn->manager_state), "idle");
 
-    tn->icon = panel_tray_add_icon(p, "netIcon", commandWidgetClass);
+    tn->icon = panel_tray_add_icon(p, "trayBtn", commandWidgetClass);
     IswAddCallback(tn->icon, IswNcallback, on_icon_click, tn);
 
     tn_menu_init(tn);
