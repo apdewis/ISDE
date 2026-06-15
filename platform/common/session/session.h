@@ -29,8 +29,20 @@ typedef struct Child {
     int         respawn;      /* 1 if @-prefixed (restart on crash) */
     int         is_wm;        /* 1 if this is the window manager */
     int         is_panel;     /* 1 if this is the panel */
+    long long   start_ms;     /* CLOCK_MONOTONIC when spawned */
+    int         rapid_crashes; /* consecutive crashes within RAPID_CRASH_WINDOW */
     struct Child *next;
 } Child;
+
+/* Pending delayed respawn (child that crashed too fast). */
+typedef struct PendingRespawn {
+    char       *command;
+    int         is_wm;
+    int         is_panel;
+    int         rapid_crashes;
+    long long   deadline_ms;  /* when to actually respawn */
+    struct PendingRespawn *next;
+} PendingRespawn;
 
 /* ---------- Session state ---------- */
 typedef struct Session {
@@ -41,6 +53,7 @@ typedef struct Session {
 
     /* Child process list */
     Child      *children;
+    PendingRespawn *pending_respawns;
 
     /* Autostart entries from the autostart file */
     char      **autostart_cmds;

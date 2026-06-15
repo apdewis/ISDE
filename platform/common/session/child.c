@@ -14,6 +14,18 @@
 #include <time.h>
 #include <sys/wait.h>
 
+#define RAPID_CRASH_WINDOW_MS  5000
+#define MAX_RAPID_CRASHES      5
+#define BASE_RETRY_DELAY_MS    1000
+#define MAX_RETRY_DELAY_MS     60000
+
+static long long now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
 {
     pid_t pid = fork();
@@ -39,10 +51,11 @@ Child *child_spawn(Session *s, const char *command, int respawn, int is_wm)
     Child *c = calloc(1, sizeof(*c));
     if (!c) { return NULL; }
 
-    c->pid     = pid;
-    c->command = strdup(command);
-    c->respawn = respawn;
-    c->is_wm   = is_wm;
+    c->pid      = pid;
+    c->command  = strdup(command);
+    c->respawn  = respawn;
+    c->is_wm    = is_wm;
+    c->start_ms = now_ms();
 
     c->next = s->children;
     s->children = c;
@@ -85,18 +98,83 @@ void child_reap(Session *s)
         }
 
         if (c->respawn && s->running) {
-            fprintf(stderr, "isde-session: respawning '%s'\n", c->command);
-            char *cmd = strdup(c->command);
-            int wm = c->is_wm;
-            int panel = c->is_panel;
-            child_remove(s, c);
-            Child *nc = child_spawn(s, cmd, 1, wm);
-            if (nc) { nc->is_panel = panel; }
-            free(cmd);
+            long long uptime = now_ms() - c->start_ms;
+            int crashes = c->rapid_crashes;
+            if (uptime < RAPID_CRASH_WINDOW_MS) {
+                crashes++;
+            } else {
+                crashes = 0;
+            }
+
+            if (crashes >= MAX_RAPID_CRASHES) {
+                fprintf(stderr, "isde-session: '%s' crashed %d times "
+                        "rapidly, giving up\n", c->command, crashes);
+                child_remove(s, c);
+            } else if (crashes > 0) {
+                long long delay = BASE_RETRY_DELAY_MS << (crashes - 1);
+                if (delay > MAX_RETRY_DELAY_MS) {
+                    delay = MAX_RETRY_DELAY_MS;
+                }
+                fprintf(stderr, "isde-session: '%s' crashed after %lldms, "
+                        "retry #%d in %lldms\n",
+                        c->command, uptime, crashes, delay);
+                PendingRespawn *pr = calloc(1, sizeof(*pr));
+                pr->command = strdup(c->command);
+                pr->is_wm = c->is_wm;
+                pr->is_panel = c->is_panel;
+                pr->rapid_crashes = crashes;
+                pr->deadline_ms = now_ms() + delay;
+                pr->next = s->pending_respawns;
+                s->pending_respawns = pr;
+                child_remove(s, c);
+            } else {
+                fprintf(stderr, "isde-session: respawning '%s'\n",
+                        c->command);
+                char *cmd = strdup(c->command);
+                int wm = c->is_wm;
+                int panel = c->is_panel;
+                child_remove(s, c);
+                Child *nc = child_spawn(s, cmd, 1, wm);
+                if (nc) { nc->is_panel = panel; }
+                free(cmd);
+            }
         } else {
             child_remove(s, c);
         }
     }
+}
+
+void child_process_pending_respawns(Session *s)
+{
+    long long now = now_ms();
+    PendingRespawn **pp = &s->pending_respawns;
+    while (*pp) {
+        PendingRespawn *pr = *pp;
+        if (now < pr->deadline_ms) {
+            pp = &pr->next;
+            continue;
+        }
+        *pp = pr->next;
+        fprintf(stderr, "isde-session: delayed respawn '%s'\n", pr->command);
+        Child *nc = child_spawn(s, pr->command, 1, pr->is_wm);
+        if (nc) {
+            nc->is_panel = pr->is_panel;
+            nc->rapid_crashes = pr->rapid_crashes;
+        }
+        free(pr->command);
+        free(pr);
+    }
+}
+
+long long child_next_respawn_deadline(Session *s)
+{
+    long long earliest = -1;
+    for (PendingRespawn *pr = s->pending_respawns; pr; pr = pr->next) {
+        if (earliest < 0 || pr->deadline_ms < earliest) {
+            earliest = pr->deadline_ms;
+        }
+    }
+    return earliest;
 }
 
 void restart_ui_children(Session *s)

@@ -743,9 +743,15 @@ void child_kill_all(Session *s)
     xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
     struct timespec ts = { 0, 50000000 }; /* 50ms */
 
-    /* Disable respawning */
+    /* Disable respawning and discard pending delayed respawns */
     for (Child *c = s->children; c; c = c->next) {
         c->respawn = 0;
+    }
+    while (s->pending_respawns) {
+        PendingRespawn *pr = s->pending_respawns;
+        s->pending_respawns = pr->next;
+        free(pr->command);
+        free(pr);
     }
 
     /* Phase 0: ask the WM to close every managed client via _NET_CLOSE_WINDOW.
@@ -888,6 +894,11 @@ void session_run(Session *s)
             (deadline < 0 || s->idle_deadline_ms < deadline)) {
             deadline = s->idle_deadline_ms;
         }
+        long long respawn_dl = child_next_respawn_deadline(s);
+        if (respawn_dl >= 0 &&
+            (deadline < 0 || respawn_dl < deadline)) {
+            deadline = respawn_dl;
+        }
         int timeout = -1;
         if (deadline >= 0) {
             timeout = (int)(deadline - now);
@@ -940,6 +951,9 @@ void session_run(Session *s)
         }
         if (s->idle_deadline_ms > 0 && now >= s->idle_deadline_ms) {
             idle_timer_fire(s);
+        }
+        if (s->pending_respawns) {
+            child_process_pending_respawns(s);
         }
     }
 }
