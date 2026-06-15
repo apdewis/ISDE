@@ -76,7 +76,7 @@ if(ISW_LOCAL_DIR)
     set_property(TARGET ISDE::ISW PROPERTY
         INTERFACE_LINK_LIBRARIES "${ISW_LOCAL_DIR}/build/libISW.so")
 else()
-    isde_dependency(ISW         PC isw>=0.9.0          LIBS ISW
+    isde_dependency(ISW         PC isw>=0.10.0          LIBS ISW
         HEADERS ISW/Intrinsic.h  HEADER_PATHS /usr/local/include/isw)
 endif()
 isde_dependency(XCB             PC xcb                 LIBS xcb             HEADERS xcb/xcb.h)
