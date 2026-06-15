@@ -16,6 +16,7 @@
 #include <xcb/randr.h>
 
 #include <ISW/ISWPlatform.h>
+#include <ISW/ShellP.h>
 #include "../../platform/X11/common/isde-monitor-xcb.h"
 
 static xcb_atom_t intern(xcb_connection_t *c, const char *name)
@@ -94,16 +95,20 @@ void query_primary_monitor(Panel *p)
 
 void panel_update_strut(Panel *p)
 {
-    PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
-    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(ctx->ewmh);
-    xcb_ewmh_wm_strut_partial_t strut;
-    memset(&strut, 0, sizeof(strut));
-    strut.bottom = p->phys_panel_h;
-    strut.bottom_start_x = p->mon_x;
-    strut.bottom_end_x = p->mon_x + p->mon_w - 1;
-    
-    //xcb_ewmh_set_wm_strut_partial(ewmh, IswWindow(p->shell), strut);
-    xcb_flush(ctx->conn);
+    Arg args[4];
+    IswSetArg(args[0], IswNstrutBottom, p->phys_panel_h);
+    IswSetArg(args[1], IswNstrutLeft, 0);
+    IswSetArg(args[2], IswNstrutRight, 0);
+    IswSetArg(args[3], IswNstrutTop, 0);
+    IswSetValues(p->shell, args, 4);
+
+    WMShellWidget wmshell = (WMShellWidget)p->shell;
+    wmshell->wm.strut_partial.bottom_start_x = p->mon_x;
+    wmshell->wm.strut_partial.bottom_end_x = p->mon_x + p->mon_w - 1;
+
+    _IswPlatformSetStrutPartial(IswDisplayOf(p->shell),
+        _IswPlatformWidgetWindow(IswDisplayOf(p->shell), p->shell),
+        &wmshell->wm.strut_partial);
 }
 
 void panel_ungrab_popup(Panel *p)
@@ -218,8 +223,6 @@ void panel_setup_dock_window(Panel *p)
 {
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
     xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle((IswScreenOf(p->toplevel)));
-
-    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(ctx->ewmh);
 
     /* Watch root for:
      *   PROPERTY_CHANGE — client list updates

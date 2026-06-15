@@ -183,8 +183,9 @@ int panel_init(Panel *p, int *argc, char **argv)
     IswArgY(&ab, logical_mon_y + logical_mon_h - PANEL_HEIGHT);
     IswArgWidth(&ab, logical_mon_w);
     IswArgHeight(&ab, PANEL_HEIGHT);
-    IswArgOverrideRedirect(&ab, True);
     IswArgBorderWidth(&ab, 0);
+    ISW_ARG(&ab, IswNwindowType, ISW_WINDOW_TYPE_DOCK);
+    ISW_ARG(&ab, IswNstrutBottom, p->phys_panel_h);
     p->shell = IswCreatePopupShell("panel", applicationShellWidgetClass,
                                   p->toplevel, ab.args, ab.count);
 
