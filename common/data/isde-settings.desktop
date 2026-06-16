@@ -5,5 +5,6 @@ GenericName=Settings
 Comment=Configure desktop appearance, display, and input
 Exec=isde-settings-x11
 Icon=isde-settings
+StartupWMClass=ISDE-Settings
 Terminal=false
 Categories=Settings;DesktopSettings;System;
