@@ -605,6 +605,10 @@ static uint32_t iswkey_to_xkeysym(uint32_t key)
 static void handle_key_press(TermWidget *t, IswKeyEvent *kev)
 {
     uint32_t sym = iswkey_to_xkeysym(kev->key);
+    if (sym == XK_VoidSymbol) return;
+    if (sym >= XK_Shift_L && sym <= XK_Hyper_R) return;
+    if (sym == XK_Num_Lock) return;
+
     uint32_t uc = kev->unicode;
     uint16_t mods_mask = kev->modifiers;
 
