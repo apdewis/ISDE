@@ -725,6 +725,45 @@ static void detect_hidpi(double config_scale)
     }
 }
 
+/* ---------- Focus on map ---------- */
+
+static void apply_x_focus(Greeter *g)
+{
+    xcb_connection_t *conn =
+        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_window_t shell_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(g->shell), g->shell));
+
+    IswSetKeyboardFocus(g->shell,
+                        g->mode_lock ? g->pass_text : g->user_text);
+    xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT,
+                        shell_win, XCB_CURRENT_TIME);
+
+    if (g->mode_lock) {
+        xcb_grab_keyboard(conn, 1, shell_win, XCB_CURRENT_TIME,
+                          XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+        xcb_grab_pointer(conn, 1, shell_win,
+                         IswButtonPressMask |
+                         IswButtonReleaseMask |
+                         IswPointerMotionMask,
+                         XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                         shell_win, XCB_NONE, XCB_CURRENT_TIME);
+    }
+
+    xcb_flush(conn);
+}
+
+static void shell_mapped_cb(Widget w, IswPointer cd, IswEvent *ev, Boolean *cont)
+{
+    (void)cont;
+    if (ev->kind != IswMap) {
+        return;
+    }
+    Greeter *g = (Greeter *)cd;
+    IswRemoveEventHandler(w, IswStructureNotifyMask, False, shell_mapped_cb, cd);
+    apply_x_focus(g);
+}
+
 /* ---------- Public API ---------- */
 
 int greeter_init(Greeter *g, int *argc, char **argv)
@@ -809,22 +848,17 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     build_ui(g);
 
     /* Default focus to username field so the cursor is visible */
-    IswSetKeyboardFocus(g->form, g->user_text);
+    IswSetKeyboardFocus(g->shell, g->user_text);
+
+    /* Set X input focus once the shell is actually mapped — doing it
+       before the server processes the map makes it a no-op. */
+    IswAddEventHandler(g->shell, IswStructureNotifyMask, False,
+                       shell_mapped_cb, g);
 
     /* Realize and show */
     IswRealizeWidget(g->shell);
     create_blank_screens(g);
     IswPopup(g->shell, IswGrabNone);
-
-    /* Override-redirect windows don't receive X focus automatically.
-       Focus the text widget's window directly so key events reach it. */
-    xcb_connection_t *xc =
-        (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->shell));
-    xcb_window_t user_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
-        _IswPlatformWidgetWindow(IswDisplayOf(g->user_text), g->user_text));
-    xcb_set_input_focus(xc, XCB_INPUT_FOCUS_PARENT,
-                        user_win, XCB_CURRENT_TIME);
-    xcb_flush(xc);
 
     /* Connect to daemon IPC */
     if (greeter_ipc_init(g) != 0) {
@@ -908,7 +942,7 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
     IswArgBuilderReset(&ab);
     IswArgString(&ab, "");
     IswSetValues(g->pass_text, ab.args, ab.count);
-    IswSetKeyboardFocus(g->form, g->pass_text);
+    IswSetKeyboardFocus(g->shell, g->pass_text);
 
     /* Hide session selector in lock mode */
     IswUnmanageChild(g->session_label);
@@ -921,27 +955,9 @@ void greeter_enter_lock_mode(Greeter *g, const char *username)
 
     greeter_clear_error(g);
 
-    /* Grab keyboard and pointer for lock screen security.
-     * Grab keyboard on the password field so key events are delivered
-     * directly to it — grabbing on the shell would intercept events
-     * before Xt can dispatch them to the text widget. */
-    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
-    xcb_window_t win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
-        _IswPlatformWidgetWindow(IswDisplayOf(g->shell), g->shell));
-    xcb_window_t pass_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
-        _IswPlatformWidgetWindow(IswDisplayOf(g->pass_text), g->pass_text));
-
-    xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT,
-                        pass_win, XCB_CURRENT_TIME);
-    xcb_grab_keyboard(conn, 1, pass_win, XCB_CURRENT_TIME,
-                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-    xcb_grab_pointer(conn, 1, win,
-                     IswButtonPressMask |
-                     IswButtonReleaseMask |
-                     IswPointerMotionMask,
-                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                     win, XCB_NONE, XCB_CURRENT_TIME);
-    xcb_flush(conn);
+    if (IswIsRealized(g->shell)) {
+        apply_x_focus(g);
+    }
 }
 
 void greeter_enter_login_mode(Greeter *g)
