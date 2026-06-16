@@ -8,13 +8,7 @@
 #include <ISW/IswArgMacros.h>
 #include <ISW/IswDragDrop.h>
 
-#include <cairo/cairo.h>
-#include <cairo/cairo-xcb.h>
-#include <cairo/cairo-ft.h>
-
 #include <fontconfig/fontconfig.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
 
 #define XK_MISCELLANY
 #define XK_LATIN1
@@ -54,12 +48,9 @@ struct TermWidget {
     struct tsm_vte    *vte;
     TermPty           *pty;
 
-    /* Font rendering: primary FreeType/FcCharSet-backed cairo face plus a
-     * small cache of fallback faces keyed by codepoint coverage. */
-    double             font_size_px;
-    double             cell_w;
-    double             cell_h;
-    double             baseline;
+    int                cell_w;
+    int                cell_h;
+    int                baseline;
 
     struct TermFont   *primary_font;
     struct TermFont  **fallback_fonts;  /* dyn array */
@@ -96,13 +87,8 @@ struct TermWidget {
 
     /* redraw coalescing */
     Boolean         dirty;
+    Boolean         metrics_synced;
     IswIntervalId   redraw_timer;
-
-    /* cached render surface */
-    cairo_surface_t *surf;
-    unsigned char   *rgba_buf;
-    int              surf_w;
-    int              surf_h;
 
     /* previous cursor position for incremental redraw */
     unsigned        prev_cx;
@@ -112,42 +98,45 @@ struct TermWidget {
 /* ---------- rendering ---------- */
 
 typedef struct TermFont {
-    FT_Face            ft_face;
-    cairo_font_face_t *cr_face;
-    FcCharSet         *charset;  /* owned */
-    char              *file;     /* owned, for dedup */
+    IswFontStruct     *isw_font;  /* from toolkit converter, owned */
+    FcCharSet         *charset;   /* owned */
+    char              *file;      /* owned, for dedup */
 } TermFont;
 
-static FT_Library g_ft_lib;
-
-static void term_ft_init(void)
+static IswFontStruct *term_load_isw_font(Widget w, const char *fc_name)
 {
-    if (!g_ft_lib) FT_Init_FreeType(&g_ft_lib);
+    IswDisplay dpy = IswDisplayOf(w);
+    XrmValue arg = { .size = sizeof(dpy), .addr = (IswPointer)&dpy };
+    Cardinal nargs = 1;
+    XrmValue from = { .size = strlen(fc_name) + 1, .addr = (IswPointer)fc_name };
+    IswFontStruct *result = NULL;
+    XrmValue to = { .size = sizeof(result), .addr = (IswPointer)&result };
+
+    if (!IswCvtStringToFontStruct(dpy, &arg, &nargs, &from, &to, NULL))
+        return NULL;
+    return result;
 }
 
-static TermFont *term_font_from_pattern(FcPattern *match)
+static TermFont *term_font_from_pattern(FcPattern *match, Widget w,
+                                        double pt_size)
 {
     FcChar8 *file = NULL;
     if (FcPatternGetString(match, FC_FILE, 0, &file) != FcResultMatch)
         return NULL;
-    int index = 0;
-    FcPatternGetInteger(match, FC_INDEX, 0, &index);
 
-    FT_Face ft = NULL;
-    if (FT_New_Face(g_ft_lib, (const char *)file, index, &ft) != 0)
-        return NULL;
+    FcChar8 *family = NULL;
+    FcPatternGetString(match, FC_FAMILY, 0, &family);
 
-    cairo_font_face_t *cr = cairo_ft_font_face_create_for_ft_face(ft, 0);
-    if (!cr || cairo_font_face_status(cr) != CAIRO_STATUS_SUCCESS) {
-        if (cr) cairo_font_face_destroy(cr);
-        FT_Done_Face(ft);
-        return NULL;
-    }
+    char fc_name[256];
+    snprintf(fc_name, sizeof(fc_name), "%s-%.0f",
+             family ? (const char *)family : "Monospace", pt_size);
+
+    IswFontStruct *isw = term_load_isw_font(w, fc_name);
+    if (!isw) return NULL;
 
     TermFont *f = calloc(1, sizeof(*f));
-    f->ft_face = ft;
-    f->cr_face = cr;
-    f->file    = strdup((const char *)file);
+    f->file     = strdup((const char *)file);
+    f->isw_font = isw;
 
     FcCharSet *cs = NULL;
     if (FcPatternGetCharSet(match, FC_CHARSET, 0, &cs) == FcResultMatch && cs)
@@ -159,16 +148,18 @@ static TermFont *term_font_from_pattern(FcPattern *match)
 static void term_font_free(TermFont *f)
 {
     if (!f) return;
-    if (f->cr_face) cairo_font_face_destroy(f->cr_face);
-    if (f->ft_face) FT_Done_Face(f->ft_face);
     if (f->charset) FcCharSetDestroy(f->charset);
+    if (f->isw_font) {
+        free(f->isw_font->font_family);
+        free(f->isw_font);
+    }
     free(f->file);
     free(f);
 }
 
-static TermFont *term_resolve_primary(const char *family)
+static TermFont *term_resolve_primary(Widget w, const char *family,
+                                      double pt_size)
 {
-    term_ft_init();
     FcPattern *pat = FcPatternCreate();
     FcPatternAddString(pat, FC_FAMILY, (const FcChar8 *)(family ? family : "Monospace"));
     FcPatternAddBool(pat, FC_SCALABLE, FcTrue);
@@ -178,7 +169,7 @@ static TermFont *term_resolve_primary(const char *family)
     FcPattern *match = FcFontMatch(NULL, pat, &result);
     FcPatternDestroy(pat);
     if (!match) return NULL;
-    TermFont *f = term_font_from_pattern(match);
+    TermFont *f = term_font_from_pattern(match, w, pt_size);
     FcPatternDestroy(match);
     return f;
 }
@@ -192,7 +183,6 @@ static TermFont *term_resolve_fallback_for(TermWidget *t, uint32_t ucs)
             return f;
     }
 
-    term_ft_init();
     FcCharSet *cs = FcCharSetCreate();
     FcCharSetAddChar(cs, ucs);
     FcPattern *pat = FcPatternCreate();
@@ -206,7 +196,8 @@ static TermFont *term_resolve_fallback_for(TermWidget *t, uint32_t ucs)
     FcPatternDestroy(pat);
     if (!match) return NULL;
 
-    TermFont *f = term_font_from_pattern(match);
+    TermFont *f = term_font_from_pattern(match, t->canvas,
+                      t->primary_font ? t->primary_font->isw_font->pt_size : 0);
     FcPatternDestroy(match);
     if (!f) return NULL;
 
@@ -249,33 +240,67 @@ static void term_fonts_clear(TermWidget *t)
 
 static void recompute_metrics(TermWidget *t)
 {
-    t->font_size_px = (double)t->cfg.font_size * 96.0 / 72.0;
+    double pt = (double)t->cfg.font_size;
 
     term_fonts_clear(t);
-    t->primary_font = term_resolve_primary(t->cfg.font_family);
+    t->primary_font = term_resolve_primary(t->canvas, t->cfg.font_family, pt);
 
-    cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 16, 16);
-    cairo_t *cr = cairo_create(surf);
-    if (t->primary_font)
-        cairo_set_font_face(cr, t->primary_font->cr_face);
-    cairo_set_font_size(cr, t->font_size_px);
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
-    cairo_text_extents_t te;
-    cairo_text_extents(cr, "M", &te);
-    t->cell_w = te.x_advance > 0 ? te.x_advance : fe.max_x_advance;
-    if (t->cell_w <= 0) t->cell_w = t->font_size_px * 0.6;
-    t->cell_h = fe.height > 0 ? fe.height : t->font_size_px * 1.2;
-    t->baseline = fe.ascent;
-    cairo_destroy(cr);
-    cairo_surface_destroy(surf);
+    IswFontStruct *f = t->primary_font ? t->primary_font->isw_font : NULL;
+    int w = ISWScaledTextWidth(t->canvas, f, "M", 1);
+    int h = ISWScaledFontHeight(t->canvas, f);
+    int a = ISWScaledFontAscent(t->canvas, f);
+    t->cell_w    = w > 0 ? w : (int)(pt * 96.0 / 72.0 * 0.6);
+    t->cell_h    = h > 0 ? h : (int)(pt * 96.0 / 72.0 * 1.2);
+    t->baseline  = a > 0 ? a : t->cell_h;
+    t->metrics_synced = False;
+}
+
+static void sync_metrics(TermWidget *t, ISWRenderContext *rc)
+{
+    if (!t->primary_font) return;
+    ISWRenderSetFont(rc, t->primary_font->isw_font);
+    int w = ISWRenderTextWidth(rc, "M", 1);
+    int h = ISWRenderTextHeight(rc);
+    if (w <= 0 || h <= 0) return;
+    int a = ISWScaledFontAscent(t->canvas, t->primary_font->isw_font);
+    t->cell_w = w;
+    t->cell_h = h + 1;
+    t->baseline = 1 + (a > 0 ? a : h);
+    t->primary_font->isw_font->ascent  = a > 0 ? a : h;
+    t->primary_font->isw_font->descent = h - (a > 0 ? a : h);
+    t->metrics_synced = True;
+    t->last_age = 0;
+
+    Dimension pw, ph;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, &pw);
+    IswArgHeight(&ab, &ph);
+    IswGetValues(t->canvas, ab.args, ab.count);
+    unsigned cols = t->cell_w > 0 ? pw / t->cell_w : t->cols;
+    unsigned rows = t->cell_h > 0 ? ph / t->cell_h : t->rows;
+    if (cols < 1) cols = 1;
+    if (rows < 1) rows = 1;
+    t->cols = cols;
+    t->rows = rows;
+    tsm_screen_resize(t->screen, cols, rows);
+
+    int fit_w = cols * t->cell_w;
+    int fit_h = rows * t->cell_h;
+    if (fit_w != pw || fit_h != ph) {
+        IswArgBuilderReset(&ab);
+        IswArgWidth(&ab, fit_w);
+        IswArgHeight(&ab, fit_h);
+        IswSetValues(t->canvas, ab.args, ab.count);
+    }
+    if (t->pty) term_pty_resize(t->pty, cols, rows, fit_w, fit_h);
 }
 
 typedef struct {
-    TermWidget *t;
-    cairo_t    *cr;
-    unsigned    cur_cx, cur_cy;
-    unsigned    prev_cx, prev_cy;
+    TermWidget        *t;
+    ISWRenderContext  *rc;
+    IswFontStruct     *cur_font;
+    unsigned           cur_cx, cur_cy;
+    unsigned           prev_cx, prev_cy;
 } DrawCtx;
 
 static void rgb_unpack(const uint8_t in[3], double out[3])
@@ -298,14 +323,14 @@ static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
         !(posx == dc->cur_cx && posy == dc->cur_cy) &&
         !(posx == dc->prev_cx && posy == dc->prev_cy)) return 0;
     TermWidget *t = dc->t;
-    cairo_t *cr = dc->cr;
+    ISWRenderContext *rc = dc->rc;
 
     if (width == 0) return 0;
 
-    double x = posx * t->cell_w;
-    double y = posy * t->cell_h;
-    double w = width * t->cell_w;
-    double h = t->cell_h;
+    int x = posx * t->cell_w;
+    int y = posy * t->cell_h;
+    int w = width * t->cell_w;
+    int h = t->cell_h;
 
     uint8_t fr, fg, fb, br, bg_, bb;
     if (attr->fccode < 0) {
@@ -338,25 +363,18 @@ static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
         }
     }
 
-    cairo_set_source_rgb(cr, br/255.0, bg_/255.0, bb/255.0);
-    cairo_rectangle(cr, x, y, w, h);
-    cairo_fill(cr);
+    ISWRenderSetColorRGBA(rc, br/255.0, bg_/255.0, bb/255.0, 1.0);
+    ISWRenderFillRectangle(rc, x, y, w, h);
 
     if (len == 0 || ch[0] == 0) {
         if (attr->underline) {
-            cairo_set_source_rgb(cr, fr/255.0, fg/255.0, fb/255.0);
-            cairo_rectangle(cr, x, y + h - 1.5, w, 1.0);
-            cairo_fill(cr);
+            ISWRenderSetColorRGBA(rc, fr/255.0, fg/255.0, fb/255.0, 1.0);
+            ISWRenderFillRectangle(rc, x, y + h - 2, w, 1);
         }
         return 0;
     }
 
-    /* Render each codepoint with a font that actually covers it. Combining
-     * marks (len > 1) typically share coverage with the base, but resolve
-     * per-codepoint anyway so odd combinations still render. */
-    cairo_set_font_size(cr, t->font_size_px);
-    cairo_set_source_rgb(cr, fr/255.0, fg/255.0, fb/255.0);
-    cairo_move_to(cr, x, y + t->baseline);
+    ISWRenderSetColorRGBA(rc, fr/255.0, fg/255.0, fb/255.0, 1.0);
 
     for (size_t k = 0; k < len; k++) {
         uint32_t c = ch[k];
@@ -382,37 +400,38 @@ static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
         utf8[n] = '\0';
 
         TermFont *font = term_font_for_codepoint(t, c);
-        if (font) cairo_set_font_face(cr, font->cr_face);
-        cairo_show_text(cr, utf8);
+        if (font && font->isw_font != dc->cur_font) {
+            ISWRenderSetFont(rc, font->isw_font);
+            dc->cur_font = font->isw_font;
+        }
+        ISWRenderDrawString(rc, utf8, n, x, y + t->baseline);
     }
 
     if (attr->underline) {
-        cairo_rectangle(cr, x, y + h - 1.5, w, 1.0);
-        cairo_fill(cr);
+        ISWRenderFillRectangle(rc, x, y + h - 2, w, 1);
     }
 
     return 0;
 }
 
-static void draw_cursor(TermWidget *t, cairo_t *cr)
+static void draw_cursor(TermWidget *t, ISWRenderContext *rc)
 {
     unsigned flags = tsm_screen_get_flags(t->screen);
     if (flags & TSM_SCREEN_HIDE_CURSOR) return;
     unsigned cx = tsm_screen_get_cursor_x(t->screen);
     unsigned cy = tsm_screen_get_cursor_y(t->screen);
-    double x = cx * t->cell_w;
-    double y = cy * t->cell_h;
+    int x = cx * t->cell_w;
+    int y = cy * t->cell_h;
     double c[3];
     rgb_unpack(t->cfg.palette.cursor, c);
-    cairo_set_source_rgba(cr, c[0], c[1], c[2], 0.6);
+    ISWRenderSetColorRGBA(rc, c[0], c[1], c[2], 0.6);
     if (strcmp(t->cfg.cursor_shape, "underline") == 0) {
-        cairo_rectangle(cr, x, y + t->cell_h - 2.0, t->cell_w, 2.0);
+        ISWRenderFillRectangle(rc, x, y + t->cell_h - 2, t->cell_w, 2);
     } else if (strcmp(t->cfg.cursor_shape, "bar") == 0) {
-        cairo_rectangle(cr, x, y, 2.0, t->cell_h);
+        ISWRenderFillRectangle(rc, x, y, 2, t->cell_h);
     } else {
-        cairo_rectangle(cr, x, y, t->cell_w, t->cell_h);
+        ISWRenderFillRectangle(rc, x, y, t->cell_w, t->cell_h);
     }
-    cairo_fill(cr);
 }
 
 static void expose_cb(Widget w, IswPointer cd, IswPointer call)
@@ -423,6 +442,8 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     ISWRenderContext *rc = d->render_ctx;
     if (!rc) return;
 
+    if (!t->metrics_synced) sync_metrics(t, rc);
+
     Dimension pw, ph;
     IswArgBuilder qb = IswArgBuilderInit();
     IswArgWidth(&qb, &pw);
@@ -430,71 +451,23 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     IswGetValues(t->canvas, qb.args, qb.count);
     if (pw <= 0 || ph <= 0) return;
 
-    double sf = ISWScaleFactor(t->canvas);
-    if (sf < 1.0) sf = 1.0;
-    int width = (int)(pw * sf + 0.5);
-    int height = (int)(ph * sf + 0.5);
-
-    if (t->surf_w != width || t->surf_h != height) {
-        if (t->surf) cairo_surface_destroy(t->surf);
-        free(t->rgba_buf);
-        t->surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                             width, height);
-        t->rgba_buf = malloc((size_t)width * height * 4);
-        t->surf_w = width;
-        t->surf_h = height;
-        t->last_age = 0;
-    }
-    if (cairo_surface_status(t->surf) != CAIRO_STATUS_SUCCESS) return;
-    if (!t->rgba_buf) return;
-
-    cairo_t *cr = cairo_create(t->surf);
-    cairo_scale(cr, sf, sf);
-
     if (t->last_age == 0) {
         double bg[3];
         rgb_unpack(t->cfg.palette.rgb[17], bg);
-        cairo_set_source_rgb(cr, bg[0], bg[1], bg[2]);
-        cairo_paint(cr);
+        ISWRenderSetColorRGBA(rc, bg[0], bg[1], bg[2], 1.0);
+        ISWRenderFillRectangle(rc, 0, 0, pw, ph);
     }
+
+    IswFontStruct *pf = t->primary_font ? t->primary_font->isw_font : NULL;
+    if (pf) ISWRenderSetFont(rc, pf);
 
     unsigned cx = tsm_screen_get_cursor_x(t->screen);
     unsigned cy = tsm_screen_get_cursor_y(t->screen);
-    DrawCtx ctx = { t, cr, cx, cy, t->prev_cx, t->prev_cy };
+    DrawCtx ctx = { t, rc, pf, cx, cy, t->prev_cx, t->prev_cy };
     t->last_age = tsm_screen_draw(t->screen, draw_cell_cb, &ctx);
-    draw_cursor(t, cr);
+    draw_cursor(t, rc);
     t->prev_cx = cx;
     t->prev_cy = cy;
-
-    cairo_destroy(cr);
-    cairo_surface_flush(t->surf);
-
-    const unsigned char *src = cairo_image_surface_get_data(t->surf);
-    int stride = cairo_image_surface_get_stride(t->surf);
-    for (int y = 0; y < height; y++) {
-        const uint32_t *row = (const uint32_t *)(src + (size_t)y * stride);
-        unsigned char *out = t->rgba_buf + (size_t)y * width * 4;
-        for (int x = 0; x < width; x++) {
-            uint32_t px = row[x];
-            unsigned a = (px >> 24) & 0xFF;
-            unsigned r = (px >> 16) & 0xFF;
-            unsigned g = (px >> 8)  & 0xFF;
-            unsigned b =  px        & 0xFF;
-            if (a != 0 && a != 0xFF) {
-                r = (r * 255 + a / 2) / a;
-                g = (g * 255 + a / 2) / a;
-                b = (b * 255 + a / 2) / a;
-            }
-            out[x * 4 + 0] = (unsigned char)r;
-            out[x * 4 + 1] = (unsigned char)g;
-            out[x * 4 + 2] = (unsigned char)b;
-            out[x * 4 + 3] = (unsigned char)a;
-        }
-    }
-    ISWRenderDrawImageRGBA(rc, t->rgba_buf,
-                           (unsigned int)width, (unsigned int)height,
-                           0, 0,
-                           (unsigned int)pw, (unsigned int)ph);
 }
 
 static void redraw_timer_cb(IswPointer closure, IswIntervalId *id)
@@ -970,8 +943,6 @@ void term_widget_destroy(TermWidget *t)
 {
     if (!t) return;
     if (t->redraw_timer) IswRemoveTimeOut(t->redraw_timer);
-    if (t->surf) cairo_surface_destroy(t->surf);
-    free(t->rgba_buf);
     if (t->vte) tsm_vte_unref(t->vte);
     if (t->screen) tsm_screen_unref(t->screen);
     term_fonts_clear(t);

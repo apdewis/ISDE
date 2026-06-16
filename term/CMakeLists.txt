@@ -65,11 +65,7 @@ target_link_libraries(isde-term
     ISDE::ISW
     ISDE::XCB
     ISDE::XCB_ICCCM
-    ISDE::CAIRO
-    ISDE::CAIRO_XCB
-    ISDE::CAIRO_FT
     ISDE::FONTCONFIG
-    ISDE::FREETYPE
     ISDE::TSM
     ISDE::DBUS
     util
