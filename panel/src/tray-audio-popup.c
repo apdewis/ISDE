@@ -433,7 +433,7 @@ void ta_popup_show(TrayAudio *ta)
         IswArgBuilderReset(&ab);
         IswArgOrientation(&ab, IswOrientHorizontal);
         IswArgFlexBasis(&ab, 50);
-        IswArgBorderWidth(&ab, 1);
+        IswArgBorderBottom(&ab, 1);
         if (scheme)
             IswArgBackground(&ab, scheme->bg_light);
         IswCreateManagedWidget("toggleArea", formWidgetClass,
@@ -442,6 +442,7 @@ void ta_popup_show(TrayAudio *ta)
         /* Tabs container */
         IswArgBuilderReset(&ab);
         IswArgFlexGrow(&ab, 1);
+        IswArgBorderWidth(&ab, 0);
         ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
                                         ta->popup_outer, ab.args, ab.count);
 

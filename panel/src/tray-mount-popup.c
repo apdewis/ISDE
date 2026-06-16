@@ -260,7 +260,7 @@ void tm_popup_show(TrayMount *tm)
         IswArgBuilderReset(&ab);
         IswArgOrientation(&ab, IswOrientHorizontal);
         IswArgFlexBasis(&ab, 50);
-        IswArgBorderWidth(&ab, 1);
+        IswArgBorderBottom(&ab, 1);
         if (scheme)
             IswArgBackground(&ab, scheme->bg_light);
         IswCreateManagedWidget("toggleArea", formWidgetClass,
