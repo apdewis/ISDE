@@ -37,6 +37,7 @@ struct TermWidget;
 static void ensure_atoms(TermWidget *t);
 static void copy_selection_to(TermWidget *t, Atom which);
 static void request_paste(TermWidget *t, Atom which);
+static Widget find_shell_ancestor(Widget w);
 
 static TermWidget *g_sel_owner;
 
@@ -271,28 +272,19 @@ static void sync_metrics(TermWidget *t, ISWRenderContext *rc)
     t->metrics_synced = True;
     t->last_age = 0;
 
-    Dimension pw, ph;
+    int fit_w = t->cols * t->cell_w;
+    int fit_h = t->rows * t->cell_h;
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgWidth(&ab, &pw);
-    IswArgHeight(&ab, &ph);
-    IswGetValues(t->canvas, ab.args, ab.count);
-    unsigned cols = t->cell_w > 0 ? pw / t->cell_w : t->cols;
-    unsigned rows = t->cell_h > 0 ? ph / t->cell_h : t->rows;
-    if (cols < 1) cols = 1;
-    if (rows < 1) rows = 1;
-    t->cols = cols;
-    t->rows = rows;
-    tsm_screen_resize(t->screen, cols, rows);
-
-    int fit_w = cols * t->cell_w;
-    int fit_h = rows * t->cell_h;
-    if (fit_w != pw || fit_h != ph) {
-        IswArgBuilderReset(&ab);
-        IswArgWidth(&ab, fit_w);
-        IswArgHeight(&ab, fit_h);
-        IswSetValues(t->canvas, ab.args, ab.count);
+    IswArgWidth(&ab, fit_w);
+    IswArgHeight(&ab, fit_h);
+    IswSetValues(t->canvas, ab.args, ab.count);
+    Widget shell = find_shell_ancestor(t->canvas);
+    if (shell) {
+        IswConfigureWidget(shell, shell->core.x, shell->core.y,
+                           fit_w, fit_h, shell->core.border_width);
     }
-    if (t->pty) term_pty_resize(t->pty, cols, rows, fit_w, fit_h);
+    tsm_screen_resize(t->screen, t->cols, t->rows);
+    if (t->pty) term_pty_resize(t->pty, t->cols, t->rows, fit_w, fit_h);
 }
 
 typedef struct {
@@ -514,7 +506,8 @@ static void resize_cb(Widget w, IswPointer cd, IswPointer call)
     t->cols = cols;
     t->rows = rows;
     tsm_screen_resize(t->screen, cols, rows);
-    if (t->pty) term_pty_resize(t->pty, cols, rows, pw, ph);
+    if (t->pty) term_pty_resize(t->pty, cols, rows,
+                                cols * t->cell_w, rows * t->cell_h);
     request_redraw(t);
 }
 
@@ -982,7 +975,8 @@ void term_widget_apply_config(TermWidget *t, const TermConfig *cfg)
     if (rows < 1) rows = 1;
     tsm_screen_resize(t->screen, cols, rows);
     t->cols = cols; t->rows = rows;
-    if (t->pty) term_pty_resize(t->pty, cols, rows, pw, ph);
+    if (t->pty) term_pty_resize(t->pty, cols, rows,
+                                cols * t->cell_w, rows * t->cell_h);
     t->last_age = 0;
     request_redraw(t);
 }
@@ -992,4 +986,10 @@ void term_widget_preferred_pixels(TermWidget *t, int cols, int rows,
 {
     if (px_w) *px_w = (int)(t->cell_w * (cols > 0 ? cols : t->initial_cols)) + 4;
     if (px_h) *px_h = (int)(t->cell_h * (rows > 0 ? rows : t->initial_rows)) + 4;
+}
+
+void term_widget_text_pixels(TermWidget *t, int *px_w, int *px_h)
+{
+    if (px_w) *px_w = t->cols * t->cell_w;
+    if (px_h) *px_h = t->rows * t->cell_h;
 }

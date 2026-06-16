@@ -149,8 +149,10 @@ int main(int argc, char **argv)
     char *default_argv[2] = { (char *)shell, NULL };
     char **use_argv = exec_argv ? exec_argv : default_argv;
 
+    int pty_px_w, pty_px_h;
+    term_widget_text_pixels(g_app.term, &pty_px_w, &pty_px_h);
     g_app.pty = term_pty_spawn(g_app.app, shell, use_argv,
-                               cols, rows,
+                               cols, rows, pty_px_w, pty_px_h,
                                pty_read_cb, pty_exit_cb, &g_app);
     if (!g_app.pty) {
         fprintf(stderr, "isde-term: failed to spawn shell\n");

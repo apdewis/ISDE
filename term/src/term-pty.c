@@ -107,6 +107,7 @@ static void sigchld_signal_cb(IswPointer closure, IswSignalId *id)
 TermPty *term_pty_spawn(IswAppContext app,
                         const char *shell, char *const *argv,
                         unsigned cols, unsigned rows,
+                        unsigned px_w, unsigned px_h,
                         TermPtyReadCb on_read,
                         TermPtyExitCb on_exit,
                         void *user)
@@ -115,7 +116,9 @@ TermPty *term_pty_spawn(IswAppContext app,
     if (!shell || !shell[0]) shell = "/bin/sh";
 
     struct winsize ws = { .ws_row = rows ? rows : 24,
-                          .ws_col = cols ? cols : 80 };
+                          .ws_col = cols ? cols : 80,
+                          .ws_xpixel = px_w,
+                          .ws_ypixel = px_h };
 
     int master = -1;
     pid_t pid = forkpty(&master, NULL, NULL, &ws);

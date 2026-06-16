@@ -53,6 +53,7 @@ typedef struct TermPty TermPty;
 TermPty *term_pty_spawn(IswAppContext app,
                         const char *shell, char *const *argv,
                         unsigned cols, unsigned rows,
+                        unsigned px_w, unsigned px_h,
                         TermPtyReadCb on_read,
                         TermPtyExitCb on_exit,
                         void *user);
@@ -78,5 +79,6 @@ void        term_widget_apply_config(TermWidget *t, const TermConfig *cfg);
 void        term_widget_preferred_pixels(TermWidget *t,
                                          int cols, int rows,
                                          int *px_w, int *px_h);
+void        term_widget_text_pixels(TermWidget *t, int *px_w, int *px_h);
 
 #endif /* ISDE_TERM_H */
