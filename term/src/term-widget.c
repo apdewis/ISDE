@@ -570,42 +570,43 @@ static uint32_t iswkey_to_xkeysym(uint32_t key)
 
 static void handle_key_press(TermWidget *t, IswKeyEvent *kev)
 {
-    uint32_t uc = kev->unicode;
-    uint16_t mods_mask = kev->modifiers;
-
-    /* Clipboard / scroll hotkeys — checked before keysym filtering
-     * because printable keys have no IswKey→XK mapping. */
-    bool ctrl  = (mods_mask & IswModControl) != 0;
-    bool shift = (mods_mask & IswModShift) != 0;
-    if (ctrl && shift && (uc == 'C' || uc == 'c')) {
-        ensure_atoms(t);
-        copy_selection_to(t, t->a_clipboard);
-        return;
-    }
-    if (ctrl && shift && (uc == 'V' || uc == 'v')) {
-        ensure_atoms(t);
-        request_paste(t, t->a_clipboard);
-        return;
-    }
-    if (shift && kev->key == IswKeyInsert) {
-        request_paste(t, t->a_primary);
-        return;
-    }
-    if (shift && kev->key == IswKeyPageUp) {
-        tsm_screen_sb_page_up(t->screen, 1);
-        request_redraw(t);
-        return;
-    }
-    if (shift && kev->key == IswKeyPageDown) {
-        tsm_screen_sb_page_down(t->screen, 1);
-        request_redraw(t);
-        return;
-    }
-
     uint32_t sym = iswkey_to_xkeysym(kev->key);
     if (sym == XK_VoidSymbol) return;
     if (sym >= XK_Shift_L && sym <= XK_Hyper_R) return;
     if (sym == XK_Num_Lock) return;
+
+    uint32_t uc = kev->unicode;
+    uint16_t mods_mask = kev->modifiers;
+
+    /* Local hotkeys */
+    if ((mods_mask & IswModShift) && kev->key == IswKeyPageUp) {
+        tsm_screen_sb_page_up(t->screen, 1);
+        request_redraw(t);
+        return;
+    }
+    if ((mods_mask & IswModShift) && kev->key == IswKeyPageDown) {
+        tsm_screen_sb_page_down(t->screen, 1);
+        request_redraw(t);
+        return;
+    }
+    {
+        bool ctrl  = (mods_mask & IswModControl) != 0;
+        bool shift = (mods_mask & IswModShift) != 0;
+        if (ctrl && shift && (uc == 'C' || uc == 'c')) {
+            ensure_atoms(t);
+            copy_selection_to(t, t->a_clipboard);
+            return;
+        }
+        if (ctrl && shift && (uc == 'V' || uc == 'v')) {
+            ensure_atoms(t);
+            request_paste(t, t->a_clipboard);
+            return;
+        }
+        if (shift && kev->key == IswKeyInsert) {
+            request_paste(t, t->a_primary);
+            return;
+        }
+    }
 
     unsigned mods = mods_to_tsm(mods_mask);
 
