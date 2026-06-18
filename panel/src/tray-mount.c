@@ -67,6 +67,30 @@ static void system_bus_input_cb(IswPointer client_data, int *fd,
     }
 }
 
+/* ---------- deferred dispatch for buffered D-Bus data ---------- */
+
+static void deferred_dbus_dispatch(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    TrayMount *tm = (TrayMount *)client_data;
+    if (!tm->system_bus)
+        return;
+    while (dbus_connection_dispatch(tm->system_bus) ==
+           DBUS_DISPATCH_DATA_REMAINS) {
+        /* drain */
+    }
+}
+
+static void dispatch_status_cb(DBusConnection *conn, DBusDispatchStatus status,
+                               void *data)
+{
+    (void)conn;
+    TrayMount *tm = (TrayMount *)data;
+    if (status == DBUS_DISPATCH_DATA_REMAINS) {
+        IswAppAddTimeOut(tm->panel->app, 0, deferred_dbus_dispatch, tm);
+    }
+}
+
 /* ---------- deferred initial icon load ---------- */
 
 static void deferred_icon_load(IswPointer client_data, IswIntervalId *id)
@@ -102,6 +126,9 @@ void tn_mount_init(Panel *p)
             IswAppAddInput(p->app, sys_fd, (IswPointer)IswInputReadMask,
                           system_bus_input_cb, tm);
         }
+        dbus_connection_set_dispatch_status_function(tm->system_bus,
+                                                     dispatch_status_cb,
+                                                     tm, NULL);
     }
 
     IswAppAddTimeOut(p->app, 100, deferred_icon_load, tm);
