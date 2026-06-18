@@ -292,7 +292,7 @@ void tm_popup_show(TrayMount *tm)
 
         populate_device_list(tm);
     } else {
-        tm_popup_refresh(tm);
+        populate_device_list(tm);
     }
 
     position_popup(tm);
