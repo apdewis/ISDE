@@ -152,7 +152,7 @@ isde_dependency(PIPEWIRE PC libpipewire-0.3 LIBS pipewire-0.3
 #add_subdirectory(tray-battery)
 #add_subdirectory(tray-net)
 #add_subdirectory(tray-bt)
-add_subdirectory(term)
+add_subdirectory(platform/X11/term)
 add_subdirectory(isw-graph)
 add_subdirectory(calc)
 #add_subdirectory(screenshot)
