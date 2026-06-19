@@ -551,6 +551,13 @@ static void bind_device(TrayAudio *ta, uint32_t id)
 
 static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 {
+    fprintf(stderr, "bind_sink: id=%u class=%s desc=%s name=%s\n",
+            id,
+            spa_dict_lookup(props, PW_KEY_MEDIA_CLASS) ?: "(null)",
+            spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION) ?: "(null)",
+            spa_dict_lookup(props, PW_KEY_NODE_NAME) ?: "(null)");
+    if (ta_find_sink(ta, id))
+        return;
     if (ta->nsinks >= MAX_SINKS)
         return;
 
@@ -611,6 +618,8 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 
 static void bind_source(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 {
+    if (ta_find_source(ta, id))
+        return;
     if (ta->nsources >= MAX_SOURCES)
         return;
 
@@ -668,6 +677,8 @@ static void bind_source(TrayAudio *ta, uint32_t id, const struct spa_dict *props
 
 static void bind_stream(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 {
+    if (ta_find_stream(ta, id))
+        return;
     if (ta->nstreams >= MAX_STREAMS)
         return;
 
