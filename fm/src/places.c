@@ -311,12 +311,13 @@ static void places_drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
     FmPlacesData *pd = fm->places_data;
     IswDragOverCallbackData *d = (IswDragOverCallbackData *)call;
 
-    /* d->x, d->y are viewport-relative. Translate to listbox coords
-     * using IswTranslateCoords on both widgets. */
-    Position vp_rx, vp_ry, lb_rx, lb_ry;
-    IswTranslateCoords(fm->places_vp, 0, 0, &vp_rx, &vp_ry);
+    /* d->x, d->y are shell-relative (the viewport is windowless so the
+     * DnD backend translates to the shell window).  Convert to listbox
+     * coords via: shell-relative + shell_root - listbox_root. */
+    Position sh_rx, sh_ry, lb_rx, lb_ry;
+    IswTranslateCoords(_IswWidgetAncestor(fm->places_vp), 0, 0, &sh_rx, &sh_ry);
     IswTranslateCoords(fm->places_listbox, 0, 0, &lb_rx, &lb_ry);
-    int lb_y = d->y + (int)vp_ry - (int)lb_ry;
+    int lb_y = d->y + (int)sh_ry - (int)lb_ry;
 
     int idx = -1;
     const char *target = places_hit_test_at_y(fm, lb_y, &idx);
@@ -342,11 +343,10 @@ static void places_vp_drop_cb(Widget w, IswPointer cd, IswPointer call)
 
     places_clear_drop_highlight(fm);
 
-    /* Translate drop coords to listbox coords */
-    Position vp_rx, vp_ry, lb_rx, lb_ry;
-    IswTranslateCoords(fm->places_vp, 0, 0, &vp_rx, &vp_ry);
+    Position sh_rx, sh_ry, lb_rx, lb_ry;
+    IswTranslateCoords(_IswWidgetAncestor(fm->places_vp), 0, 0, &sh_rx, &sh_ry);
     IswTranslateCoords(fm->places_listbox, 0, 0, &lb_rx, &lb_ry);
-    int lb_y = d->y + (int)vp_ry - (int)lb_ry;
+    int lb_y = d->y + (int)sh_ry - (int)lb_ry;
 
     const char *target_dir = places_hit_test_at_y(fm, lb_y, NULL);
     if (!target_dir)
