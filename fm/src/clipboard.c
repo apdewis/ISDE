@@ -6,6 +6,7 @@
  * for compatibility with other file managers.
  */
 #include "fm.h"
+#include <ISW/ISWPlatform.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -247,11 +248,12 @@ void clipboard_init(Fm *fm)
     FmApp *app = fm->app_state;
     /* Intern clipboard atoms using the DnD intern helper (works for
      * any atom name, not just MIME types). */
-    app->atom_clipboard   = IswDndInternType(fm->toplevel, "CLIPBOARD");
-    app->atom_targets     = IswDndInternType(fm->toplevel, "TARGETS");
-    app->atom_uri_list    = IswDndInternType(fm->toplevel, "text/uri-list");
-    app->atom_gnome_files = IswDndInternType(fm->toplevel, "x-special/gnome-copied-files");
-    app->atom_utf8_string = IswDndInternType(fm->toplevel, "UTF8_STRING");
+    IswDisplay dpy = IswDisplayOf(fm->toplevel);
+    app->atom_clipboard   = _IswPlatformInternAtomOp(dpy, "CLIPBOARD", False);
+    app->atom_targets     = _IswPlatformInternAtomOp(dpy, "TARGETS", False);
+    app->atom_uri_list    = _IswPlatformInternAtomOp(dpy, "text/uri-list", False);
+    app->atom_gnome_files = _IswPlatformInternAtomOp(dpy, "x-special/gnome-copied-files", False);
+    app->atom_utf8_string = _IswPlatformInternAtomOp(dpy, "UTF8_STRING", False);
 }
 
 void clipboard_copy(Fm *fm)

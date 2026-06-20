@@ -494,8 +494,7 @@ void ta_popup_show(TrayAudio *ta)
     IswPopup(ta->popup_shell, IswGrabNone);
     IswGrabPointer(ta->popup_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, ta->popup_shell);
     ta->popup_visible = 1;
@@ -744,8 +743,7 @@ void ta_menu_show(TrayAudio *ta)
     IswPopup(ta->menu_shell, IswGrabNone);
     IswGrabPointer(ta->menu_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, ta->menu_shell);
 }

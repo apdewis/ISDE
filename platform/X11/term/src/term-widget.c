@@ -7,6 +7,7 @@
 #include <ISW/StringDefs.h>
 #include <ISW/IswArgMacros.h>
 #include <ISW/IswDragDrop.h>
+#include <ISW/ISWPlatform.h>
 
 #include <fontconfig/fontconfig.h>
 
@@ -107,11 +108,11 @@ typedef struct TermFont {
 static IswFontStruct *term_load_isw_font(Widget w, const char *fc_name)
 {
     IswDisplay dpy = IswDisplayOf(w);
-    XrmValue arg = { .size = sizeof(dpy), .addr = (IswPointer)&dpy };
+    IswValueRec arg = { .size = sizeof(dpy), .addr = (IswPointer)&dpy };
     Cardinal nargs = 1;
-    XrmValue from = { .size = strlen(fc_name) + 1, .addr = (IswPointer)fc_name };
+    IswValueRec from = { .size = strlen(fc_name) + 1, .addr = (IswPointer)fc_name };
     IswFontStruct *result = NULL;
-    XrmValue to = { .size = sizeof(result), .addr = (IswPointer)&result };
+    IswValueRec to = { .size = sizeof(result), .addr = (IswPointer)&result };
 
     if (!IswCvtStringToFontStruct(dpy, &arg, &nargs, &from, &to, NULL))
         return NULL;
@@ -628,12 +629,13 @@ static void ensure_atoms(TermWidget *t)
 {
     if (t->a_primary) return;
     Widget w = _IswWidgetAncestor(t->canvas);
-    t->a_primary     = IswDndInternType(w, "PRIMARY");
-    t->a_clipboard   = IswDndInternType(w, "CLIPBOARD");
-    t->a_utf8_string = IswDndInternType(w, "UTF8_STRING");
-    t->a_targets     = IswDndInternType(w, "TARGETS");
-    t->a_text        = IswDndInternType(w, "TEXT");
-    t->a_timestamp   = IswDndInternType(w, "TIMESTAMP");
+    IswDisplay dpy = IswDisplayOf(w);
+    t->a_primary     = _IswPlatformInternAtomOp(dpy, "PRIMARY", False);
+    t->a_clipboard   = _IswPlatformInternAtomOp(dpy, "CLIPBOARD", False);
+    t->a_utf8_string = _IswPlatformInternAtomOp(dpy, "UTF8_STRING", False);
+    t->a_targets     = _IswPlatformInternAtomOp(dpy, "TARGETS", False);
+    t->a_text        = _IswPlatformInternAtomOp(dpy, "TEXT", False);
+    t->a_timestamp   = _IswPlatformInternAtomOp(dpy, "TIMESTAMP", False);
 }
 
 static Boolean convert_selection(Widget w, Atom *selection, Atom *target,

@@ -299,8 +299,7 @@ void tm_popup_show(TrayMount *tm)
     IswPopup(tm->popup_shell, IswGrabNone);
     IswGrabPointer(tm->popup_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, tm->popup_shell);
     tm->popup_visible = 1;

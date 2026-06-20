@@ -24,6 +24,7 @@
 #include "dbus.h"
 #include <ISW/IswArgMacros.h>
 #include <ISW/IswDragDrop.h>
+#include <ISW/ISWPlatform.h>
 
 #include "calc.h"
 
@@ -429,8 +430,9 @@ static Atom atom_string;
 static void ensure_sel_atoms(void)
 {
     if (atom_primary) return;
-    atom_primary = IswDndInternType(toplevel, "PRIMARY");
-    atom_string  = IswDndInternType(toplevel, "STRING");
+    IswDisplay dpy = IswDisplayOf(toplevel);
+    atom_primary = _IswPlatformInternAtomOp(dpy, "PRIMARY", False);
+    atom_string  = _IswPlatformInternAtomOp(dpy, "STRING", False);
 }
 
 static Boolean convert(Widget w, Atom *selection, Atom *target,

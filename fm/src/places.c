@@ -594,7 +594,7 @@ void places_init(Fm *fm)
 
 void places_register_drop_targets(Fm *fm)
 {
-    Atom uri_type = IswDndInternType(fm->places_vp, "text/uri-list");
+    static const char *uri_type = "text/uri-list";
     IswDndWidgetAcceptDrops(fm->places_vp);
     IswDndSetDropCallback(fm->places_vp, places_vp_drop_cb, fm);
     IswDndSetDragMotionCallback(fm->places_vp, places_drag_motion_cb, fm);

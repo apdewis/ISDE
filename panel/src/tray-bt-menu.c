@@ -479,8 +479,7 @@ void tb_menu_show(TrayBt *tb)
     IswPopup(tb->popup_shell, IswGrabNone);
     IswGrabPointer(tb->popup_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, tb->popup_shell);
     tb->popup_visible = 1;

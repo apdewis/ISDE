@@ -39,7 +39,7 @@ static void free_drag_paths(Fm *fm)
 
 /* ---------- drag source: convert callback ---------- */
 
-static Boolean drag_convert(Widget w, Atom target_type,
+static Boolean drag_convert(Widget w, const char *target_type,
                             IswPointer *data_return,
                             unsigned long *length_return,
                             int *format_return,
@@ -47,10 +47,8 @@ static Boolean drag_convert(Widget w, Atom target_type,
 {
     (void)w;
     Fm *fm = (Fm *)client_data;
-    Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    Atom uri_atom = IswDndInternType(dnd_w, "text/uri-list");
 
-    if (target_type != uri_atom) {
+    if (strcmp(target_type, "text/uri-list") != 0) {
         return False;
     }
 
@@ -129,9 +127,8 @@ static void start_drag(Fm *fm)
         return;
     }
 
-    static Atom uri_type;
+    static const char *uri_type = "text/uri-list";
     Widget drag_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    uri_type = IswDndInternType(drag_w, "text/uri-list");
 
     IswDndAction actions = ISW_DND_ACTION_COPY;
     if (IswEventModifiers(&fm->dnd_saved_press) & IswModShift)
@@ -377,8 +374,7 @@ static void drag_motion_cb(Widget w, IswPointer cd, IswPointer call)
     if (action == ISW_DND_ACTION_NONE)
         action = ISW_DND_ACTION_COPY;
 
-    Widget dnd_w = (fm->view_mode == FM_VIEW_LIST) ? fm->listview : fm->iconview;
-    d->accepted_type   = IswDndInternType(dnd_w, "text/uri-list");
+    d->accepted_type   = "text/uri-list";
     d->accepted_action = action;
 }
 
@@ -435,7 +431,7 @@ void dnd_init(Fm *fm)
     /* Register the content viewport as drop target. The places viewport
      * is registered separately in places_init(). FindDropTarget walks
      * the widget tree and finds the correct target by position. */
-    Atom uri_type = IswDndInternType(fm->viewport, "text/uri-list");
+    static const char *uri_type = "text/uri-list";
     IswDndWidgetAcceptDrops(fm->viewport);
     IswDndSetDropCallback(fm->viewport, drop_cb, fm);
     IswDndSetDragMotionCallback(fm->viewport, drag_motion_cb, fm);

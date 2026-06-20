@@ -226,12 +226,10 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 
     panel_show_popup(p, g->menu);
 
-    IswGrabKeyboard(g->menu, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                    ISW_CURRENT_TIME);
+    IswGrabKeyboard(g->menu, True, ISW_CURRENT_TIME);
     IswGrabPointer(g->menu, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 }
 
 static void taskbar_button_callback(Widget w, IswPointer client_data,
@@ -597,12 +595,10 @@ static void show_context_menu(Panel *p, TaskGroup *g)
 
     panel_show_popup(p, g->ctx_menu);
 
-    IswGrabKeyboard(g->ctx_menu, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                    ISW_CURRENT_TIME);
+    IswGrabKeyboard(g->ctx_menu, True, ISW_CURRENT_TIME);
     IswGrabPointer(g->ctx_menu, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 }
 
 static void context_menu_handler(Widget w, IswPointer client_data,

@@ -285,8 +285,7 @@ void tbat_popup_show(TrayBattery *tb)
     IswPopup(tb->popup_shell, IswGrabNone);
     IswGrabPointer(tb->popup_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, tb->popup_shell);
     tb->popup_visible = 1;
@@ -494,8 +493,7 @@ void tbat_menu_show(TrayBattery *tb)
     IswPopup(tb->menu_shell, IswGrabNone);
     IswGrabPointer(tb->menu_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, tb->menu_shell);
 }

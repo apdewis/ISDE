@@ -613,15 +613,10 @@ void startmenu_toggle(Panel *p)
     /* Highlight first category and grab keyboard */
     IswListHighlight(p->cat_box, 0);
     show_category(p, 0);
-    IswGrabKeyboard(p->start_shell, True,
-                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                    ISW_CURRENT_TIME);
-    /* owner_events=True so clicks on our own child widgets still dispatch
-     * normally; clicks outside deliver to the shell and dismiss. */
+    IswGrabKeyboard(p->start_shell, True, ISW_CURRENT_TIME);
     IswGrabPointer(p->start_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 }
 
 /* ---------- refresh / watch ---------- */

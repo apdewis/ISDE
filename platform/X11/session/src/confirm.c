@@ -322,13 +322,11 @@ int main(int argc, char **argv)
      * the grab steals events from ISW's dispatch).  Grab the shell widget
      * directly through IswGrabKeyboard/IswGrabPointer. */
     for (int attempt = 0; attempt < 50; attempt++) {
-        int kb = IswGrabKeyboard(shell, True, 1 /* async */,
-                                 1 /* async */, 0);
+        int kb = IswGrabKeyboard(shell, True, 0);
         int ptr = IswGrabPointer(shell, True,
                                   IswButtonPressMask | IswButtonReleaseMask |
                                   IswPointerMotionMask,
-                                  1 /* async */, 1 /* async */,
-                                  (IswWindow)None, (IswCursor)None, 0);
+                                  (IswCursor)None, 0);
         if (kb == IswGrabSuccess && ptr == IswGrabSuccess)
             break;
         if (kb == IswGrabSuccess) IswUngrabKeyboard(shell, 0);

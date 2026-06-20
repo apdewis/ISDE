@@ -410,8 +410,7 @@ void tn_menu_show(TrayNet *tn)
     IswPopup(tn->popup_shell, IswGrabNone);
     IswGrabPointer(tn->popup_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 
     panel_show_popup(p, tn->popup_shell);
     tn->popup_visible = 1;

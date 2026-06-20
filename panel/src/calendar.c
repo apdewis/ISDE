@@ -312,12 +312,10 @@ void calendar_toggle(Panel *p)
 
     panel_show_popup(p, p->cal_shell);
 
-    IswGrabKeyboard(p->cal_shell, True, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                    ISW_CURRENT_TIME);
+    IswGrabKeyboard(p->cal_shell, True, ISW_CURRENT_TIME);
     IswGrabPointer(p->cal_shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
-                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                   None, IswCursorNone, ISW_CURRENT_TIME);
+                   IswCursorNone, ISW_CURRENT_TIME);
 }
 
 void calendar_reload_theme(Panel *p)

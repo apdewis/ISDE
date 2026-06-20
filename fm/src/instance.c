@@ -69,7 +69,7 @@ static Boolean instance_convert(Widget w, Atom *selection, Atom *target,
         IswWindow win = _IswPlatformWidgetWindow(dpy, w);
         static uint32_t win_id;
         win_id = _IswPlatformWindowId(win);
-        *type_return = IswDndInternType(w, "CARDINAL");
+        *type_return = _IswPlatformInternAtomOp(IswDisplayOf(w), "CARDINAL", False);
         *value_return = (IswPointer)&win_id;
         *length_return = 1;
         *format_return = 32;
@@ -95,8 +95,8 @@ int instance_try_primary(FmApp *app, const char *path)
     Widget shell = app->first_toplevel;
     IswDisplay dpy = IswDisplayOf(shell);
 
-    atom_instance  = IswDndInternType(shell, "_ISDE_FM_INSTANCE");
-    atom_open_path = IswDndInternType(shell, "_ISDE_FM_OPEN_PATH");
+    atom_instance  = _IswPlatformInternAtomOp(dpy, "_ISDE_FM_INSTANCE", False);
+    atom_open_path = _IswPlatformInternAtomOp(dpy, "_ISDE_FM_OPEN_PATH", False);
     if (atom_instance == None || atom_open_path == None) {
         return -1;
     }

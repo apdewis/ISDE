@@ -324,8 +324,8 @@ static void fm_cursor_init(Fm *fm)
     }
     IswDisplay dpy = IswDisplayOf(fm->toplevel);
     IswScreen scr = IswScreenOf(fm->toplevel);
-    fm_cursor_watch = _IswLoadThemedCursor(dpy, scr, "watch", 0);
-    fm_cursor_default = _IswLoadThemedCursor(dpy, scr, "left_ptr", 0);
+    fm_cursor_watch = _IswLoadThemedCursor(dpy, scr, "watch");
+    fm_cursor_default = _IswLoadThemedCursor(dpy, scr, "left_ptr");
 }
 
 static void fm_set_cursor(Fm *fm, IswCursor cursor)

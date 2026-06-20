@@ -1386,7 +1386,7 @@ int isde_font_height(const char *category, int padding)
 IswFontStruct *isde_resolve_font(Widget w, const char *spec)
 {
     if (!w || !spec) { return NULL; }
-    XrmValue from, to;
+    IswValueRec from, to;
     IswFontStruct *fs = NULL;
     from.addr = (IswPointer)spec;
     from.size = strlen(spec) + 1;
