@@ -58,7 +58,7 @@ static void on_theme_changed(void *user_data)
         Fm *w = app->windows[i];
         IswReloadResources(w->toplevel);
         IswOverrideTranslations(w->toplevel, IswParseTranslationTable(
-            "<Message>WM_PROTOCOLS: fm-close-window()\n"));
+            "<WindowClose>: fm-close-window()\n"));
         IswReloadResources(w->main_window);
         IswReloadResources(w->nav_box);
         IswReloadResources(w->vbox);
@@ -444,7 +444,7 @@ Fm *fm_window_new(FmApp *app, const char *path)
      * IswAppSetExitFlag, killing all windows) with one that only
      * closes this window. */
     IswOverrideTranslations(fm->toplevel, IswParseTranslationTable(
-        "<Message>WM_PROTOCOLS: fm-close-window()\n"));
+        "<WindowClose>: fm-close-window()\n"));
 
     /* MainWindow */
     fm->main_window = IswCreateManagedWidget("mainWin", mainWindowWidgetClass,

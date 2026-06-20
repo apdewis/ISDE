@@ -86,7 +86,7 @@ Widget isde_dialog_create_shell(Widget parent, const char *name,
 
     /* Escape and WM close button both dismiss */
     IswOverrideTranslations(shell, IswParseTranslationTable(
-        "<Message>WM_PROTOCOLS: isde-dialog-dismiss()\n"
+        "<WindowClose>: isde-dialog-dismiss()\n"
         "<Key>Escape: isde-dialog-dismiss()\n"));
 
     return shell;
