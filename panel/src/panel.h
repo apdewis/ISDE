@@ -134,6 +134,7 @@ typedef struct Panel {
 
     /* Type-ahead search */
     Widget             search_input;
+    Widget             search_label;
     Widget             search_viewport;
     Widget             search_list;
     char               search_buf[128];

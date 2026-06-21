@@ -1043,18 +1043,37 @@ void startmenu_init(Panel *p)
                                             p->menu_toolbar, ab.args, ab.count);
     IswAddCallback(p->shutdown_btn, IswNcallback, shutdown_cb, p);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Search");
+    IswArgBackground(&ab, 0);
+    IswArgHeight(&ab, btn_size);
+    IswArgCornerRadius(&ab, 0);
+    IswArgHorizDistance(&ab, btn_margin);
+    IswArgVertDistance(&ab, btn_margin);
+    IswArgBorderWidth(&ab, 0);
+    IswArgInternalWidth(&ab, 6);
+    IswArgInternalHeight(&ab, 0);
+    ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
+    p->search_label = IswCreateManagedWidget("searchInputLabel", labelWidgetClass,
+                                            p->menu_toolbar, ab.args, ab.count);
+
     /* Search input — fills the toolbar left of the power buttons */
-    int search_w = btn_x - btn_margin * 2;
+    int search_w = MENU_WIDTH / 2;
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "");
     IswArgWidth(&ab, search_w);
     IswArgHeight(&ab, btn_size);
+    IswArgCornerRadius(&ab, 4);
+    IswArgRightMargin(&ab, 4);
     IswArgHorizDistance(&ab, btn_margin);
     IswArgVertDistance(&ab, btn_margin);
     IswArgBorderWidth(&ab, 1);
     IswArgInternalWidth(&ab, 6);
     IswArgInternalHeight(&ab, 0);
-    ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
+    IswArgFromHoriz(&ab, p->search_label);
+    IswArgJustify(&ab, IswJustifyLeft);
     IswArgLeft(&ab, IswChainLeft);
     IswArgRight(&ab, IswChainLeft);
     p->search_input = IswCreateManagedWidget("searchInput", labelWidgetClass,
