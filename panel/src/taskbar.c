@@ -286,6 +286,8 @@ static void taskbar_press_handler(Widget w, IswPointer client_data,
     } else {
         show_window_menu(p, g);
     }
+
+    IswCallActionProc(g->button, "unset", event, NULL, 0);
 }
 
 /* ---------- right-click context menu (pin/unpin) ---------- */
