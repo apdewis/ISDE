@@ -143,7 +143,8 @@ static void position_popup(TrayBattery *tb)
     int log_mon_w = (int)(p->mon_w / sf + 0.5);
     int log_shell_x = p->shell->core.x;
 
-    int x = log_shell_x + icon_x;
+    int icon_center = log_shell_x + icon_x + tb->icon->core.width / 2;
+    int x = icon_center - (popup_w + 2 * popup_bw) / 2;
     int y = log_panel_top - popup_h - 2 * popup_bw;
 
     /* Clamp to monitor bounds */
@@ -446,7 +447,8 @@ static void position_menu(TrayBattery *tb)
     int log_mon_w = (int)(p->mon_w / sf + 0.5);
     int log_shell_x = p->shell->core.x;
 
-    int x = log_shell_x + icon_x;
+    int icon_center = log_shell_x + icon_x + tb->icon->core.width / 2;
+    int x = icon_center - (menu_w + 2 * menu_bw) / 2;
     int y = log_panel_top - menu_h - 2 * menu_bw;
 
     /* Clamp to monitor bounds */
