@@ -384,19 +384,14 @@ char *panel_get_window_title(Panel *p, TaskGroup *g, int idx)
 
 Pixel panel_color_pixel(Panel *p, unsigned int rgb)
 {
-    PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
-    xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle((IswScreenOf(p->toplevel)));
-    xcb_alloc_color_reply_t *reply = xcb_alloc_color_reply(
-        ctx->conn,
-        xcb_alloc_color(ctx->conn, screen->default_colormap,
-                        ((rgb >> 16) & 0xFF) * 257,
-                        ((rgb >> 8)  & 0xFF) * 257,
-                        ( rgb        & 0xFF) * 257),
-        NULL);
-    if (!reply) {
-        return screen->white_pixel;
-    }
-    Pixel px = reply->pixel;
-    free(reply);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "#%06X", rgb & 0xFFFFFF);
+    IswValueRec from, to;
+    Pixel px = 0;
+    from.addr = (IswPointer)buf;
+    from.size = strlen(buf) + 1;
+    to.addr   = (IswPointer)&px;
+    to.size   = sizeof(px);
+    IswConvertAndStore(p->toplevel, IswRString, &from, IswRPixel, &to);
     return px;
 }
