@@ -21,6 +21,17 @@
  * Volume popup
  * ================================================================ */
 
+static void popup_button_handler(Widget w, IswPointer client_data,
+                                 IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    TrayAudio *ta = (TrayAudio *)client_data;
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(ta->panel);
+    ta->popup_visible = 0;
+}
+
 /* Per-row data for slider/mute callbacks */
 typedef struct VolumeRow {
     TrayAudio  *ta;
@@ -420,6 +431,8 @@ void ta_popup_show(TrayAudio *ta)
         ta->popup_shell = IswCreatePopupShell("audioPopup",
                                             overrideShellWidgetClass,
                                             p->toplevel, ab.args, ab.count);
+        IswAddEventHandler(ta->popup_shell, IswButtonPressMask, False,
+                           popup_button_handler, ta);
 
         /* Outer vertical FlexBox */
         IswArgBuilderReset(&ab);
@@ -633,6 +646,16 @@ static void on_mute_default(Widget w, IswPointer client_data,
         ta_pw_set_mute(ta, def->id, def->muted ? 0 : 1);
 }
 
+static void menu_button_handler(Widget w, IswPointer client_data,
+                                IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(p);
+}
+
 /* ---------- position menu above tray icon ---------- */
 
 static void position_menu(TrayAudio *ta)
@@ -696,6 +719,8 @@ void ta_menu_show(TrayAudio *ta)
 
     ta->menu_shell = IswCreatePopupShell("audioMenu", simpleMenuWidgetClass,
                                           p->toplevel, NULL, 0);
+    IswAddEventHandler(ta->menu_shell, IswButtonPressMask, False,
+                       menu_button_handler, p);
 
     if (ta->nsinks == 0) {
         IswArgBuilderReset(&ab);

@@ -25,6 +25,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void popup_button_handler(Widget w, IswPointer client_data,
+                                 IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    TrayBt *tb = (TrayBt *)client_data;
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(tb->panel);
+    tb->popup_visible = 0;
+}
+
 /* ---------- callback data ---------- */
 
 typedef struct MenuAction {
@@ -401,6 +412,8 @@ void tb_menu_show(TrayBt *tb)
         tb->popup_shell = IswCreatePopupShell("btPopup",
                                                overrideShellWidgetClass,
                                                p->toplevel, ab.args, ab.count);
+        IswAddEventHandler(tb->popup_shell, IswButtonPressMask, False,
+                           popup_button_handler, tb);
 
         /* Outer vertical FlexBox */
         IswArgBuilderReset(&ab);

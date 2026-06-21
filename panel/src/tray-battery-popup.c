@@ -17,6 +17,27 @@
  * Left-click popup
  * ================================================================ */
 
+static void popup_button_handler(Widget w, IswPointer client_data,
+                                 IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    TrayBattery *tb = (TrayBattery *)client_data;
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(tb->panel);
+    tb->popup_visible = 0;
+}
+
+static void menu_button_handler(Widget w, IswPointer client_data,
+                                IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswButtonDown)
+        return;
+    panel_dismiss_popup(p);
+}
+
 static const char *profile_labels[] = {
     "Power Saver", "Balanced", "Performance"
 };
@@ -166,6 +187,8 @@ void tbat_popup_show(TrayBattery *tb)
         tb->popup_shell = IswCreatePopupShell("batteryPopup",
                                               overrideShellWidgetClass,
                                               p->toplevel, ab.args, ab.count);
+        IswAddEventHandler(tb->popup_shell, IswButtonPressMask, False,
+                           popup_button_handler, tb);
 
         /* Form layout */
         IswArgBuilderReset(&ab);
@@ -453,6 +476,8 @@ void tbat_menu_show(TrayBattery *tb)
     IswArgBuilder ab = IswArgBuilderInit();
     tb->menu_shell = IswCreatePopupShell("batteryMenu", simpleMenuWidgetClass,
                                           p->toplevel, NULL, 0);
+    IswAddEventHandler(tb->menu_shell, IswButtonPressMask, False,
+                       menu_button_handler, p);
 
     /* Battery info header */
     const IsdeBattery *bat = tb->power
