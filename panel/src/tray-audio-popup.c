@@ -190,7 +190,7 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     IswArgMinimumValue(&ab, 0);
     IswArgMaximumValue(&ab, 100);
     IswArgSliderValue(&ab, (int)(volume * 100.0f + 0.5f));
-    IswArgJustify(&ab, IswJustifyCenter);
+    IswArgJustify(&ab, IswJustifyLeft);
     IswArgShowValue(&ab, False);
     Widget sl = IswCreateManagedWidget("volSlider", sliderWidgetClass,
                                        ctl_row, ab.args, ab.count);
@@ -208,7 +208,7 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     IswArgState(&ab, muted ? True : False);
     IswArgWidth(&ab, 20);
     IswArgHeight(&ab, 20);
-    IswArgJustify(&ab, IswJustifyCenter);
+    IswArgJustify(&ab, IswJustifyLeft);
     Widget mb = IswCreateManagedWidget("volMute", toggleButtonWidgetClass,
                                        ctl_row, ab.args, ab.count);
     free(muted_icon);
@@ -426,7 +426,7 @@ void ta_popup_show(TrayAudio *ta)
         IswArgBuilder ab = IswArgBuilderInit();
 
         /* Override shell for popup */
-        IswArgWidth(&ab, 400);
+        IswArgWidth(&ab, 280);
         IswArgHeight(&ab, 400);
         ta->popup_shell = IswCreatePopupShell("audioPopup",
                                             overrideShellWidgetClass,
