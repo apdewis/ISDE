@@ -595,10 +595,25 @@ typedef struct IsdeProgress {
     char         last_rate_msg[64];
 } IsdeProgress;
 
+static void progress_shell_destroyed(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    IsdeProgress *p = (IsdeProgress *)cd;
+    p->shell = NULL;
+    p->bar = NULL;
+    p->label = NULL;
+    p->file_bar = NULL;
+    p->file_label = NULL;
+    p->rate_label = NULL;
+    p->graph = NULL;
+}
+
 static void progress_create_dialog(IsdeProgress *p)
 {
     p->shell = isde_dialog_create_shell(p->parent, "progressShell",
                                         p->title, 350, 320);
+    IswAddCallback(p->shell, IswNdestroyCallback,
+                   progress_shell_destroyed, p);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientVertical);
