@@ -428,6 +428,7 @@ void ta_popup_show(TrayAudio *ta)
         /* Override shell for popup */
         IswArgWidth(&ab, 280);
         IswArgHeight(&ab, 400);
+        IswArgBorderWidth(&ab, 0);
         ta->popup_shell = IswCreatePopupShell("audioPopup",
                                             overrideShellWidgetClass,
                                             p->toplevel, ab.args, ab.count);
@@ -441,21 +442,14 @@ void ta_popup_show(TrayAudio *ta)
         ta->popup_outer = IswCreateManagedWidget("outerBox", flexBoxWidgetClass,
                                                 ta->popup_shell,
                                                 ab.args, ab.count);
-
-        /* Toggle row: horizontal Box */
-        IswArgBuilderReset(&ab);
-        IswArgOrientation(&ab, IswOrientHorizontal);
-        IswArgFlexBasis(&ab, 50);
-        IswArgBorderBottom(&ab, 1);
-        if (scheme)
-            IswArgBackground(&ab, scheme->bg_light);
-        IswCreateManagedWidget("toggleArea", formWidgetClass,
-                               ta->popup_outer, ab.args, ab.count);
-
+                                                
         /* Tabs container */
         IswArgBuilderReset(&ab);
         IswArgFlexGrow(&ab, 1);
-        IswArgBorderWidth(&ab, 0);
+        IswArgBorderWidth(&ab, 1);
+        IswArgWidth(&ab, 280);
+        IswArgTabHeight(&ab, 30);
+        IswArgTabSizing(&ab, IswTabSizingFill);
         ta->tabs = IswCreateManagedWidget("tabs", tabsWidgetClass,
                                         ta->popup_outer, ab.args, ab.count);
 
