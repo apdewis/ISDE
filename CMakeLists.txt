@@ -8,6 +8,7 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_SKIP_INSTALL_RPATH ON)
 
 include(GNUInstallDirs)
 
