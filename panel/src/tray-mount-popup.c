@@ -132,8 +132,15 @@ static void populate_device_list(TrayMount *tm)
 
     nactions = 0;
 
-    while (cw->composite.num_children > 0) {
-        IswDestroyWidget(cw->composite.children[0]);
+    WidgetList children;
+    Cardinal num;
+    IswArgBuilder qab = IswArgBuilderInit();
+    IswArgBuilderAdd(&qab, IswNchildren, (IswArgVal)&children);
+    IswArgBuilderAdd(&qab, IswNnumChildren, (IswArgVal)&num);
+    IswGetValues(listbox, qab.args, qab.count);
+
+    for (int i = (int)num - 1; i >= 0; i--) {
+        IswDestroyWidget(children[i]);
     }
 
     IswArgBuilder ab = IswArgBuilderInit();
