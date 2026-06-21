@@ -590,9 +590,10 @@ void startmenu_toggle(Panel *p)
     }
     int menu_w = p->start_shell->core.width;
     int menu_h = p->start_shell->core.height;
-    int menu_y = log_panel_top - menu_h;
+    int menu_bw = p->start_shell->core.border_width;
+    int menu_y = log_panel_top - menu_h - 2 * menu_bw;
     IswConfigureWidget(p->start_shell, log_mon_x, menu_y,
-                      menu_w, menu_h, 1);
+                      menu_w, menu_h, menu_bw);
     IswPopup(p->start_shell, IswGrabNone);
 
     /* Force immediate redraw — the shell content may be stale from the
