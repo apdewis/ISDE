@@ -269,10 +269,6 @@ static void search_activate(Panel *p)
     p->search_active = 1;
     p->menu_focus = 2;
     p->app_highlight = -1;
-    IswUnmapWidget(p->cat_viewport);
-    IswUnmapWidget(p->app_viewport);
-    IswMapWidget(p->search_input);
-    IswMapWidget(p->search_viewport);
 }
 
 static void search_deactivate(Panel *p)
@@ -286,7 +282,6 @@ static void search_deactivate(Panel *p)
     IswArgLabel(&ab, "");
     IswSetValues(p->search_input, ab.args, ab.count);
 
-    IswUnmapWidget(p->search_input);
     IswUnmapWidget(p->search_viewport);
     IswMapWidget(p->cat_viewport);
 
@@ -304,6 +299,18 @@ static void search_update_display(Panel *p)
     IswArgLabel(&ab, p->search_buf);
     IswSetValues(p->search_input, ab.args, ab.count);
     search_run_filter(p);
+
+    if (p->search_len > 0) {
+        IswUnmapWidget(p->cat_viewport);
+        IswUnmapWidget(p->app_viewport);
+        IswMapWidget(p->search_viewport);
+    } else {
+        IswUnmapWidget(p->search_viewport);
+        IswMapWidget(p->cat_viewport);
+        if (p->active_cat >= 0) {
+            IswMapWidget(p->app_viewport);
+        }
+    }
 }
 
 static void search_selected(Widget w, IswPointer client_data,
@@ -601,11 +608,13 @@ void startmenu_toggle(Panel *p)
     p->app_highlight = -1;
     p->menu_focus = 0;
 
-    /* Reset search state */
+    /* Reset search state and clear the input label */
     p->search_active = 0;
     p->search_buf[0] = '\0';
     p->search_len = 0;
-    IswUnmapWidget(p->search_input);
+    IswArgBuilder sab = IswArgBuilderInit();
+    IswArgLabel(&sab, "");
+    IswSetValues(p->search_input, sab.args, sab.count);
     IswUnmapWidget(p->search_viewport);
     IswMapWidget(p->cat_viewport);
     IswUnmapWidget(p->app_viewport);
@@ -916,24 +925,10 @@ void startmenu_init(Panel *p)
     IswOverrideTranslations(p->app_box,
                            IswParseTranslationTable(appTranslations));
 
-    /* Search bar — label showing typed query, overlaps cat/app viewports */
-    #define SEARCH_BAR_HEIGHT 28
+    /* Search results list — full width, overlaps cat/app viewports */
     IswArgBuilderReset(&ab);
     IswArgWidth(&ab, MENU_WIDTH);
-    IswArgHeight(&ab, SEARCH_BAR_HEIGHT);
-    IswArgBorderBottom(&ab, 1);
-    IswArgLabel(&ab, "");
-    ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
-    IswArgInternalWidth(&ab, 6);
-    p->search_input = IswCreateManagedWidget("searchInput", labelWidgetClass,
-                                            form, ab.args, ab.count);
-
-    /* Search results list — full width, below search bar */
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, p->search_input);
-    IswArgVertDistance(&ab, 0);
-    IswArgWidth(&ab, MENU_WIDTH);
-    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT - SEARCH_BAR_HEIGHT);
+    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
     IswArgBorderWidth(&ab, 0);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
@@ -963,8 +958,7 @@ void startmenu_init(Panel *p)
     IswOverrideTranslations(p->search_list,
                            IswParseTranslationTable(searchTranslations));
 
-    /* Search widgets hidden until typing starts */
-    IswUnmapWidget(p->search_input);
+    /* Search results hidden until typing starts */
     IswUnmapWidget(p->search_viewport);
 
     /* Keyboard navigation via event handler on the shell */
@@ -1048,6 +1042,23 @@ void startmenu_init(Panel *p)
     p->shutdown_btn = IswCreateManagedWidget("shutdownBtn", commandWidgetClass,
                                             p->menu_toolbar, ab.args, ab.count);
     IswAddCallback(p->shutdown_btn, IswNcallback, shutdown_cb, p);
+
+    /* Search input — fills the toolbar left of the power buttons */
+    int search_w = btn_x - btn_margin * 2;
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgWidth(&ab, search_w);
+    IswArgHeight(&ab, btn_size);
+    IswArgHorizDistance(&ab, btn_margin);
+    IswArgVertDistance(&ab, btn_margin);
+    IswArgBorderWidth(&ab, 1);
+    IswArgInternalWidth(&ab, 6);
+    IswArgInternalHeight(&ab, 0);
+    ISW_ARG(&ab, IswNjustify, IswJustifyLeft);
+    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainLeft);
+    p->search_input = IswCreateManagedWidget("searchInput", labelWidgetClass,
+                                            p->menu_toolbar, ab.args, ab.count);
 
     /* Hide app list until a category is hovered */
     IswUnmapWidget(p->app_viewport);
