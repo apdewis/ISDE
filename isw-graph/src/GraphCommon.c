@@ -110,6 +110,9 @@ IswGraphBaseDraw(Widget w, GraphBasePart *gp, ISWRenderContext *render_ctx)
     if (width <= 0 || height <= 0)
 	return;
 
+    ISWRenderSetColor(render_ctx, w->core.background_pixel);
+    ISWRenderFillRectangle(render_ctx, 0, 0, width, height);
+
     /* kplot draws only to a cairo context.  Render it to a standalone cairo
      * image surface, then blit the result through ISW's backend-neutral
      * RGBA path — the graph never assumes the widget's render backend is
