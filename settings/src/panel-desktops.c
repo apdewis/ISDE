@@ -45,25 +45,24 @@ static void desktops_revert(void)
     IswSliderSetValue(scale_cols, saved_cols);
 }
 
-static int lbl_w;
-
-static Widget make_scale_row(Widget form, Widget above, const char *label_text,
-                             int min, int max, int value, Widget *out_scale)
+static void make_scale_row(Widget vbox, const char *label_text,
+                           int min, int max, int value, Widget *out_scale)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgLabel(&ab, label_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    if (above) { IswArgFromVert(&ab, above); }
-    Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                       form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, lbl);
-    if (above) { IswArgFromVert(&ab, above); }
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass, row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgMinimumValue(&ab, min);
     IswArgMaximumValue(&ab, max);
     IswArgSliderValue(&ab, value);
@@ -72,10 +71,9 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     IswArgTickInterval(&ab, 1);
     IswArgWidth(&ab, SLIDER_W);
     IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
-                                       form, ab.args, ab.count);
-    return *out_scale;
+                                       row, ab.args, ab.count);
 }
 
 static Widget desktops_create(Widget parent, IswAppContext app)
@@ -100,24 +98,19 @@ static Widget desktops_create(Widget parent, IswAppContext app)
         isde_config_free(cfg);
     }
 
-    Dimension pw;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    IswGetValues(parent, qb.args, qb.count);
-
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("desktopsPanel", formWidgetClass,
+    Widget vbox = IswCreateWidget("desktopsPanel", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
-    Widget row;
-    row = make_scale_row(form, NULL, "Desktop rows:",
-                         1, 4, saved_rows, &scale_rows);
-    row = make_scale_row(form, row, "Desktop columns:",
-                         1, 4, saved_cols, &scale_cols);
+    make_scale_row(vbox, "Desktop rows:",
+                   1, 4, saved_rows, &scale_rows);
+    make_scale_row(vbox, "Desktop columns:",
+                   1, 4, saved_cols, &scale_cols);
 
-    return form;
+    return vbox;
 }
 
 static int desktops_has_changes(void)

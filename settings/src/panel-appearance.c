@@ -103,18 +103,11 @@ static Widget appearance_create(Widget parent, IswAppContext app)
 {
     (void)app;
 
-    Dimension pw, ph;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    //IswArgHeight(&qb, &ph);
-    IswGetValues(parent, qb.args, qb.count);
-
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    IswArgResizable(&ab, True);
-
-    Widget form = IswCreateWidget("appearForm", formWidgetClass,
+    Widget vbox = IswCreateWidget("appearForm", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
     /* Load current config */
@@ -136,23 +129,25 @@ static Widget appearance_create(Widget parent, IswAppContext app)
         isde_config_free(cfg);
     }
 
-    Widget prev = NULL;
-    int list_height = (ph > 0 ? (ph - 80) / 3 : 80);
-
     int lbl_w = 150;
     int list_w = 250;
+    int list_height = 80;
 
     /* --- Colour Scheme --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget scheme_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                              vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Colour Scheme:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    if (prev) { IswArgFromVert(&ab, prev); }
-    Widget scheme_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                              form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           scheme_row, ab.args, ab.count);
 
     char **raw_schemes = NULL;
     scheme_count = isde_scheme_list(&raw_schemes);
@@ -171,11 +166,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgHeight(&ab, list_height);
     IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, scheme_lbl);
-    IswArgLeft(&ab, IswChainLeft);
-    if (prev) { IswArgFromVert(&ab, prev); }
     Widget scheme_vp = IswCreateManagedWidget("schemeVp", viewportWidgetClass,
-                                              form, ab.args, ab.count);
+                                              scheme_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgList(&ab, scheme_names_arr);
@@ -187,19 +179,22 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     scheme_list = IswCreateManagedWidget("schemeList", listWidgetClass,
                                         scheme_vp, ab.args, ab.count);
     IswListHighlight(scheme_list, saved_scheme_idx);
-    prev = scheme_vp;
 
     /* --- Cursor Theme --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget cursor_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                              vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Cursor Theme:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    IswArgFromVert(&ab, prev);
-    Widget cursor_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                              form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           cursor_row, ab.args, ab.count);
 
     char **raw_cursors = NULL;
     cursor_count = isde_cursor_theme_list(&raw_cursors);
@@ -218,11 +213,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgHeight(&ab, list_height);
     IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, cursor_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     Widget cursor_vp = IswCreateManagedWidget("cursorVp", viewportWidgetClass,
-                                              form, ab.args, ab.count);
+                                              cursor_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgList(&ab, cursor_names_arr);
@@ -234,19 +226,22 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
                                         cursor_vp, ab.args, ab.count);
     IswListHighlight(cursor_list, saved_cursor_idx);
-    prev = cursor_vp;
 
     /* --- Icon Theme --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget icon_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                            vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Icon Theme:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    IswArgFromVert(&ab, prev);
-    Widget icon_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                            form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           icon_row, ab.args, ab.count);
 
     char **raw_disp = NULL;
     char **raw_dirs = NULL;
@@ -276,11 +271,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgHeight(&ab, list_height);
     IswArgWidth(&ab, list_w);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, icon_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     Widget icon_vp = IswCreateManagedWidget("iconVp", viewportWidgetClass,
-                                            form, ab.args, ab.count);
+                                            icon_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgList(&ab, icon_names_arr);
@@ -292,13 +284,12 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
                                       icon_vp, ab.args, ab.count);
     IswListHighlight(icon_list, saved_icon_idx);
-    prev = icon_vp;
 
     free(cur_scheme);
     free(cur_cursor);
     free(cur_icon);
 
-    return form;
+    return vbox;
 }
 
 static int appearance_has_changes(void)

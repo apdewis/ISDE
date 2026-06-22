@@ -228,15 +228,11 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         toplevel_cache = IswParent(toplevel_cache);
     }
 
-    Dimension pw;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    IswGetValues(parent, qb.args, qb.count);
-
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("fontsForm", formWidgetClass,
+    Widget vbox = IswCreateWidget("fontsForm", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
     /* Load current config */
@@ -284,20 +280,22 @@ static Widget fonts_create(Widget parent, IswAppContext app)
     memcpy(saved, current, sizeof(saved));
 
     /* Build rows */
-    Widget prev = NULL;
-
     for (int i = 0; i < NUM_FONTS; i++) {
+        IswArgBuilderReset(&ab);
+        IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgSpacing(&ab, 8);
+        Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                           vbox, ab.args, ab.count);
+
         /* Category label */
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, font_labels[i]);
         IswArgBorderWidth(&ab, 0);
-        IswArgWidth(&ab, LABEL_W);
         IswArgJustify(&ab, IswJustifyRight);
-        IswArgLeft(&ab, IswChainLeft);
-        IswArgRight(&ab, IswChainLeft);
-        if (prev) { IswArgFromVert(&ab, prev); }
-        Widget lbl = IswCreateManagedWidget("fontCatLbl", labelWidgetClass,
-                                            form, ab.args, ab.count);
+        IswArgFlexBasis(&ab, LABEL_W);
+        IswArgFlexAlign(&ab, IswFlexAlignCenter);
+        IswCreateManagedWidget("fontCatLbl", labelWidgetClass,
+                               row, ab.args, ab.count);
 
         /* Font description label — rendered in the configured font */
         char desc[160];
@@ -308,38 +306,30 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         format_fc_pattern(font, sizeof(font), current[i].family,
                           current[i].size, current[i].weight,
                           current[i].slant);
-        IswFontStruct *fs = isde_resolve_font(form, font);
+        IswFontStruct *fs = isde_resolve_font(vbox, font);
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, desc);
         IswArgBorderWidth(&ab, 0);
         IswArgWidth(&ab, SELECTED_W);
         IswArgJustify(&ab, IswJustifyLeft);
-        IswArgFromHoriz(&ab, lbl);
         IswArgResize(&ab, True);
-        IswArgResizable(&ab, True);
-        IswArgLeft(&ab, IswChainLeft);
-        IswArgRight(&ab, IswChainLeft);
-        if (prev) { IswArgFromVert(&ab, prev); }
+        IswArgFlexAlign(&ab, IswFlexAlignCenter);
         if (fs) { IswArgFont(&ab, fs); }
         desc_labels[i] = IswCreateManagedWidget("fontDescLbl",
                                                 labelWidgetClass,
-                                                form, ab.args, ab.count);
+                                                row, ab.args, ab.count);
 
         /* Edit button */
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "Edit...");
         IswArgWidth(&ab, BUTTON_W);
-        IswArgFromHoriz(&ab, desc_labels[i]);
-        IswArgLeft(&ab, IswChainLeft);
-        if (prev) { IswArgFromVert(&ab, prev); }
+        IswArgFlexAlign(&ab, IswFlexAlignCenter);
         Widget btn = IswCreateManagedWidget("fontEditBtn", commandWidgetClass,
-                                            form, ab.args, ab.count);
+                                            row, ab.args, ab.count);
         IswAddCallback(btn, IswNcallback, edit_cb, (IswPointer)(intptr_t)i);
-
-        prev = lbl;
     }
 
-    return form;
+    return vbox;
 }
 
 static void fonts_apply(void)

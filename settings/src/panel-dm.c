@@ -180,65 +180,63 @@ static Widget dm_create(Widget parent, IswAppContext app)
     fetch_greeter_config();
 
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("dmPanel", formWidgetClass,
+    Widget vbox = IswCreateWidget("dmPanel", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
-
-    Dimension pw;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    IswGetValues(parent, qb.args, qb.count);
 
     /* Time Format */
     IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, "Time Format");
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget time_lbl = IswCreateManagedWidget("timeFmtLabel",
-                                            labelWidgetClass,
-                                            form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget time_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                            vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, time_lbl);
+    IswArgLabel(&ab, "Time Format");
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("timeFmtLabel", labelWidgetClass,
+                           time_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgWidth(&ab, TEXT_W);
     IswArgEditType(&ab, IswtextEdit);
     IswArgBorderWidth(&ab, 1);
     IswArgString(&ab, saved_time_fmt);
-    IswArgLeft(&ab, IswChainLeft);
-    text_time_fmt = IswCreateManagedWidget("timeFmtText",
-                                          textWidgetClass,
-                                          form, ab.args, ab.count);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    text_time_fmt = IswCreateManagedWidget("timeFmtText", textWidgetClass,
+                                          time_row, ab.args, ab.count);
 
     /* Date Format */
     IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, "Date Format");
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, time_lbl);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget date_lbl = IswCreateManagedWidget("dateFmtLabel",
-                                            labelWidgetClass,
-                                            form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget date_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                            vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, date_lbl);
-    IswArgFromVert(&ab, text_time_fmt);
+    IswArgLabel(&ab, "Date Format");
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("dateFmtLabel", labelWidgetClass,
+                           date_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgWidth(&ab, TEXT_W);
     IswArgEditType(&ab, IswtextEdit);
     IswArgBorderWidth(&ab, 1);
     IswArgString(&ab, saved_date_fmt);
-    IswArgLeft(&ab, IswChainLeft);
-    text_date_fmt = IswCreateManagedWidget("dateFmtText",
-                                          textWidgetClass,
-                                          form, ab.args, ab.count);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    text_date_fmt = IswCreateManagedWidget("dateFmtText", textWidgetClass,
+                                          date_row, ab.args, ab.count);
 
-    return form;
+    return vbox;
 }
 
 static int dm_has_changes(void)

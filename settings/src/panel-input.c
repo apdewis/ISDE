@@ -79,23 +79,24 @@ static void input_revert(void)
     apply_mouse(saved_accel_num, saved_threshold);
 }
 
-static Widget make_scale_row(Widget form, Widget above, const char *label_text,
-                             int min, int max, int value, Widget *out_scale)
+static void make_scale_row(Widget vbox, const char *label_text,
+                           int min, int max, int value, Widget *out_scale)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgLabel(&ab, label_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    if (above) { IswArgFromVert(&ab, above); }
-    Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                       form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, lbl);
-    if (above) { IswArgFromVert(&ab, above); }
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass, row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgMinimumValue(&ab, min);
     IswArgMaximumValue(&ab, max);
     IswArgSliderValue(&ab, value);
@@ -103,10 +104,9 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     IswArgShowValue(&ab, True);
     IswArgWidth(&ab, SLIDER_W);
     IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
-                                       form, ab.args, ab.count);
-    return *out_scale;
+                                       row, ab.args, ab.count);
 }
 
 static Widget input_create(Widget parent, IswAppContext app)
@@ -133,26 +133,21 @@ static Widget input_create(Widget parent, IswAppContext app)
         isde_config_free(cfg);
     }
 
-    Dimension pw;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    IswGetValues(parent, qb.args, qb.count);
-
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("mousePanel", formWidgetClass,
+    Widget vbox = IswCreateWidget("mousePanel", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
-    Widget row;
-    row = make_scale_row(form, NULL, "Double-click speed (ms):",
-                         100, 1000, saved_dclick, &scale_dclick);
-    row = make_scale_row(form, row, "Mouse acceleration:",
-                         1, 10, saved_accel_num, &scale_accel);
-    row = make_scale_row(form, row, "Mouse threshold (pixels):",
-                         1, 20, saved_threshold, &scale_threshold);
+    make_scale_row(vbox, "Double-click speed (ms):",
+                   100, 1000, saved_dclick, &scale_dclick);
+    make_scale_row(vbox, "Mouse acceleration:",
+                   1, 10, saved_accel_num, &scale_accel);
+    make_scale_row(vbox, "Mouse threshold (pixels):",
+                   1, 20, saved_threshold, &scale_threshold);
 
-    return form;
+    return vbox;
 }
 
 static int input_has_changes(void)

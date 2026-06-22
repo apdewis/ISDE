@@ -926,17 +926,11 @@ static void display_revert(void)
 
 static Widget display_create(Widget parent, IswAppContext app)
 {
-    Dimension pw, ph;
-    IswArgBuilder qb = IswArgBuilderInit();
-    IswArgWidth(&qb, &pw);
-    IswArgHeight(&qb, &ph);
-    IswGetValues(parent, qb.args, qb.count);
-
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    IswArgResizable(&ab, 1);
-    Widget form = IswCreateWidget("displayForm", formWidgetClass,
+    Widget vbox = IswCreateWidget("displayForm", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
     display_conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(parent));
@@ -945,31 +939,32 @@ static Widget display_create(Widget parent, IswAppContext app)
     query_outputs(display_conn, display_root);
     load_output_configs();
 
-    Widget prev = NULL;
-
     /* --- Output list --- */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget out_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                           vbox, ab.args, ab.count);
+
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Outputs:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, LABEL_W);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    Widget out_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           out_row, ab.args, ab.count);
 
-    int list_height = (ph > 0 ? ph / 3 : 100);
     IswArgBuilderReset(&ab);
     IswArgList(&ab, output_names);
     IswArgNumberStrings(&ab, noutputs);
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgHeight(&ab, list_height);
+    IswArgHeight(&ab, 100);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, out_lbl);
-    IswArgLeft(&ab, IswChainLeft);
     output_list = IswCreateManagedWidget("outputList", listWidgetClass,
-                                        form, ab.args, ab.count);
+                                        out_row, ab.args, ab.count);
     IswAddCallback(output_list, IswNcallback, output_select_cb, NULL);
 
     selected_output = 0;
@@ -977,55 +972,57 @@ static Widget display_create(Widget parent, IswAppContext app)
         if (outputs[i].is_primary) { selected_output = i; break; }
     }
     IswListHighlight(output_list, selected_output);
-    prev = output_list;
 
     /* --- Enable toggle + Primary button --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget en_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                          vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Enabled:");
     IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, prev);
-    IswArgWidth(&ab, LABEL_W);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget en_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           en_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "");
     IswArgBorderWidth(&ab, 1);
-    IswArgFromVert(&ab, prev);
-    IswArgFromHoriz(&ab, en_lbl);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     if (outputs[selected_output].sel_enabled)
         IswArgState(&ab, True);
     enable_toggle = IswCreateManagedWidget("enableToggle", toggleWidgetClass,
-                                           form, ab.args, ab.count);
+                                           en_row, ab.args, ab.count);
     IswAddCallback(enable_toggle, IswNcallback, enable_changed_cb, NULL);
 
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Set as Primary");
     IswArgBorderWidth(&ab, 1);
-    IswArgFromVert(&ab, prev);
-    IswArgFromHoriz(&ab, enable_toggle);
-    IswArgLeft(&ab, IswChainLeft);
     IswArgWidth(&ab, 120);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     primary_btn = IswCreateManagedWidget("primaryBtn", commandWidgetClass,
-                                         form, ab.args, ab.count);
+                                         en_row, ab.args, ab.count);
     IswAddCallback(primary_btn, IswNcallback, primary_clicked_cb, NULL);
-    prev = enable_toggle;
 
     /* --- Resolution combo --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget res_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                           vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Resolution:");
     IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, prev);
-    IswArgWidth(&ab, LABEL_W);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget res_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                            form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           res_row, ab.args, ab.count);
 
     build_mode_strings(&outputs[selected_output]);
 
@@ -1036,28 +1033,29 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromVert(&ab, prev);
-    IswArgFromHoriz(&ab, res_lbl);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     res_combo = IswCreateManagedWidget("resCombo", comboBoxWidgetClass,
-                                      form, ab.args, ab.count);
+                                      res_row, ab.args, ab.count);
     IswAddCallback(res_combo, IswNcallback, mode_select_cb, NULL);
 
     if (outputs[selected_output].sel_mode_idx >= 0)
         IswListHighlight(res_combo, outputs[selected_output].sel_mode_idx);
-    prev = res_combo;
 
     /* --- HiDPI scale (per-output) --- */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget scale_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                             vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Scale:");
     IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, prev);
-    IswArgWidth(&ab, LABEL_W);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     scale_label = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                        form, ab.args, ab.count);
+                                        scale_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgMinimumValue(&ab, 100);
@@ -1066,40 +1064,37 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswArgShowValue(&ab, True);
     IswArgTickInterval(&ab, 25);
     IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, prev);
-    IswArgFromHoriz(&ab, scale_label);
     IswArgWidth(&ab, SLIDER_W);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     scale_slider = IswCreateManagedWidget("scaleSlider", sliderWidgetClass,
-                                          form, ab.args, ab.count);
+                                          scale_row, ab.args, ab.count);
     IswAddCallback(scale_slider, IswNvalueChanged, scale_changed_cb, NULL);
-    prev = scale_slider;
 
     /* --- Layout preview --- */
     IswArgBuilderReset(&ab);
-    IswArgLabel(&ab, "Layout:");
-    IswArgBorderWidth(&ab, 0);
-    IswArgFromVert(&ab, prev);
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget lay_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                            form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget lay_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                           vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, prev);
-    IswArgFromHoriz(&ab, lay_lbl);
+    IswArgLabel(&ab, "Layout:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           lay_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgWidth(&ab, SLIDER_W);
     IswArgHeight(&ab, CANVAS_H);
     IswArgBorderWidth(&ab, 1);
-    IswArgLeft(&ab, IswChainLeft);
     layout_canvas = IswCreateManagedWidget("layoutCanvas",
                                            drawingAreaWidgetClass,
-                                           form, ab.args, ab.count);
+                                           lay_row, ab.args, ab.count);
     IswAddCallback(layout_canvas, IswNexposeCallback, layout_expose_cb, NULL);
     IswAddCallback(layout_canvas, IswNinputCallback, layout_input_cb, NULL);
-    prev = layout_canvas;
 
     update_controls_sensitivity();
 
@@ -1120,7 +1115,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     randr_poll_id = IswAppAddTimeOut(display_app, RANDR_POLL_MS,
                                     randr_poll_cb, NULL);
 
-    return form;
+    return vbox;
 }
 
 static int display_has_changes(void)

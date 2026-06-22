@@ -23,6 +23,7 @@
 #include <ISW/Viewport.h>
 #include <ISW/IconView.h>
 #include <ISW/Shell.h>
+#include <ISW/FlexBox.h>
 
 #include "isde-config.h"
 #include "dbus.h"

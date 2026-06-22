@@ -145,64 +145,69 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     saved_scrollback = cur_scrollback;
     memcpy(saved_cursor_shape, cur_cursor_shape, sizeof(saved_cursor_shape));
 
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
-    IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("termForm", formWidgetClass,
-                                  parent, ab.args, ab.count);
-
     int lbl_w = 150;
-    Widget prev = NULL;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
+    IswArgBorderWidth(&ab, 0);
+    Widget vbox = IswCreateWidget("termForm", flexBoxWidgetClass,
+                                  parent, ab.args, ab.count);
 
     /* Font row */
     IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget font_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                             vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Font:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget font_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                             form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass, font_row, ab.args, ab.count);
 
     char desc[160];
     char font[160];
     snprintf(desc, sizeof(desc), "%s %dpt", cur_font_family, cur_font_size);
     snprintf(font, sizeof(font), "%s-%d", cur_font_family, cur_font_size);
-    IswFontStruct *fs = isde_resolve_font(form, font);
+    IswFontStruct *fs = isde_resolve_font(vbox, font);
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, desc);
     IswArgBorderWidth(&ab, 0);
     IswArgWidth(&ab, 250);
     IswArgJustify(&ab, IswJustifyLeft);
-    IswArgFromHoriz(&ab, font_lbl);
     IswArgResize(&ab, True);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     if (fs) { IswArgFont(&ab, fs); }
     font_desc_lbl = IswCreateManagedWidget("fontDesc", labelWidgetClass,
-                                           form, ab.args, ab.count);
+                                           font_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Edit...");
     IswArgWidth(&ab, 80);
-    IswArgFromHoriz(&ab, font_desc_lbl);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     Widget edit_btn = IswCreateManagedWidget("fontEdit", commandWidgetClass,
-                                             form, ab.args, ab.count);
+                                             font_row, ab.args, ab.count);
     IswAddCallback(edit_btn, IswNcallback, edit_font_cb, NULL);
-    prev = font_lbl;
 
-    /* Colour scheme list */
+    /* Colour scheme row */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget scheme_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                               vbox, ab.args, ab.count);
+
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Colour Scheme:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget sc_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           scheme_row, ab.args, ab.count);
 
     char **raw = NULL;
     scheme_count = isde_scheme_list(&raw);
@@ -222,26 +227,26 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgHeight(&ab, 120);
     IswArgWidth(&ab, 200);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, sc_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     scheme_list = IswCreateManagedWidget("termSchemeList", listWidgetClass,
-                                         form, ab.args, ab.count);
+                                         scheme_row, ab.args, ab.count);
     IswListHighlight(scheme_list, find_idx(scheme_names_arr, scheme_count,
                                            cur_color_scheme));
-    prev = scheme_list;
 
-    /* Cursor shape list */
+    /* Cursor shape row */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget cursor_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                               vbox, ab.args, ab.count);
+
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Cursor Shape:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget cs_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignStart);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           cursor_row, ab.args, ab.count);
 
     static String shape_names[NUM_CURSOR_SHAPES + 1];
     for (int i = 0; i < NUM_CURSOR_SHAPES; i++) {
@@ -258,35 +263,33 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgHeight(&ab, 80);
     IswArgWidth(&ab, 200);
     IswArgBorderWidth(&ab, 1);
-    IswArgFromHoriz(&ab, cs_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
     cursor_shape_list = IswCreateManagedWidget("termCursorList", listWidgetClass,
-                                               form, ab.args, ab.count);
+                                               cursor_row, ab.args, ab.count);
     IswListHighlight(cursor_shape_list,
                      find_idx(shape_names, NUM_CURSOR_SHAPES, cur_cursor_shape));
-    prev = cursor_shape_list;
 
-    /* Scrollback spin */
+    /* Scrollback row */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget sb_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                           vbox, ab.args, ab.count);
+
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "Scrollback Lines:");
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, lbl_w);
     IswArgJustify(&ab, IswJustifyRight);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    Widget sb_lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                           form, ab.args, ab.count);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           sb_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgBorderWidth(&ab, 1);
     IswArgWidth(&ab, 120);
-    IswArgFromHoriz(&ab, sb_lbl);
-    IswArgFromVert(&ab, prev);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     scrollback_spin = IswCreateManagedWidget("termScrollback", spinBoxWidgetClass,
-                                             form, ab.args, ab.count);
+                                             sb_row, ab.args, ab.count);
     IswArgBuilderReset(&ab);
     IswArgSpinMinimum(&ab, 0);
     IswArgSpinMaximum(&ab, 100000);
@@ -294,7 +297,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgSpinValue(&ab, cur_scrollback);
     IswSetValues(scrollback_spin, ab.args, ab.count);
 
-    return form;
+    return vbox;
 }
 
 static void terminal_apply(void)

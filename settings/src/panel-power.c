@@ -133,23 +133,24 @@ static void power_revert(void)
     }
 }
 
-static Widget make_scale_row(Widget form, Widget above, const char *label_text,
-                             int min, int max, int value, Widget *out_scale)
+static void make_scale_row(Widget vbox, const char *label_text,
+                           int min, int max, int value, Widget *out_scale)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgLabel(&ab, label_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    if (above) { IswArgFromVert(&ab, above); }
-    Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                       form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, lbl);
-    if (above) { IswArgFromVert(&ab, above); }
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass, row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgMinimumValue(&ab, min);
     IswArgMaximumValue(&ab, max);
     IswArgSliderValue(&ab, value);
@@ -157,43 +158,41 @@ static Widget make_scale_row(Widget form, Widget above, const char *label_text,
     IswArgShowValue(&ab, True);
     IswArgWidth(&ab, SLIDER_W);
     IswArgBorderWidth(&ab, 0);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
-                                       form, ab.args, ab.count);
-    return *out_scale;
+                                       row, ab.args, ab.count);
 }
 
-static Widget make_combo_row(Widget form, Widget above, const char *label_text,
-                             String *items, int nitems, int selected,
-                             Widget *out_combo, IswCallbackProc cb)
+static void make_combo_row(Widget vbox, const char *label_text,
+                           String *items, int nitems, int selected,
+                           Widget *out_combo, IswCallbackProc cb)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgLabel(&ab, label_text);
-    IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, LABEL_W);
-    IswArgJustify(&ab, IswJustifyRight);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    if (above) { IswArgFromVert(&ab, above); }
-    Widget lbl = IswCreateManagedWidget("lbl", labelWidgetClass,
-                                       form, ab.args, ab.count);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgSpacing(&ab, 8);
+    Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, lbl);
-    if (above) { IswArgFromVert(&ab, above); }
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass, row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
     IswArgList(&ab, items);
     IswArgNumberStrings(&ab, nitems);
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
     IswArgWidth(&ab, COMBO_W);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_combo = IswCreateManagedWidget("combo", comboBoxWidgetClass,
-                                        form, ab.args, ab.count);
+                                        row, ab.args, ab.count);
     IswAddCallback(*out_combo, IswNcallback, cb, NULL);
     IswListHighlight(*out_combo, selected);
-
-    return *out_combo;
 }
 
 static Widget power_create(Widget parent, IswAppContext app)
@@ -227,27 +226,27 @@ static Widget power_create(Widget parent, IswAppContext app)
     sel_profile = saved_profile;
 
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgDefaultDistance(&ab, 8);
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgSpacing(&ab, 8);
     IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateWidget("powerPanel", formWidgetClass,
+    Widget vbox = IswCreateWidget("powerPanel", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
 
-    Widget row;
-    row = make_scale_row(form, NULL, "Screen off (seconds):",
-                         0, 3600, saved_screen_off, &scale_screen_off);
-    row = make_scale_row(form, row, "Idle suspend (seconds):",
-                         0, 3600, saved_idle_suspend, &scale_idle_suspend);
-    row = make_combo_row(form, row, "Lid close action:",
-                         lid_action_labels, NUM_LID_ACTIONS,
-                         saved_lid_action, &lid_combo, on_lid_select);
+    make_scale_row(vbox, "Screen off (seconds):",
+                   0, 3600, saved_screen_off, &scale_screen_off);
+    make_scale_row(vbox, "Idle suspend (seconds):",
+                   0, 3600, saved_idle_suspend, &scale_idle_suspend);
+    make_combo_row(vbox, "Lid close action:",
+                   lid_action_labels, NUM_LID_ACTIONS,
+                   saved_lid_action, &lid_combo, on_lid_select);
 
     if (isde_cpufreq_available()) {
-        row = make_combo_row(form, row, "Performance profile:",
-                             profile_labels, NUM_PROFILES,
-                             saved_profile, &profile_combo, on_profile_select);
+        make_combo_row(vbox, "Performance profile:",
+                       profile_labels, NUM_PROFILES,
+                       saved_profile, &profile_combo, on_profile_select);
     }
 
-    return form;
+    return vbox;
 }
 
 static int power_has_changes(void)
