@@ -393,10 +393,10 @@ int settings_init(Settings *s, int *argc, char **argv)
     IswArgInternalWidth(&ab, btn_pad);
     IswArgInternalHeight(&ab, btn_pad);
     IswArgVertDistance(&ab, btn_pad);
-    IswArgHorizDistance(&ab, btn_pad);
+    IswArgHorizDistance(&ab, right_w - btn_pad - ((btn_w + sb_w) * 2));
     IswArgResizable(&ab, True);
-    IswArgRight(&ab, IswChainLeft);
-    IswArgLeft(&ab, IswChainLeft);
+    IswArgRight(&ab, IswChainRight);
+    IswArgLeft(&ab, IswChainRight);
     IswArgBottom(&ab, IswChainBottom);
     IswArgTop(&ab, IswChainBottom);
     s->revert_btn = IswCreateManagedWidget("revertBtn", commandWidgetClass,
