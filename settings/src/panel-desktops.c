@@ -137,7 +137,7 @@ void panel_desktops_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_desktops = {
     .name        = "Desktops",
-    .icon        = NULL,
+    .icon        = "preferences-desktop-wallpaper",
     .section     = "wm.desktops",
     .create      = desktops_create,
     .apply       = desktops_apply,

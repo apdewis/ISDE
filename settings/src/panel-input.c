@@ -174,7 +174,7 @@ void panel_input_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_input = {
     .name        = "Mouse",
-    .icon        = NULL,
+    .icon        = "input-mouse",
     .section     = "input",
     .create      = input_create,
     .apply       = input_apply,

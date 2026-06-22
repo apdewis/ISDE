@@ -392,7 +392,7 @@ void panel_fonts_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_fonts = {
     .name        = "Fonts",
-    .icon        = NULL,
+    .icon        = "preferences-desktop-font",
     .section     = "fonts",
     .create      = fonts_create,
     .apply       = fonts_apply,

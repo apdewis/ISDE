@@ -271,7 +271,7 @@ void panel_power_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_power = {
     .name        = "Power",
-    .icon        = NULL,
+    .icon        = "preferences-system-power-management",
     .section     = "power",
     .create      = power_create,
     .apply       = power_apply,

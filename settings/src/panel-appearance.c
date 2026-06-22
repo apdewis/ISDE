@@ -106,7 +106,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     Dimension pw, ph;
     IswArgBuilder qb = IswArgBuilderInit();
     IswArgWidth(&qb, &pw);
-    IswArgHeight(&qb, &ph);
+    //IswArgHeight(&qb, &ph);
     IswGetValues(parent, qb.args, qb.count);
 
     IswArgBuilder ab = IswArgBuilderInit();
@@ -331,7 +331,7 @@ void panel_appearance_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_appearance = {
     .name        = "Appearance",
-    .icon        = NULL,
+    .icon        = "preferences-desktop-theme",
     .section     = "appearance",
     .create      = appearance_create,
     .apply       = appearance_apply,

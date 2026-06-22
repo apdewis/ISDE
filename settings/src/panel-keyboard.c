@@ -170,7 +170,7 @@ void panel_keyboard_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_keyboard = {
     .name        = "Keyboard",
-    .icon        = NULL,
+    .icon        = "input-keyboard",
     .section     = "keyboard",
     .create      = keyboard_create,
     .apply       = keyboard_apply,

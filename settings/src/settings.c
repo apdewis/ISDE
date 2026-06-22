@@ -1,9 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * settings.c — isde-settings UI shell, plugin loading, panel switching
+ * settings.c — isde-settings UI shell, plugin loading, panel windows
  *
- * Layout: left pane = scrollable List of panel names
- *         right pane = active panel content
+ * Layout: main window = IconView grid of panel icons
+ *         each panel opens in its own top-level window
  */
 #include "settings.h"
 
@@ -14,12 +14,8 @@
 #include <dlfcn.h>
 #include <dirent.h>
 
-#include <ISW/List.h>
 #include <ISW/Viewport.h>
-#include <ISW/Dialog.h>
 #include <ISW/IswArgMacros.h>
-
-#define PANEL_LIST_WIDTH 180
 
 /* ---------- panel management ---------- */
 
@@ -32,7 +28,7 @@ static void register_panel(Settings *s, const IsdeSettingsPanel *panel,
     int idx = s->npanels;
     s->panels[idx] = panel;
     s->plugin_handles[idx] = dl_handle;
-    s->panel_widgets[idx] = NULL;
+    memset(&s->panel_wins[idx], 0, sizeof(PanelWindow));
     s->npanels++;
 }
 
@@ -93,137 +89,188 @@ static void load_plugins(Settings *s)
     }
 }
 
-/* ---------- unsaved changes warning ---------- */
+/* ---------- per-panel save/revert callbacks ---------- */
 
-static int check_unsaved(Settings *s)
-{
-    int idx = s->active_panel;
-    if (idx < 0 || idx >= s->npanels) {
-        return 0;
-    }
-    if (!s->panels[idx]->has_changes) {
-        return 0;
-    }
-    return s->panels[idx]->has_changes();
-}
+typedef struct {
+    Settings *s;
+    int       index;
+} PanelCbData;
 
-/* ---------- common save/revert callbacks ---------- */
+static PanelCbData cb_data[MAX_PANELS];
 
-static void common_save_cb(Widget w, IswPointer cd, IswPointer call)
+static void panel_save_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
-    Settings *s = (Settings *)cd;
-    if (s->active_panel >= 0 && s->panels[s->active_panel]->apply) {
-        s->panels[s->active_panel]->apply();
+    PanelCbData *d = (PanelCbData *)cd;
+    if (d->s->panels[d->index]->apply) {
+        d->s->panels[d->index]->apply();
     }
 }
 
-static void common_revert_cb(Widget w, IswPointer cd, IswPointer call)
+static void panel_revert_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w; (void)call;
-    Settings *s = (Settings *)cd;
-    if (s->active_panel >= 0 && s->panels[s->active_panel]->revert) {
-        s->panels[s->active_panel]->revert();
+    PanelCbData *d = (PanelCbData *)cd;
+    if (d->s->panels[d->index]->revert) {
+        d->s->panels[d->index]->revert();
     }
 }
 
-/* ---------- panel switching ---------- */
+/* ---------- panel window close ---------- */
 
-void settings_switch_panel(Settings *s, int index)
+static void panel_destroy_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)call;
+    PanelCbData *d = (PanelCbData *)cd;
+    int idx = d->index;
+    if (d->s->panels[idx]->destroy) {
+        d->s->panels[idx]->destroy();
+    }
+    memset(&d->s->panel_wins[idx], 0, sizeof(PanelWindow));
+}
+
+/* ---------- opening a panel window ---------- */
+
+void settings_open_panel(Settings *s, int index)
 {
     if (index < 0 || index >= s->npanels) {
         return;
     }
-    if (index == s->active_panel && s->panel_widgets[index]) {
+
+    PanelWindow *pw = &s->panel_wins[index];
+
+    if (pw->open && pw->shell) {
+        IswPopup(pw->shell, IswGrabNone);
         return;
     }
 
-    /* Check for unsaved changes in current panel */
-    if (check_unsaved(s)) {
-        fprintf(stderr, "isde-settings: warning: unsaved changes discarded\n");
+    if (!pw->shell) {
+        int win_w = 700;
+        int win_h = 450;
+        int btn_h = 32;
+        int btn_pad = 8;
+        int btn_w = 80;
+        int sb_w = 14;
+
+        char title[128];
+        snprintf(title, sizeof(title), "%s — Settings", s->panels[index]->name);
+
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, win_h);
+        IswArgMinWidth(&ab, 400);
+        IswArgMinHeight(&ab, 300);
+        IswArgTitle(&ab, title);
+        pw->shell = IswCreatePopupShell("panelShell",
+                                        topLevelShellWidgetClass,
+                                        s->toplevel, ab.args, ab.count);
+
+        cb_data[index].s = s;
+        cb_data[index].index = index;
+        IswAddCallback(pw->shell, IswNdestroyCallback,
+                       panel_destroy_cb, &cb_data[index]);
+
+        /* Form layout: viewport + buttons at bottom */
+        IswArgBuilderReset(&ab);
+        IswArgDefaultDistance(&ab, 0);
+        IswArgBorderWidth(&ab, 0);
+        Widget form = IswCreateManagedWidget("panelForm", formWidgetClass,
+                                            pw->shell, ab.args, ab.count);
+
+        /* Scrollable viewport for panel content */
+        IswArgBuilderReset(&ab);
+        IswArgAllowVert(&ab, True);
+        IswArgAllowHoriz(&ab, True);
+        IswArgUseBottom(&ab, True);
+        IswArgUseRight(&ab, True);
+        IswArgBorderBottom(&ab, 1);
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, win_h - btn_h - btn_pad);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainRight);
+        pw->content_vp = IswCreateManagedWidget("contentScroll",
+                                                viewportWidgetClass,
+                                                form, ab.args, ab.count);
+
+        /* Panel content container inside viewport */
+        IswArgBuilderReset(&ab);
+        IswArgDefaultDistance(&ab, 0);
+        IswArgBorderWidth(&ab, 0);
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, win_h - btn_h - btn_pad);
+        pw->content_area = IswCreateManagedWidget("content", formWidgetClass,
+                                                  pw->content_vp,
+                                                  ab.args, ab.count);
+
+        /* Create the panel widget tree */
+        pw->panel_widget = s->panels[index]->create(pw->content_area, s->app);
+
+        IswArgBuilderReset(&ab);
+        IswArgTop(&ab, IswChainTop);
+        IswArgBottom(&ab, IswChainTop);
+        IswArgLeft(&ab, IswChainLeft);
+        IswArgRight(&ab, IswChainLeft);
+        IswSetValues(pw->panel_widget, ab.args, ab.count);
+
+        IswManageChild(pw->panel_widget);
+
+        /* Revert / Apply buttons — fixed at bottom right */
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, pw->content_vp);
+        IswArgLabel(&ab, "Revert");
+        IswArgWidth(&ab, btn_w);
+        IswArgHeight(&ab, btn_h - btn_pad);
+        IswArgInternalWidth(&ab, btn_pad);
+        IswArgInternalHeight(&ab, btn_pad);
+        IswArgVertDistance(&ab, btn_pad);
+        IswArgHorizDistance(&ab, win_w - btn_pad - ((btn_w + sb_w) * 2));
+        IswArgResizable(&ab, True);
+        IswArgRight(&ab, IswChainRight);
+        IswArgLeft(&ab, IswChainRight);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgTop(&ab, IswChainBottom);
+        pw->revert_btn = IswCreateManagedWidget("revertBtn",
+                                                commandWidgetClass,
+                                                form, ab.args, ab.count);
+        IswAddCallback(pw->revert_btn, IswNcallback,
+                       panel_revert_cb, &cb_data[index]);
+
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, pw->content_vp);
+        IswArgLabel(&ab, "Apply");
+        IswArgWidth(&ab, btn_w);
+        IswArgHeight(&ab, btn_h - btn_pad);
+        IswArgInternalWidth(&ab, btn_pad);
+        IswArgInternalHeight(&ab, btn_pad);
+        IswArgVertDistance(&ab, btn_pad);
+        IswArgHorizDistance(&ab, win_w - btn_w - btn_pad - sb_w);
+        IswArgResizable(&ab, True);
+        IswArgRight(&ab, IswChainRight);
+        IswArgLeft(&ab, IswChainRight);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgTop(&ab, IswChainBottom);
+        pw->save_btn = IswCreateManagedWidget("saveBtn", commandWidgetClass,
+                                             form, ab.args, ab.count);
+        IswAddCallback(pw->save_btn, IswNcallback,
+                       panel_save_cb, &cb_data[index]);
     }
 
-    /* Unmanage current panel */
-    if (s->active_panel >= 0 && s->panel_widgets[s->active_panel]) {
-        IswUnmanageChild(s->panel_widgets[s->active_panel]);
-    }
-
-    s->active_panel = index;
-
-    /* Create panel widget if needed */
-    if (!s->panel_widgets[index]) {
-        /* Query viewport size for initial panel dimensions. */
-        Dimension vpw, vph;
-        IswArgBuilder qb = IswArgBuilderInit();
-        IswArgWidth(&qb, &vpw);
-        IswArgHeight(&qb, &vph);
-        IswGetValues(s->content_vp, qb.args, qb.count);
-
-        /* Set content_area so panels can query parent dimensions */
-        if (vpw > 0 || vph > 0) {
-            IswArgBuilder ab = IswArgBuilderInit();
-            if (vpw > 0) { IswArgWidth(&ab, vpw); }
-            if (vph > 0) { IswArgHeight(&ab, vph); }
-            IswSetValues(s->content_area, ab.args, ab.count);
-        }
-
-        s->panel_widgets[index] =
-            s->panels[index]->create(s->content_area, s->app);
-
-        /* Anchor panel top-left so rubber constraints don't scale it
-         * when the viewport resizes content_area.  Size it to the
-         * current viewport so it realises with nonzero geometry. */
-        {
-            IswArgBuilder ab = IswArgBuilderInit();
-            if (vpw > 0) { IswArgWidth(&ab, vpw); }
-            if (vph > 0) { IswArgHeight(&ab, vph); }
-            IswArgTop(&ab, IswChainTop);
-            IswArgBottom(&ab, IswChainTop);
-            IswArgLeft(&ab, IswChainLeft);
-            IswArgRight(&ab, IswChainLeft);
-            IswSetValues(s->panel_widgets[index], ab.args, ab.count);
-        }
-    }
-
-    IswManageChild(s->panel_widgets[index]);
-
-    /* Debug: dump widget dimensions */
-    {
-        Dimension tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph;
-        IswArgBuilder db = IswArgBuilderInit();
-
-        IswArgWidth(&db, &tw); IswArgHeight(&db, &th);
-        IswGetValues(s->toplevel, db.args, db.count);
-
-        IswArgBuilderReset(&db);
-        IswArgWidth(&db, &cfw); IswArgHeight(&db, &cfh);
-        IswGetValues(s->content_form, db.args, db.count);
-
-        IswArgBuilderReset(&db);
-        IswArgWidth(&db, &vpw); IswArgHeight(&db, &vph);
-        IswGetValues(s->content_vp, db.args, db.count);
-
-        IswArgBuilderReset(&db);
-        IswArgWidth(&db, &caw); IswArgHeight(&db, &cah);
-        IswGetValues(s->content_area, db.args, db.count);
-
-        IswArgBuilderReset(&db);
-        IswArgWidth(&db, &pw); IswArgHeight(&db, &pph);
-        IswGetValues(s->panel_widgets[index], db.args, db.count);
-        fprintf(stderr, "DEBUG: toplevel=%dx%d content_form=%dx%d viewport=%dx%d content_area=%dx%d panel=%dx%d\n",
-                tw, th, cfw, cfh, vpw, vph, caw, cah, pw, pph);
-    }
+    IswRealizeWidget(pw->shell);
+    IswPopup(pw->shell, IswGrabNone);
+    pw->open = 1;
 }
 
-/* ---------- list selection callback ---------- */
+/* ---------- icon view selection callback ---------- */
 
-static void panel_list_cb(Widget w, IswPointer cd, IswPointer call)
+static void icon_select_cb(Widget w, IswPointer cd, IswPointer call)
 {
     (void)w;
     Settings *s = (Settings *)cd;
-    IswListReturnStruct *ret = (IswListReturnStruct *)call;
-    if (ret->list_index >= 0 && ret->list_index < s->npanels) {
-        settings_switch_panel(s, ret->list_index);
+    IswIconViewCallbackData *data = (IswIconViewCallbackData *)call;
+    if (data->index >= 0 && data->index < s->npanels) {
+        settings_open_panel(s, data->index);
     }
 }
 
@@ -257,35 +304,25 @@ static void settings_destroy_cb(Widget w, IswPointer cd, IswPointer call)
 int settings_init(Settings *s, int *argc, char **argv)
 {
     memset(s, 0, sizeof(*s));
-    s->active_panel = -1;
 
     s->toplevel = IswAppInitialize(&s->app, "ISDE-Settings",
                                   NULL, 0, argc, argv,
                                   NULL, NULL, 0);
     isde_theme_merge_xrm(s->toplevel);
 
-    int init_w = 960;
-    int init_h = 450;
-    IswDisplay dpy = IswDisplayOf(s->toplevel);
+    int init_w = 340;
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgWidth(&ab, init_w);
-    IswArgHeight(&ab, init_h);
-    IswArgMinWidth(&ab, 400);
-    IswArgMinHeight(&ab, 300);
+    IswArgMinWidth(&ab, 300);
+    IswArgMinHeight(&ab, 250);
+    IswArgTitle(&ab, "Settings");
     IswSetValues(s->toplevel, ab.args, ab.count);
 
     IswAddCallback(s->toplevel, IswNdestroyCallback,
                   settings_destroy_cb, s);
 
-    /* Main layout form — direct child of toplevel */
-    IswArgBuilderReset(&ab);
-    IswArgDefaultDistance(&ab, 0);
-    IswArgBorderWidth(&ab, 0);
-    Widget form = IswCreateManagedWidget("layout", formWidgetClass,
-                                        s->toplevel, ab.args, ab.count);
-
-    /* Register core panels first (so names are available for the list) */
+    /* Register core panels */
     register_panel(s, &panel_input, NULL);
     register_panel(s, &panel_keyboard, NULL);
     register_panel(s, &panel_appearance, NULL);
@@ -297,117 +334,37 @@ int settings_init(Settings *s, int *argc, char **argv)
     register_panel(s, &panel_power, NULL);
     load_plugins(s);
 
-    /* Left pane: panel name list */
-    static String *panel_names = NULL;
-    free(panel_names);
-    panel_names = malloc((s->npanels + 1) * sizeof(String));
+    /* Build icon label and path arrays for IconView */
     for (int i = 0; i < s->npanels; i++) {
-        panel_names[i] = (String)s->panels[i]->name;
+        s->icon_labels[i] = (String)s->panels[i]->name;
+        if (s->panels[i]->icon) {
+            s->icon_paths[i] = isde_icon_find("categories",
+                                              s->panels[i]->icon);
+        } else {
+            s->icon_paths[i] = NULL;
+        }
     }
-    panel_names[s->npanels] = NULL;
 
-    IswArgBuilderReset(&ab);
-    IswArgList(&ab, panel_names);
-    IswArgNumberStrings(&ab, s->npanels);
-    IswArgDefaultColumns(&ab, 1);
-    IswArgForceColumns(&ab, True);
-    IswArgVerticalList(&ab, True);
-    IswArgWidth(&ab, PANEL_LIST_WIDTH);
-    IswArgHeight(&ab, init_h - 10);
-    IswArgBorderRight(&ab, 1);
-    IswArgResizable(&ab, True);
-    IswArgTop(&ab, IswChainTop);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainLeft);
-    s->panel_bar = IswCreateManagedWidget("panelList", listWidgetClass,
-                                         form, ab.args, ab.count);
-    IswAddCallback(s->panel_bar, IswNcallback, panel_list_cb, s);
-
-    /* Right pane: form with scrollable content + fixed buttons at bottom */
-    int right_w = init_w - PANEL_LIST_WIDTH - 4;
-    int right_h = init_h - 10;
-    int btn_h = 32;
-    int btn_pad = 8;
-    int sb_w = 14;  /* scrollbar thickness */
-
-    IswArgBuilderReset(&ab);
-    IswArgFromHoriz(&ab, s->panel_bar);
-    IswArgBorderWidth(&ab, 0);
-    IswArgDefaultDistance(&ab, 0);
-    IswArgWidth(&ab, right_w);
-    IswArgHeight(&ab, right_h);
-    IswArgResizable(&ab, False);
-    IswArgTop(&ab, IswChainTop);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    s->content_form = IswCreateManagedWidget("contentForm", formWidgetClass,
-                                            form, ab.args, ab.count);
-
-    /* Scrollable viewport for panel content */
+    /* Viewport wrapping the icon view for scrolling */
     IswArgBuilderReset(&ab);
     IswArgAllowVert(&ab, True);
-    IswArgAllowHoriz(&ab, True);
-    IswArgUseBottom(&ab, True);
+    IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, True);
-    IswArgBorderBottom(&ab, 1);
-    IswArgWidth(&ab, right_w);
-    IswArgHeight(&ab, right_h - btn_h - btn_pad);
-    IswArgTop(&ab, IswChainTop);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgLeft(&ab, IswChainLeft);
-    IswArgRight(&ab, IswChainRight);
-    s->content_vp = IswCreateManagedWidget("contentScroll", viewportWidgetClass,
-                                          s->content_form, ab.args, ab.count);
-
-    /* Panel content container inside viewport */
-    IswArgBuilderReset(&ab);
-    IswArgDefaultDistance(&ab, 0);
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, right_w);
-    IswArgHeight(&ab, right_h - btn_h - btn_pad);
-    s->content_area = IswCreateManagedWidget("content", formWidgetClass,
-                                            s->content_vp, ab.args, ab.count);
+    Widget vp = IswCreateManagedWidget("iconScroll", viewportWidgetClass,
+                                      s->toplevel, ab.args, ab.count);
 
-    /* Save / Revert buttons — fixed at bottom right. */
-    int btn_w = 80;
-
+    /* IconView grid */
     IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, s->content_vp);
-    IswArgLabel(&ab, "Revert");
-    IswArgWidth(&ab, btn_w);
-    IswArgHeight(&ab, btn_h - btn_pad);
-    IswArgInternalWidth(&ab, btn_pad);
-    IswArgInternalHeight(&ab, btn_pad);
-    IswArgVertDistance(&ab, btn_pad);
-    IswArgHorizDistance(&ab, right_w - btn_pad - ((btn_w + sb_w) * 2));
-    IswArgResizable(&ab, True);
-    IswArgRight(&ab, IswChainRight);
-    IswArgLeft(&ab, IswChainRight);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgTop(&ab, IswChainBottom);
-    s->revert_btn = IswCreateManagedWidget("revertBtn", commandWidgetClass,
-                                          s->content_form, ab.args, ab.count);
-    IswAddCallback(s->revert_btn, IswNcallback, common_revert_cb, s);
-
-    IswArgBuilderReset(&ab);
-    IswArgFromVert(&ab, s->content_vp);
-    IswArgLabel(&ab, "Apply");
-    IswArgWidth(&ab, btn_w);
-    IswArgHeight(&ab, btn_h - btn_pad);
-    IswArgInternalWidth(&ab, btn_pad);
-    IswArgInternalHeight(&ab, btn_pad);
-    IswArgVertDistance(&ab, btn_pad);
-    IswArgHorizDistance(&ab, right_w - btn_w - btn_pad - sb_w);
-    IswArgResizable(&ab, True);
-    IswArgRight(&ab, IswChainRight);
-    IswArgLeft(&ab, IswChainRight);
-    IswArgBottom(&ab, IswChainBottom);
-    IswArgTop(&ab, IswChainBottom);
-    s->save_btn = IswCreateManagedWidget("saveBtn", commandWidgetClass,
-                                        s->content_form, ab.args, ab.count);
-    IswAddCallback(s->save_btn, IswNcallback, common_save_cb, s);
+    IswArgIconLabels(&ab, s->icon_labels);
+    IswArgIconData(&ab, s->icon_paths);
+    IswArgNumIcons(&ab, s->npanels);
+    IswArgIconSize(&ab, 48);
+    IswArgMultiSelect(&ab, False);
+    IswArgWidth(&ab, init_w);
+    s->icon_view = IswCreateManagedWidget("iconView", iconViewWidgetClass,
+                                         vp, ab.args, ab.count);
+    IswAddCallback(s->icon_view, IswNselectCallback, icon_select_cb, s);
 
     /* D-Bus */
     s->dbus = isde_dbus_init();
@@ -429,11 +386,6 @@ int settings_init(Settings *s, int *argc, char **argv)
 
     IswRealizeWidget(s->toplevel);
 
-    /* Show first panel by default */
-    if (s->npanels > 0) {
-        settings_switch_panel(s, 0);
-    }
-
     s->running = 1;
     return 0;
 }
@@ -448,12 +400,13 @@ void settings_run(Settings *s)
 void settings_cleanup(Settings *s)
 {
     for (int i = 0; i < s->npanels; i++) {
-        if (s->panels[i]->destroy) {
+        if (s->panel_wins[i].shell && s->panels[i]->destroy) {
             s->panels[i]->destroy();
         }
         if (s->plugin_handles[i]) {
             dlclose(s->plugin_handles[i]);
         }
+        free(s->icon_paths[i]);
     }
     isde_dbus_free(s->dbus);
     IswDestroyApplicationContext(s->app);

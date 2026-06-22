@@ -21,6 +21,8 @@
 #include <ISW/FontChooser.h>
 #include <ISW/Tabs.h>
 #include <ISW/Viewport.h>
+#include <ISW/IconView.h>
+#include <ISW/Shell.h>
 
 #include "isde-config.h"
 #include "dbus.h"
@@ -30,24 +32,30 @@
 
 #define MAX_PANELS 32
 
+typedef struct PanelWindow {
+    Widget shell;           /* top-level shell for this panel */
+    Widget content_vp;      /* scrollable viewport */
+    Widget content_area;    /* form inside viewport */
+    Widget panel_widget;    /* created panel widget tree */
+    Widget save_btn;
+    Widget revert_btn;
+    int    open;            /* 1 if currently popped up */
+} PanelWindow;
+
 typedef struct Settings {
     IswAppContext   app;
     Widget         toplevel;
-    Widget         main_window;
-    Widget         panel_bar;     /* Top row: panel selector buttons */
-    Widget         content_form;  /* Right pane form */
-    Widget         content_vp;    /* Scrollable viewport for panel content */
-    Widget         content_area;  /* Form inside viewport — panels go here */
-    Widget         save_btn;
-    Widget         revert_btn;
+    Widget         icon_view;     /* main window icon grid */
 
     /* Panels (core + plugins) */
     const IsdeSettingsPanel *panels[MAX_PANELS];
-    Widget                   panel_btns[MAX_PANELS];
-    Widget                   panel_widgets[MAX_PANELS]; /* created widget trees */
+    PanelWindow              panel_wins[MAX_PANELS];
     void                    *plugin_handles[MAX_PANELS]; /* dlopen handles */
     int                      npanels;
-    int                      active_panel;
+
+    /* Icon data for IconView (must outlive the widget) */
+    String                   icon_labels[MAX_PANELS];
+    String                   icon_paths[MAX_PANELS];
 
     /* D-Bus */
     IsdeDBus      *dbus;
@@ -59,7 +67,7 @@ typedef struct Settings {
 int   settings_init(Settings *s, int *argc, char **argv);
 void  settings_run(Settings *s);
 void  settings_cleanup(Settings *s);
-void  settings_switch_panel(Settings *s, int index);
+void  settings_open_panel(Settings *s, int index);
 
 /* Core panel registration */
 extern const IsdeSettingsPanel panel_input;

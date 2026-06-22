@@ -262,7 +262,7 @@ static void dm_destroy(void)
 
 const IsdeSettingsPanel panel_dm = {
     .name        = "Display Manager",
-    .icon        = NULL,
+    .icon        = "preferences-desktop-login",
     .section     = "dm",
     .create      = dm_create,
     .apply       = dm_apply,

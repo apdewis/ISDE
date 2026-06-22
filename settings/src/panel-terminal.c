@@ -389,7 +389,7 @@ void panel_terminal_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
 
 const IsdeSettingsPanel panel_terminal = {
     .name        = "Terminal",
-    .icon        = NULL,
+    .icon        = "utilities-terminal",
     .section     = "terminal",
     .create      = terminal_create,
     .apply       = terminal_apply,

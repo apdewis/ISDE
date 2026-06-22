@@ -1156,7 +1156,7 @@ void panel_display_set_dbus(IsdeDBus *bus) { display_dbus = bus; }
 
 const IsdeSettingsPanel panel_display = {
     .name        = "Display",
-    .icon        = NULL,
+    .icon        = "preferences-desktop-display",
     .section     = "display",
     .create      = display_create,
     .apply       = display_apply,
