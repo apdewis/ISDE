@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <float.h>
 #include <inttypes.h>
 #include <math.h>

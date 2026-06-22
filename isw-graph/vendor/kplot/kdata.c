@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <float.h>
 #include <inttypes.h>
 #include <math.h>
@@ -71,7 +70,6 @@ kdatacfg_defaults(struct kdatacfg *cfg)
 	cfg->point.sz = 2.0;
 	cfg->point.clr.type = KPLOTCTYPE_DEFAULT;
 	cfg->line.sz = 2.0;
-	cfg->line.join = CAIRO_LINE_JOIN_ROUND;
 	cfg->line.clr.type = KPLOTCTYPE_DEFAULT;
 }
 

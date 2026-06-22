@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -31,28 +30,29 @@ kplotctx_grid_init(struct kplotctx *ctx)
 	size_t		 i;
 
 	kplotctx_line_init(ctx, &ctx->cfg.gridline);
+	ISWRenderPathBegin(ctx->rc);
 
 	if (GRID_X & ctx->cfg.grid)
 		for (i = 0; i < ctx->cfg.xtics; i++) {
-			offs = 1 == ctx->cfg.xtics ? 0.5 : 
+			offs = 1 == ctx->cfg.xtics ? 0.5 :
 				i / (double)(ctx->cfg.xtics - 1);
-			v = kplotctx_line_fix(ctx, 
+			v = kplotctx_line_fix(ctx,
 				ctx->cfg.gridline.sz,
 				ctx->offs.x + offs * ctx->dims.x);
-			cairo_move_to(ctx->cr, v, ctx->offs.y);
-			cairo_rel_line_to(ctx->cr, 0.0, ctx->dims.y);
+			ISWRenderPathMoveTo(ctx->rc, v, ctx->offs.y);
+			ISWRenderPathLineTo(ctx->rc, v, ctx->offs.y + ctx->dims.y);
 		}
 
 	if (GRID_Y & ctx->cfg.grid)
 		for (i = 0; i < ctx->cfg.ytics; i++) {
-			offs = 1 == ctx->cfg.ytics ? 0.5 : 
+			offs = 1 == ctx->cfg.ytics ? 0.5 :
 				i / (double)(ctx->cfg.ytics - 1);
-			v = kplotctx_line_fix(ctx, 
+			v = kplotctx_line_fix(ctx,
 				ctx->cfg.gridline.sz,
 				ctx->offs.y + offs * ctx->dims.y);
-			cairo_move_to(ctx->cr, ctx->offs.x, v);
-			cairo_rel_line_to(ctx->cr, ctx->dims.x, 0.0);
+			ISWRenderPathMoveTo(ctx->rc, ctx->offs.x, v);
+			ISWRenderPathLineTo(ctx->rc, ctx->offs.x + ctx->dims.x, v);
 		}
 
-	cairo_stroke(ctx->cr);
+	ISWRenderStroke(ctx->rc);
 }

@@ -137,7 +137,6 @@ target_include_directories(isw-graph
 target_link_libraries(isw-graph
     PUBLIC
         ISDE::ISW
-        ISDE::CAIRO
     PRIVATE
         m
 )

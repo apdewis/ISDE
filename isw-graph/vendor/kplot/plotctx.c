@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -32,17 +31,14 @@ kplotctx_ccfg_init(struct kplotctx *ctx, struct kplotccfg *cfg)
 
 	switch (cfg->type) {
 	case (KPLOTCTYPE_PALETTE):
-		cairo_set_source_rgba(ctx->cr, 
+		ISWRenderSetColorRGBA(ctx->rc,
 			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[0],
 			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[1],
 			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[2],
 			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[3]);
 		break;
-	case (KPLOTCTYPE_PATTERN):
-		cairo_set_source(ctx->cr, cfg->pattern);
-		break;
 	case (KPLOTCTYPE_RGBA):
-		cairo_set_source_rgba(ctx->cr, cfg->rgba[0],
+		ISWRenderSetColorRGBA(ctx->rc, cfg->rgba[0],
 			cfg->rgba[1], cfg->rgba[2], cfg->rgba[3]);
 		break;
 	default:
@@ -55,9 +51,9 @@ kplotctx_ticln_init(struct kplotctx *ctx, struct kplotticln *line)
 {
 
 	kplotctx_ccfg_init(ctx, &line->clr);
-	cairo_set_line_width(ctx->cr, line->sz);
-	cairo_set_dash(ctx->cr, line->dashes, 
-		line->dashesz, line->dashoff);
+	ISWRenderSetLineWidth(ctx->rc, line->sz);
+	ISWRenderSetDash(ctx->rc, line->dashes,
+		(int)line->dashesz, line->dashoff);
 }
 
 void
@@ -65,11 +61,8 @@ kplotctx_font_init(struct kplotctx *ctx, struct kplotfont *font)
 {
 
 	kplotctx_ccfg_init(ctx, &font->clr);
-	cairo_select_font_face
-		(ctx->cr, font->family,
-		 font->slant,
-		 font->weight);
-	cairo_set_font_size(ctx->cr, font->sz);
+	if (font->font)
+		ISWRenderSetFont(ctx->rc, font->font);
 }
 
 void
@@ -77,9 +70,9 @@ kplotctx_point_init(struct kplotctx *ctx, struct kplotpoint *pnt)
 {
 
 	kplotctx_ccfg_init(ctx, &pnt->clr);
-	cairo_set_line_width(ctx->cr, pnt->sz);
-	cairo_set_dash(ctx->cr, pnt->dashes, 
-		pnt->dashesz, pnt->dashoff);
+	ISWRenderSetLineWidth(ctx->rc, pnt->sz);
+	ISWRenderSetDash(ctx->rc, pnt->dashes,
+		(int)pnt->dashesz, pnt->dashoff);
 }
 
 void
@@ -87,10 +80,9 @@ kplotctx_line_init(struct kplotctx *ctx, struct kplotline *line)
 {
 
 	kplotctx_ccfg_init(ctx, &line->clr);
-	cairo_set_line_width(ctx->cr, line->sz);
-	cairo_set_dash(ctx->cr, line->dashes, 
-		line->dashesz, line->dashoff);
-	cairo_set_line_join(ctx->cr, line->join);
+	ISWRenderSetLineWidth(ctx->rc, line->sz);
+	ISWRenderSetDash(ctx->rc, line->dashes,
+		(int)line->dashesz, line->dashoff);
 }
 
 /*

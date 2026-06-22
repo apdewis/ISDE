@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -108,7 +107,7 @@ kdata_extrema_yerr(struct kplotdat *d, struct kplotctx *ctx)
 		if ( ! (kpair_vrfy(&p[i]) && kpair_vrfy(&err[i])))
 			continue;
 
-		/* 
+		/*
 		 * Since the error can be negative, check in both
 		 * directions from the basis point.
 		 */
@@ -144,7 +143,7 @@ kdata_extrema_single(struct kplotdat *d, struct kplotctx *ctx)
 		if ( ! kpair_vrfy(&d->datas[0]->pairs[i]))
 			continue;
 		kpair_set(d, i, &kp);
-		if (KSMOOTH_CDF == d->smthtype) 
+		if (KSMOOTH_CDF == d->smthtype)
 			d->sum += d->datas[0]->pairs[i].y;
 		if (KSMOOTH_PMF == d->smthtype) {
 			d->sum += d->datas[0]->pairs[i].y;
@@ -156,8 +155,8 @@ kdata_extrema_single(struct kplotdat *d, struct kplotctx *ctx)
 		if (kp.x > ctx->maxv.x)
 			ctx->maxv.x = kp.x;
 		switch (d->smthtype) {
-		case (KSMOOTH_CDF): 
-		case (KSMOOTH_PMF): 
+		case (KSMOOTH_CDF):
+		case (KSMOOTH_PMF):
 			break;
 		default:
 			if (kp.y < ctx->minv.y)
@@ -205,13 +204,13 @@ kpoint_to_real(const struct kpair *data, struct kpair *real,
  * so, convert it to the plot space.
  */
 static int
-kplotctx_point_to_real(const struct kpair *data, 
+kplotctx_point_to_real(const struct kpair *data,
 	struct kpair *real, const struct kplotctx *ctx)
 {
 
 	if ( ! kpair_vrfy(data))
 		return(0);
-	kpoint_to_real(data, real, 
+	kpoint_to_real(data, real,
 		&ctx->minv, &ctx->maxv, ctx->w, ctx->h);
 	return(1);
 }
@@ -221,7 +220,7 @@ kplotctx_point_to_real(const struct kpair *data,
  * boundaries we set with the plot, otherwise do nothing.
  */
 static void
-kplot_arc(const struct kpair *kp, 
+kplot_arc(const struct kpair *kp,
 	const struct kplotpoint *p, struct kplotctx *ctx)
 {
 	struct kpair	 pair;
@@ -232,8 +231,10 @@ kplot_arc(const struct kpair *kp,
 		return;
 	if (0 == kplotctx_point_to_real(kp, &pair, ctx))
 		return;
-	cairo_arc(ctx->cr, pair.x, pair.y, p->radius, 0, 2 * M_PI);
-	cairo_stroke(ctx->cr);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathNewSubPath(ctx->rc);
+	ISWRenderPathArc(ctx->rc, pair.x, pair.y, p->radius, 0, 2 * M_PI);
+	ISWRenderStroke(ctx->rc);
 }
 
 static void
@@ -249,32 +250,31 @@ kplot_mark(const struct kpair *kp,
 	if (0 == kplotctx_point_to_real(kp, &pair, ctx))
 		return;
 
-	cairo_move_to(ctx->cr, pair.x - p->radius, pair.y - p->radius);
-	cairo_line_to(ctx->cr, pair.x + p->radius, pair.y + p->radius);
-	cairo_move_to(ctx->cr, pair.x - p->radius, pair.y + p->radius);
-	cairo_line_to(ctx->cr, pair.x + p->radius, pair.y - p->radius);
-	cairo_stroke(ctx->cr);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathMoveTo(ctx->rc, pair.x - p->radius, pair.y - p->radius);
+	ISWRenderPathLineTo(ctx->rc, pair.x + p->radius, pair.y + p->radius);
+	ISWRenderPathMoveTo(ctx->rc, pair.x - p->radius, pair.y + p->radius);
+	ISWRenderPathLineTo(ctx->rc, pair.x + p->radius, pair.y - p->radius);
+	ISWRenderStroke(ctx->rc);
 }
 
 /*
  * When drawing points, arrange the drawing space.
- * It's the responsibility of kplot_arc() to avoid points that would be
- * drawn outside of this range.
- * You must call cairo_restore(ctx->cr) to symmetrise.
+ * You must call ISWRenderRestore(ctx->rc) to symmetrise.
  */
 static void
 ksubwin_points(struct kplotctx *ctx)
 {
 
-	cairo_save(ctx->cr);
-	cairo_translate(ctx->cr, ctx->offs.x, ctx->offs.y);
+	ISWRenderSave(ctx->rc);
+	ISWRenderTranslate(ctx->rc, ctx->offs.x, ctx->offs.y);
 }
 
 /*
  * When drawing lines (or bars), create a subwindow large enough for
  * lines within the context dimensions.
  * Lines drawn outside of the subwindow will be clipped.
- * You must call cairo_restore(ctx->cr) to symmetrise.
+ * You must call ISWRenderRestore(ctx->rc) to symmetrise.
  */
 static void
 ksubwin_lines(struct kplotctx *ctx, const struct kdatacfg *dat)
@@ -282,19 +282,20 @@ ksubwin_lines(struct kplotctx *ctx, const struct kdatacfg *dat)
 	double		 width;
 
 	width = dat->line.sz / 2.0;
-	cairo_save(ctx->cr);
-	cairo_translate(ctx->cr, 
-		ctx->offs.x - width, 
+	ISWRenderSave(ctx->rc);
+	ISWRenderTranslate(ctx->rc,
+		ctx->offs.x - width,
 		ctx->offs.y - width);
-	cairo_rectangle(ctx->cr, 0, 0, 
-		ctx->dims.x + width * 2, 
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathRectangle(ctx->rc, 0, 0,
+		ctx->dims.x + width * 2,
 		ctx->dims.y + width * 2);
-	cairo_clip(ctx->cr);
-	cairo_translate(ctx->cr, width, width);
+	ISWRenderClip(ctx->rc);
+	ISWRenderTranslate(ctx->rc, width, width);
 }
 
 static size_t
-kplotctx_draw_yerrline_start(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_start(struct kplotctx *ctx,
 	const struct kplotdat *d, size_t *end)
 {
 	size_t	 start;
@@ -313,7 +314,7 @@ kplotctx_draw_yerrline_start(struct kplotctx *ctx,
 }
 
 static void
-kplotctx_draw_yerrline_basepoints(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_basepoints(struct kplotctx *ctx,
 	size_t start, size_t end, const struct kplotdat *d)
 {
 	size_t		 i;
@@ -324,10 +325,10 @@ kplotctx_draw_yerrline_basepoints(struct kplotctx *ctx,
 		if ( ! (kpair_vrfy(&d->datas[0]->pairs[i]) &&
 			kpair_vrfy(&d->datas[1]->pairs[i])))
 			continue;
-		kplot_arc(&d->datas[0]->pairs[i], 
+		kplot_arc(&d->datas[0]->pairs[i],
 			&d->cfgs[0].point, ctx);
 	}
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
@@ -345,11 +346,11 @@ kplotctx_draw_yerrline_basemarks(struct kplotctx *ctx,
 		kplot_mark(&d->datas[0]->pairs[i],
 			&d->cfgs[0].point, ctx);
 	}
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
-kplotctx_draw_yerrline_pairbars(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_pairbars(struct kplotctx *ctx,
 	size_t start, size_t end, const struct kplotdat *d)
 {
 	size_t	 	 i;
@@ -358,6 +359,7 @@ kplotctx_draw_yerrline_pairbars(struct kplotctx *ctx,
 
 	ksubwin_lines(ctx, &d->cfgs[1]);
 	kplotctx_line_init(ctx, &d->cfgs[1].line);
+	ISWRenderPathBegin(ctx->rc);
 	for (i = start; i < end; i++) {
 		if ( ! (kpair_vrfy(&d->datas[0]->pairs[i]) &&
 			kpair_vrfy(&d->datas[1]->pairs[i])))
@@ -371,18 +373,18 @@ kplotctx_draw_yerrline_pairbars(struct kplotctx *ctx,
 
 		rc = kplotctx_point_to_real(&bot, &pair, ctx);
 		assert(0 != rc);
-		cairo_move_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathMoveTo(ctx->rc, pair.x, pair.y);
 
 		rc = kplotctx_point_to_real(&top, &pair, ctx);
 		assert(0 != rc);
-		cairo_line_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathLineTo(ctx->rc, pair.x, pair.y);
 	}
-	cairo_stroke(ctx->cr);
-	cairo_restore(ctx->cr);
+	ISWRenderStroke(ctx->rc);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
-kplotctx_draw_yerrline_pairpoints(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_pairpoints(struct kplotctx *ctx,
 	size_t start, size_t end, const struct kplotdat *d)
 {
 	size_t	 	 i;
@@ -411,7 +413,7 @@ kplotctx_draw_yerrline_pairpoints(struct kplotctx *ctx,
 		kplot_arc(&orig, &d->cfgs[1].point, ctx);
 	}
 
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
@@ -444,11 +446,11 @@ kplotctx_draw_yerrline_pairmarks(struct kplotctx *ctx,
 		kplot_mark(&orig, &d->cfgs[1].point, ctx);
 	}
 
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
-kplotctx_draw_yerrline_baselines(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_baselines(struct kplotctx *ctx,
 	size_t start, size_t end, const struct kplotdat *d)
 {
 	size_t		 i;
@@ -461,7 +463,8 @@ kplotctx_draw_yerrline_baselines(struct kplotctx *ctx,
 	rc = kplotctx_point_to_real
 		(&d->datas[0]->pairs[start], &pair, ctx);
 	assert(0 != rc);
-	cairo_move_to(ctx->cr, pair.x, pair.y);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathMoveTo(ctx->rc, pair.x, pair.y);
 	for (i = start; i < end; i++) {
 		if ( ! (kpair_vrfy(&d->datas[0]->pairs[i]) &&
 			kpair_vrfy(&d->datas[1]->pairs[i])))
@@ -469,14 +472,14 @@ kplotctx_draw_yerrline_baselines(struct kplotctx *ctx,
 		rc = kplotctx_point_to_real
 			(&d->datas[0]->pairs[i], &pair, ctx);
 		assert(0 != rc);
-		cairo_line_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathLineTo(ctx->rc, pair.x, pair.y);
 	}
-	cairo_stroke(ctx->cr);
-	cairo_restore(ctx->cr);
+	ISWRenderStroke(ctx->rc);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
-kplotctx_draw_yerrline_pairlines(struct kplotctx *ctx, 
+kplotctx_draw_yerrline_pairlines(struct kplotctx *ctx,
 	size_t start, size_t end, const struct kplotdat *d)
 {
 	struct kpair	 orig, pair;
@@ -490,7 +493,8 @@ kplotctx_draw_yerrline_pairlines(struct kplotctx *ctx,
 		 d->datas[1]->pairs[start].y;
 	rc = kplotctx_point_to_real(&orig, &pair, ctx);
 	assert(0 != rc);
-	cairo_move_to(ctx->cr, pair.x, pair.y);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathMoveTo(ctx->rc, pair.x, pair.y);
 	for (i = start; i < end; i++) {
 		if ( ! (kpair_vrfy(&d->datas[0]->pairs[i]) &&
 			kpair_vrfy(&d->datas[1]->pairs[i])))
@@ -500,16 +504,17 @@ kplotctx_draw_yerrline_pairlines(struct kplotctx *ctx,
 			 d->datas[1]->pairs[i].y;
 		rc = kplotctx_point_to_real(&orig, &pair, ctx);
 		assert(0 != rc);
-		cairo_line_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathLineTo(ctx->rc, pair.x, pair.y);
 	}
-	cairo_stroke(ctx->cr);
+	ISWRenderStroke(ctx->rc);
 
 	kplotctx_line_init(ctx, &d->cfgs[1].line);
 	orig.x = d->datas[0]->pairs[start].x;
 	orig.y = d->datas[0]->pairs[start].y -
 		 d->datas[1]->pairs[start].y;
 	kplotctx_point_to_real(&orig, &pair, ctx);
-	cairo_move_to(ctx->cr, pair.x, pair.y);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathMoveTo(ctx->rc, pair.x, pair.y);
 	for (i = start; i < end; i++) {
 		if ( ! (kpair_vrfy(&d->datas[0]->pairs[i]) &&
 			kpair_vrfy(&d->datas[1]->pairs[i])))
@@ -519,10 +524,10 @@ kplotctx_draw_yerrline_pairlines(struct kplotctx *ctx,
 			 d->datas[1]->pairs[i].y;
 		rc = kplotctx_point_to_real(&orig, &pair, ctx);
 		assert(0 != rc);
-		cairo_line_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathLineTo(ctx->rc, pair.x, pair.y);
 	}
-	cairo_stroke(ctx->cr);
-	cairo_restore(ctx->cr);
+	ISWRenderStroke(ctx->rc);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
@@ -544,7 +549,8 @@ kplotctx_draw_lines(struct kplotctx *ctx, const struct kplotdat *d)
 		goto out;
 
 	kplotctx_line_init(ctx, &d->cfgs[0].line);
-	cairo_move_to(ctx->cr, pair.x, pair.y);
+	ISWRenderPathBegin(ctx->rc);
+	ISWRenderPathMoveTo(ctx->rc, pair.x, pair.y);
 	memset(&kp, 0, sizeof(struct kpair));
 	for ( ; i < d->datas[0]->pairsz; i++) {
 		if ( ! kpair_vrfy(&d->datas[0]->pairs[i]))
@@ -553,11 +559,11 @@ kplotctx_draw_lines(struct kplotctx *ctx, const struct kplotdat *d)
 		rc = kplotctx_point_to_real(&kp, &pair, ctx);
 		if ( ! rc)
 			continue;
-		cairo_line_to(ctx->cr, pair.x, pair.y);
+		ISWRenderPathLineTo(ctx->rc, pair.x, pair.y);
 	}
-	cairo_stroke(ctx->cr);
+	ISWRenderStroke(ctx->rc);
 out:
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
@@ -575,7 +581,7 @@ kplotctx_draw_points(struct kplotctx *ctx, const struct kplotdat *d)
 		kpair_set(d, i, &kp);
 		kplot_arc(&kp, &d->cfgs[0].point, ctx);
 	}
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 static void
@@ -593,7 +599,7 @@ kplotctx_draw_marks(struct kplotctx *ctx, const struct kplotdat *d)
 		kpair_set(d, i, &kp);
 		kplot_mark(&kp, &d->cfgs[0].point, ctx);
 	}
-	cairo_restore(ctx->cr);
+	ISWRenderRestore(ctx->rc);
 }
 
 void
@@ -601,12 +607,6 @@ kplotfont_defaults(struct kplotfont *font)
 {
 
 	memset(font, 0, sizeof(struct kplotfont));
-
-	/* Point 12 size serif font. */
-	font->family = "serif";
-	font->sz = 12.0;
-	font->slant = CAIRO_FONT_SLANT_NORMAL;
-	font->weight = CAIRO_FONT_WEIGHT_NORMAL;
 }
 
 void
@@ -624,7 +624,7 @@ kplotcfg_defaults(struct kplotcfg *cfg)
 	/* A bit of margin. */
 	cfg->margin = MARGIN_ALL;
 	cfg->marginsz = 15.0;
-	
+
 	/* Innie tics, grey. */
 	cfg->tic = TIC_LEFT_IN | TIC_BOTTOM_IN;
 	cfg->ticline.len = 5.0;
@@ -648,7 +648,7 @@ kplotcfg_defaults(struct kplotcfg *cfg)
 
 void
 kplotctx_draw(struct kplotctx *ctx, struct kplot *p, double w,
-	double h, cairo_t *cr)
+	double h, ISWRenderContext *rc)
 {
 	size_t	 	 i, start, end;
 	struct kplotdat	*d;
@@ -658,7 +658,7 @@ kplotctx_draw(struct kplotctx *ctx, struct kplot *p, double w,
 
 	ctx->w = w;
 	ctx->h = h;
-	ctx->cr = cr;
+	ctx->rc = rc;
 	ctx->minv.x = ctx->minv.y = DBL_MAX;
 	ctx->maxv.x = ctx->maxv.y = -DBL_MAX;
 	ctx->cfg = p->cfg;
@@ -731,7 +731,7 @@ kplotctx_draw(struct kplotctx *ctx, struct kplot *p, double w,
 		ctx->cfg.clrs[6].rgba[0] = 0xe5 / 255.0;
 		ctx->cfg.clrs[6].rgba[1] = 0x1e / 255.0;
 		ctx->cfg.clrs[6].rgba[2] = 0x10 / 255.0;
-	} 
+	}
 
 	for (i = 0; i < p->datasz; i++) {
 		d = &p->datas[i];
@@ -765,7 +765,7 @@ kplotctx_draw(struct kplotctx *ctx, struct kplot *p, double w,
 	kplotctx_grid_init(ctx);
 	kplotctx_border_init(ctx);
 	kplotctx_tic_init(ctx);
-	
+
 	ctx->h = ctx->dims.y;
 	ctx->w = ctx->dims.x;
 
@@ -872,11 +872,11 @@ kplotctx_draw(struct kplotctx *ctx, struct kplot *p, double w,
 }
 
 void
-kplot_draw(struct kplot *p, double w, double h, cairo_t *cr)
+kplot_draw(struct kplot *p, double w, double h, ISWRenderContext *rc)
 {
 	struct kplotctx	 ctx;
 
-	kplotctx_draw(&ctx, p, w, h, cr);
+	kplotctx_draw(&ctx, p, w, h, rc);
 }
 
 int

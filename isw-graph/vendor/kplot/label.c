@@ -17,23 +17,23 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "kplot.h"
 #include "extern.h"
 
 static void
-bbox_extents(struct kplotctx *ctx, const char *v, 
+bbox_extents(struct kplotctx *ctx, const char *v,
 	double *h, double *w, double rot)
 {
-	cairo_text_extents_t e;
+	double tw = ISWRenderTextWidth(ctx->rc, v, (int)strlen(v));
+	double th = ISWRenderTextHeight(ctx->rc);
 
-	cairo_text_extents(ctx->cr, v, &e);
-	*h = fabs(e.width * sin(rot)) + fabs(e.height * cos(rot));
-	*w = fabs(e.width * cos(rot)) + fabs(e.height * sin(rot));
+	*h = fabs(tw * sin(rot)) + fabs(th * cos(rot));
+	*w = fabs(tw * cos(rot)) + fabs(th * sin(rot));
 }
 
 void
@@ -41,9 +41,9 @@ kplotctx_label_init(struct kplotctx *ctx)
 {
 	char		buf[128];
 	size_t		i;
-	cairo_text_extents_t e;
-	double		maxh, maxw, offs, lastx, 
+	double		maxh, maxw, offs, lastx,
 			lasty, firsty, w, h;
+	double		ew, eh;
 
 	maxh = maxw = lastx = lasty = firsty = 0.0;
 
@@ -55,12 +55,11 @@ kplotctx_label_init(struct kplotctx *ctx)
 	kplotctx_font_init(ctx, &ctx->cfg.ticlabelfont);
 
 	for (i = 0; i < ctx->cfg.xtics; i++) {
-		offs = 1 == ctx->cfg.xtics ? 0.5 : 
+		offs = 1 == ctx->cfg.xtics ? 0.5 :
 			i / (double)(ctx->cfg.xtics - 1);
 
-		/* Call out to xformat function. */
 		if (NULL == ctx->cfg.xticlabelfmt)
-			snprintf(buf, sizeof(buf), "%g", 
+			snprintf(buf, sizeof(buf), "%g",
 				ctx->minv.x + offs *
 				(ctx->maxv.x - ctx->minv.x));
 		else
@@ -69,42 +68,42 @@ kplotctx_label_init(struct kplotctx *ctx)
 				 (ctx->maxv.x - ctx->minv.x),
 				 buf, sizeof(buf));
 
-		cairo_text_extents(ctx->cr, buf, &e);
+		ew = ISWRenderTextWidth(ctx->rc, buf, (int)strlen(buf));
+		eh = ISWRenderTextHeight(ctx->rc);
 
-		/* 
+		/*
 		 * Important: if we're on the last x-axis value, then
 		 * save the width, because we'll check that the
 		 * right-hand buffer zone accomodates for it.
-		 * FIXME: only do this is TICLABEL_TOP, etc...
 		 */
 		if (i == ctx->cfg.xtics - 1 && ctx->cfg.xticlabelrot > 0.0)
-			lastx = e.width * cos
-				(M_PI * 2.0 - 
+			lastx = ew * cos
+				(M_PI * 2.0 -
 				 (M_PI_2 - ctx->cfg.xticlabelrot)) +
-				e.height * sin((ctx->cfg.xticlabelrot));
+				eh * sin((ctx->cfg.xticlabelrot));
 		else if (i == ctx->cfg.xtics - 1)
-			lastx = e.width / 2.0;
+			lastx = ew / 2.0;
 
-		/* 
+		/*
 		 * If we're rotating, get our height by computing the
 		 * sum of the vertical segments.
 		 */
 		if (ctx->cfg.xticlabelrot > 0.0)
-			e.height = e.width * sin(ctx->cfg.xticlabelrot) +
-				e.height * cos(M_PI * 2.0 - 
+			eh = ew * sin(ctx->cfg.xticlabelrot) +
+				eh * cos(M_PI * 2.0 -
 					(M_PI_2 - ctx->cfg.xticlabelrot));
 
-		if (e.height > maxh)
-			maxh = e.height;
+		if (eh > maxh)
+			maxh = eh;
 	}
 
 	/* Now for the y-axis... */
 	for (i = 0; i < ctx->cfg.ytics; i++) {
-		offs = 1 == ctx->cfg.ytics ? 0.5 : 
+		offs = 1 == ctx->cfg.ytics ? 0.5 :
 			i / (double)(ctx->cfg.ytics - 1);
 
 		if (NULL == ctx->cfg.yticlabelfmt)
-			snprintf(buf, sizeof(buf), "%g", 
+			snprintf(buf, sizeof(buf), "%g",
 				ctx->minv.y + offs *
 				(ctx->maxv.y - ctx->minv.y));
 		else
@@ -113,7 +112,8 @@ kplotctx_label_init(struct kplotctx *ctx)
 				 (ctx->maxv.y - ctx->minv.y),
 				 buf, sizeof(buf));
 
-		cairo_text_extents(ctx->cr, buf, &e);
+		ew = ISWRenderTextWidth(ctx->rc, buf, (int)strlen(buf));
+		eh = ISWRenderTextHeight(ctx->rc);
 
 		/*
 		 * If we're the first or last tic label, record our
@@ -121,12 +121,12 @@ kplotctx_label_init(struct kplotctx *ctx)
 		 * isn't cut off if there are no margins.
 		 */
 		if (i == 0)
-			firsty = e.height / 2.0;
+			firsty = eh / 2.0;
 		if (i == ctx->cfg.ytics - 1)
-			lasty = e.height / 2.0;
+			lasty = eh / 2.0;
 
-		if (e.width > maxw)
-			maxw = e.width;
+		if (ew > maxw)
+			maxw = ew;
 	}
 
 	/*
@@ -137,37 +137,37 @@ kplotctx_label_init(struct kplotctx *ctx)
 	kplotctx_font_init(ctx, &ctx->cfg.axislabelfont);
 
 	if (NULL != ctx->cfg.xaxislabel) {
-		bbox_extents(ctx, ctx->cfg.xaxislabel, 
+		bbox_extents(ctx, ctx->cfg.xaxislabel,
 			&h, &w, ctx->cfg.xaxislabelrot);
 		ctx->dims.y -= h + ctx->cfg.xaxislabelpad;
 	}
 
 	if (NULL != ctx->cfg.x2axislabel) {
-		bbox_extents(ctx, ctx->cfg.x2axislabel, 
+		bbox_extents(ctx, ctx->cfg.x2axislabel,
 			&h, &w, ctx->cfg.xaxislabelrot);
 		ctx->offs.y += h + ctx->cfg.xaxislabelpad;
 		ctx->dims.y -= h + ctx->cfg.xaxislabelpad;
 	}
 
 	if (NULL != ctx->cfg.yaxislabel) {
-		bbox_extents(ctx, ctx->cfg.yaxislabel, 
+		bbox_extents(ctx, ctx->cfg.yaxislabel,
 			&h, &w, ctx->cfg.yaxislabelrot);
 		ctx->offs.x += w + ctx->cfg.yaxislabelpad;
 		ctx->dims.x -= w + ctx->cfg.yaxislabelpad;
 	}
 
 	if (NULL != ctx->cfg.y2axislabel) {
-		bbox_extents(ctx, ctx->cfg.y2axislabel, 
+		bbox_extents(ctx, ctx->cfg.y2axislabel,
 			&h, &w, ctx->cfg.yaxislabelrot);
 		ctx->dims.x -= w + ctx->cfg.yaxislabelpad;
 	}
 
 	if (TICLABEL_LEFT & ctx->cfg.ticlabel) {
 		ctx->offs.x += maxw + ctx->cfg.yticlabelpad;
-		ctx->dims.x -= maxw + ctx->cfg.yticlabelpad; 
+		ctx->dims.x -= maxw + ctx->cfg.yticlabelpad;
 	}
 
-	/* 
+	/*
 	 * Now look at the tic labels.
 	 * Start with the right label.
 	 * Also check if our overflow for the horizontal axes into the
@@ -178,7 +178,7 @@ kplotctx_label_init(struct kplotctx *ctx)
 			ctx->dims.x -= maxw + ctx->cfg.yticlabelpad;
 		else
 			ctx->dims.x -= lastx;
-	} else if (lastx > 0.0) 
+	} else if (lastx > 0.0)
 		ctx->dims.x -= lastx;
 
 	/*
@@ -214,11 +214,11 @@ kplotctx_label_init(struct kplotctx *ctx)
 	kplotctx_font_init(ctx, &ctx->cfg.ticlabelfont);
 
 	for (i = 0; i < ctx->cfg.xtics; i++) {
-		offs = 1 == ctx->cfg.xtics ? 0.5 : 
+		offs = 1 == ctx->cfg.xtics ? 0.5 :
 			i / (double)(ctx->cfg.xtics - 1);
 
 		if (NULL == ctx->cfg.xticlabelfmt)
-			snprintf(buf, sizeof(buf), "%g", 
+			snprintf(buf, sizeof(buf), "%g",
 				ctx->minv.x + offs *
 				(ctx->maxv.x - ctx->minv.x));
 		else
@@ -227,48 +227,50 @@ kplotctx_label_init(struct kplotctx *ctx)
 				 (ctx->maxv.x - ctx->minv.x),
 				 buf, sizeof(buf));
 
-		cairo_text_extents(ctx->cr, buf, &e);
+		ew = ISWRenderTextWidth(ctx->rc, buf, (int)strlen(buf));
+		eh = ISWRenderTextHeight(ctx->rc);
 
 		if (TICLABEL_BOTTOM & ctx->cfg.ticlabel) {
 			if (ctx->cfg.xticlabelrot > 0.0) {
-				cairo_move_to(ctx->cr, 
-					ctx->offs.x + 
+				ISWRenderSave(ctx->rc);
+				ISWRenderTranslate(ctx->rc,
+					ctx->offs.x +
 					offs * ctx->dims.x,
-					ctx->offs.y + ctx->dims.y + 
-					e.height * cos
-					 (M_PI * 2.0 - 
+					ctx->offs.y + ctx->dims.y +
+					eh * cos
+					 (M_PI * 2.0 -
 					  (M_PI_2 - ctx->cfg.xticlabelrot)) +
 					ctx->cfg.xticlabelpad);
-				cairo_save(ctx->cr);
-				cairo_rotate(ctx->cr, ctx->cfg.xticlabelrot);
-			} else 
-				cairo_move_to(ctx->cr, 
+				ISWRenderRotate(ctx->rc, ctx->cfg.xticlabelrot);
+				ISWRenderPathMoveTo(ctx->rc, 0.0, 0.0);
+				ISWRenderShowText(ctx->rc, buf);
+				ISWRenderRestore(ctx->rc);
+			} else {
+				ISWRenderPathMoveTo(ctx->rc,
 					ctx->offs.x + offs * ctx->dims.x -
-					(e.width / 2.0), 
-					ctx->offs.y + ctx->dims.y + 
+					(ew / 2.0),
+					ctx->offs.y + ctx->dims.y +
 					maxh + ctx->cfg.xticlabelpad);
-
-			cairo_show_text(ctx->cr, buf);
-			if (ctx->cfg.xticlabelrot > 0.0)
-				cairo_restore(ctx->cr);
+				ISWRenderShowText(ctx->rc, buf);
+			}
 		}
 
 		if (TICLABEL_TOP & ctx->cfg.ticlabel) {
-			cairo_move_to(ctx->cr, 
+			ISWRenderPathMoveTo(ctx->rc,
 				ctx->offs.x + offs * ctx->dims.x -
-				(e.width / 2.0), 
+				(ew / 2.0),
 				ctx->offs.y - maxh);
-			cairo_show_text(ctx->cr, buf);
+			ISWRenderShowText(ctx->rc, buf);
 		}
 	}
 
 	/* Now move on to the y-axis... */
 	for (i = 0; i < ctx->cfg.ytics; i++) {
-		offs = 1 == ctx->cfg.ytics ? 0.5 : 
+		offs = 1 == ctx->cfg.ytics ? 0.5 :
 			i / (double)(ctx->cfg.ytics - 1);
 
 		if (NULL == ctx->cfg.yticlabelfmt)
-			snprintf(buf, sizeof(buf), "%g", 
+			snprintf(buf, sizeof(buf), "%g",
 				ctx->minv.y + offs *
 				(ctx->maxv.y - ctx->minv.y));
 		else
@@ -277,25 +279,26 @@ kplotctx_label_init(struct kplotctx *ctx)
 				 (ctx->maxv.y - ctx->minv.y),
 				 buf, sizeof(buf));
 
-		cairo_text_extents(ctx->cr, buf, &e);
+		ew = ISWRenderTextWidth(ctx->rc, buf, (int)strlen(buf));
+		eh = ISWRenderTextHeight(ctx->rc);
 
 		if (TICLABEL_LEFT & ctx->cfg.ticlabel) {
-			cairo_move_to(ctx->cr, 
-				ctx->offs.x - e.width - 
+			ISWRenderPathMoveTo(ctx->rc,
+				ctx->offs.x - ew -
 				ctx->cfg.yticlabelpad,
-				(ctx->offs.y + ctx->dims.y) - 
-				(offs * ctx->dims.y) + 
-				(e.height / 2.0));
-			cairo_show_text(ctx->cr, buf);
+				(ctx->offs.y + ctx->dims.y) -
+				(offs * ctx->dims.y) +
+				(eh / 2.0));
+			ISWRenderShowText(ctx->rc, buf);
 		}
 		if (TICLABEL_RIGHT & ctx->cfg.ticlabel) {
-			cairo_move_to(ctx->cr, 
-				ctx->offs.x + ctx->dims.x + 
+			ISWRenderPathMoveTo(ctx->rc,
+				ctx->offs.x + ctx->dims.x +
 				ctx->cfg.yticlabelpad,
-				(ctx->offs.y + ctx->dims.y) - 
-				(offs * ctx->dims.y) + 
-				(e.height / 2.0));
-			cairo_show_text(ctx->cr, buf);
+				(ctx->offs.y + ctx->dims.y) -
+				(offs * ctx->dims.y) +
+				(eh / 2.0));
+			ISWRenderShowText(ctx->rc, buf);
 		}
 	}
 
@@ -307,74 +310,82 @@ kplotctx_label_init(struct kplotctx *ctx)
 	kplotctx_font_init(ctx, &ctx->cfg.axislabelfont);
 
 	if (NULL != ctx->cfg.xaxislabel) {
-		bbox_extents(ctx, ctx->cfg.xaxislabel, 
+		bbox_extents(ctx, ctx->cfg.xaxislabel,
 			&h, &w, ctx->cfg.xaxislabelrot);
-		cairo_save(ctx->cr);
-		cairo_translate(ctx->cr, 
+		ISWRenderSave(ctx->rc);
+		ISWRenderTranslate(ctx->rc,
 			ctx->offs.x + ctx->dims.x / 2.0,
-			(MARGIN_BOTTOM & ctx->cfg.margin ? 
+			(MARGIN_BOTTOM & ctx->cfg.margin ?
 			ctx->h - ctx->cfg.marginsz : ctx->h) - h / 2.0);
-		cairo_rotate(ctx->cr, ctx->cfg.xaxislabelrot);
-		cairo_text_extents(ctx->cr, ctx->cfg.xaxislabel, &e);
-		w = -e.width / 2.0;
-		h = e.height / 2.0;
-		cairo_translate(ctx->cr, w, h);
-		cairo_move_to(ctx->cr, 0.0, 0.0);
-		cairo_show_text(ctx->cr, ctx->cfg.xaxislabel);
-		cairo_restore(ctx->cr);
+		ISWRenderRotate(ctx->rc, ctx->cfg.xaxislabelrot);
+		ew = ISWRenderTextWidth(ctx->rc, ctx->cfg.xaxislabel,
+			(int)strlen(ctx->cfg.xaxislabel));
+		eh = ISWRenderTextHeight(ctx->rc);
+		w = -ew / 2.0;
+		h = eh / 2.0;
+		ISWRenderTranslate(ctx->rc, w, h);
+		ISWRenderPathMoveTo(ctx->rc, 0.0, 0.0);
+		ISWRenderShowText(ctx->rc, ctx->cfg.xaxislabel);
+		ISWRenderRestore(ctx->rc);
 	}
 
 	if (NULL != ctx->cfg.x2axislabel) {
-		bbox_extents(ctx, ctx->cfg.x2axislabel, 
+		bbox_extents(ctx, ctx->cfg.x2axislabel,
 			&h, &w, ctx->cfg.xaxislabelrot);
-		cairo_save(ctx->cr);
-		cairo_translate(ctx->cr, 
+		ISWRenderSave(ctx->rc);
+		ISWRenderTranslate(ctx->rc,
 			ctx->offs.x + ctx->dims.x / 2.0,
-			(MARGIN_TOP & ctx->cfg.margin ? 
+			(MARGIN_TOP & ctx->cfg.margin ?
 			ctx->cfg.marginsz : 0.0) + h / 2.0);
-		cairo_rotate(ctx->cr, ctx->cfg.xaxislabelrot);
-		cairo_text_extents(ctx->cr, ctx->cfg.x2axislabel, &e);
-		w = -e.width / 2.0;
-		h = e.height / 2.0;
-		cairo_translate(ctx->cr, w, h);
-		cairo_move_to(ctx->cr, 0.0, 0.0);
-		cairo_show_text(ctx->cr, ctx->cfg.x2axislabel);
-		cairo_restore(ctx->cr);
+		ISWRenderRotate(ctx->rc, ctx->cfg.xaxislabelrot);
+		ew = ISWRenderTextWidth(ctx->rc, ctx->cfg.x2axislabel,
+			(int)strlen(ctx->cfg.x2axislabel));
+		eh = ISWRenderTextHeight(ctx->rc);
+		w = -ew / 2.0;
+		h = eh / 2.0;
+		ISWRenderTranslate(ctx->rc, w, h);
+		ISWRenderPathMoveTo(ctx->rc, 0.0, 0.0);
+		ISWRenderShowText(ctx->rc, ctx->cfg.x2axislabel);
+		ISWRenderRestore(ctx->rc);
 	}
 
 	if (NULL != ctx->cfg.yaxislabel) {
-		bbox_extents(ctx, ctx->cfg.yaxislabel, 
+		bbox_extents(ctx, ctx->cfg.yaxislabel,
 			&h, &w, ctx->cfg.yaxislabelrot);
-		cairo_save(ctx->cr);
-		cairo_translate(ctx->cr, 
-			(MARGIN_LEFT & ctx->cfg.margin ? 
+		ISWRenderSave(ctx->rc);
+		ISWRenderTranslate(ctx->rc,
+			(MARGIN_LEFT & ctx->cfg.margin ?
 			 ctx->cfg.marginsz : 0.0) + w / 2.0,
 			ctx->offs.y + ctx->dims.y / 2.0);
-		cairo_rotate(ctx->cr, ctx->cfg.yaxislabelrot);
-		cairo_text_extents(ctx->cr, ctx->cfg.yaxislabel, &e);
-		w = -e.width / 2.0;
-		h = e.height / 2.0;
-		cairo_translate(ctx->cr, w, h);
-		cairo_move_to(ctx->cr, 0.0, 0.0);
-		cairo_show_text(ctx->cr, ctx->cfg.yaxislabel);
-		cairo_restore(ctx->cr);
+		ISWRenderRotate(ctx->rc, ctx->cfg.yaxislabelrot);
+		ew = ISWRenderTextWidth(ctx->rc, ctx->cfg.yaxislabel,
+			(int)strlen(ctx->cfg.yaxislabel));
+		eh = ISWRenderTextHeight(ctx->rc);
+		w = -ew / 2.0;
+		h = eh / 2.0;
+		ISWRenderTranslate(ctx->rc, w, h);
+		ISWRenderPathMoveTo(ctx->rc, 0.0, 0.0);
+		ISWRenderShowText(ctx->rc, ctx->cfg.yaxislabel);
+		ISWRenderRestore(ctx->rc);
 	}
 
 	if (NULL != ctx->cfg.y2axislabel) {
-		bbox_extents(ctx, ctx->cfg.y2axislabel, 
+		bbox_extents(ctx, ctx->cfg.y2axislabel,
 			&h, &w, ctx->cfg.yaxislabelrot);
-		cairo_save(ctx->cr);
-		cairo_translate(ctx->cr, 
-			(MARGIN_RIGHT & ctx->cfg.margin ? 
+		ISWRenderSave(ctx->rc);
+		ISWRenderTranslate(ctx->rc,
+			(MARGIN_RIGHT & ctx->cfg.margin ?
 			 ctx->w - ctx->cfg.marginsz : ctx->w) - w / 2.0,
 			ctx->offs.y + ctx->dims.y / 2.0);
-		cairo_rotate(ctx->cr, ctx->cfg.yaxislabelrot);
-		cairo_text_extents(ctx->cr, ctx->cfg.y2axislabel, &e);
-		w = -e.width / 2.0;
-		h = e.height / 2.0;
-		cairo_translate(ctx->cr, w, h);
-		cairo_move_to(ctx->cr, 0.0, 0.0);
-		cairo_show_text(ctx->cr, ctx->cfg.y2axislabel);
-		cairo_restore(ctx->cr);
+		ISWRenderRotate(ctx->rc, ctx->cfg.yaxislabelrot);
+		ew = ISWRenderTextWidth(ctx->rc, ctx->cfg.y2axislabel,
+			(int)strlen(ctx->cfg.y2axislabel));
+		eh = ISWRenderTextHeight(ctx->rc);
+		w = -ew / 2.0;
+		h = eh / 2.0;
+		ISWRenderTranslate(ctx->rc, w, h);
+		ISWRenderPathMoveTo(ctx->rc, 0.0, 0.0);
+		ISWRenderShowText(ctx->rc, ctx->cfg.y2axislabel);
+		ISWRenderRestore(ctx->rc);
 	}
 }

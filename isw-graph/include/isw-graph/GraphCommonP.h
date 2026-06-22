@@ -6,14 +6,15 @@
 
 typedef struct {
     /* resources */
-    Pixel        foreground;
-    String       x_axis_label;
-    String       y_axis_label;
-    Boolean      show_grid;
-    Boolean      show_border;
-    Boolean      show_tic_labels;
-    int          x_tics;
-    int          y_tics;
+    Pixel          foreground;
+    IswFontStruct *font;
+    String         x_axis_label;
+    String         y_axis_label;
+    Boolean        show_grid;
+    Boolean        show_border;
+    Boolean        show_tic_labels;
+    int            x_tics;
+    int            y_tics;
 
     /* private */
     struct kplot *plot;
@@ -29,6 +30,8 @@ Boolean IswGraphBaseSetValues(Widget w, GraphBasePart *cur, GraphBasePart *newp)
 #define GRAPH_BASE_RESOURCES(type, field) \
     {IswNforeground, IswCForeground, IswRPixel, sizeof(Pixel), \
 	IswOffsetOf(type, field.foreground), IswRString, IswDefaultForeground}, \
+    {IswNfont, IswCFont, IswRFontStruct, sizeof(IswFontStruct *), \
+	IswOffsetOf(type, field.font), IswRString, IswDefaultFont}, \
     {IswGraphNxAxisLabel, IswGraphCAxisLabel, IswRString, sizeof(String), \
 	IswOffsetOf(type, field.x_axis_label), IswRString, NULL}, \
     {IswGraphNyAxisLabel, IswGraphCAxisLabel, IswRString, sizeof(String), \

@@ -17,6 +17,8 @@
 #ifndef KPLOT_H
 #define KPLOT_H
 
+#include <ISW/ISWRender.h>
+
 struct 	kpair {
 	double	 x;
 	double	 y;
@@ -46,22 +48,17 @@ enum	kplotstype {
 enum	kplotctype {
 	KPLOTCTYPE_DEFAULT = 0,
 	KPLOTCTYPE_PALETTE,
-	KPLOTCTYPE_PATTERN,
 	KPLOTCTYPE_RGBA
 };
 
 struct	kplotccfg {
 	enum kplotctype	 type;
 	size_t		 palette;
-	cairo_pattern_t	*pattern;
 	double		 rgba[4];
 };
 
 struct 	kplotfont {
-	cairo_font_slant_t   slant;
-	cairo_font_weight_t  weight;
-	const char	    *family;
-	double		     sz;
+	IswFontStruct	    *font;
 	struct kplotccfg     clr;
 };
 
@@ -89,7 +86,6 @@ struct	kplotline {
 	double	  	  dashes[KPLOT_DASH_MAX];
 	size_t		  dashesz;
 	double	 	  dashoff;
-	cairo_line_join_t join;
 	struct kplotccfg  clr;
 };
 
@@ -169,7 +165,7 @@ struct	kplotcfg {
 };
 
 struct	kplotctx {
-	cairo_t		 *cr;
+	ISWRenderContext *rc;
 	double		  h;
 	double		  w;
 	struct kpair	  minv;
@@ -248,10 +244,11 @@ int		 kplot_attach_datas(struct kplot *, size_t,
 			const struct kdatacfg *const *,
 			enum kplotstype);
 void		 kplotctx_draw(struct kplotctx *, struct kplot *,
-			double, double, cairo_t *);
+			double, double, ISWRenderContext *);
 int		 kplotctx_translate(const struct kplotctx *, double,
 			double, double *, double *);
-void		 kplot_draw(struct kplot *, double, double, cairo_t *);
+void		 kplot_draw(struct kplot *, double, double,
+			ISWRenderContext *);
 void		 kplot_free(struct kplot *);
 int		 kplot_get_datacfg(struct kplot *, size_t,
 			struct kdatacfg **, size_t *);

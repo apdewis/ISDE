@@ -3,7 +3,6 @@
 
 #include <sys/types.h>
 #include <sys/cdefs.h>
-#include <cairo/cairo.h>
 #include <ISW/DrawingArea.h>
 #include <kplot.h>
 

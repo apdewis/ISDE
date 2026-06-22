@@ -17,7 +17,6 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -32,36 +31,37 @@ kplotctx_border_init(struct kplotctx *ctx)
 	double		 v;
 
 	kplotctx_line_init(ctx, &ctx->cfg.borderline);
+	ISWRenderPathBegin(ctx->rc);
 
 	if (BORDER_LEFT & ctx->cfg.border) {
-		v = kplotctx_line_fix(ctx, 
+		v = kplotctx_line_fix(ctx,
 			ctx->cfg.borderline.sz, ctx->offs.x);
-		cairo_move_to(ctx->cr, v, ctx->offs.y);
-		cairo_rel_line_to(ctx->cr, 0.0, ctx->dims.y);
+		ISWRenderPathMoveTo(ctx->rc, v, ctx->offs.y);
+		ISWRenderPathLineTo(ctx->rc, v, ctx->offs.y + ctx->dims.y);
 	}
 
 	if (BORDER_RIGHT & ctx->cfg.border) {
-		v = kplotctx_line_fix(ctx, 
-			ctx->cfg.borderline.sz, 
+		v = kplotctx_line_fix(ctx,
+			ctx->cfg.borderline.sz,
 			ctx->offs.x + ctx->dims.x);
-		cairo_move_to(ctx->cr, v, ctx->offs.y);
-		cairo_rel_line_to(ctx->cr, 0.0, ctx->dims.y);
+		ISWRenderPathMoveTo(ctx->rc, v, ctx->offs.y);
+		ISWRenderPathLineTo(ctx->rc, v, ctx->offs.y + ctx->dims.y);
 	}
 
 	if (BORDER_TOP & ctx->cfg.border) {
-		v = kplotctx_line_fix(ctx, 
+		v = kplotctx_line_fix(ctx,
 			ctx->cfg.borderline.sz, ctx->offs.y);
-		cairo_move_to(ctx->cr, ctx->offs.x, v);
-		cairo_rel_line_to(ctx->cr, ctx->dims.x, 0.0);
+		ISWRenderPathMoveTo(ctx->rc, ctx->offs.x, v);
+		ISWRenderPathLineTo(ctx->rc, ctx->offs.x + ctx->dims.x, v);
 	}
 
 	if (BORDER_BOTTOM & ctx->cfg.border) {
-		v = kplotctx_line_fix(ctx, 
-			ctx->cfg.borderline.sz, 
+		v = kplotctx_line_fix(ctx,
+			ctx->cfg.borderline.sz,
 			ctx->offs.y + ctx->dims.y);
-		cairo_move_to(ctx->cr, ctx->offs.x, v);
-		cairo_rel_line_to(ctx->cr, ctx->dims.x, 0.0);
+		ISWRenderPathMoveTo(ctx->rc, ctx->offs.x, v);
+		ISWRenderPathLineTo(ctx->rc, ctx->offs.x + ctx->dims.x, v);
 	}
 
-	cairo_stroke(ctx->cr);
+	ISWRenderStroke(ctx->rc);
 }

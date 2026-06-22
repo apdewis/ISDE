@@ -17,9 +17,7 @@
 #include "config.h"
 
 #include <assert.h>
-#include <cairo.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include "kplot.h"
 #include "extern.h"
@@ -28,17 +26,8 @@ void
 kplotccfg_init_palette(struct kplotccfg *c, size_t palette)
 {
 
-	switch (c->type) {
-	case (KPLOTCTYPE_DEFAULT):
+	if (KPLOTCTYPE_DEFAULT == c->type) {
 		c->type = KPLOTCTYPE_PALETTE;
 		c->palette = palette;
-		break;
-	case (KPLOTCTYPE_PATTERN):
-		assert(NULL != c->pattern);
-		cairo_pattern_reference(c->pattern);
-		break;
-	default:
-		break;
 	}
 }
-
