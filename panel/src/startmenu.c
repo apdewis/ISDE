@@ -2,14 +2,16 @@
 /*
  * startmenu.c — custom two-pane start menu
  *
- * OverrideShell with two List widgets:
- *   Left:  category names — click to populate right pane
- *   Right: app names for selected category — click to launch
+ * OverrideShell with category List + app ListBox:
+ *   Left:  category names (List widget) — click to populate right pane
+ *   Right: app entries with icons (ListBox + ListBoxRow) — click to launch
  */
 
 #include "panel.h"
 #include <ISW/ShellP.h>
 #include <ISW/List.h>
+#include <ISW/ListBox.h>
+#include <ISW/ListBoxRow.h>
 #include <ISW/IswArgMacros.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +50,7 @@ static void set_start_btn_active(Panel *p, int active)
 #define MENU_HEIGHT      350
 #define CAT_PANE_WIDTH   150
 #define TOOLBAR_HEIGHT   28
+#define APP_ICON_SIZE    28
 
 /* Standard freedesktop.org category mapping */
 static const struct { const char *key; const char *label; } CAT_MAP[] = {
@@ -141,6 +144,152 @@ static void build_categories(Panel *p)
     }
 }
 
+/* ---------- ListBox helpers ---------- */
+
+static void listbox_clear(Widget listbox)
+{
+    WidgetList children;
+    Cardinal num;
+    IswArgBuilder qab = IswArgBuilderInit();
+    IswArgBuilderAdd(&qab, IswNchildren, (IswArgVal)&children);
+    IswArgBuilderAdd(&qab, IswNnumChildren, (IswArgVal)&num);
+    IswGetValues(listbox, qab.args, qab.count);
+
+    for (int i = (int)num - 1; i >= 0; i--) {
+        IswDestroyWidget(children[i]);
+    }
+}
+
+static Widget listbox_nth_child(Widget listbox, int n)
+{
+    CompositeWidget cw = (CompositeWidget)listbox;
+    int managed = 0;
+    for (Cardinal i = 0; i < cw->composite.num_children; i++) {
+        Widget child = cw->composite.children[i];
+        if (!IswIsManaged(child)) {
+            continue;
+        }
+        if (managed == n) {
+            return child;
+        }
+        managed++;
+    }
+    return NULL;
+}
+
+static void listbox_select_index(Widget listbox, int index)
+{
+    IswListBoxClearSelection(listbox);
+    Widget child = listbox_nth_child(listbox, index);
+    if (child) {
+        IswListBoxSelectChild(listbox, child);
+    }
+}
+
+static void app_row_hover(Widget w, IswPointer client_data,
+                          IswEvent *event, Boolean *cont)
+{
+    (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswEnter && event->kind != IswMotion) {
+        return;
+    }
+    Widget listbox = IswParent(IswParent(w));
+    CompositeWidget cw = (CompositeWidget)listbox;
+    Widget row = IswParent(w);
+    int managed = 0;
+    for (Cardinal i = 0; i < cw->composite.num_children; i++) {
+        Widget child = cw->composite.children[i];
+        if (!IswIsManaged(child)) {
+            continue;
+        }
+        if (child == row) {
+            p->app_highlight = managed;
+            listbox_select_index(listbox, managed);
+            return;
+        }
+        managed++;
+    }
+}
+
+static void app_row_leave(Widget w, IswPointer client_data,
+                          IswEvent *event, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Panel *p = (Panel *)client_data;
+    if (event->kind != IswLeave) {
+        return;
+    }
+    p->app_highlight = -1;
+    Widget listbox = IswParent(IswParent(w));
+    IswListBoxClearSelection(listbox);
+}
+
+static void populate_listbox(Panel *p, Widget listbox, int pane_w,
+                             StartMenuApp *apps, int napps)
+{
+    listbox_clear(listbox);
+
+    IswArgBuilder ab = IswArgBuilderInit();
+
+    for (int i = 0; i < napps; i++) {
+        IswArgBuilderReset(&ab);
+        IswArgBorderWidth(&ab, 0);
+        IswArgRowPadding(&ab, 0);
+        IswArgListBoxRowHeight(&ab, APP_ICON_SIZE + 6);
+        Widget row = IswCreateManagedWidget("appRow", listBoxRowWidgetClass,
+                                           listbox, ab.args, ab.count);
+
+        char *icon_path = apps[i].icon
+            ? isde_icon_find("apps", apps[i].icon) : NULL;
+        if (!icon_path) {
+            icon_path = isde_icon_find("apps", "application-default");
+        }
+
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
+        IswArgBorderWidth(&ab, 0);
+        IswArgWidth(&ab, APP_ICON_SIZE);
+        IswArgHeight(&ab, APP_ICON_SIZE);
+        IswArgInternalWidth(&ab, 0);
+        IswArgInternalHeight(&ab, 0);
+        ISW_ARG(&ab, IswNresize, False);
+        if (icon_path) {
+            IswArgImage(&ab, icon_path);
+        }
+        Widget icon_w = IswCreateManagedWidget("appIcon", labelWidgetClass,
+                                               row, ab.args, ab.count);
+        free(icon_path);
+
+        int text_w = pane_w - APP_ICON_SIZE - 4;
+        if (text_w < 1) {
+            text_w = 1;
+        }
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, (String)apps[i].name);
+        IswArgBorderWidth(&ab, 0);
+        IswArgJustify(&ab, IswJustifyLeft);
+        IswArgInternalWidth(&ab, 4);
+        IswArgInternalHeight(&ab, 0);
+        ISW_ARG(&ab, IswNresize, False);
+        IswArgWidth(&ab, text_w);
+        ISW_ARG(&ab, IswNellipsize, IswEllipsizeEnd);
+        Widget label = IswCreateManagedWidget("appLabel", labelWidgetClass,
+                                              row, ab.args, ab.count);
+
+        IswAddEventHandler(icon_w,
+                           IswEnterWindowMask | IswPointerMotionMask,
+                           False, app_row_hover, p);
+        IswAddEventHandler(icon_w, IswLeaveWindowMask,
+                           False, app_row_leave, p);
+        IswAddEventHandler(label,
+                           IswEnterWindowMask | IswPointerMotionMask,
+                           False, app_row_hover, p);
+        IswAddEventHandler(label, IswLeaveWindowMask,
+                           False, app_row_leave, p);
+    }
+}
+
 /* ---------- show apps for selected category ---------- */
 
 static void show_category(Panel *p, int index)
@@ -151,19 +300,10 @@ static void show_category(Panel *p, int index)
     p->active_cat = index;
 
     StartMenuCategory *c = &p->categories[index];
-
-    /* Build string list for the app List widget */
-    String *names = malloc((c->napps + 1) * sizeof(String));
-    for (int i = 0; i < c->napps; i++) {
-        names[i] = (String)c->apps[i].name;
-    }
-    names[c->napps] = NULL;
-
-    IswListChange(p->app_box, names, c->napps, 0, True);
+    populate_listbox(p, p->app_box, MENU_WIDTH - CAT_PANE_WIDTH,
+                     c->apps, c->napps);
     IswViewportSetLocation(p->app_viewport, 0.0, 0.0);
     IswMapWidget(p->app_viewport);
-    /* Don't free names — the List widget holds the pointer.
-     * Previous array leaks, but it's small and infrequent. */
 }
 
 static void launch_app(Panel *p, int index)
@@ -201,11 +341,8 @@ static void app_selected(Widget w, IswPointer client_data,
 {
     (void)w;
     Panel *p = (Panel *)client_data;
-    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
-    if (ret->list_index == XAW_LIST_NONE) {
-        return;
-    }
-    launch_app(p, ret->list_index);
+    IswListBoxCallbackData *cb = (IswListBoxCallbackData *)call_data;
+    launch_app(p, cb->index);
 }
 
 /* ---------- type-ahead search ---------- */
@@ -214,8 +351,7 @@ static void search_run_filter(Panel *p)
 {
     if (p->search_len == 0) {
         p->nsearch_results = 0;
-        static String empty[] = { NULL };
-        IswListChange(p->search_list, empty, 0, 0, True);
+        listbox_clear(p->search_list);
         return;
     }
 
@@ -247,18 +383,19 @@ match:
         }
     }
 
-    free(p->search_names);
-    p->search_names = malloc((p->nsearch_results + 1) * sizeof(String));
+    /* Build a temporary StartMenuApp array for populate_listbox */
+    StartMenuApp *search_apps = malloc(p->nsearch_results * sizeof(StartMenuApp));
     for (int i = 0; i < p->nsearch_results; i++) {
-        p->search_names[i] = (String)p->search_results[i]->name;
+        search_apps[i] = *p->search_results[i];
     }
-    p->search_names[p->nsearch_results] = NULL;
+    populate_listbox(p, p->search_list, MENU_WIDTH,
+                     search_apps, p->nsearch_results);
+    free(search_apps);
 
-    IswListChange(p->search_list, p->search_names, p->nsearch_results, 0, True);
     IswViewportSetLocation(p->search_viewport, 0.0, 0.0);
     if (p->nsearch_results > 0) {
         p->app_highlight = 0;
-        IswListHighlight(p->search_list, 0);
+        listbox_select_index(p->search_list, 0);
     } else {
         p->app_highlight = -1;
     }
@@ -318,12 +455,11 @@ static void search_selected(Widget w, IswPointer client_data,
 {
     (void)w;
     Panel *p = (Panel *)client_data;
-    IswListReturnStruct *ret = (IswListReturnStruct *)call_data;
-    if (ret->list_index == XAW_LIST_NONE ||
-        ret->list_index >= p->nsearch_results) {
+    IswListBoxCallbackData *cb = (IswListBoxCallbackData *)call_data;
+    if (cb->index < 0 || cb->index >= p->nsearch_results) {
         return;
     }
-    IsdeDesktopEntry *de = p->search_results[ret->list_index]->entry;
+    IsdeDesktopEntry *de = p->search_results[cb->index]->entry;
     panel_dismiss_popup(p);
     panel_launch_notify(p, de, NULL, 0);
 }
@@ -411,7 +547,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             }
             if (next >= 0) {
                 p->app_highlight = next;
-                IswListHighlight(p->search_list, next);
+                listbox_select_index(p->search_list, next);
             }
             return;
         }
@@ -421,7 +557,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
                 next = 0;
             }
             p->app_highlight = next;
-            IswListHighlight(p->search_list, next);
+            listbox_select_index(p->search_list, next);
             return;
         }
         if (sym == IswKeyReturn) {
@@ -442,7 +578,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             IswListHighlight(p->cat_box, next);
             show_category(p, next);
             p->app_highlight = -1;
-            IswListUnhighlight(p->app_box);
+            IswListBoxClearSelection(p->app_box);
         } else {
             if (p->active_cat < 0) {
                 break;
@@ -453,7 +589,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
                 next = c->napps - 1;
             }
             p->app_highlight = next;
-            IswListHighlight(p->app_box, next);
+            listbox_select_index(p->app_box, next);
         }
         break;
 
@@ -467,14 +603,14 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             IswListHighlight(p->cat_box, next);
             show_category(p, next);
             p->app_highlight = -1;
-            IswListUnhighlight(p->app_box);
+            IswListBoxClearSelection(p->app_box);
         } else {
             int next = p->app_highlight - 1;
             if (next < 0) {
                 next = 0;
             }
             p->app_highlight = next;
-            IswListHighlight(p->app_box, next);
+            listbox_select_index(p->app_box, next);
         }
         break;
 
@@ -484,7 +620,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         }
         p->menu_focus = 1;
         p->app_highlight = 0;
-        IswListHighlight(p->app_box, 0);
+        listbox_select_index(p->app_box, 0);
         break;
 
     case IswKeyArrowLeft:
@@ -493,7 +629,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
         }
         p->menu_focus = 0;
         p->app_highlight = -1;
-        IswListUnhighlight(p->app_box);
+        IswListBoxClearSelection(p->app_box);
         break;
 
     case IswKeyReturn:
@@ -503,7 +639,7 @@ static void menu_key_handler(Widget w, IswPointer client_data,
             }
             p->menu_focus = 1;
             p->app_highlight = 0;
-            IswListHighlight(p->app_box, 0);
+            listbox_select_index(p->app_box, 0);
         } else {
             launch_app(p, p->app_highlight);
         }
@@ -668,8 +804,7 @@ static void startmenu_refresh(Panel *p)
     cat_names_backing = names;
 
     /* App pane shows stale pointers into freed categories; clear it. */
-    static String empty[] = { NULL };
-    IswListChange(p->app_box, empty, 0, 0, True);
+    listbox_clear(p->app_box);
     IswUnmapWidget(p->app_viewport);
 
     /* Search results point into freed category data */
@@ -677,7 +812,7 @@ static void startmenu_refresh(Panel *p)
     p->search_active = 0;
     p->search_buf[0] = '\0';
     p->search_len = 0;
-    IswListChange(p->search_list, empty, 0, 0, True);
+    listbox_clear(p->search_list);
 
     p->active_cat = -1;
     p->cat_highlight = -1;
@@ -890,21 +1025,14 @@ void startmenu_init(Panel *p)
                                             viewportWidgetClass,
                                             form, ab.args, ab.count);
 
-    /* App list — child of viewport.
-     * Must be static since the List widget holds the pointer. */
-    static String initial[] = { "Select a category", NULL };
+    /* App list — ListBox with icon+label rows */
     IswArgBuilderReset(&ab);
-    IswArgList(&ab, initial);
-    IswArgNumberStrings(&ab, 1);
-    IswArgDefaultColumns(&ab, 1);
-    IswArgForceColumns(&ab, True);
-    IswArgVerticalList(&ab, True);
+    IswArgSelectionMode(&ab, IswListBoxSelectSingle);
+    IswArgRowSpacing(&ab, 0);
     IswArgBorderWidth(&ab, 0);
-    IswArgHeight(&ab, MENU_HEIGHT - TOOLBAR_HEIGHT);
-    IswArgCursor(&ab, None);
-    p->app_box = IswCreateManagedWidget("appList", listWidgetClass,
+    p->app_box = IswCreateManagedWidget("appList", listBoxWidgetClass,
                                        p->app_viewport, ab.args, ab.count);
-    IswAddCallback(p->app_box, IswNcallback, app_selected, p);
+    IswAddCallback(p->app_box, IswNselectCallback, app_selected, p);
 
     /* Category list: hover highlights and switches category immediately */
     static char catTranslations[] =
@@ -915,16 +1043,6 @@ void startmenu_init(Panel *p)
         "<BtnUp>:       Notify()";
     IswOverrideTranslations(p->cat_box,
                            IswParseTranslationTable(catTranslations));
-
-    /* App list: hover highlights, click launches */
-    static char appTranslations[] =
-        "<EnterWindow>: Set()\n"
-        "<LeaveWindow>: Unset()\n"
-        "<Motion>:      Set()\n"
-        "<BtnDown>:     Set() Notify()\n"
-        "<BtnUp>:       Notify()";
-    IswOverrideTranslations(p->app_box,
-                           IswParseTranslationTable(appTranslations));
 
     /* Search results list — full width, overlaps cat/app viewports */
     IswArgBuilderReset(&ab);
@@ -937,27 +1055,13 @@ void startmenu_init(Panel *p)
                                                viewportWidgetClass,
                                                form, ab.args, ab.count);
 
-    static String search_initial[] = { NULL };
     IswArgBuilderReset(&ab);
-    IswArgList(&ab, search_initial);
-    IswArgNumberStrings(&ab, 0);
-    IswArgDefaultColumns(&ab, 1);
-    IswArgForceColumns(&ab, True);
-    IswArgVerticalList(&ab, True);
+    IswArgSelectionMode(&ab, IswListBoxSelectSingle);
+    IswArgRowSpacing(&ab, 0);
     IswArgBorderWidth(&ab, 0);
-    IswArgCursor(&ab, None);
-    p->search_list = IswCreateManagedWidget("searchList", listWidgetClass,
+    p->search_list = IswCreateManagedWidget("searchList", listBoxWidgetClass,
                                            p->search_viewport, ab.args, ab.count);
-    IswAddCallback(p->search_list, IswNcallback, search_selected, p);
-
-    static char searchTranslations[] =
-        "<EnterWindow>: Set()\n"
-        "<LeaveWindow>: Unset()\n"
-        "<Motion>:      Set()\n"
-        "<BtnDown>:     Set() Notify()\n"
-        "<BtnUp>:       Notify()";
-    IswOverrideTranslations(p->search_list,
-                           IswParseTranslationTable(searchTranslations));
+    IswAddCallback(p->search_list, IswNselectCallback, search_selected, p);
 
     /* Search results hidden until typing starts */
     IswUnmapWidget(p->search_viewport);
