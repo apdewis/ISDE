@@ -17,7 +17,7 @@ static int saved_cols;
 static IsdeDBus *panel_dbus;
 
 #define SLIDER_W 300
-#define LABEL_W 250
+#define LABEL_W 150
 
 static void desktops_apply(void)
 {
@@ -74,6 +74,12 @@ static void make_scale_row(Widget vbox, const char *label_text,
     IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
                                        row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass, row, ab.args, ab.count);
 }
 
 static Widget desktops_create(Widget parent, IswAppContext app)

@@ -193,6 +193,13 @@ static Widget terminal_create(Widget parent, IswAppContext app)
                                              font_row, ab.args, ab.count);
     IswAddCallback(edit_btn, IswNcallback, edit_font_cb, NULL);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           font_row, ab.args, ab.count);
+
     /* Colour scheme row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -232,6 +239,13 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswListHighlight(scheme_list, find_idx(scheme_names_arr, scheme_count,
                                            cur_color_scheme));
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           scheme_row, ab.args, ab.count);
+
     /* Cursor shape row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -268,6 +282,13 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswListHighlight(cursor_shape_list,
                      find_idx(shape_names, NUM_CURSOR_SHAPES, cur_cursor_shape));
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           cursor_row, ab.args, ab.count);
+
     /* Scrollback row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -296,6 +317,13 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgSpinIncrement(&ab, 100);
     IswArgSpinValue(&ab, cur_scrollback);
     IswSetValues(scrollback_spin, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           sb_row, ab.args, ab.count);
 
     return vbox;
 }

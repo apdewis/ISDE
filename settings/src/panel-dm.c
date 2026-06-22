@@ -28,7 +28,7 @@ static char saved_date_fmt[64];
 static DBusConnection *sys_bus;
 
 #define TEXT_W 300
-#define LABEL_W 250
+#define LABEL_W 150
 
 static void ensure_system_bus(void)
 {
@@ -211,6 +211,13 @@ static Widget dm_create(Widget parent, IswAppContext app)
     text_time_fmt = IswCreateManagedWidget("timeFmtText", textWidgetClass,
                                           time_row, ab.args, ab.count);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           time_row, ab.args, ab.count);
+
     /* Date Format */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -235,6 +242,13 @@ static Widget dm_create(Widget parent, IswAppContext app)
     IswArgFlexAlign(&ab, IswFlexAlignCenter);
     text_date_fmt = IswCreateManagedWidget("dateFmtText", textWidgetClass,
                                           date_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           date_row, ab.args, ab.count);
 
     return vbox;
 }

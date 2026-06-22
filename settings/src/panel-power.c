@@ -29,7 +29,7 @@ static int sel_profile;
 static IsdeDBus *panel_dbus;
 
 #define SLIDER_W 300
-#define LABEL_W  250
+#define LABEL_W  150
 #define COMBO_W  200
 
 static String lid_action_labels[] = {
@@ -161,6 +161,12 @@ static void make_scale_row(Widget vbox, const char *label_text,
     IswArgFlexAlign(&ab, IswFlexAlignCenter);
     *out_scale = IswCreateManagedWidget("slider", sliderWidgetClass,
                                        row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass, row, ab.args, ab.count);
 }
 
 static void make_combo_row(Widget vbox, const char *label_text,
@@ -193,6 +199,12 @@ static void make_combo_row(Widget vbox, const char *label_text,
                                         row, ab.args, ab.count);
     IswAddCallback(*out_combo, IswNcallback, cb, NULL);
     IswListHighlight(*out_combo, selected);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswCreateManagedWidget("spacer", labelWidgetClass, row, ab.args, ab.count);
 }
 
 static Widget power_create(Widget parent, IswAppContext app)

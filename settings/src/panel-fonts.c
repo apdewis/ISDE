@@ -24,7 +24,7 @@
 
 #define NUM_FONTS 6
 #define SELECTED_W 300
-#define LABEL_W 250
+#define LABEL_W 150
 #define SLIDER_W 300
 #define BUTTON_W 60
 
@@ -231,6 +231,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientVertical);
     IswArgSpacing(&ab, 8);
+    IswArgWidth(&ab, 200);
     IswArgBorderWidth(&ab, 0);
     Widget vbox = IswCreateWidget("fontsForm", flexBoxWidgetClass,
                                  parent, ab.args, ab.count);
@@ -283,6 +284,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
     for (int i = 0; i < NUM_FONTS; i++) {
         IswArgBuilderReset(&ab);
         IswArgOrientation(&ab, IswOrientHorizontal);
+        IswArgBorderWidth(&ab, 0);
         IswArgSpacing(&ab, 8);
         Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                            vbox, ab.args, ab.count);
@@ -310,10 +312,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, desc);
         IswArgBorderWidth(&ab, 0);
-        IswArgWidth(&ab, SELECTED_W);
-        IswArgJustify(&ab, IswJustifyLeft);
-        IswArgResize(&ab, True);
-        IswArgFlexAlign(&ab, IswFlexAlignCenter);
+        IswArgFlexGrow(&ab, 1);
         if (fs) { IswArgFont(&ab, fs); }
         desc_labels[i] = IswCreateManagedWidget("fontDescLbl",
                                                 labelWidgetClass,
@@ -322,11 +321,18 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         /* Edit button */
         IswArgBuilderReset(&ab);
         IswArgLabel(&ab, "Edit...");
-        IswArgWidth(&ab, BUTTON_W);
-        IswArgFlexAlign(&ab, IswFlexAlignCenter);
+        IswArgFlexBasis(&ab, BUTTON_W);
+        IswArgFlexAlign(&ab, IswFlexAlignEnd);
         Widget btn = IswCreateManagedWidget("fontEditBtn", commandWidgetClass,
                                             row, ab.args, ab.count);
         IswAddCallback(btn, IswNcallback, edit_cb, (IswPointer)(intptr_t)i);
+
+        IswArgBuilderReset(&ab);
+        IswArgLabel(&ab, "");
+        IswArgBorderWidth(&ab, 0);
+        IswArgFlexBasis(&ab, 20);
+        IswCreateManagedWidget("spacer", labelWidgetClass,
+                               row, ab.args, ab.count);
     }
 
     return vbox;

@@ -92,7 +92,7 @@ static double drag_scale;
 
 static void randr_poll_cb(IswPointer, IswIntervalId *);
 
-#define LABEL_W  150
+#define LABEL_W  100
 #define LIST_W   300
 #define SLIDER_W 300
 #define CANVAS_H 200
@@ -973,6 +973,13 @@ static Widget display_create(Widget parent, IswAppContext app)
     }
     IswListHighlight(output_list, selected_output);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           out_row, ab.args, ab.count);
+
     /* --- Enable toggle + Primary button --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -1008,6 +1015,13 @@ static Widget display_create(Widget parent, IswAppContext app)
                                          en_row, ab.args, ab.count);
     IswAddCallback(primary_btn, IswNcallback, primary_clicked_cb, NULL);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           en_row, ab.args, ab.count);
+
     /* --- Resolution combo --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -1041,6 +1055,13 @@ static Widget display_create(Widget parent, IswAppContext app)
     if (outputs[selected_output].sel_mode_idx >= 0)
         IswListHighlight(res_combo, outputs[selected_output].sel_mode_idx);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           res_row, ab.args, ab.count);
+
     /* --- HiDPI scale (per-output) --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -1070,6 +1091,13 @@ static Widget display_create(Widget parent, IswAppContext app)
                                           scale_row, ab.args, ab.count);
     IswAddCallback(scale_slider, IswNvalueChanged, scale_changed_cb, NULL);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           scale_row, ab.args, ab.count);
+
     /* --- Layout preview --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -1095,6 +1123,13 @@ static Widget display_create(Widget parent, IswAppContext app)
                                            lay_row, ab.args, ab.count);
     IswAddCallback(layout_canvas, IswNexposeCallback, layout_expose_cb, NULL);
     IswAddCallback(layout_canvas, IswNinputCallback, layout_input_cb, NULL);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           lay_row, ab.args, ab.count);
 
     update_controls_sensitivity();
 

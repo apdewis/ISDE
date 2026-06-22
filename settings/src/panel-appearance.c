@@ -180,6 +180,13 @@ static Widget appearance_create(Widget parent, IswAppContext app)
                                         scheme_vp, ab.args, ab.count);
     IswListHighlight(scheme_list, saved_scheme_idx);
 
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, 20);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           scheme_row, ab.args, ab.count);
+
     /* --- Cursor Theme --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -226,6 +233,13 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
                                         cursor_vp, ab.args, ab.count);
     IswListHighlight(cursor_list, saved_cursor_idx);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           cursor_row, ab.args, ab.count);
 
     /* --- Icon Theme --- */
     IswArgBuilderReset(&ab);
@@ -284,6 +298,13 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
                                       icon_vp, ab.args, ab.count);
     IswListHighlight(icon_list, saved_icon_idx);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           icon_row, ab.args, ab.count);
 
     free(cur_scheme);
     free(cur_cursor);

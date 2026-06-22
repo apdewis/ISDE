@@ -185,7 +185,7 @@ void settings_open_panel(Settings *s, int index)
         IswArgUseRight(&ab, True);
         IswArgBorderBottom(&ab, 1);
         IswArgWidth(&ab, min_w);
-        IswArgHeight(&ab, min_h - btn_h - btn_pad);
+        IswArgHeight(&ab, min_h - btn_h - btn_pad * 2);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainBottom);
         IswArgLeft(&ab, IswChainLeft);
@@ -199,7 +199,7 @@ void settings_open_panel(Settings *s, int index)
         IswArgDefaultDistance(&ab, 0);
         IswArgBorderWidth(&ab, 0);
         IswArgWidth(&ab, min_w);
-        IswArgHeight(&ab, min_h - btn_h - btn_pad);
+        IswArgHeight(&ab, min_h - btn_h - btn_pad * 2);
         pw->content_area = IswCreateManagedWidget("content", formWidgetClass,
                                                   pw->content_vp,
                                                   ab.args, ab.count);
@@ -212,6 +212,7 @@ void settings_open_panel(Settings *s, int index)
         IswArgBottom(&ab, IswChainTop);
         IswArgLeft(&ab, IswChainLeft);
         IswArgRight(&ab, IswChainLeft);
+        IswArgVertDistance(&ab, 20);
         IswSetValues(pw->panel_widget, ab.args, ab.count);
 
         IswManageChild(pw->panel_widget);
@@ -225,7 +226,7 @@ void settings_open_panel(Settings *s, int index)
         int content_h = (pref.request_mode & IswCWHeight) ? (int)pref.height : min_h;
 
         int win_w = content_w + sb_w;
-        int win_h = content_h + btn_h + btn_pad + sb_w;
+        int win_h = content_h + 20 + btn_h + btn_pad * 2 + sb_w;
 
         if (win_w < min_w) { win_w = min_w; }
         if (win_h < min_h) { win_h = min_h; }
@@ -237,7 +238,7 @@ void settings_open_panel(Settings *s, int index)
         if (win_w > scr_w) { win_w = scr_w; }
         if (win_h > scr_h) { win_h = scr_h; }
 
-        int vp_h = win_h - btn_h - btn_pad;
+        int vp_h = win_h - btn_h - btn_pad * 2;
 
         IswArgBuilderReset(&ab);
         IswArgWidth(&ab, win_w);
@@ -295,6 +296,20 @@ void settings_open_panel(Settings *s, int index)
                                              form, ab.args, ab.count);
         IswAddCallback(pw->save_btn, IswNcallback,
                        panel_save_cb, &cb_data[index]);
+
+        /* Bottom spacer to create padding below buttons */
+        IswArgBuilderReset(&ab);
+        IswArgFromVert(&ab, pw->save_btn);
+        IswArgWidth(&ab, 1);
+        IswArgHeight(&ab, 1);
+        IswArgBorderWidth(&ab, 0);
+        IswArgVertDistance(&ab, btn_pad);
+        IswArgBottom(&ab, IswChainBottom);
+        IswArgTop(&ab, IswChainBottom);
+        IswArgLeft(&ab, IswChainRight);
+        IswArgRight(&ab, IswChainRight);
+        IswCreateManagedWidget("bottomSpacer", labelWidgetClass,
+                               form, ab.args, ab.count);
     }
 
     IswRealizeWidget(pw->shell);
