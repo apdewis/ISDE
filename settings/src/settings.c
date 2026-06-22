@@ -145,21 +145,21 @@ void settings_open_panel(Settings *s, int index)
     }
 
     if (!pw->shell) {
-        int win_w = 700;
-        int win_h = 450;
         int btn_h = 32;
         int btn_pad = 8;
         int btn_w = 80;
         int sb_w = 14;
+        int min_w = 400;
+        int min_h = 300;
 
         char title[128];
         snprintf(title, sizeof(title), "%s — Settings", s->panels[index]->name);
 
         IswArgBuilder ab = IswArgBuilderInit();
-        IswArgWidth(&ab, win_w);
-        IswArgHeight(&ab, win_h);
-        IswArgMinWidth(&ab, 400);
-        IswArgMinHeight(&ab, 300);
+        IswArgWidth(&ab, min_w);
+        IswArgHeight(&ab, min_h);
+        IswArgMinWidth(&ab, min_w);
+        IswArgMinHeight(&ab, min_h);
         IswArgTitle(&ab, title);
         pw->shell = IswCreatePopupShell("panelShell",
                                         topLevelShellWidgetClass,
@@ -184,8 +184,8 @@ void settings_open_panel(Settings *s, int index)
         IswArgUseBottom(&ab, True);
         IswArgUseRight(&ab, True);
         IswArgBorderBottom(&ab, 1);
-        IswArgWidth(&ab, win_w);
-        IswArgHeight(&ab, win_h - btn_h - btn_pad);
+        IswArgWidth(&ab, min_w);
+        IswArgHeight(&ab, min_h - btn_h - btn_pad);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainBottom);
         IswArgLeft(&ab, IswChainLeft);
@@ -198,8 +198,8 @@ void settings_open_panel(Settings *s, int index)
         IswArgBuilderReset(&ab);
         IswArgDefaultDistance(&ab, 0);
         IswArgBorderWidth(&ab, 0);
-        IswArgWidth(&ab, win_w);
-        IswArgHeight(&ab, win_h - btn_h - btn_pad);
+        IswArgWidth(&ab, min_w);
+        IswArgHeight(&ab, min_h - btn_h - btn_pad);
         pw->content_area = IswCreateManagedWidget("content", formWidgetClass,
                                                   pw->content_vp,
                                                   ab.args, ab.count);
@@ -215,6 +215,46 @@ void settings_open_panel(Settings *s, int index)
         IswSetValues(pw->panel_widget, ab.args, ab.count);
 
         IswManageChild(pw->panel_widget);
+
+        /* Query the panel's preferred size and size the window to fit */
+        IswWidgetGeometry pref;
+        memset(&pref, 0, sizeof(pref));
+        IswQueryGeometry(pw->panel_widget, NULL, &pref);
+
+        int content_w = (pref.request_mode & IswCWWidth)  ? (int)pref.width  : min_w;
+        int content_h = (pref.request_mode & IswCWHeight) ? (int)pref.height : min_h;
+
+        int win_w = content_w + sb_w;
+        int win_h = content_h + btn_h + btn_pad + sb_w;
+
+        if (win_w < min_w) { win_w = min_w; }
+        if (win_h < min_h) { win_h = min_h; }
+
+        IswDisplay dpy = IswDisplayOf(s->toplevel);
+        IswScreen scr = IswScreenOf(s->toplevel);
+        int scr_w = (int)_IswPlatformScreenWidth(dpy, scr);
+        int scr_h = (int)_IswPlatformScreenHeight(dpy, scr);
+        if (win_w > scr_w) { win_w = scr_w; }
+        if (win_h > scr_h) { win_h = scr_h; }
+
+        int vp_h = win_h - btn_h - btn_pad;
+
+        IswArgBuilderReset(&ab);
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, win_h);
+        IswSetValues(pw->shell, ab.args, ab.count);
+
+        IswArgBuilderReset(&ab);
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, vp_h);
+        IswArgResizable(&ab, True);
+        IswSetValues(pw->content_vp, ab.args, ab.count);
+
+        IswArgBuilderReset(&ab);
+        IswArgWidth(&ab, win_w);
+        IswArgHeight(&ab, vp_h);
+        IswArgResizable(&ab, True);
+        IswSetValues(pw->content_area, ab.args, ab.count);
 
         /* Revert / Apply buttons — fixed at bottom right */
         IswArgBuilderReset(&ab);
