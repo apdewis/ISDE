@@ -221,7 +221,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgVerticalList(&ab, True);
     IswArgHeight(&ab, 120);
     IswArgWidth(&ab, 200);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgFromHoriz(&ab, sc_lbl);
     IswArgFromVert(&ab, prev);
     IswArgLeft(&ab, IswChainLeft);
@@ -257,7 +257,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     IswArgVerticalList(&ab, True);
     IswArgHeight(&ab, 80);
     IswArgWidth(&ab, 200);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgFromHoriz(&ab, cs_lbl);
     IswArgFromVert(&ab, prev);
     IswArgLeft(&ab, IswChainLeft);

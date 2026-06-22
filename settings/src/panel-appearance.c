@@ -183,7 +183,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     scheme_list = IswCreateManagedWidget("schemeList", listWidgetClass,
                                         scheme_vp, ab.args, ab.count);
     IswListHighlight(scheme_list, saved_scheme_idx);
@@ -230,7 +230,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     cursor_list = IswCreateManagedWidget("cursorList", listWidgetClass,
                                         cursor_vp, ab.args, ab.count);
     IswListHighlight(cursor_list, saved_cursor_idx);
@@ -288,7 +288,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     icon_list = IswCreateManagedWidget("iconList", listWidgetClass,
                                       icon_vp, ab.args, ab.count);
     IswListHighlight(icon_list, saved_icon_idx);

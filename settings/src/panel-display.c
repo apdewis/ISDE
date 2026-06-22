@@ -965,7 +965,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
     IswArgHeight(&ab, list_height);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgFromHoriz(&ab, out_lbl);
     IswArgLeft(&ab, IswChainLeft);
     output_list = IswCreateManagedWidget("outputList", listWidgetClass,
@@ -1035,7 +1035,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     IswArgDefaultColumns(&ab, 1);
     IswArgForceColumns(&ab, True);
     IswArgVerticalList(&ab, True);
-    IswArgBorderWidth(&ab, 0);
+    IswArgBorderWidth(&ab, 1);
     IswArgFromVert(&ab, prev);
     IswArgFromHoriz(&ab, res_lbl);
     IswArgLeft(&ab, IswChainLeft);
