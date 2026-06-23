@@ -649,7 +649,7 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
         return False;
 
     if (*target == t->a_targets) {
-        static Atom targets[3];
+        Atom *targets = (Atom *)IswMalloc(3 * sizeof(Atom));
         targets[0] = t->a_targets;
         targets[1] = t->a_utf8_string;
         targets[2] = t->a_text;
@@ -661,8 +661,10 @@ static Boolean convert_selection(Widget w, Atom *selection, Atom *target,
     }
 
     if (*target == t->a_utf8_string || *target == t->a_text) {
+        char *copy = IswMalloc((unsigned)t->sel_len);
+        memcpy(copy, t->sel_text, t->sel_len);
         *type_return = t->a_utf8_string;
-        *value_return = (IswPointer)t->sel_text;
+        *value_return = (IswPointer)copy;
         *length_return = t->sel_len;
         *format_return = 8;
         return True;
