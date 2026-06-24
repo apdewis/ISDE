@@ -235,7 +235,6 @@ static void show_window_menu(Panel *p, TaskGroup *g)
 static void taskbar_button_callback(Widget w, IswPointer client_data,
                                     IswPointer call_data)
 {
-    printf("button \n");
     (void)w;
     (void)call_data;
     TaskClosure *tc = (TaskClosure *)client_data;
@@ -248,6 +247,16 @@ static void taskbar_button_callback(Widget w, IswPointer client_data,
         launch_app(p, g);
     } else if (g->nwindows == 1) {
         panel_focus_window(p, g, 0);
+    } else {
+        if (g->nwindows <= 1) {
+            return;  /* handled by the Command callback on release */
+        }
+
+        if (p->active_popup && g->menu && wl_group == g) {
+            panel_dismiss_popup(p);
+        } else {
+            show_window_menu(p, g);
+        }
     }
 }
 
@@ -257,37 +266,22 @@ static void taskbar_button_callback(Widget w, IswPointer client_data,
 static void taskbar_press_handler(Widget w, IswPointer client_data,
                                   IswEvent *event, Boolean *cont)
 {
-    printf("taskbar button pressed\n");
     (void)w;
     (void)cont;
-    if (event->kind != IswButtonDown) {
-        return;
-    }
-    if (event->button.button != IswButtonLeft &&
-        event->button.button != IswButtonMiddle) {
-        return;
-    }
 
     TaskClosure *tc = (TaskClosure *)client_data;
     Panel *p = tc->panel;
     TaskGroup *g = tc->group;
 
-    if (event->button.button == IswButtonMiddle) {
-        launch_app(p, g);
+    if (event->kind != IswButtonDown &&
+        event->button.button != IswButtonMiddle) {
         return;
     }
 
-    if (g->nwindows <= 1) {
-        return;  /* handled by the Command callback on release */
-    }
-
-    if (p->active_popup && g->menu && wl_group == g) {
-        panel_dismiss_popup(p);
-    } else {
-        show_window_menu(p, g);
-    }
-
-    IswCallActionProc(g->button, "unset", event, NULL, 0);
+    if (event->button.button == IswButtonMiddle) {
+            launch_app(p, g);
+            return;
+        }
 }
 
 /* ---------- right-click context menu (pin/unpin) ---------- */
@@ -747,10 +741,10 @@ TaskGroup *taskbar_add_group(Panel *p, const char *wm_class)
     tc->group = g;
     IswAddCallback(g->button, IswNcallback, taskbar_button_callback, tc);
 
-    /* Button-press handler: left-click shows window list for multi-window
-     * groups; right-click opens pin/unpin context menu */
     IswAddEventHandler(g->button, IswButtonPressMask, False,
                       taskbar_press_handler, tc);
+
+    //handle right click menu
     IswAddEventHandler(g->button, IswButtonPressMask, False,
                       context_menu_handler, tc);
 
