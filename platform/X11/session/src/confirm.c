@@ -192,16 +192,16 @@ int main(int argc, char **argv)
 
     /* Colours */
     const IsdeColorScheme *scheme = isde_theme_current();
-    Pixel overlay_bg = scr->black_pixel;
-    Pixel form_bg = scr->white_pixel;
-    Pixel form_fg = scr->black_pixel;
+    Pixel overlay_bg = 0xFF000000UL | scr->black_pixel;
+    Pixel form_bg = 0xFF000000UL | scr->white_pixel;
+    Pixel form_fg = 0xFF000000UL | scr->black_pixel;
 
     if (scheme) {
         xcb_alloc_color_reply_t *r;
         r = xcb_alloc_color_reply(conn,
             xcb_alloc_color(conn, scr->default_colormap,
                             0x1000, 0x1000, 0x1000), NULL);
-        if (r) { overlay_bg = r->pixel; free(r); }
+        if (r) { overlay_bg = 0xFF000000UL | r->pixel; free(r); }
 
         unsigned int bg = scheme->bg;
         r = xcb_alloc_color_reply(conn,
@@ -209,7 +209,7 @@ int main(int argc, char **argv)
                             ((bg >> 16) & 0xFF) * 257,
                             ((bg >> 8)  & 0xFF) * 257,
                             ( bg        & 0xFF) * 257), NULL);
-        if (r) { form_bg = r->pixel; free(r); }
+        if (r) { form_bg = 0xFF000000UL | r->pixel; free(r); }
 
         unsigned int fg = scheme->fg;
         r = xcb_alloc_color_reply(conn,
@@ -217,7 +217,7 @@ int main(int argc, char **argv)
                             ((fg >> 16) & 0xFF) * 257,
                             ((fg >> 8)  & 0xFF) * 257,
                             ( fg        & 0xFF) * 257), NULL);
-        if (r) { form_fg = r->pixel; free(r); }
+        if (r) { form_fg = 0xFF000000UL | r->pixel; free(r); }
     }
 
     /* Override-redirect shell covering primary monitor */
