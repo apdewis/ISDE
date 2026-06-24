@@ -217,7 +217,19 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
         wm->focused->focused = 0;
         frame_apply_theme(wm, wm->focused);
         wm->focused = NULL;
-        wm_ewmh_update_active(wm);
+    }
+
+    if (!wm->focused) {
+        WmClient *mru = NULL;
+        for (WmClient *c = wm->clients; c; c = c->next) {
+            if (c->desktop != desktop && c->desktop != 0xFFFFFFFF) {
+                continue;
+            }
+            if (!mru || c->focus_seq > mru->focus_seq) {
+                mru = c;
+            }
+        }
+        wm_focus_client(wm, mru, XCB_CURRENT_TIME);
     }
 
     xcb_flush(wm->conn);
