@@ -1222,15 +1222,18 @@ void wm_compositor_paint(WmCompositor *comp)
             order[i--] = cw;
         }
 
+        CompositorWindow *deferred_exclude = NULL;
+
         for (i = 0; i < count; i++) {
             CompositorWindow *cw = order[i];
-            /* Draw the owned snapshot so fade-out doesn't sample freed pixmap
-             * storage; fall back to the live texture only while mapped (e.g.
-             * when no FBO is available to snapshot). */
+
+            if (comp->slide_active && cw->window == comp->slide_exclude) {
+                deferred_exclude = cw;
+                continue;
+            }
+
             GLuint tex = cw->snapshot ? cw->snapshot
                                       : (cw->mapped ? cw->texture : 0);
-            /* Paint mapped windows, and unmapped ones still fading out.
-             * Skip when fully transparent and unmapped, or with no texture. */
             if ((!cw->mapped && cw->opacity <= 0.0f) || !tex) {
                 continue;
             }
@@ -1238,10 +1241,6 @@ void wm_compositor_paint(WmCompositor *comp)
             glBindTexture(GL_TEXTURE_2D, tex);
             glColor4f(1.0f, 1.0f, 1.0f, cw->opacity);
 
-            /* Desktop-switch slide offset.  Outgoing windows slide off toward
-             * the travel edge; incoming windows slide in from the opposite
-             * edge.  Windows not in the slide (e.g. sticky panels, the switch
-             * OSD) stay put. */
             float ox = 0.0f, oy = 0.0f;
             int slide_part = (cw->slide_role != 0 &&
                               cw->window != comp->slide_exclude);
@@ -1257,8 +1256,6 @@ void wm_compositor_paint(WmCompositor *comp)
                      comp->screen->height_in_pixels;
             }
 
-            /* Draw the named pixmap verbatim at the window's outer corner —
-             * it already contains the border X11 drew. */
             float x0 = cw->x + ox;
             float y0 = cw->y + oy;
             float x1 = cw->x + cw->pw + ox;
@@ -1270,6 +1267,22 @@ void wm_compositor_paint(WmCompositor *comp)
             glTexCoord2f(1.0f, 1.0f); glVertex2f(x1, y1);
             glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y1);
             glEnd();
+        }
+
+        if (deferred_exclude) {
+            GLuint tex = deferred_exclude->snapshot
+                       ? deferred_exclude->snapshot
+                       : (deferred_exclude->mapped ? deferred_exclude->texture : 0);
+            if (tex && (deferred_exclude->mapped || deferred_exclude->opacity > 0.0f)) {
+                glBindTexture(GL_TEXTURE_2D, tex);
+                glColor4f(1.0f, 1.0f, 1.0f, deferred_exclude->opacity);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0f, 0.0f); glVertex2f(deferred_exclude->x, deferred_exclude->y);
+                glTexCoord2f(1.0f, 0.0f); glVertex2f(deferred_exclude->x + deferred_exclude->pw, deferred_exclude->y);
+                glTexCoord2f(1.0f, 1.0f); glVertex2f(deferred_exclude->x + deferred_exclude->pw, deferred_exclude->y + deferred_exclude->ph);
+                glTexCoord2f(0.0f, 1.0f); glVertex2f(deferred_exclude->x, deferred_exclude->y + deferred_exclude->ph);
+                glEnd();
+            }
         }
 
         free(order);
