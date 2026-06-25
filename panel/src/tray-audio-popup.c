@@ -85,20 +85,30 @@ static void on_slider_changed(Widget w, IswPointer client_data,
     ta_pw_set_volume(r->ta, r->node_id, vol);
 }
 
-static void on_mute_toggled(Widget w, IswPointer client_data,
+static void on_mute_clicked(Widget w, IswPointer client_data,
                             IswPointer call_data)
 {
-    (void)call_data;
+    (void)w; (void)call_data;
     VolumeRow *r = (VolumeRow *)client_data;
     if (r->ta->updating)
         return;
 
-    Boolean state = False;
-    IswArgBuilder ab = IswArgBuilderInit();
-    IswArgState(&ab, &state);
-    IswGetValues(w, ab.args, ab.count);
+    int muted = 0;
+    SinkInfo *sink = ta_find_sink(r->ta, r->node_id);
+    if (sink) {
+        muted = sink->muted;
+    } else {
+        SourceInfo *source = ta_find_source(r->ta, r->node_id);
+        if (source) {
+            muted = source->muted;
+        } else {
+            StreamInfo *stream = ta_find_stream(r->ta, r->node_id);
+            if (stream)
+                muted = stream->muted;
+        }
+    }
 
-    ta_pw_set_mute(r->ta, r->node_id, state ? 1 : 0);
+    ta_pw_set_mute(r->ta, r->node_id, muted ? 0 : 1);
 }
 
 static void on_radio_toggled(Widget w, IswPointer client_data,
@@ -197,23 +207,19 @@ static void build_volume_row(TrayAudio *ta, Widget listbox,
     IswAddCallback(sl, IswNvalueChanged, on_slider_changed, row);
     row->slider = sl;
 
-    char *muted_icon = isde_icon_find("status", "audio-volume-muted");
-    char *vol_icon = isde_icon_find("status", volume_icon_name(volume));
+    const char *icon_name = muted ? "audio-volume-muted" : volume_icon_name(volume);
+    char *icon_path = isde_icon_find("status", icon_name);
     IswArgBuilderReset(&ab);
     IswArgLabel(&ab, "");
-    if (muted_icon)
-        IswArgImageOn(&ab, muted_icon);
-    if (vol_icon)
-        IswArgImageOff(&ab, vol_icon);
-    IswArgState(&ab, muted ? True : False);
-    IswArgWidth(&ab, 20);
-    IswArgHeight(&ab, 20);
-    IswArgJustify(&ab, IswJustifyLeft);
-    Widget mb = IswCreateManagedWidget("volMute", toggleButtonWidgetClass,
+    if (icon_path)
+        IswArgImage(&ab, icon_path);
+    IswArgMinWidth(&ab, 48);
+    IswArgHeight(&ab, 24);
+    
+    Widget mb = IswCreateManagedWidget("volMute", commandWidgetClass,
                                        ctl_row, ab.args, ab.count);
-    free(muted_icon);
-    free(vol_icon);
-    IswAddCallback(mb, IswNcallback, on_mute_toggled, row);
+    free(icon_path);
+    IswAddCallback(mb, IswNcallback, on_mute_clicked, row);
     row->mute_btn = mb;
 }
 
@@ -554,13 +560,14 @@ void ta_popup_update(TrayAudio *ta)
             IswSliderSetValue(r->slider, (int)(vol * 100.0f + 0.5f));
 
         if (r->mute_btn) {
-            char *vi = isde_icon_find("status", volume_icon_name(vol));
-            IswArgBuilder ab = IswArgBuilderInit();
-            IswArgState(&ab, muted ? True : False);
-            if (vi)
-                IswArgImageOff(&ab, vi);
-            IswSetValues(r->mute_btn, ab.args, ab.count);
-            free(vi);
+            const char *iname = muted ? "audio-volume-muted" : volume_icon_name(vol);
+            char *vi = isde_icon_find("status", iname);
+            if (vi) {
+                IswArgBuilder ab = IswArgBuilderInit();
+                IswArgImage(&ab, vi);
+                IswSetValues(r->mute_btn, ab.args, ab.count);
+                free(vi);
+            }
         }
 
         if (r->radio) {
