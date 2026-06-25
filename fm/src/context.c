@@ -97,6 +97,13 @@ void fm_dismiss_context(Fm *fm)
     places_dismiss_device_menu(fm);
 }
 
+static void ctx_popdown(Fm *fm)
+{
+    if (fm->ctx_shell) {
+        IswPopdown(fm->ctx_shell);
+    }
+}
+
 static void ctx_run_action(Fm *fm, int action_idx)
 {
     FmApp *app = fm->app_state;
@@ -145,13 +152,13 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
     int target = fm->ctx_target_index;
 
     if (idx < 0) {
-        fm_dismiss_context(fm);
+        ctx_popdown(fm);
         fm->ctx_target_index = -1;
         return;
     }
 
     if (in_trash) {
-        fm_dismiss_context(fm);
+        ctx_popdown(fm);
         fm->ctx_target_index = target;
         if (idx < CTX_TRASH_NITEMS && ctx_trash_actions[idx]) {
             ctx_trash_actions[idx](fm);
@@ -167,7 +174,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         IsdeDesktopEntry *de = app->desktop_entries[de_idx];
         char *file = fm->ow_file_path ? strdup(fm->ow_file_path) : NULL;
 
-        fm_dismiss_context(fm);
+        ctx_popdown(fm);
 
         if (file && de) {
             fm_launch_notify(fm, de, (const char **)&file, 1);
@@ -184,7 +191,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
         int ai = fm->ctx_action_indices[idx - fm->ctx_action_offset];
         fm->ctx_target_index = target;
         ctx_run_action(fm, ai);
-        fm_dismiss_context(fm);
+        ctx_popdown(fm);
         fm->ctx_target_index = -1;
         return;
     }
@@ -198,7 +205,7 @@ static void ctx_select_cb(Widget w, IswPointer client_data,
     if (action)
         action(fm);
 
-    fm_dismiss_context(fm);
+    ctx_popdown(fm);
     fm->ctx_target_index = -1;
 }
 
