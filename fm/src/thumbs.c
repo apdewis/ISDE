@@ -19,6 +19,8 @@
 #include <limits.h>
 #include <sys/wait.h>
 
+#include <ISW/IconViewP.h>
+
 #include <cairo/cairo.h>
 #include <jpeglib.h>
 #include <setjmp.h>
@@ -450,15 +452,19 @@ typedef struct {
 } ThumbResult;
 
 typedef struct ThumbJob {
-    ThumbRequest *requests;
-    int           nrequests;
-    ThumbResult  *results;
-    int           nresults;
-    int           results_cap;
-    Fm           *fm;
-    pthread_t     thread;
-    int           pipe_fd[2]; /* worker writes, main reads */
-    IswInputId    input_id;
+    ThumbRequest   *requests;
+    int             nrequests;
+    /* Result queue: worker appends under lock, main thread drains */
+    ThumbResult    *results;
+    int             nresults;
+    int             results_cap;
+    pthread_mutex_t result_mutex;
+    atomic_int      cancelled;
+    atomic_int      worker_done;
+    Fm             *fm;
+    pthread_t       thread;
+    int             pipe_fd[2]; /* worker writes, main reads */
+    IswInputId      input_id;
 } ThumbJob;
 
 static void thumb_worker_func(void *arg)
@@ -466,9 +472,13 @@ static void thumb_worker_func(void *arg)
     ThumbJob *job = (ThumbJob *)arg;
 
     for (int i = 0; i < job->nrequests; i++) {
+        if (atomic_load(&job->cancelled))
+            break;
+
         ThumbRequest *req = &job->requests[i];
 
         if (thumb_generate(req->full_path, req->cache_path, req->fmt) == 0) {
+            pthread_mutex_lock(&job->result_mutex);
             if (job->nresults >= job->results_cap) {
                 job->results_cap = job->results_cap ? job->results_cap * 2 : 16;
                 job->results = realloc(job->results,
@@ -478,12 +488,16 @@ static void thumb_worker_func(void *arg)
             job->results[job->nresults].entry_index = req->entry_index;
             job->nresults++;
             req->cache_path = NULL; /* ownership transferred */
+            pthread_mutex_unlock(&job->result_mutex);
+
+            char byte = 1;
+            (void)write(job->pipe_fd[1], &byte, 1);
         }
     }
 
-    /* Signal main thread */
-    char byte = 1;
-    (void)write(job->pipe_fd[1], &byte, 1);
+    atomic_store(&job->worker_done, 1);
+    char done = 0;
+    (void)write(job->pipe_fd[1], &done, 1);
 }
 
 static void *thumb_thread_entry(void *arg)
@@ -507,6 +521,8 @@ static void thumb_job_free(ThumbJob *job)
         free(job->results[i].cache_path);
     free(job->results);
 
+    pthread_mutex_destroy(&job->result_mutex);
+
     if (job->pipe_fd[0] >= 0) close(job->pipe_fd[0]);
     if (job->pipe_fd[1] >= 0) close(job->pipe_fd[1]);
 
@@ -519,43 +535,77 @@ static void thumb_done_cb(IswPointer client_data, int *fd, IswInputId *id)
     ThumbJob *job = (ThumbJob *)client_data;
     Fm *fm = job->fm;
 
-    /* Drain the pipe */
-    char buf[16];
+    char buf[64];
     (void)read(job->pipe_fd[0], buf, sizeof(buf));
 
-    pthread_join(job->thread, NULL);
-    IswRemoveInput(job->input_id);
+    pthread_mutex_lock(&job->result_mutex);
+    ThumbResult *results = job->results;
+    int nresults = job->nresults;
+    job->results = NULL;
+    job->nresults = 0;
+    job->results_cap = 0;
+    pthread_mutex_unlock(&job->result_mutex);
 
-    /* Apply results: swap icon paths for entries that got thumbnails.
-     * Entries may have changed if the user navigated away — validate
-     * that the entry index is still in range and the path matches. */
+    IconViewWidget iw = (IconViewWidget)fm->iconview;
     int changed = 0;
-    for (int i = 0; i < job->nresults; i++) {
-        ThumbResult *r = &job->results[i];
-        if (r->entry_index < 0 || r->entry_index >= fm->nentries)
-            continue;
-        /* Store the cache path as the entry's thumbnail */
-        FmEntry *e = &fm->entries[r->entry_index];
 
-        /* Verify path still matches */
+    for (int i = 0; i < nresults; i++) {
+        ThumbResult *r = &results[i];
+        int idx = r->entry_index;
+        if (idx < 0 || idx >= fm->nentries) {
+            free(r->cache_path);
+            continue;
+        }
+        FmEntry *e = &fm->entries[idx];
+
         char *expected = thumb_cache_path(e->full_path);
         if (!expected || strcmp(expected, r->cache_path) != 0) {
             free(expected);
+            free(r->cache_path);
             continue;
         }
         free(expected);
 
         free(e->thumb_path);
         e->thumb_path = r->cache_path;
-        r->cache_path = NULL; /* ownership transferred */
+
+        if (fm->fv_icons && idx < fm->nentries)
+            fm->fv_icons[idx] = (String)e->thumb_path;
+
+        if (iw && idx < iw->iconView.cache_size) {
+            IconViewItemCache *ic = &iw->iconView.cache[idx];
+            if (ic->img_handle) {
+                ISWRenderImageFree(iw->iconView.render_ctx, ic->img_handle);
+                ic->img_handle = 0;
+                ic->handle_raster = NULL;
+            }
+            if (ic->image) {
+                ISWImageDestroy(ic->image);
+                ic->image = NULL;
+            }
+            ic->raster = NULL;
+            ic->raster_w = 0;
+            ic->raster_h = 0;
+            ic->load_pending = True;
+        }
         changed = 1;
     }
+    free(results);
 
-    thumb_job_free(job);
-    fm->thumb_job = NULL;
+    int done = atomic_load(&job->worker_done);
 
-    if (changed)
-        fileview_populate(fm);
+    if (done) {
+        IswRemoveInput(job->input_id);
+        pthread_join(job->thread, NULL);
+        thumb_job_free(job);
+        fm->thumb_job = NULL;
+    }
+
+    if (changed && IswIsRealized((Widget)iw)) {
+        Widget w = (Widget)iw;
+        if (w->core.widget_class->core_class.expose)
+            w->core.widget_class->core_class.expose(w, NULL, 0);
+    }
 }
 
 void thumbs_apply_cache(Fm *fm)
@@ -577,23 +627,76 @@ void thumbs_apply_cache(Fm *fm)
     }
 }
 
+static int visible_entry_range(Fm *fm, int *first_out, int *last_out)
+{
+    if (!fm->iconview || !fm->viewport)
+        return 0;
+
+    IconViewWidget iw = (IconViewWidget)fm->iconview;
+    Widget iv = (Widget)iw;
+
+    if (iw->iconView.nrows <= 0 || !iw->iconView.row_y ||
+        !iw->iconView.row_h || iw->iconView.ncols <= 0)
+        return 0;
+
+    int vis_top, vis_bot;
+    int vx, vy, vw, vh;
+    if (ISWRenderGetVirtualOrigin(iv, &vx, &vy, &vw, &vh)) {
+        vis_top = vy;
+        vis_bot = vy + vh;
+    } else {
+        vis_top = -(int)iv->core.y;
+        vis_bot = vis_top + (int)fm->viewport->core.height;
+    }
+
+    int lo = 0, hi = iw->iconView.nrows - 1;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (iw->iconView.row_y[mid] +
+            (int)iw->iconView.row_h[mid] <= vis_top)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    int first_row = lo;
+
+    lo = first_row;
+    hi = iw->iconView.nrows - 1;
+    while (lo < hi) {
+        int mid = (lo + hi + 1) / 2;
+        if (iw->iconView.row_y[mid] >= vis_bot)
+            hi = mid - 1;
+        else
+            lo = mid;
+    }
+    int last_row = lo;
+
+    *first_out = first_row * iw->iconView.ncols;
+    *last_out = (last_row + 1) * iw->iconView.ncols;
+    if (*last_out > iw->iconView.nitems)
+        *last_out = iw->iconView.nitems;
+    return 1;
+}
+
 void thumbs_populate_async(Fm *fm)
 {
     /* Cancel any in-flight job */
-    if (fm->thumb_job) {
-        ThumbJob *old = fm->thumb_job;
-        IswRemoveInput(old->input_id);
-        pthread_detach(old->thread);
-        fm->thumb_job = NULL;
-    }
+    if (fm->thumb_job)
+        thumbs_cancel(fm);
+
+    int vis_first = 0, vis_last = fm->nentries;
+    int have_range = visible_entry_range(fm, &vis_first, &vis_last);
 
     ThumbJob *job = calloc(1, sizeof(ThumbJob));
     job->fm = fm;
     job->pipe_fd[0] = job->pipe_fd[1] = -1;
+    pthread_mutex_init(&job->result_mutex, NULL);
+    atomic_init(&job->cancelled, 0);
+    atomic_init(&job->worker_done, 0);
 
-    /* Collect entries that need thumbnails (cache hits already applied) */
+    /* Only generate thumbnails for visible entries */
     int cap = 0;
-    for (int i = 0; i < fm->nentries; i++) {
+    for (int i = vis_first; i < vis_last; i++) {
         FmEntry *e = &fm->entries[i];
         if (e->is_dir || e->thumb_path) continue;
 
@@ -605,7 +708,8 @@ void thumbs_populate_async(Fm *fm)
 
         if (job->nrequests >= cap) {
             cap = cap ? cap * 2 : 16;
-            job->requests = realloc(job->requests, cap * sizeof(ThumbRequest));
+            job->requests = realloc(job->requests,
+                                    cap * sizeof(ThumbRequest));
         }
         ThumbRequest *req = &job->requests[job->nrequests++];
         req->full_path = strdup(e->full_path);
@@ -666,7 +770,9 @@ void thumbs_cancel(Fm *fm)
 {
     if (!fm->thumb_job) return;
     ThumbJob *old = fm->thumb_job;
+    atomic_store(&old->cancelled, 1);
     IswRemoveInput(old->input_id);
-    pthread_detach(old->thread);
+    pthread_join(old->thread, NULL);
+    thumb_job_free(old);
     fm->thumb_job = NULL;
 }

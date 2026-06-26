@@ -320,6 +320,7 @@ typedef struct Fm {
 
     /* Thumbnail generation (per-window) */
     struct ThumbJob *thumb_job;
+    IswIntervalId  thumb_scroll_timer;
 
     /* Startup notification — busy cursor */
     char          *launch_id;

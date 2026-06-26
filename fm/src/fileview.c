@@ -9,6 +9,37 @@
 #include <string.h>
 #include <time.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/Reports.h>
+
+/* ---------- scroll-triggered thumbnail generation ---------- */
+
+#define THUMB_SCROLL_DEBOUNCE_MS 200
+
+static void scroll_thumb_timer_cb(IswPointer closure, IswIntervalId *id)
+{
+    (void)id;
+    Fm *fm = (Fm *)closure;
+    fm->thumb_scroll_timer = 0;
+    if (fm->view_mode == FM_VIEW_ICON)
+        thumbs_populate_async(fm);
+}
+
+static void viewport_scroll_cb(Widget w, IswPointer client_data,
+                                IswPointer call_data)
+{
+    (void)w;
+    IswPannerReport *rep = (IswPannerReport *)call_data;
+    Fm *fm = (Fm *)client_data;
+
+    if (!(rep->changed & IswPRSliderY))
+        return;
+
+    if (fm->thumb_scroll_timer)
+        IswRemoveTimeOut(fm->thumb_scroll_timer);
+    fm->thumb_scroll_timer = IswAppAddTimeOut(
+        fm->app_state->app, THUMB_SCROLL_DEBOUNCE_MS,
+        scroll_thumb_timer_cb, fm);
+}
 
 /* ---------- double-click tracking ---------- */
 
@@ -295,6 +326,7 @@ void fileview_init(Fm *fm)
     IswArgFlexGrow(&ab, 1);
     fm->viewport = IswCreateManagedWidget("viewport", viewportWidgetClass,
                                          fm->hbox, ab.args, ab.count);
+    IswAddCallback(fm->viewport, IswNreportCallback, viewport_scroll_cb, fm);
 
     /* Default sort: name descending */
     fm->sort_col = FM_SORT_NAME;
@@ -494,6 +526,11 @@ void fileview_populate(Fm *fm)
 
 void fileview_cleanup(Fm *fm)
 {
+    if (fm->thumb_scroll_timer) {
+        IswRemoveTimeOut(fm->thumb_scroll_timer);
+        fm->thumb_scroll_timer = 0;
+    }
+
     free(fm->fv_labels);
     free(fm->fv_icons);
     fm->fv_labels = NULL;
