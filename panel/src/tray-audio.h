@@ -11,7 +11,6 @@
 #include <ISW/Toggle.h>
 #include <ISW/ListBox.h>
 #include <ISW/ListBoxRow.h>
-#include <ISW/ToggleButton.h>
 #include <ISW/SmeBSB.h>
 #include <ISW/SmeLine.h>
 
