@@ -368,8 +368,6 @@ void tn_menu_show(TrayNet *tn)
         IswArgOrientation(&ab, IswOrientHorizontal);
         IswArgFlexBasis(&ab, 50);
         IswArgBorderBottom(&ab, 1);
-        if (scheme)
-            IswArgBackground(&ab, scheme->bg_light);
         Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
                                                     tn->popup_outer,
                                                     ab.args, ab.count);
@@ -385,8 +383,7 @@ void tn_menu_show(TrayNet *tn)
             IswArgLabel(&ab, t->name);
             IswArgState(&ab, t->powered ? True : False);
             IswArgJustify(&ab, IswJustifyLeft);
-            if (scheme)
-                IswArgBackground(&ab, scheme->bg_light);
+            IswArgToggleShape(&ab, IswToggleShapeSlide);
             Widget tw = IswCreateManagedWidget("techToggle", toggleWidgetClass,
                                                 toggle_area, ab.args, ab.count);
             IswAddCallback(tw, IswNcallback, on_tech_toggled, td);

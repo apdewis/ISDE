@@ -671,9 +671,7 @@ static void layout_expose_cb(Widget w, IswPointer cd, IswPointer call)
     IswGetValues(w, qb.args, qb.count);
 
     /* Background */
-    double r, g, b;
-    isde_color_to_rgb(scheme ? scheme->bg : 0x333333, &r, &g, &b);
-    ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+    ISWRenderSetColor(rc, 0xFF000000 | (scheme ? scheme->bg : 0x333333));
     ISWRenderPaint(rc);
 
     LayoutTransform lt = compute_layout_transform(cw, ch);
@@ -696,19 +694,16 @@ static void layout_expose_cb(Widget w, IswPointer cd, IswPointer call)
             fill_color = scheme ? scheme->active : 0x4488CC;
         else
             fill_color = scheme ? scheme->bg_light : 0x555555;
-        isde_color_to_rgb(fill_color, &r, &g, &b);
-        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        ISWRenderSetColor(rc, 0xFF000000 | fill_color);
         ISWRenderFillRectangle(rc, rx, ry, rw, rh);
 
         /* Border */
-        isde_color_to_rgb(scheme ? scheme->border : 0x888888, &r, &g, &b);
-        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        ISWRenderSetColor(rc, 0xFF000000 | (scheme ? scheme->border : 0x888888));
         ISWRenderSetLineWidth(rc, 1.0);
         ISWRenderStrokeRectangle(rc, rx, ry, rw - 1, rh - 1);
 
         /* Label */
-        isde_color_to_rgb(scheme ? scheme->fg_light : 0xFFFFFF, &r, &g, &b);
-        ISWRenderSetColorRGBA(rc, r, g, b, 1.0);
+        ISWRenderSetColor(rc, 0xFF000000 | (scheme ? scheme->fg_light : 0xFFFFFF));
         int tw = ISWRenderTextWidth(rc, outputs[i].name,
                                     strlen(outputs[i].name));
         int th = ISWRenderTextHeight(rc);
@@ -942,6 +937,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     /* --- Output list --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget out_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                            vbox, ab.args, ab.count);
@@ -983,6 +979,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     /* --- Enable toggle + Primary button --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget en_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                           vbox, ab.args, ab.count);
@@ -1025,6 +1022,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     /* --- Resolution combo --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget res_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                            vbox, ab.args, ab.count);
@@ -1065,6 +1063,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     /* --- HiDPI scale (per-output) --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget scale_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                              vbox, ab.args, ab.count);
@@ -1101,6 +1100,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     /* --- Layout preview --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget lay_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                            vbox, ab.args, ab.count);

@@ -189,6 +189,7 @@ static Widget dm_create(Widget parent, IswAppContext app)
     /* Time Format */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget time_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                             vbox, ab.args, ab.count);
@@ -221,6 +222,7 @@ static Widget dm_create(Widget parent, IswAppContext app)
     /* Date Format */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget date_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                             vbox, ab.args, ab.count);

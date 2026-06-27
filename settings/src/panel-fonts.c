@@ -230,6 +230,7 @@ static Widget fonts_create(Widget parent, IswAppContext app)
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     IswArgWidth(&ab, 200);
     IswArgBorderWidth(&ab, 0);

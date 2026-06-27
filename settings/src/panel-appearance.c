@@ -136,6 +136,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     /* --- Colour Scheme --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget scheme_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                               vbox, ab.args, ab.count);
@@ -190,6 +191,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     /* --- Cursor Theme --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget cursor_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                               vbox, ab.args, ab.count);
@@ -244,6 +246,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     /* --- Icon Theme --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget icon_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                             vbox, ab.args, ab.count);

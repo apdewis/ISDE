@@ -29,21 +29,20 @@ static void
 kplotctx_ccfg_init(struct kplotctx *ctx, struct kplotccfg *cfg)
 {
 
-	switch (cfg->type) {
-	case (KPLOTCTYPE_PALETTE):
-		ISWRenderSetColorRGBA(ctx->rc,
-			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[0],
-			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[1],
-			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[2],
-			ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[3]);
-		break;
-	case (KPLOTCTYPE_RGBA):
-		ISWRenderSetColorRGBA(ctx->rc, cfg->rgba[0],
-			cfg->rgba[1], cfg->rgba[2], cfg->rgba[3]);
-		break;
-	default:
-		abort();
-	}
+	//switch (cfg->type) {
+	//case (KPLOTCTYPE_PALETTE):
+	//	ISWRenderSetColor(ctx->rc,
+	//		ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[0],
+	//		ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[1],
+	//		ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[2],
+	//		ctx->cfg.clrs[cfg->palette % ctx->cfg.clrsz].rgba[3]);
+	//	break;
+	//case (KPLOTCTYPE_RGBA):
+		//ISWRenderSetColor(ctx->rc, cfg->rgba);
+		//break;
+	//default:
+	//	abort();
+	//}
 }
 
 void

@@ -296,12 +296,6 @@ typedef struct {
     unsigned           prev_cx, prev_cy;
 } DrawCtx;
 
-static void rgb_unpack(const uint8_t in[3], double out[3])
-{
-    out[0] = in[0] / 255.0;
-    out[1] = in[1] / 255.0;
-    out[2] = in[2] / 255.0;
-}
 
 static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
                         const uint32_t *ch, size_t len, unsigned int width,
@@ -356,18 +350,18 @@ static int draw_cell_cb(struct tsm_screen *con, TSM_DRAW_ID_TYPE id,
         }
     }
 
-    ISWRenderSetColorRGBA(rc, br/255.0, bg_/255.0, bb/255.0, 1.0);
+    ISWRenderSetColor(rc, ISW_PIXEL_ARGB(0xFF, br, bg_, bb));
     ISWRenderFillRectangle(rc, x, y, w, h);
 
     if (len == 0 || ch[0] == 0) {
         if (attr->underline) {
-            ISWRenderSetColorRGBA(rc, fr/255.0, fg/255.0, fb/255.0, 1.0);
+            ISWRenderSetColor(rc, ISW_PIXEL_ARGB(0xFF, fr, fg, fb));
             ISWRenderFillRectangle(rc, x, y + h - 2, w, 1);
         }
         return 0;
     }
 
-    ISWRenderSetColorRGBA(rc, fr/255.0, fg/255.0, fb/255.0, 1.0);
+    ISWRenderSetColor(rc, ISW_PIXEL_ARGB(0xFF, fr, fg, fb));
 
     for (size_t k = 0; k < len; k++) {
         uint32_t c = ch[k];
@@ -415,9 +409,8 @@ static void draw_cursor(TermWidget *t, ISWRenderContext *rc)
     unsigned cy = tsm_screen_get_cursor_y(t->screen);
     int x = cx * t->cell_w;
     int y = cy * t->cell_h;
-    double c[3];
-    rgb_unpack(t->cfg.palette.cursor, c);
-    ISWRenderSetColorRGBA(rc, c[0], c[1], c[2], 0.6);
+    const uint8_t *cc = t->cfg.palette.cursor;
+    ISWRenderSetColor(rc, ISW_PIXEL_ARGB(153, cc[0], cc[1], cc[2]));
     if (strcmp(t->cfg.cursor_shape, "underline") == 0) {
         ISWRenderFillRectangle(rc, x, y + t->cell_h - 2, t->cell_w, 2);
     } else if (strcmp(t->cfg.cursor_shape, "bar") == 0) {
@@ -445,9 +438,8 @@ static void expose_cb(Widget w, IswPointer cd, IswPointer call)
     if (pw <= 0 || ph <= 0) return;
 
     if (t->last_age == 0) {
-        double bg[3];
-        rgb_unpack(t->cfg.palette.rgb[17], bg);
-        ISWRenderSetColorRGBA(rc, bg[0], bg[1], bg[2], 1.0);
+        const uint8_t *bg = t->cfg.palette.rgb[17];
+        ISWRenderSetColor(rc, ISW_PIXEL_ARGB(0xFF, bg[0], bg[1], bg[2]));
         ISWRenderFillRectangle(rc, 0, 0, pw, ph);
     }
 

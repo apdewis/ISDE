@@ -157,6 +157,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     /* Font row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget font_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                              vbox, ab.args, ab.count);
@@ -203,6 +204,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     /* Colour scheme row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget scheme_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                                vbox, ab.args, ab.count);
@@ -249,6 +251,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     /* Cursor shape row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget cursor_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                                vbox, ab.args, ab.count);
@@ -292,6 +295,7 @@ static Widget terminal_create(Widget parent, IswAppContext app)
     /* Scrollback row */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget sb_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                            vbox, ab.args, ab.count);

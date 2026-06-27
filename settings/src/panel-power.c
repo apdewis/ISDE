@@ -138,6 +138,7 @@ static void make_scale_row(Widget vbox, const char *label_text,
 {
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                        vbox, ab.args, ab.count);
@@ -175,6 +176,7 @@ static void make_combo_row(Widget vbox, const char *label_text,
 {
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
     IswArgSpacing(&ab, 8);
     Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
                                        vbox, ab.args, ab.count);

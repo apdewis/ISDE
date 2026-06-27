@@ -410,6 +410,7 @@ void tb_menu_show(TrayBt *tb)
         /* Override shell */
         IswArgWidth(&ab, 300);
         IswArgHeight(&ab, 400);
+        
         tb->popup_shell = IswCreatePopupShell("btPopup",
                                                overrideShellWidgetClass,
                                                p->toplevel, ab.args, ab.count);
@@ -429,8 +430,6 @@ void tb_menu_show(TrayBt *tb)
         IswArgOrientation(&ab, IswOrientHorizontal);
         IswArgFlexBasis(&ab, 50);
         IswArgBorderBottom(&ab, 1);
-        if (scheme)
-            IswArgBackground(&ab, scheme->bg_light);
         Widget toggle_area = IswCreateManagedWidget("toggleArea", formWidgetClass,
                                                     tb->popup_outer,
                                                     ab.args, ab.count);
@@ -440,8 +439,7 @@ void tb_menu_show(TrayBt *tb)
         IswArgLabel(&ab, "Bluetooth");
         IswArgState(&ab, (tb->has_adapter && tb->adapter.powered) ? True : False);
         IswArgJustify(&ab, IswJustifyLeft);
-        if (scheme)
-            IswArgBackground(&ab, scheme->bg_light);
+        IswArgToggleShape(&ab, IswToggleShapeSlide);
         Widget tw = IswCreateManagedWidget("btToggle", toggleWidgetClass,
                                             toggle_area, ab.args, ab.count);
         IswAddCallback(tw, IswNcallback, on_power_toggled, tb);
