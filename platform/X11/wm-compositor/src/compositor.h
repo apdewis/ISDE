@@ -65,6 +65,12 @@ typedef struct WmCompositor {
     uint64_t            switcher_anim_last_ms;
     GLuint              switcher_title_tex;  /* texture of the centered title */
     int                 switcher_title_w, switcher_title_h;
+
+    /* Desktop background */
+    GLuint              bg_texture;
+    int                 bg_has_texture;
+    float               bg_r, bg_g, bg_b;
+    xcb_atom_t          atom_xrootpmap;
 } WmCompositor;
 
 struct Wm;
@@ -90,5 +96,6 @@ void  wm_compositor_window_configured(WmCompositor *comp, xcb_window_t win,
                                        uint16_t width, uint16_t height,
                                        uint16_t border,
                                        xcb_window_t above_sibling);
+void  wm_compositor_reload_background(WmCompositor *comp);
 
 #endif /* ISDE_COMPOSITOR_H */

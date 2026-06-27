@@ -20,6 +20,7 @@
 
 #include <cairo/cairo.h>
 #include "render.h"
+#include "isde-config.h"
 #include "isde-theme.h"
 
 /* EGL / GL extension function pointers (zero-copy path) */
@@ -550,8 +551,108 @@ int wm_compositor_init(Wm *wm)
         free(tree);
     }
 
+    /* Intern the root pixmap atom and load initial background */
+    xcb_intern_atom_cookie_t bg_ck =
+        xcb_intern_atom(comp->conn, 0, 14, "_XROOTPMAP_ID");
+    xcb_intern_atom_reply_t *bg_ar =
+        xcb_intern_atom_reply(comp->conn, bg_ck, NULL);
+    if (bg_ar) {
+        comp->atom_xrootpmap = bg_ar->atom;
+        free(bg_ar);
+    }
+    wm_compositor_reload_background(comp);
+
     fprintf(stderr, "compositor: initialized (overlay 0x%x)\n", comp->overlay);
     return 0;
+}
+
+void wm_compositor_reload_background(WmCompositor *comp)
+{
+    if (!comp) return;
+
+    /* Try to read _XROOTPMAP_ID from the root window */
+    xcb_window_t root = comp->screen->root;
+
+    if (comp->atom_xrootpmap) {
+        xcb_get_property_reply_t *prop = xcb_get_property_reply(comp->conn,
+            xcb_get_property(comp->conn, 0, root, comp->atom_xrootpmap,
+                             XCB_ATOM_PIXMAP, 0, 1), NULL);
+        if (prop && xcb_get_property_value_length(prop) >= 4) {
+            xcb_pixmap_t pixmap = *(xcb_pixmap_t *)xcb_get_property_value(prop);
+            free(prop);
+
+            if (pixmap != XCB_PIXMAP_NONE) {
+                xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(
+                    comp->conn,
+                    xcb_get_geometry(comp->conn, pixmap), NULL);
+                if (geo && geo->width > 0 && geo->height > 0) {
+                    xcb_get_image_reply_t *img = xcb_get_image_reply(
+                        comp->conn,
+                        xcb_get_image(comp->conn, XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                      pixmap, 0, 0, geo->width, geo->height,
+                                      0xFFFFFFFF), NULL);
+                    if (img) {
+                        uint8_t *data = xcb_get_image_data(img);
+                        int len = xcb_get_image_data_length(img);
+                        int npixels = geo->width * geo->height;
+                        if (len >= npixels * 4) {
+                            uint32_t *pixels = (uint32_t *)data;
+                            for (int i = 0; i < npixels; i++)
+                                pixels[i] |= 0xFF000000;
+
+                            if (!comp->bg_texture)
+                                glGenTextures(1, &comp->bg_texture);
+                            glBindTexture(GL_TEXTURE_2D, comp->bg_texture);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                                         geo->width, geo->height, 0,
+                                         GL_BGRA, GL_UNSIGNED_BYTE, data);
+                            glBindTexture(GL_TEXTURE_2D, 0);
+                            comp->bg_has_texture = 1;
+                            fprintf(stderr, "compositor: background pixmap %ux%u loaded\n",
+                                    geo->width, geo->height);
+                        }
+                        free(img);
+                    }
+                }
+                free(geo);
+                comp->needs_repaint = 1;
+                return;
+            }
+        }
+        free(prop);
+    }
+
+    /* No pixmap — read solid colour from config */
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *cfg_root = isde_config_root(cfg);
+        IsdeConfigTable *dt = isde_config_table(cfg_root, "desktop");
+        IsdeConfigTable *bg_tbl = dt ? isde_config_table(dt, "background") : NULL;
+        if (bg_tbl) {
+            const char *hex = isde_config_string(bg_tbl, "color", NULL);
+            if (hex) {
+                if (*hex == '#') hex++;
+                char *end;
+                unsigned long v = strtoul(hex, &end, 16);
+                if (end != hex) {
+                    comp->bg_r = ((v >> 16) & 0xFF) / 255.0f;
+                    comp->bg_g = ((v >> 8) & 0xFF) / 255.0f;
+                    comp->bg_b = (v & 0xFF) / 255.0f;
+                }
+            }
+        }
+        isde_config_free(cfg);
+    }
+
+    if (comp->bg_has_texture) {
+        glDeleteTextures(1, &comp->bg_texture);
+        comp->bg_texture = 0;
+        comp->bg_has_texture = 0;
+    }
+    comp->needs_repaint = 1;
 }
 
 void wm_compositor_destroy(WmCompositor *comp)
@@ -578,6 +679,9 @@ void wm_compositor_destroy(WmCompositor *comp)
         free(cw);
     }
 
+    if (comp->bg_texture) {
+        glDeleteTextures(1, &comp->bg_texture);
+    }
     if (comp->snapshot_fbo) {
         pfn_glDeleteFramebuffers(1, &comp->snapshot_fbo);
     }
@@ -1204,8 +1308,22 @@ void wm_compositor_paint(WmCompositor *comp)
         }
     }
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(comp->bg_r, comp->bg_g, comp->bg_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    if (comp->bg_has_texture && comp->bg_texture) {
+        glBindTexture(GL_TEXTURE_2D, comp->bg_texture);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        int sw = comp->screen->width_in_pixels;
+        int sh = comp->screen->height_in_pixels;
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2i(0,  0);
+        glTexCoord2f(1.0f, 0.0f); glVertex2i(sw, 0);
+        glTexCoord2f(1.0f, 1.0f); glVertex2i(sw, sh);
+        glTexCoord2f(0.0f, 1.0f); glVertex2i(0,  sh);
+        glEnd();
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 
     /* Paint windows in list order (last = frontmost, drawn last).
      * The list is prepend-order so we need to walk it in reverse.

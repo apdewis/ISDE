@@ -1,12 +1,18 @@
 #define _POSIX_C_SOURCE 200809L
 /*
- * panel-desktops.c — Virtual desktop settings: grid rows and columns
+ * panel-desktops.c — Virtual desktop settings: grid rows/columns and
+ *                    desktop background (solid colour or image)
  */
 #include "settings.h"
 #include <ISW/Slider.h>
+#include <ISW/Toggle.h>
+#include <ISW/ColorPicker.h>
+#include <ISW/Text.h>
 #include <ISW/IswArgMacros.h>
 
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 static Widget scale_rows;
 static Widget scale_cols;
@@ -14,10 +20,69 @@ static Widget scale_cols;
 static int saved_rows;
 static int saved_cols;
 
+/* Background state */
+static Widget radio_solid;
+static Widget radio_image;
+static Widget color_picker;
+static Widget color_picker_row;
+static Widget image_path_text;
+static Widget image_path_row;
+
+static int saved_bg_mode;        /* 0 = solid, 1 = image */
+static int saved_bg_r, saved_bg_g, saved_bg_b;
+static char saved_bg_image[512];
+
 static IsdeDBus *panel_dbus;
 
 #define SLIDER_W 300
 #define LABEL_W 150
+
+/* ---------- helpers ---------- */
+
+static int current_bg_mode(void)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    Boolean state = False;
+    IswArgState(&ab, &state);
+    IswGetValues(radio_image, ab.args, ab.count);
+    return state ? 1 : 0;
+}
+
+static const char *get_text(Widget w)
+{
+    String str = NULL;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &str);
+    IswGetValues(w, ab.args, ab.count);
+    return str ? str : "";
+}
+
+static void set_text(Widget w, const char *str)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, str);
+    IswSetValues(w, ab.args, ab.count);
+}
+
+static void update_bg_visibility(void)
+{
+    int mode = current_bg_mode();
+    if (mode == 0) {
+        IswManageChild(color_picker_row);
+        IswUnmanageChild(image_path_row);
+    } else {
+        IswUnmanageChild(color_picker_row);
+        IswManageChild(image_path_row);
+    }
+}
+
+static void bg_mode_changed_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    update_bg_visibility();
+}
+
+/* ---------- apply / revert ---------- */
 
 static void desktops_apply(void)
 {
@@ -28,7 +93,29 @@ static void desktops_apply(void)
     if (path) {
         isde_config_write_int(path, "wm.desktops", "rows", rows);
         isde_config_write_int(path, "wm.desktops", "columns", cols);
+
+        int mode = current_bg_mode();
+        isde_config_write_string(path, "desktop.background", "mode",
+                                 mode == 0 ? "solid" : "image");
+
+        int r, g, b;
+        IswColorPickerGetColor(color_picker, &r, &g, &b);
+        char hex[8];
+        snprintf(hex, sizeof(hex), "#%02x%02x%02x", r, g, b);
+        isde_config_write_string(path, "desktop.background", "color", hex);
+
+        const char *img = get_text(image_path_text);
+        isde_config_write_string(path, "desktop.background", "image",
+                                 img ? img : "");
+
         free(path);
+
+        saved_bg_mode = mode;
+        saved_bg_r = r;
+        saved_bg_g = g;
+        saved_bg_b = b;
+        snprintf(saved_bg_image, sizeof(saved_bg_image), "%s",
+                 img ? img : "");
     }
 
     saved_rows = rows;
@@ -36,6 +123,7 @@ static void desktops_apply(void)
 
     if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "wm.desktops", "*");
+        isde_dbus_settings_notify(panel_dbus, "desktop.background", "*");
     }
 }
 
@@ -43,7 +131,23 @@ static void desktops_revert(void)
 {
     IswSliderSetValue(scale_rows, saved_rows);
     IswSliderSetValue(scale_cols, saved_cols);
+
+    /* Revert background */
+    IswColorPickerSetColor(color_picker, saved_bg_r, saved_bg_g, saved_bg_b);
+    set_text(image_path_text, saved_bg_image);
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgState(&ab, saved_bg_mode == 0 ? True : False);
+    IswSetValues(radio_solid, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgState(&ab, saved_bg_mode == 1 ? True : False);
+    IswSetValues(radio_image, ab.args, ab.count);
+
+    update_bg_visibility();
 }
+
+/* ---------- UI construction ---------- */
 
 static void make_scale_row(Widget vbox, const char *label_text,
                            int min, int max, int value, Widget *out_scale)
@@ -83,6 +187,16 @@ static void make_scale_row(Widget vbox, const char *label_text,
     IswCreateManagedWidget("spacer", labelWidgetClass, row, ab.args, ab.count);
 }
 
+static uint32_t parse_hex_color(const char *s)
+{
+    if (!s) return 0x1a1a2e;
+    if (*s == '#') s++;
+    char *end;
+    unsigned long v = strtoul(s, &end, 16);
+    if (end == s) return 0x1a1a2e;
+    return (uint32_t)(v & 0xFFFFFF);
+}
+
 static Widget desktops_create(Widget parent, IswAppContext app)
 {
     (void)app;
@@ -90,6 +204,10 @@ static Widget desktops_create(Widget parent, IswAppContext app)
     /* Load current values */
     saved_rows = 1;
     saved_cols = 2;
+    saved_bg_mode = 0;
+    saved_bg_r = 0x1a; saved_bg_g = 0x1a; saved_bg_b = 0x2e;
+    saved_bg_image[0] = '\0';
+
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -102,6 +220,23 @@ static Widget desktops_create(Widget parent, IswAppContext app)
             if (r > 0) { saved_rows = r; }
             if (c > 0) { saved_cols = c; }
         }
+
+        IsdeConfigTable *dt = isde_config_table(root, "desktop");
+        IsdeConfigTable *bg = dt ? isde_config_table(dt, "background") : NULL;
+        if (bg) {
+            const char *mode = isde_config_string(bg, "mode", "solid");
+            saved_bg_mode = (strcmp(mode, "image") == 0) ? 1 : 0;
+
+            uint32_t color = parse_hex_color(
+                isde_config_string(bg, "color", "#1a1a2e"));
+            saved_bg_r = (color >> 16) & 0xFF;
+            saved_bg_g = (color >> 8) & 0xFF;
+            saved_bg_b = color & 0xFF;
+
+            const char *img = isde_config_string(bg, "image", "");
+            snprintf(saved_bg_image, sizeof(saved_bg_image), "%s", img);
+        }
+
         isde_config_free(cfg);
     }
 
@@ -117,20 +252,156 @@ static Widget desktops_create(Widget parent, IswAppContext app)
     make_scale_row(vbox, "Desktop columns:",
                    1, 4, saved_cols, &scale_cols);
 
+    /* --- Separator --- */
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Background");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("bgHeader", labelWidgetClass,
+                           vbox, ab.args, ab.count);
+
+    /* --- Mode radio buttons --- */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 8);
+    Widget mode_row = IswCreateManagedWidget("modeRow", flexBoxWidgetClass,
+                                            vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Background type:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("modeLbl", labelWidgetClass,
+                           mode_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Solid Colour");
+    IswArgBorderWidth(&ab, 1);
+    IswArgToggleShape(&ab, IswToggleShapeRadio);
+    if (saved_bg_mode == 0) IswArgState(&ab, True);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    radio_solid = IswCreateManagedWidget("radioSolid", toggleWidgetClass,
+                                        mode_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Image");
+    IswArgBorderWidth(&ab, 1);
+    IswArgToggleShape(&ab, IswToggleShapeRadio);
+    IswArgRadioGroup(&ab, radio_solid);
+    if (saved_bg_mode == 1) IswArgState(&ab, True);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    radio_image = IswCreateManagedWidget("radioImage", toggleWidgetClass,
+                                        mode_row, ab.args, ab.count);
+
+    IswAddCallback(radio_solid, IswNcallback, bg_mode_changed_cb, NULL);
+    IswAddCallback(radio_image, IswNcallback, bg_mode_changed_cb, NULL);
+
+    /* --- Colour picker row --- */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 8);
+    color_picker_row = IswCreateWidget("colorRow", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Colour:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("colorLbl", labelWidgetClass,
+                           color_picker_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    ab.args[ab.count].name = IswNcolorRed;
+    ab.args[ab.count].value = (IswArgVal)saved_bg_r;
+    ab.count++;
+    ab.args[ab.count].name = IswNcolorGreen;
+    ab.args[ab.count].value = (IswArgVal)saved_bg_g;
+    ab.count++;
+    ab.args[ab.count].name = IswNcolorBlue;
+    ab.args[ab.count].value = (IswArgVal)saved_bg_b;
+    ab.count++;
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    color_picker = IswCreateManagedWidget("colorPicker",
+                                          colorPickerWidgetClass,
+                                          color_picker_row,
+                                          ab.args, ab.count);
+
+    /* --- Image path row --- */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 8);
+    image_path_row = IswCreateWidget("imageRow", flexBoxWidgetClass,
+                                     vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Image path:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("imgLbl", labelWidgetClass,
+                           image_path_row, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgBorderWidth(&ab, 1);
+    IswArgWidth(&ab, SLIDER_W);
+    IswArgString(&ab, saved_bg_image);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    image_path_text = IswCreateManagedWidget("imgPath", textWidgetClass,
+                                             image_path_row,
+                                             ab.args, ab.count);
+
+    /* Show/hide rows based on current mode */
+    if (saved_bg_mode == 0) {
+        IswManageChild(color_picker_row);
+    } else {
+        IswManageChild(image_path_row);
+    }
+
     return vbox;
 }
 
 static int desktops_has_changes(void)
 {
     if (!scale_rows) { return 0; }
-    return IswSliderGetValue(scale_rows) != saved_rows ||
-           IswSliderGetValue(scale_cols) != saved_cols;
+    if (IswSliderGetValue(scale_rows) != saved_rows ||
+        IswSliderGetValue(scale_cols) != saved_cols)
+        return 1;
+
+    if (current_bg_mode() != saved_bg_mode)
+        return 1;
+
+    int r, g, b;
+    IswColorPickerGetColor(color_picker, &r, &g, &b);
+    if (r != saved_bg_r || g != saved_bg_g || b != saved_bg_b)
+        return 1;
+
+    const char *img = get_text(image_path_text);
+    if (strcmp(img, saved_bg_image) != 0)
+        return 1;
+
+    return 0;
 }
 
 static void desktops_destroy(void)
 {
     scale_rows = NULL;
     scale_cols = NULL;
+    radio_solid = NULL;
+    radio_image = NULL;
+    color_picker = NULL;
+    color_picker_row = NULL;
+    image_path_text = NULL;
+    image_path_row = NULL;
 }
 
 void panel_desktops_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }

@@ -22,6 +22,9 @@
 #include <xcb/dpms.h>
 #include <xcb/screensaver.h>
 #include <dbus/dbus.h>
+#include <cairo/cairo.h>
+#include <cairo/cairo-xcb.h>
+#include <ISW/ISWImage.h>
 
 #include "isde-theme.h"
 #include "dpms.h"
@@ -237,6 +240,171 @@ void apply_power_settings(Session *s)
             (int)s->lid_action);
 }
 
+/* ---------- desktop background ---------- */
+
+static uint32_t parse_hex_color(const char *s, uint32_t fallback)
+{
+    if (!s) return fallback;
+    if (*s == '#') s++;
+    char *end;
+    unsigned long v = strtoul(s, &end, 16);
+    if (end == s) return fallback;
+    return (uint32_t)(v & 0xFFFFFF);
+}
+
+static xcb_visualtype_t *find_root_visual(xcb_screen_t *screen)
+{
+    xcb_depth_iterator_t di = xcb_screen_allowed_depths_iterator(screen);
+    for (; di.rem; xcb_depth_next(&di)) {
+        xcb_visualtype_iterator_t vi = xcb_depth_visuals_iterator(di.data);
+        for (; vi.rem; xcb_visualtype_next(&vi)) {
+            if (vi.data->visual_id == screen->root_visual)
+                return vi.data;
+        }
+    }
+    return NULL;
+}
+
+static xcb_screen_t *session_screen(Session *s)
+{
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
+    xcb_screen_iterator_t it =
+        xcb_setup_roots_iterator(xcb_get_setup(conn));
+    for (int i = 0; i < s->screen_num; i++) xcb_screen_next(&it);
+    return it.data;
+}
+
+static void set_root_pixmap_atoms(xcb_connection_t *conn,
+                                  xcb_window_t root,
+                                  xcb_pixmap_t pixmap)
+{
+    const char *names[] = {"_XROOTPMAP_ID", "ESETROOT_PMAP_ID"};
+    xcb_intern_atom_cookie_t cookies[2];
+    for (int i = 0; i < 2; i++)
+        cookies[i] = xcb_intern_atom(conn, 0, strlen(names[i]), names[i]);
+    for (int i = 0; i < 2; i++) {
+        xcb_intern_atom_reply_t *r = xcb_intern_atom_reply(conn, cookies[i], NULL);
+        if (r) {
+            xcb_change_property(conn, XCB_PROP_MODE_REPLACE, root,
+                                r->atom, XCB_ATOM_PIXMAP, 32, 1, &pixmap);
+            free(r);
+        }
+    }
+}
+
+void apply_background(Session *s)
+{
+    xcb_connection_t *conn = (xcb_connection_t *)s->server_context;
+    if (!conn) return;
+
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (!cfg) return;
+
+    IsdeConfigTable *root_tbl = isde_config_root(cfg);
+    IsdeConfigTable *desk = isde_config_table(root_tbl, "desktop");
+    IsdeConfigTable *bg = desk ? isde_config_table(desk, "background") : NULL;
+
+    free(s->bg_image_path);
+    s->bg_image_path = NULL;
+
+    if (bg) {
+        const char *mode = isde_config_string(bg, "mode", "solid");
+        s->bg_mode = (strcmp(mode, "image") == 0) ? BG_MODE_IMAGE : BG_MODE_SOLID;
+        s->bg_color = parse_hex_color(
+            isde_config_string(bg, "color", "#1a1a2e"), 0x1a1a2e);
+        const char *img = isde_config_string(bg, "image", NULL);
+        if (img && img[0]) s->bg_image_path = strdup(img);
+    } else {
+        s->bg_mode = BG_MODE_SOLID;
+        s->bg_color = 0x1a1a2e;
+    }
+    isde_config_free(cfg);
+
+    xcb_screen_t *screen = session_screen(s);
+    xcb_window_t root_win = screen->root;
+    int sw = screen->width_in_pixels;
+    int sh = screen->height_in_pixels;
+
+    if (s->bg_mode == BG_MODE_IMAGE && s->bg_image_path) {
+        xcb_visualtype_t *visual = find_root_visual(screen);
+        if (!visual) goto solid_fallback;
+
+        ISWImage *img = ISWImageLoad(s->bg_image_path, 96.0, NULL);
+        if (!img) {
+            fprintf(stderr, "isde-session: cannot load background image: %s\n",
+                    s->bg_image_path);
+            goto solid_fallback;
+        }
+
+        unsigned int iw, ih;
+        const unsigned char *rgba = ISWImageRasterize(img, sw, sh, &iw, &ih);
+        if (!rgba || iw == 0 || ih == 0) {
+            ISWImageDestroy(img);
+            goto solid_fallback;
+        }
+
+        xcb_pixmap_t pixmap = xcb_generate_id(conn);
+        xcb_create_pixmap(conn, screen->root_depth, pixmap, root_win, sw, sh);
+
+        cairo_surface_t *surface =
+            cairo_xcb_surface_create(conn, pixmap, visual, sw, sh);
+        cairo_t *cr = cairo_create(surface);
+
+        cairo_surface_t *img_surface =
+            cairo_image_surface_create_for_data(
+                (unsigned char *)rgba, CAIRO_FORMAT_ARGB32, iw, ih, iw * 4);
+
+        /* ISWImage produces RGBA; Cairo wants premultiplied ARGB in native
+         * byte order.  Swizzle the buffer in-place before painting. */
+        unsigned char *px = (unsigned char *)rgba;
+        for (unsigned int i = 0; i < iw * ih; i++) {
+            unsigned char r = px[0], g = px[1], b = px[2], a = px[3];
+            unsigned char ra = (unsigned char)((r * a + 127) / 255);
+            unsigned char ga = (unsigned char)((g * a + 127) / 255);
+            unsigned char ba = (unsigned char)((b * a + 127) / 255);
+            px[0] = ba; px[1] = ga; px[2] = ra; px[3] = a;
+            px += 4;
+        }
+        cairo_surface_mark_dirty(img_surface);
+
+        cairo_scale(cr, (double)sw / iw, (double)sh / ih);
+        cairo_set_source_surface(cr, img_surface, 0, 0);
+        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_BILINEAR);
+        cairo_paint(cr);
+
+        cairo_surface_destroy(img_surface);
+        cairo_destroy(cr);
+        cairo_surface_flush(surface);
+        cairo_surface_destroy(surface);
+        ISWImageDestroy(img);
+
+        uint32_t val = pixmap;
+        xcb_change_window_attributes(conn, root_win,
+                                     XCB_CW_BACK_PIXMAP, &val);
+        xcb_clear_area(conn, 0, root_win, 0, 0, sw, sh);
+        set_root_pixmap_atoms(conn, root_win, pixmap);
+        xcb_flush(conn);
+
+        fprintf(stderr, "isde-session: background image: %s (%ux%u → %dx%d)\n",
+                s->bg_image_path, iw, ih, sw, sh);
+        return;
+    }
+
+solid_fallback:;
+    uint32_t pixel = s->bg_color;
+    /* Allocate a matching pixel value if the screen depth is not 24/32,
+     * but for TrueColor visuals the RGB value is the pixel. */
+    xcb_change_window_attributes(conn, root_win, XCB_CW_BACK_PIXEL, &pixel);
+    xcb_clear_area(conn, 0, root_win, 0, 0, sw, sh);
+
+    /* Clear root pixmap atoms so compositors don't use a stale pixmap */
+    set_root_pixmap_atoms(conn, root_win, XCB_PIXMAP_NONE);
+    xcb_flush(conn);
+
+    fprintf(stderr, "isde-session: background color: #%06x\n", s->bg_color);
+}
+
 static const DBusObjectPathVTable screensaver_vtable = {
     .message_function = screensaver_message_handler
 };
@@ -300,6 +468,10 @@ static void on_settings_changed(const char *section, const char *key,
     if (strcmp(section, "power") == 0 ||
         strcmp(section, "*") == 0) {
         s->reload_power = 1;
+    }
+    if (strcmp(section, "desktop.background") == 0 ||
+        strcmp(section, "*") == 0) {
+        s->reload_background = 1;
     }
 }
 
@@ -617,6 +789,11 @@ static void check_timer_fire(Session *s)
         s->reload_power = 0;
         apply_power_settings(s);
     }
+
+    if (s->reload_background) {
+        s->reload_background = 0;
+        apply_background(s);
+    }
 }
 
 /* ---------- public API ---------- */
@@ -721,6 +898,9 @@ int session_init(Session *s)
             isde_dpms_set_timeouts(conn, s->screen_off_sec,
                                    s->screen_off_sec, s->screen_off_sec);
         }
+
+        /* Paint desktop background */
+        apply_background(s);
 
         xcb_flush(conn);
     } else {
@@ -992,4 +1172,5 @@ void session_cleanup(Session *s)
     free(s->wm_command);
     free(s->panel_command);
     free(s->fm_command);
+    free(s->bg_image_path);
 }

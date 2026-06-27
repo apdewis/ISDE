@@ -10,6 +10,7 @@
 #include "isde-xdg.h"
 
 #include <signal.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
 #include <dbus/dbus.h>
@@ -21,6 +22,12 @@ typedef enum LidAction {
     LID_ACTION_LOCK,
     LID_ACTION_NOTHING
 } LidAction;
+
+/* Desktop background mode */
+typedef enum BgMode {
+    BG_MODE_SOLID,
+    BG_MODE_IMAGE
+} BgMode;
 
 /* ---------- Child process ---------- */
 typedef struct Child {
@@ -78,6 +85,11 @@ typedef struct Session {
     /* Session settings */
     int               idle_lock_sec;
 
+    /* Desktop background */
+    BgMode            bg_mode;
+    uint32_t          bg_color;       /* 0xRRGGBB */
+    char             *bg_image_path;
+
     /* Confirmation overlay process */
     pid_t             confirm_pid;    /* isde-confirm child, or 0 */
 
@@ -100,6 +112,7 @@ typedef struct Session {
     volatile sig_atomic_t reload_appearance;
     volatile sig_atomic_t reload_display;
     volatile sig_atomic_t reload_power;
+    volatile sig_atomic_t reload_background;
 
     /* Pending confirmation action from ConfirmationRequested signal */
     char              confirm_action[16];

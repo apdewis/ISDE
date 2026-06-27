@@ -141,6 +141,13 @@ static void wm_on_settings_changed(const char *section, const char *key,
         return;
     }
 
+#ifdef ISDE_COMPOSITOR
+    if (strcmp(section, "desktop.background") == 0 && wm->compositor) {
+        wm_compositor_reload_background(wm->compositor);
+        return;
+    }
+#endif
+
     /* Appearance/font changes are applied live: reload the colour scheme,
      * re-tint the title-bar button icons, and refresh every frame. */
     if (strcmp(section, "appearance") == 0 ||
@@ -2361,6 +2368,13 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     }
     case XCB_PROPERTY_NOTIFY: {
         xcb_property_notify_event_t *pn = (xcb_property_notify_event_t *)ev;
+#ifdef ISDE_COMPOSITOR
+        if (pn->window == wm->root && wm->compositor &&
+            wm->compositor->atom_xrootpmap &&
+            pn->atom == wm->compositor->atom_xrootpmap) {
+            wm_compositor_reload_background(wm->compositor);
+        } else
+#endif
         if (!wm_find_client_by_window(wm, pn->window)) {
             on_user_time_window_notify(wm, pn);
         } else {

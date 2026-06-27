@@ -42,6 +42,7 @@ target_link_libraries(isde-session-x11
     ISDE::XCB_DPMS
     ISDE::XCB_SCREENSAVER
     ISDE::CAIRO
+    ISDE::CAIRO_XCB
     ISDE::FONTCONFIG
     ISDE::DBUS
 )
