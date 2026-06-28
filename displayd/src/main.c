@@ -213,7 +213,8 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                 xcb_randr_get_crtc_info_reply(conn,
                     xcb_randr_get_crtc_info(conn, crtc, cfg_ts), NULL);
             if (ci) {
-                if (ci->x == (int16_t)want_x && ci->y == (int16_t)want_y &&
+                if (ci->mode != XCB_NONE &&
+                    ci->x == (int16_t)want_x && ci->y == (int16_t)want_y &&
                     ci->width == (uint16_t)want_w &&
                     ci->height == (uint16_t)want_h)
                     already_correct = 1;
