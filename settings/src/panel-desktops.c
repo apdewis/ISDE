@@ -8,6 +8,8 @@
 #include <ISW/Toggle.h>
 #include <ISW/ColorPicker.h>
 #include <ISW/Text.h>
+#include <ISW/FileChooser.h>
+#include <ISW/Command.h>
 #include <ISW/IswArgMacros.h>
 
 #include <stdlib.h>
@@ -25,7 +27,8 @@ static Widget radio_solid;
 static Widget radio_image;
 static Widget color_picker;
 static Widget color_picker_row;
-static Widget image_path_text;
+static Widget image_path_label;
+static Widget image_browse_btn;
 static Widget image_path_row;
 
 static int saved_bg_mode;        /* 0 = solid, 1 = image */
@@ -48,20 +51,80 @@ static int current_bg_mode(void)
     return state ? 1 : 0;
 }
 
-static const char *get_text(Widget w)
+static const char *get_path_label(void)
 {
     String str = NULL;
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgString(&ab, &str);
-    IswGetValues(w, ab.args, ab.count);
+    IswArgLabel(&ab, &str);
+    IswGetValues(image_path_label, ab.args, ab.count);
     return str ? str : "";
 }
 
-static void set_text(Widget w, const char *str)
+static void set_path_label(const char *str)
 {
     IswArgBuilder ab = IswArgBuilderInit();
-    IswArgString(&ab, str);
-    IswSetValues(w, ab.args, ab.count);
+    IswArgLabel(&ab, str);
+    IswSetValues(image_path_label, ab.args, ab.count);
+}
+
+/* ---------- file chooser dialog ---------- */
+
+static Widget fc_shell;
+
+static void fc_dismiss(void)
+{
+    if (fc_shell) {
+        IswPopdown(fc_shell);
+        IswDestroyWidget(fc_shell);
+        fc_shell = NULL;
+    }
+}
+
+static void fc_selected_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd;
+    IswFileChooserCallbackData *cb = (IswFileChooserCallbackData *)call;
+    if (cb && cb->path)
+        set_path_label(cb->path);
+    fc_dismiss();
+}
+
+static void fc_cancel_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd; (void)call;
+    fc_dismiss();
+}
+
+static void browse_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd; (void)call;
+
+    if (fc_shell)
+        return;
+
+    Widget parent = image_browse_btn;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgTitle(&ab, "Select Background Image");
+    IswArgWidth(&ab, 500);
+    IswArgHeight(&ab, 400);
+    fc_shell = IswCreatePopupShell("fileChooserShell", transientShellWidgetClass,
+                                   parent, ab.args, ab.count);
+
+    static IswFileFilter filters[] = {
+        { "Image Files", "*.png;*.jpg;*.jpeg;*.bmp;*.xpm" },
+        { "All Files",   "*" },
+    };
+
+    IswArgBuilderReset(&ab);
+    ISW_ARG(&ab, IswNfileFilters, filters);
+    ISW_ARG(&ab, IswNnumFileFilters, IswNumber(filters));
+    Widget fc = IswCreateManagedWidget("fileChooser", fileChooserWidgetClass,
+                                      fc_shell, ab.args, ab.count);
+
+    IswAddCallback(fc, IswNfileSelected, fc_selected_cb, NULL);
+    IswAddCallback(fc, IswNfileCancelled, fc_cancel_cb, NULL);
+
+    IswPopup(fc_shell, IswGrabExclusive);
 }
 
 static void update_bg_visibility(void)
@@ -104,7 +167,7 @@ static void desktops_apply(void)
         snprintf(hex, sizeof(hex), "#%02x%02x%02x", r, g, b);
         isde_config_write_string(path, "desktop.background", "color", hex);
 
-        const char *img = get_text(image_path_text);
+        const char *img = get_path_label();
         isde_config_write_string(path, "desktop.background", "image",
                                  img ? img : "");
 
@@ -134,7 +197,7 @@ static void desktops_revert(void)
 
     /* Revert background */
     IswColorPickerSetColor(color_picker, saved_bg_r, saved_bg_g, saved_bg_b);
-    set_text(image_path_text, saved_bg_image);
+    set_path_label(saved_bg_image);
 
     IswArgBuilder ab = IswArgBuilderInit();
     IswArgState(&ab, saved_bg_mode == 0 ? True : False);
@@ -351,14 +414,23 @@ static Widget desktops_create(Widget parent, IswAppContext app)
                            image_path_row, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
-    IswArgEditType(&ab, IswtextEdit);
-    IswArgBorderWidth(&ab, 1);
-    IswArgWidth(&ab, SLIDER_W);
-    IswArgString(&ab, saved_bg_image);
+    IswArgLabel(&ab, saved_bg_image);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyLeft);
+    IswArgFlexBasis(&ab, SLIDER_W - 80);
     IswArgFlexAlign(&ab, IswFlexAlignCenter);
-    image_path_text = IswCreateManagedWidget("imgPath", textWidgetClass,
-                                             image_path_row,
-                                             ab.args, ab.count);
+    image_path_label = IswCreateManagedWidget("imgPath", labelWidgetClass,
+                                              image_path_row,
+                                              ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Browse...");
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    image_browse_btn = IswCreateManagedWidget("imgBrowse", commandWidgetClass,
+                                              image_path_row,
+                                              ab.args, ab.count);
+    IswAddCallback(image_browse_btn, IswNcallback, browse_cb, NULL);
 
     /* Show/hide rows based on current mode */
     if (saved_bg_mode == 0) {
@@ -385,7 +457,7 @@ static int desktops_has_changes(void)
     if (r != saved_bg_r || g != saved_bg_g || b != saved_bg_b)
         return 1;
 
-    const char *img = get_text(image_path_text);
+    const char *img = get_path_label();
     if (strcmp(img, saved_bg_image) != 0)
         return 1;
 
@@ -400,8 +472,10 @@ static void desktops_destroy(void)
     radio_image = NULL;
     color_picker = NULL;
     color_picker_row = NULL;
-    image_path_text = NULL;
+    image_path_label = NULL;
+    image_browse_btn = NULL;
     image_path_row = NULL;
+    fc_shell = NULL;
 }
 
 void panel_desktops_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
