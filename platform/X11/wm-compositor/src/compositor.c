@@ -553,7 +553,7 @@ int wm_compositor_init(Wm *wm)
 
     /* Intern the root pixmap atom and load initial background */
     xcb_intern_atom_cookie_t bg_ck =
-        xcb_intern_atom(comp->conn, 0, 14, "_XROOTPMAP_ID");
+        xcb_intern_atom(comp->conn, 0, 13, "_XROOTPMAP_ID");
     xcb_intern_atom_reply_t *bg_ar =
         xcb_intern_atom_reply(comp->conn, bg_ck, NULL);
     if (bg_ar) {
