@@ -40,6 +40,12 @@ xcb_randr_crtc_t isde_randr_find_free_crtc(xcb_connection_t *conn,
 int isde_randr_monitors(xcb_connection_t *conn, xcb_window_t root,
                         IsdeMonitor **out);
 
+/* Read the EDID property for an output and return a 32-char hex hash
+ * of the first 16 bytes.  Returns NULL if EDID is unavailable.
+ * Caller must free() the returned string. */
+char *isde_randr_read_edid_hash(xcb_connection_t *conn,
+                                xcb_randr_output_t output);
+
 #ifdef __cplusplus
 }
 #endif

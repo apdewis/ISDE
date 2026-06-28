@@ -3,7 +3,9 @@
  * isde-randr.c — shared RandR helpers
  */
 #include "randr.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 double isde_randr_refresh(xcb_randr_mode_info_t *mi)
 {
@@ -226,4 +228,33 @@ int isde_randr_monitors(xcb_connection_t *conn, xcb_window_t root,
 
     free(res);
     return count;
+}
+
+char *isde_randr_read_edid_hash(xcb_connection_t *conn,
+                                xcb_randr_output_t output)
+{
+    xcb_intern_atom_reply_t *atom_reply =
+        xcb_intern_atom_reply(conn,
+            xcb_intern_atom(conn, 1, 4, "EDID"), NULL);
+    if (!atom_reply) return NULL;
+    xcb_atom_t edid_atom = atom_reply->atom;
+    free(atom_reply);
+    if (edid_atom == XCB_ATOM_NONE) return NULL;
+
+    xcb_randr_get_output_property_reply_t *prop =
+        xcb_randr_get_output_property_reply(conn,
+            xcb_randr_get_output_property(conn, output, edid_atom,
+                XCB_ATOM_ANY, 0, 128, 0, 0), NULL);
+    if (!prop || prop->num_items < 16) {
+        free(prop);
+        return NULL;
+    }
+
+    uint8_t *data = xcb_randr_get_output_property_data(prop);
+    char *hex = malloc(33);
+    for (int i = 0; i < 16; i++)
+        sprintf(hex + i * 2, "%02x", data[i]);
+    hex[32] = '\0';
+    free(prop);
+    return hex;
 }

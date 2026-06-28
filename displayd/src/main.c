@@ -44,6 +44,67 @@ static void on_settings_changed(const char *section, const char *key,
         dbus_reload_flag = 1;
 }
 
+static int hash_cmp(const void *a, const void *b)
+{
+    return strcmp(*(const char **)a, *(const char **)b);
+}
+
+/* Build a profile key from the EDID hashes of all connected outputs.
+ * The key is a sorted, comma-separated list of hex hashes.
+ * Caller must free() the returned string. Returns NULL on failure. */
+static char *build_profile_key(xcb_connection_t *conn, xcb_window_t root)
+{
+    xcb_randr_get_screen_resources_current_reply_t *res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root), NULL);
+    if (!res) return NULL;
+
+    xcb_timestamp_t cfg_ts = res->config_timestamp;
+    xcb_randr_output_t *outs =
+        xcb_randr_get_screen_resources_current_outputs(res);
+    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    char **hashes = malloc(nouts * sizeof(char *));
+    int nhashes = 0;
+
+    for (int i = 0; i < nouts; i++) {
+        xcb_randr_get_output_info_reply_t *oi =
+            xcb_randr_get_output_info_reply(conn,
+                xcb_randr_get_output_info(conn, outs[i], cfg_ts), NULL);
+        if (!oi) continue;
+        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED) {
+            free(oi);
+            continue;
+        }
+        char *hash = isde_randr_read_edid_hash(conn, outs[i]);
+        if (hash)
+            hashes[nhashes++] = hash;
+        free(oi);
+    }
+    free(res);
+
+    if (nhashes == 0) {
+        free(hashes);
+        return NULL;
+    }
+
+    qsort(hashes, nhashes, sizeof(char *), hash_cmp);
+
+    size_t keylen = 0;
+    for (int i = 0; i < nhashes; i++)
+        keylen += strlen(hashes[i]) + 1;
+
+    char *key = malloc(keylen);
+    key[0] = '\0';
+    for (int i = 0; i < nhashes; i++) {
+        if (i > 0) strcat(key, ",");
+        strcat(key, hashes[i]);
+        free(hashes[i]);
+    }
+    free(hashes);
+    return key;
+}
+
 /* ---------- disable_disconnected ----------
  * Release CRTCs for outputs that are no longer physically present. */
 
@@ -88,7 +149,10 @@ static void disable_disconnected(xcb_connection_t *conn, xcb_window_t root)
 
 /* ---------- enable_connected ----------
  * For each connected output that has no CRTC, assign one and set
- * the preferred mode.  Reads isde.toml for per-output overrides. */
+ * the preferred mode.  Reads the matching profile from isde.toml
+ * for per-output overrides.  When no profile exists for the current
+ * monitor combination, all outputs get preferred modes and the
+ * sole/first output becomes primary. */
 
 static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
                               xcb_screen_t *scr)
@@ -106,14 +170,20 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
         xcb_randr_get_screen_resources_current_outputs(res);
     int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
 
+    char *profile_key = build_profile_key(conn, root);
+
+    IsdeConfigTable *outs_tbl = NULL;
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    IsdeConfigTable *outs_tbl = NULL;
-    if (cfg) {
+    if (cfg && profile_key) {
         IsdeConfigTable *cfg_root = isde_config_root(cfg);
         IsdeConfigTable *disp = isde_config_table(cfg_root, "display");
-        if (disp)
-            outs_tbl = isde_config_table(disp, "outputs");
+        IsdeConfigTable *profiles = disp ?
+            isde_config_table(disp, "profiles") : NULL;
+        IsdeConfigTable *profile = profiles ?
+            isde_config_table(profiles, profile_key) : NULL;
+        if (profile)
+            outs_tbl = isde_config_table(profile, "outputs");
     }
 
     xcb_randr_output_t first_enabled = XCB_NONE;
@@ -264,13 +334,17 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
 
     xcb_flush(conn);
     free(res);
+    free(profile_key);
     isde_config_free(cfg);
 }
 
 /* ---------- apply_config ----------
- * Full config application from isde.toml: disable outputs marked off,
- * set modes/positions for all enabled outputs.  Used on startup,
- * SIGHUP, and settings-panel changes. */
+ * Full config application from isde.toml: look up the profile matching
+ * the current connected monitor combination.  Disable outputs marked
+ * off, set modes/positions for all enabled outputs.  When no profile
+ * exists, enable all connected outputs at preferred modes with the
+ * first as primary.  Used on startup, SIGHUP, and settings-panel
+ * changes. */
 
 static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                           xcb_screen_t *scr)
@@ -279,16 +353,45 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (!cfg) return;
 
+    char *profile_key = build_profile_key(conn, root);
+
     IsdeConfigTable *cfg_root = isde_config_root(cfg);
     IsdeConfigTable *disp = isde_config_table(cfg_root, "display");
-    if (!disp) { isde_config_free(cfg); return; }
-    IsdeConfigTable *outs_tbl = isde_config_table(disp, "outputs");
-    if (!outs_tbl) { isde_config_free(cfg); return; }
+    if (!disp) {
+        free(profile_key);
+        isde_config_free(cfg);
+        return;
+    }
+
+    IsdeConfigTable *outs_tbl = NULL;
+    if (profile_key) {
+        IsdeConfigTable *profiles = isde_config_table(disp, "profiles");
+        IsdeConfigTable *profile = profiles ?
+            isde_config_table(profiles, profile_key) : NULL;
+        if (profile)
+            outs_tbl = isde_config_table(profile, "outputs");
+    }
+
+    if (!outs_tbl) {
+        fprintf(stderr, "isde-displayd: no profile for current monitors%s%s%s,"
+                " using defaults\n",
+                profile_key ? " (" : "",
+                profile_key ? profile_key : "",
+                profile_key ? ")" : "");
+        free(profile_key);
+        isde_config_free(cfg);
+        enable_connected(conn, root, scr);
+        return;
+    }
 
     xcb_randr_get_screen_resources_current_reply_t *res =
         xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) { isde_config_free(cfg); return; }
+    if (!res) {
+        free(profile_key);
+        isde_config_free(cfg);
+        return;
+    }
 
     xcb_randr_mode_info_t *mode_infos =
         xcb_randr_get_screen_resources_current_modes(res);
@@ -524,6 +627,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
 
     xcb_flush(conn);
     free(res);
+    free(profile_key);
     isde_config_free(cfg);
 }
 

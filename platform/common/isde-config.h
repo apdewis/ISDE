@@ -52,6 +52,13 @@ IsdeConfigTable *isde_config_array_table(IsdeConfigTable *tbl, const char *key,
 int isde_config_string_array(IsdeConfigTable *tbl, const char *key,
                              char ***out);
 
+/* Return the number of sub-tables in a table. */
+int isde_config_table_count(IsdeConfigTable *tbl);
+
+/* Return the key name of the i-th sub-table (0-based).
+ * The returned string is owned by the config and valid until freed. */
+const char *isde_config_table_key(IsdeConfigTable *tbl, int index);
+
 /* ---------- Global ISDE settings (from isde.toml) ---------- */
 
 /* Return the double-click threshold in milliseconds.
@@ -76,6 +83,10 @@ int isde_config_write_bool(const char *path, const char *section,
                             const char *key, int value);
 int isde_config_write_double(const char *path, const char *section,
                               const char *key, double value);
+
+/* Delete an entire [section] (header + all keys) from a TOML file.
+ * Returns 0 on success or if section was not found. */
+int isde_config_delete_section(const char *path, const char *section);
 
 #ifdef __cplusplus
 }

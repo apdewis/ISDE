@@ -127,33 +127,42 @@ static void free_outputs(void)
     free_mode_strings();
 }
 
-/* #FIXME this really doesn't belong in the settings panel code*/
-static char *read_edid_hash(xcb_connection_t *conn, xcb_randr_output_t output)
-{
-    xcb_intern_atom_reply_t *atom_reply =
-        xcb_intern_atom_reply(conn,
-            xcb_intern_atom(conn, 1, 4, "EDID"), NULL);
-    if (!atom_reply) return NULL;
-    xcb_atom_t edid_atom = atom_reply->atom;
-    free(atom_reply);
-    if (edid_atom == XCB_ATOM_NONE) return NULL;
+static char *cur_profile_key;
 
-    xcb_randr_get_output_property_reply_t *prop =
-        xcb_randr_get_output_property_reply(conn,
-            xcb_randr_get_output_property(conn, output, edid_atom,
-                XCB_ATOM_ANY, 0, 128, 0, 0), NULL);
-    if (!prop || prop->num_items < 16) {
-        free(prop);
-        return NULL;
+static int hash_cmp(const void *a, const void *b)
+{
+    return strcmp(*(const char **)a, *(const char **)b);
+}
+
+static void update_profile_key(void)
+{
+    free(cur_profile_key);
+    cur_profile_key = NULL;
+
+    char **hashes = malloc(noutputs * sizeof(char *));
+    int nhashes = 0;
+    for (int i = 0; i < noutputs; i++) {
+        if (outputs[i].edid_hash)
+            hashes[nhashes++] = outputs[i].edid_hash;
+    }
+    if (nhashes == 0) {
+        free(hashes);
+        return;
     }
 
-    uint8_t *data = xcb_randr_get_output_property_data(prop);
-    char *hex = malloc(33);
-    for (int i = 0; i < 16; i++)
-        sprintf(hex + i * 2, "%02x", data[i]);
-    hex[32] = '\0';
-    free(prop);
-    return hex;
+    qsort(hashes, nhashes, sizeof(char *), hash_cmp);
+
+    size_t keylen = 0;
+    for (int i = 0; i < nhashes; i++)
+        keylen += strlen(hashes[i]) + 1;
+
+    cur_profile_key = malloc(keylen);
+    cur_profile_key[0] = '\0';
+    for (int i = 0; i < nhashes; i++) {
+        if (i > 0) strcat(cur_profile_key, ",");
+        strcat(cur_profile_key, hashes[i]);
+    }
+    free(hashes);
 }
 
 static int mode_cmp(const void *a, const void *b)
@@ -245,7 +254,7 @@ static void query_outputs(xcb_connection_t *conn, xcb_window_t root)
         o->output_id = outs[i];
         o->crtc_id = oinfo->crtc;
         o->is_primary = (outs[i] == primary_id);
-        o->edid_hash = read_edid_hash(conn, outs[i]);
+        o->edid_hash = isde_randr_read_edid_hash(conn, outs[i]);
 
         /* Build mode list for this output */
         xcb_randr_mode_t *out_modes = xcb_randr_get_output_info_modes(oinfo);
@@ -387,7 +396,14 @@ static void load_output_configs(void)
     if (disp)
         global_scale = (int)isde_config_int(disp, "scale_percent", 100);
 
-    IsdeConfigTable *outs_tbl = disp ? isde_config_table(disp, "outputs") : NULL;
+    IsdeConfigTable *outs_tbl = NULL;
+    if (disp && cur_profile_key) {
+        IsdeConfigTable *profiles = isde_config_table(disp, "profiles");
+        IsdeConfigTable *profile = profiles ?
+            isde_config_table(profiles, cur_profile_key) : NULL;
+        if (profile)
+            outs_tbl = isde_config_table(profile, "outputs");
+    }
 
     for (int i = 0; i < noutputs; i++) {
         OutputInfo *o = &outputs[i];
@@ -435,12 +451,47 @@ static void load_output_configs(void)
 static void save_output_configs(void)
 {
     char *path = isde_xdg_config_path("isde.toml");
-    if (!path) return;
+    if (!path || !cur_profile_key) {
+        free(path);
+        return;
+    }
+
+    char profile_prefix[256];
+    snprintf(profile_prefix, sizeof(profile_prefix),
+             "display.profiles.%s.outputs", cur_profile_key);
+
+    /* Delete existing output sections for this profile so that removed
+     * outputs don't leave orphan config. */
+    char errbuf[256];
+    IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
+    if (cfg) {
+        IsdeConfigTable *root = isde_config_root(cfg);
+        IsdeConfigTable *disp = isde_config_table(root, "display");
+        IsdeConfigTable *profiles = disp ?
+            isde_config_table(disp, "profiles") : NULL;
+        IsdeConfigTable *profile = profiles ?
+            isde_config_table(profiles, cur_profile_key) : NULL;
+        IsdeConfigTable *outs_tbl = profile ?
+            isde_config_table(profile, "outputs") : NULL;
+        if (outs_tbl) {
+            int ntabs = isde_config_table_count(outs_tbl);
+            for (int i = 0; i < ntabs; i++) {
+                const char *key = isde_config_table_key(outs_tbl, i);
+                if (key) {
+                    char sect[256];
+                    snprintf(sect, sizeof(sect), "%s.%s",
+                             profile_prefix, key);
+                    isde_config_delete_section(path, sect);
+                }
+            }
+        }
+        isde_config_free(cfg);
+    }
 
     for (int i = 0; i < noutputs; i++) {
         OutputInfo *o = &outputs[i];
-        char section[128];
-        snprintf(section, sizeof(section), "display.outputs.%s", o->name);
+        char section[256];
+        snprintf(section, sizeof(section), "%s.%s", profile_prefix, o->name);
 
         isde_config_write_bool(path, section, "enabled", o->sel_enabled);
 
@@ -556,6 +607,7 @@ static void refresh_display_list(void)
         sel_name = strdup(outputs[selected_output].name);
 
     query_outputs(display_conn, display_root);
+    update_profile_key();
     load_output_configs();
 
     IswListChange(output_list, output_names, noutputs, 0, True);
@@ -932,6 +984,7 @@ static Widget display_create(Widget parent, IswAppContext app)
     display_screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(parent));
     display_root = display_screen->root;
     query_outputs(display_conn, display_root);
+    update_profile_key();
     load_output_configs();
 
     /* --- Output list --- */
@@ -1172,6 +1225,8 @@ static void display_destroy(void)
         IswRemoveTimeOut(randr_poll_id);
         randr_poll_id = 0;
     }
+    free(cur_profile_key);
+    cur_profile_key = NULL;
     output_list = NULL;
     res_combo = NULL;
     scale_slider = NULL;

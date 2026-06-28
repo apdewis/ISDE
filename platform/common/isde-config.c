@@ -216,6 +216,19 @@ IsdeConfigTable *isde_config_array_table(IsdeConfigTable *tbl, const char *key,
     return wrap_table(toml_table_at(arr, index));
 }
 
+int isde_config_table_count(IsdeConfigTable *tbl)
+{
+    if (!tbl || !tbl->tbl) return 0;
+    return toml_table_ntab(tbl->tbl);
+}
+
+const char *isde_config_table_key(IsdeConfigTable *tbl, int index)
+{
+    if (!tbl || !tbl->tbl) return NULL;
+    int offset = toml_table_nkval(tbl->tbl) + toml_table_narr(tbl->tbl);
+    return toml_key_in(tbl->tbl, offset + index);
+}
+
 static int dclick_cached = -1;
 
 int isde_config_double_click_ms(void)

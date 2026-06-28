@@ -177,3 +177,74 @@ int isde_config_write_double(const char *path, const char *section,
     snprintf(val_str, sizeof(val_str), "%.2f", value);
     return write_value(path, section, key, val_str);
 }
+
+int isde_config_delete_section(const char *path, const char *section)
+{
+    FILE *in = fopen(path, "r");
+    if (!in) return 0;
+
+    char **lines = NULL;
+    int nlines = 0;
+    int cap = 64;
+    lines = malloc(cap * sizeof(char *));
+
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), in)) {
+        size_t len = strlen(buf);
+        if (len > 0 && buf[len - 1] == '\n')
+            buf[len - 1] = '\0';
+        if (nlines >= cap) {
+            cap *= 2;
+            lines = realloc(lines, cap * sizeof(char *));
+        }
+        lines[nlines++] = strdup(buf);
+    }
+    fclose(in);
+
+    char header[256];
+    snprintf(header, sizeof(header), "[%s]", section);
+    size_t hlen = strlen(header);
+
+    int skip_start = -1, skip_end = -1;
+    for (int i = 0; i < nlines; i++) {
+        const char *trimmed = lines[i];
+        while (*trimmed && isspace((unsigned char)*trimmed))
+            trimmed++;
+
+        if (trimmed[0] != '[') continue;
+
+        if (skip_start >= 0 && skip_end < 0) {
+            skip_end = i;
+            break;
+        }
+
+        if (strncmp(trimmed, header, hlen) == 0 &&
+            (trimmed[hlen] == '\0' || isspace((unsigned char)trimmed[hlen])))
+            skip_start = i;
+    }
+    if (skip_start >= 0 && skip_end < 0)
+        skip_end = nlines;
+
+    if (skip_start < 0) {
+        for (int i = 0; i < nlines; i++) free(lines[i]);
+        free(lines);
+        return 0;
+    }
+
+    FILE *out = fopen(path, "w");
+    if (!out) {
+        for (int i = 0; i < nlines; i++) free(lines[i]);
+        free(lines);
+        return -1;
+    }
+
+    for (int i = 0; i < nlines; i++) {
+        if (i >= skip_start && i < skip_end) continue;
+        fprintf(out, "%s\n", lines[i]);
+    }
+
+    fclose(out);
+    for (int i = 0; i < nlines; i++) free(lines[i]);
+    free(lines);
+    return 0;
+}
