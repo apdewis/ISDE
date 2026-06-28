@@ -20,6 +20,7 @@ target_link_libraries(isde-displayd
     ISDE::ISW
     ISDE::XCB
     ISDE::XCB_RANDR
+    ISDE::XCB_DPMS
     ISDE::XCB_EWMH
     ISDE::XCB_ICCCM
     ISDE::DBUS

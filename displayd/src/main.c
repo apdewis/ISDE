@@ -15,6 +15,7 @@
 #include <poll.h>
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
+#include <xcb/dpms.h>
 
 #include "isde-config.h"
 #include "isde-xdg.h"
@@ -435,6 +436,9 @@ int main(int argc, char *argv[])
             while ((ev = xcb_poll_for_event(conn)))
                 free(ev);
             apply_config(conn, root, scr);
+            xcb_dpms_force_level(conn, XCB_DPMS_DPMS_MODE_ON);
+            xcb_force_screen_saver(conn, XCB_SCREEN_SAVER_RESET);
+            xcb_flush(conn);
         }
     }
 
