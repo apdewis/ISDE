@@ -25,6 +25,7 @@ target_link_libraries(isde-displayd
     ISDE::XCB_ICCCM
     ISDE::DBUS
     ISDE::CAIRO
+    ISDE::UDEV
 )
 
 install(TARGETS isde-displayd RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
