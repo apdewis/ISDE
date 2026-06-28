@@ -111,7 +111,7 @@ static void browse_cb(Widget w, IswPointer cd, IswPointer call)
                                    parent, ab.args, ab.count);
 
     static IswFileFilter filters[] = {
-        { "Image Files", "*.png;*.jpg;*.jpeg;*.bmp;*.xpm" },
+        { "Image Files", "*.png" },
         { "All Files",   "*" },
     };
 
