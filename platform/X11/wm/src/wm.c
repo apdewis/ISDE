@@ -189,6 +189,8 @@ static int  monitor_for_client(Wm *wm, WmClient *c);
 static void wm_get_monitor_work_area(Wm *wm, int monitor,
                                       int *wx, int *wy, int *ww, int *wh);
 
+static void wm_set_wm_state(Wm *wm, WmClient *c, uint32_t state);
+
 /* ---------- initialization ---------- */
 
 int wm_init(Wm *wm, int *argc, char **argv)
@@ -329,6 +331,7 @@ int wm_init(Wm *wm, int *argc, char **argv)
     wm->atom_net_wm_name       = intern(wm->conn, "_NET_WM_NAME");
     wm->atom_motif_wm_hints    = intern(wm->conn, "_MOTIF_WM_HINTS");
     wm->atom_wm_change_state   = intern(wm->conn, "WM_CHANGE_STATE");
+    wm->atom_wm_state          = intern(wm->conn, "WM_STATE");
     wm->atom_wm_icon_name      = intern(wm->conn, "WM_ICON_NAME");
     wm->atom_net_wm_icon_name  = intern(wm->conn, "_NET_WM_ICON_NAME");
     wm->atom_net_wm_user_time  = intern(wm->conn, "_NET_WM_USER_TIME");
@@ -477,6 +480,8 @@ int wm_init(Wm *wm, int *argc, char **argv)
                             xcb_map_window(wm->conn, c->frame);
                             xcb_map_window(wm->conn, c->client);
                             c->mapped = 1;
+                            wm_set_wm_state(wm, c, 1);
+                            frame_send_configure_notify(wm, c);
                         } else {
                             xcb_unmap_window(wm->conn, c->frame);
                         }
@@ -547,8 +552,19 @@ WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win)
     return NULL;
 }
 
+/* ---------- ICCCM WM_STATE ---------- */
+
+static void wm_set_wm_state(Wm *wm, WmClient *c, uint32_t state)
+{
+    uint32_t data[2] = { state, XCB_WINDOW_NONE };
+    xcb_change_property(wm->conn, XCB_PROP_MODE_REPLACE, c->client,
+                        wm->atom_wm_state, wm->atom_wm_state,
+                        32, 2, data);
+}
+
 /* ---------- focus ---------- */
 
+static int client_supports_protocol(Wm *wm, WmClient *c, xcb_atom_t proto);
 static void wm_update_net_wm_state(Wm *wm, WmClient *c);
 
 void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
@@ -581,8 +597,22 @@ void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
     if (c) {
         c->focused = 1;
         c->focus_seq = ++wm->focus_seq;
-        xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
-                            c->client, time);
+        if (c->input_hint) {
+            xcb_set_input_focus(wm->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
+                                c->client, time);
+        }
+        if (client_supports_protocol(wm, c, wm->atom_wm_take_focus)) {
+            xcb_client_message_event_t tf;
+            memset(&tf, 0, sizeof(tf));
+            tf.response_type = XCB_CLIENT_MESSAGE;
+            tf.window = c->client;
+            tf.type = wm->atom_wm_protocols;
+            tf.format = 32;
+            tf.data.data32[0] = wm->atom_wm_take_focus;
+            tf.data.data32[1] = time;
+            xcb_send_event(wm->conn, 0, c->client,
+                           XCB_EVENT_MASK_NO_EVENT, (const char *)&tf);
+        }
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)c->frame);
         if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
@@ -1174,6 +1204,7 @@ void wm_fullscreen_client(Wm *wm, WmClient *c, int enable)
 void wm_minimize_client(Wm *wm, WmClient *c)
 {
     c->minimized = 1;
+    wm_set_wm_state(wm, c, 3);
     if (c->frame) {
         xcb_unmap_window(wm->conn, c->frame);
         c->mapped = 0;
@@ -1199,6 +1230,7 @@ void wm_restore_client(Wm *wm, WmClient *c)
 {
     if (!c->minimized) return;
     c->minimized = 0;
+    wm_set_wm_state(wm, c, 1);
     xcb_map_window(wm->conn, c->client);
     if (c->frame) {
         xcb_map_window(wm->conn, c->frame);
@@ -1633,9 +1665,21 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
                                 c->client, c->desktop);
         wm_ewmh_set_allowed_actions(wm, c);
+
+        if (c->initial_state == 3) {
+            wm_set_wm_state(wm, c, 3);
+            wm_minimize_client(wm, c);
+            wm_ewmh_update_client_list(wm);
+            wm_ewmh_update_client_list_stacking(wm);
+            xcb_flush(wm->conn);
+            return;
+        }
+
         xcb_map_window(wm->conn, ev->window);
         xcb_map_window(wm->conn, c->frame);
         c->mapped = 1;
+        wm_set_wm_state(wm, c, 1);
+        frame_send_configure_notify(wm, c);
         /* The compositor tracks the frame via the MapNotify it receives
          * on root — no explicit add needed here. */
         if (c->fullscreen) {

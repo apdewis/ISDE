@@ -426,6 +426,20 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
     frame_read_size_hints(wm, c);
 
+    c->input_hint = 1;
+    c->initial_state = 1;
+    xcb_icccm_wm_hints_t wm_hints;
+    if (xcb_icccm_get_wm_hints_reply(wm->conn,
+            xcb_icccm_get_wm_hints(wm->conn, client),
+            &wm_hints, NULL)) {
+        if (wm_hints.flags & XCB_ICCCM_WM_HINT_INPUT) {
+            c->input_hint = wm_hints.input;
+        }
+        if (wm_hints.flags & XCB_ICCCM_WM_HINT_STATE) {
+            c->initial_state = wm_hints.initial_state;
+        }
+    }
+
     c->decorated = wm_client_wants_decorations(wm, client) &&
                    wm_window_type_wants_decorations(wm, client);
 
@@ -551,10 +565,11 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
         frame_create_grips(wm, c);
     }
 
-    /* Remove client border */
-    uint32_t bw = 0;
+    /* Remove client border and sync client to (possibly clamped) size */
+    uint32_t init_cfg[] = { (uint32_t)c->width, (uint32_t)c->height, 0 };
     xcb_configure_window(wm->conn, client,
-                         XCB_CONFIG_WINDOW_BORDER_WIDTH, &bw);
+                         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT |
+                         XCB_CONFIG_WINDOW_BORDER_WIDTH, init_cfg);
 
     /* Listen for property changes on the client */
     uint32_t client_mask = XCB_EVENT_MASK_PROPERTY_CHANGE |
@@ -640,6 +655,26 @@ void frame_set_extents(Wm *wm, WmClient *c)
                                c->client, left, right, top, bottom);
 }
 
+/* ---------- synthetic ConfigureNotify (ICCCM §4.2.3) ---------- */
+
+void frame_send_configure_notify(Wm *wm, WmClient *c)
+{
+    xcb_configure_notify_event_t ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.response_type = XCB_CONFIGURE_NOTIFY;
+    ev.event = c->client;
+    ev.window = c->client;
+    ev.x = 0;
+    ev.y = 0;
+    ev.width = c->width;
+    ev.height = c->height;
+    ev.border_width = 0;
+    ev.above_sibling = XCB_WINDOW_NONE;
+    ev.override_redirect = 0;
+    xcb_send_event(wm->conn, 0, c->client,
+                   XCB_EVENT_MASK_STRUCTURE_NOTIFY, (const char *)&ev);
+}
+
 /* ---------- frame geometry ---------- */
 
 int frame_total_width(WmClient *c)
@@ -692,6 +727,7 @@ void frame_configure(Wm *wm, WmClient *c)
     }
 
     frame_set_extents(wm, c);
+    frame_send_configure_notify(wm, c);
     frame_paint(wm, c);
     xcb_flush(wm->conn);
 }

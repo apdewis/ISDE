@@ -112,6 +112,10 @@ typedef struct WmClient {
     int          inc_w, inc_h;
     int          fixed_size;       /* 1 if min == max in both dimensions */
 
+    /* ICCCM WM_HINTS */
+    int          input_hint;      /* 1 = Passive/Locally Active (default) */
+    int          initial_state;   /* NormalState=1, IconicState=3 */
+
     /* Resize grips — input-only windows on frame edges */
     xcb_window_t  grip[8];  /* top, bottom, left, right, tl, tr, bl, br */
 
@@ -150,6 +154,7 @@ typedef struct Wm {
     xcb_atom_t             atom_net_wm_user_time;
     xcb_atom_t             atom_net_wm_user_time_window;
     xcb_atom_t             atom_net_wm_state_focused;
+    xcb_atom_t             atom_wm_state;
     xcb_atom_t             atom_net_startup_info_begin;
     xcb_atom_t             atom_net_startup_info;
     xcb_atom_t             atom_net_startup_id;
@@ -319,6 +324,7 @@ void      wm_dismiss_menu(Wm *wm);
 void      frame_disambiguate_all(Wm *wm, const char *base_title,
                                  const char *base_icon);
 void      frame_read_size_hints(Wm *wm, WmClient *c);
+void      frame_send_configure_notify(Wm *wm, WmClient *c);
 void      frame_create_grips(Wm *wm, WmClient *c);
 void      frame_update_grips(Wm *wm, WmClient *c);
 void      frame_destroy_grips(Wm *wm, WmClient *c);
