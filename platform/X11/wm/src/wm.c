@@ -1768,18 +1768,12 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
-        int new_w = c->width;
-        int new_h = c->height;
-
         if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
-            new_w = ev->width;
+            c->width = ev->width;
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
-            new_h = ev->height;
+            c->height = ev->height;
         }
-        frame_constrain_size(c, &new_w, &new_h);
-        c->width = new_w;
-        c->height = new_h;
 
         if (ev->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)) {
             int gx = (ev->value_mask & XCB_CONFIG_WINDOW_X) ? ev->x : 0;
