@@ -57,12 +57,18 @@ static char *build_profile_key(xcb_connection_t *conn, xcb_window_t root)
     xcb_randr_get_screen_resources_current_reply_t *res =
         xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) return NULL;
+    if (!res) {
+        fprintf(stdout, "isde-displayd: build_profile_key: "
+                "get_screen_resources failed\n");
+        return NULL;
+    }
 
     xcb_timestamp_t cfg_ts = res->config_timestamp;
     xcb_randr_output_t *outs =
         xcb_randr_get_screen_resources_current_outputs(res);
     int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+
+    fprintf(stdout, "isde-displayd: build_profile_key: %d outputs\n", nouts);
 
     char **hashes = malloc(nouts * sizeof(char *));
     int nhashes = 0;
@@ -72,18 +78,36 @@ static char *build_profile_key(xcb_connection_t *conn, xcb_window_t root)
             xcb_randr_get_output_info_reply(conn,
                 xcb_randr_get_output_info(conn, outs[i], cfg_ts), NULL);
         if (!oi) continue;
+
+        int namelen = xcb_randr_get_output_info_name_length(oi);
+        char oname[64];
+        int cplen = namelen < 63 ? namelen : 63;
+        memcpy(oname, xcb_randr_get_output_info_name(oi), cplen);
+        oname[cplen] = '\0';
+
         if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED) {
+            fprintf(stdout, "isde-displayd: build_profile_key: "
+                    "%s not connected (status %d)\n",
+                    oname, oi->connection);
             free(oi);
             continue;
         }
         char *hash = isde_randr_read_edid_hash(conn, outs[i]);
-        if (hash)
+        if (hash) {
+            fprintf(stdout, "isde-displayd: build_profile_key: "
+                    "%s edid=%s\n", oname, hash);
             hashes[nhashes++] = hash;
+        } else {
+            fprintf(stdout, "isde-displayd: build_profile_key: "
+                    "%s connected but no EDID\n", oname);
+        }
         free(oi);
     }
     free(res);
 
     if (nhashes == 0) {
+        fprintf(stdout, "isde-displayd: build_profile_key: "
+                "no EDID hashes, returning NULL\n");
         free(hashes);
         return NULL;
     }
@@ -110,10 +134,16 @@ static char *build_profile_key(xcb_connection_t *conn, xcb_window_t root)
 
 static void disable_disconnected(xcb_connection_t *conn, xcb_window_t root)
 {
+    fprintf(stdout, "isde-displayd: disable_disconnected: enter\n");
+
     xcb_randr_get_screen_resources_current_reply_t *res =
         xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) return;
+    if (!res) {
+        fprintf(stdout, "isde-displayd: disable_disconnected: "
+                "get_screen_resources failed\n");
+        return;
+    }
 
     xcb_timestamp_t cfg_ts = res->config_timestamp;
     xcb_randr_output_t *outs =
@@ -125,20 +155,33 @@ static void disable_disconnected(xcb_connection_t *conn, xcb_window_t root)
             xcb_randr_get_output_info_reply(conn,
                 xcb_randr_get_output_info(conn, outs[i], cfg_ts), NULL);
         if (!oi) continue;
-        if (oi->connection == XCB_RANDR_CONNECTION_CONNECTED ||
-            oi->crtc == XCB_NONE) {
-            free(oi);
-            continue;
-        }
+
         int namelen = xcb_randr_get_output_info_name_length(oi);
         char *name = strndup((char *)xcb_randr_get_output_info_name(oi),
                              namelen);
+
+        if (oi->connection == XCB_RANDR_CONNECTION_CONNECTED) {
+            fprintf(stdout, "isde-displayd: disable_disconnected: "
+                    "%s still connected (crtc=%u), skipping\n",
+                    name, (unsigned)oi->crtc);
+            free(name);
+            free(oi);
+            continue;
+        }
+        if (oi->crtc == XCB_NONE) {
+            fprintf(stdout, "isde-displayd: disable_disconnected: "
+                    "%s disconnected, no CRTC assigned\n", name);
+            free(name);
+            free(oi);
+            continue;
+        }
+
         xcb_randr_set_crtc_config(conn, oi->crtc,
             XCB_CURRENT_TIME, cfg_ts,
             0, 0, XCB_NONE,
             XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
-        fprintf(stderr, "isde-displayd: released CRTC for disconnected %s\n",
-                name);
+        fprintf(stdout, "isde-displayd: released CRTC %u for "
+                "disconnected %s\n", (unsigned)oi->crtc, name);
         free(name);
         free(oi);
     }
@@ -154,21 +197,30 @@ static void disable_disconnected(xcb_connection_t *conn, xcb_window_t root)
  * monitor combination, all outputs get preferred modes and the
  * sole/first output becomes primary. */
 
-static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
-                              xcb_screen_t *scr)
+static int enable_connected(xcb_connection_t *conn, xcb_window_t root,
+                             xcb_screen_t *scr)
 {
-    xcb_randr_get_screen_resources_current_reply_t *res =
-        xcb_randr_get_screen_resources_current_reply(conn,
-            xcb_randr_get_screen_resources_current(conn, root), NULL);
-    if (!res) return;
+    fprintf(stdout, "isde-displayd: enable_connected: enter\n");
+
+    xcb_randr_get_screen_resources_reply_t *res =
+        xcb_randr_get_screen_resources_reply(conn,
+            xcb_randr_get_screen_resources(conn, root), NULL);
+    if (!res) {
+        fprintf(stdout, "isde-displayd: enable_connected: "
+                "get_screen_resources failed\n");
+        return 0;
+    }
 
     xcb_randr_mode_info_t *mode_infos =
-        xcb_randr_get_screen_resources_current_modes(res);
-    int nmi = xcb_randr_get_screen_resources_current_modes_length(res);
+        xcb_randr_get_screen_resources_modes(res);
+    int nmi = xcb_randr_get_screen_resources_modes_length(res);
     xcb_timestamp_t cfg_ts = res->config_timestamp;
     xcb_randr_output_t *outs =
-        xcb_randr_get_screen_resources_current_outputs(res);
-    int nouts = xcb_randr_get_screen_resources_current_outputs_length(res);
+        xcb_randr_get_screen_resources_outputs(res);
+    int nouts = xcb_randr_get_screen_resources_outputs_length(res);
+
+    fprintf(stdout, "isde-displayd: enable_connected: "
+            "%d outputs, %d modes\n", nouts, nmi);
 
     char *profile_key = build_profile_key(conn, root);
 
@@ -186,6 +238,10 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
             outs_tbl = isde_config_table(profile, "outputs");
     }
 
+    fprintf(stdout, "isde-displayd: enable_connected: profile=%s outs_tbl=%s\n",
+            profile_key ? profile_key : "(null)",
+            outs_tbl ? "found" : "none");
+
     xcb_randr_output_t first_enabled = XCB_NONE;
 
     for (int i = 0; i < nouts; i++) {
@@ -193,25 +249,50 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
             xcb_randr_get_output_info_reply(conn,
                 xcb_randr_get_output_info(conn, outs[i], cfg_ts), NULL);
         if (!oi) continue;
-        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED) {
-            free(oi);
-            continue;
-        }
-        if (oi->crtc != XCB_NONE) {
-            if (first_enabled == XCB_NONE)
-                first_enabled = outs[i];
-            free(oi);
-            continue;
-        }
 
         int namelen = xcb_randr_get_output_info_name_length(oi);
         char *name = strndup((char *)xcb_randr_get_output_info_name(oi),
                              namelen);
 
+        if (oi->connection != XCB_RANDR_CONNECTION_CONNECTED) {
+            fprintf(stdout, "isde-displayd: enable_connected: "
+                    "%s not connected (status %d)\n",
+                    name, oi->connection);
+            free(name);
+            free(oi);
+            continue;
+        }
+        if (oi->crtc != XCB_NONE) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(conn,
+                    xcb_randr_get_crtc_info(conn, oi->crtc, cfg_ts), NULL);
+            int active = ci && ci->mode != XCB_NONE;
+            fprintf(stdout, "isde-displayd: enable_connected: "
+                    "%s has CRTC %u, mode=%u → %s\n",
+                    name, (unsigned)oi->crtc,
+                    ci ? (unsigned)ci->mode : 0,
+                    active ? "active, skipping" : "inactive, reconfiguring");
+            free(ci);
+            if (active) {
+                if (first_enabled == XCB_NONE)
+                    first_enabled = outs[i];
+                free(name);
+                free(oi);
+                continue;
+            }
+        }
+
+        int out_nmodes_total = xcb_randr_get_output_info_modes_length(oi);
+        fprintf(stdout, "isde-displayd: enable_connected: "
+                "%s needs CRTC, %d modes available, %d preferred\n",
+                name, out_nmodes_total, oi->num_preferred);
+
         IsdeConfigTable *mon = outs_tbl ?
             isde_config_table(outs_tbl, name) : NULL;
 
         if (mon && !isde_config_bool(mon, "enabled", 1)) {
+            fprintf(stdout, "isde-displayd: enable_connected: "
+                    "%s disabled by config\n", name);
             free(name);
             free(oi);
             continue;
@@ -221,6 +302,11 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
         int want_h = mon ? (int)isde_config_int(mon, "height", 0) : 0;
         int want_x = mon ? (int)isde_config_int(mon, "x", 0) : 0;
         int want_y = mon ? (int)isde_config_int(mon, "y", 0) : 0;
+
+        fprintf(stdout, "isde-displayd: enable_connected: "
+                "%s config: %dx%d+%d+%d (mon=%s)\n",
+                name, want_w, want_h, want_x, want_y,
+                mon ? "found" : "none");
 
         if (want_w <= 0 || want_h <= 0) {
             xcb_randr_mode_t *pref_modes =
@@ -235,17 +321,23 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
                     }
                 }
             }
+            fprintf(stdout, "isde-displayd: enable_connected: "
+                    "%s preferred mode fallback: %dx%d\n",
+                    name, want_w, want_h);
         }
 
         if (want_w <= 0 || want_h <= 0) {
+            fprintf(stdout, "isde-displayd: enable_connected: "
+                    "%s no usable mode, skipping\n", name);
             free(name);
             free(oi);
             continue;
         }
 
-        xcb_randr_crtc_t crtc = isde_randr_find_free_crtc(conn, oi, cfg_ts);
+        xcb_randr_crtc_t crtc = oi->crtc != XCB_NONE ?
+            oi->crtc : isde_randr_find_free_crtc(conn, oi, cfg_ts);
         if (crtc == XCB_NONE) {
-            fprintf(stderr, "isde-displayd: no free CRTC for %s\n", name);
+            fprintf(stdout, "isde-displayd: no free CRTC for %s\n", name);
             free(name);
             free(oi);
             continue;
@@ -271,7 +363,7 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
         }
 
         if (best_mode == XCB_NONE) {
-            fprintf(stderr, "isde-displayd: no mode %dx%d for %s\n",
+            fprintf(stdout, "isde-displayd: no mode %dx%d for %s\n",
                     want_w, want_h, name);
             free(name);
             free(oi);
@@ -315,12 +407,13 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
         xcb_randr_set_crtc_config_reply_t *cr =
             xcb_randr_set_crtc_config_reply(conn, ck, NULL);
         if (!cr || cr->status != XCB_RANDR_SET_CONFIG_SUCCESS) {
-            fprintf(stderr, "isde-displayd: set_crtc_config failed for %s"
+            fprintf(stdout, "isde-displayd: set_crtc_config failed for %s"
                     " (status %d)\n", name, cr ? cr->status : -1);
         } else {
-            fprintf(stderr, "isde-displayd: enabled %s -> %dx%d+%d+%d"
-                    " @ %.0f Hz\n",
-                    name, want_w, want_h, want_x, want_y, best_refresh);
+            fprintf(stdout, "isde-displayd: enabled %s -> %dx%d+%d+%d"
+                    " @ %.0f Hz (crtc %u)\n",
+                    name, want_w, want_h, want_x, want_y, best_refresh,
+                    (unsigned)crtc);
             if (first_enabled == XCB_NONE)
                 first_enabled = outs[i];
         }
@@ -332,10 +425,15 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
     if (first_enabled != XCB_NONE)
         xcb_randr_set_output_primary(conn, root, first_enabled);
 
+    fprintf(stdout, "isde-displayd: enable_connected: done, "
+            "first_enabled=%s\n",
+            first_enabled != XCB_NONE ? "yes" : "none");
+
     xcb_flush(conn);
     free(res);
     free(profile_key);
     isde_config_free(cfg);
+    return first_enabled != XCB_NONE;
 }
 
 /* ---------- apply_config ----------
@@ -346,21 +444,31 @@ static void enable_connected(xcb_connection_t *conn, xcb_window_t root,
  * first as primary.  Used on startup, SIGHUP, and settings-panel
  * changes. */
 
-static void apply_config(xcb_connection_t *conn, xcb_window_t root,
-                          xcb_screen_t *scr)
+static int apply_config(xcb_connection_t *conn, xcb_window_t root,
+                         xcb_screen_t *scr)
 {
+    fprintf(stdout, "isde-displayd: apply_config: enter\n");
+
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
-    if (!cfg) return;
+    if (!cfg) {
+        fprintf(stdout, "isde-displayd: apply_config: "
+                "failed to load isde.toml: %s\n", errbuf);
+        return 0;
+    }
 
     char *profile_key = build_profile_key(conn, root);
+    fprintf(stdout, "isde-displayd: apply_config: profile_key=%s\n",
+            profile_key ? profile_key : "(null)");
 
     IsdeConfigTable *cfg_root = isde_config_root(cfg);
     IsdeConfigTable *disp = isde_config_table(cfg_root, "display");
     if (!disp) {
+        fprintf(stdout, "isde-displayd: apply_config: "
+                "no [display] section in config\n");
         free(profile_key);
         isde_config_free(cfg);
-        return;
+        return 0;
     }
 
     IsdeConfigTable *outs_tbl = NULL;
@@ -370,27 +478,33 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
             isde_config_table(profiles, profile_key) : NULL;
         if (profile)
             outs_tbl = isde_config_table(profile, "outputs");
+        fprintf(stdout, "isde-displayd: apply_config: "
+                "profiles=%s profile=%s outs_tbl=%s\n",
+                profiles ? "found" : "none",
+                profile ? "found" : "none",
+                outs_tbl ? "found" : "none");
     }
 
     if (!outs_tbl) {
-        fprintf(stderr, "isde-displayd: no profile for current monitors%s%s%s,"
-                " using defaults\n",
+        fprintf(stdout, "isde-displayd: apply_config: no profile for "
+                "current monitors%s%s%s, falling back to enable_connected\n",
                 profile_key ? " (" : "",
                 profile_key ? profile_key : "",
                 profile_key ? ")" : "");
         free(profile_key);
         isde_config_free(cfg);
-        enable_connected(conn, root, scr);
-        return;
+        return enable_connected(conn, root, scr);
     }
 
     xcb_randr_get_screen_resources_current_reply_t *res =
         xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
     if (!res) {
+        fprintf(stdout, "isde-displayd: apply_config: "
+                "get_screen_resources failed\n");
         free(profile_key);
         isde_config_free(cfg);
-        return;
+        return 0;
     }
 
     xcb_randr_mode_info_t *mode_infos =
@@ -429,7 +543,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                 XCB_CURRENT_TIME, cfg_ts,
                 0, 0, XCB_NONE,
                 XCB_RANDR_ROTATION_ROTATE_0, 0, NULL);
-            fprintf(stderr, "isde-displayd: disabled %s\n", name);
+            fprintf(stdout, "isde-displayd: disabled %s\n", name);
             changed = 1;
         }
 
@@ -441,7 +555,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         free(res);
         res = xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
-        if (!res) { isde_config_free(cfg); return; }
+        if (!res) { isde_config_free(cfg); return 0; }
         mode_infos = xcb_randr_get_screen_resources_current_modes(res);
         nmi = xcb_randr_get_screen_resources_current_modes_length(res);
         cfg_ts = res->config_timestamp;
@@ -465,7 +579,17 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                              namelen);
 
         IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
+
+        fprintf(stdout, "isde-displayd: apply_config: %s: "
+                "connected, crtc=%u, config=%s, %d modes, %d preferred\n",
+                name, (unsigned)oinfo->crtc,
+                mon ? "found" : "none",
+                xcb_randr_get_output_info_modes_length(oinfo),
+                oinfo->num_preferred);
+
         if (mon && !isde_config_bool(mon, "enabled", 1)) {
+            fprintf(stdout, "isde-displayd: apply_config: "
+                    "%s disabled by config, skipping\n", name);
             free(name);
             free(oinfo);
             continue;
@@ -476,6 +600,10 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         int want_x = mon ? (int)isde_config_int(mon, "x", 0) : 0;
         int want_y = mon ? (int)isde_config_int(mon, "y", 0) : 0;
         int is_primary = mon ? isde_config_bool(mon, "primary", 0) : 0;
+
+        fprintf(stdout, "isde-displayd: apply_config: %s: "
+                "want %dx%d+%d+%d primary=%d\n",
+                name, want_w, want_h, want_x, want_y, is_primary);
 
         if (want_w <= 0 || want_h <= 0) {
             xcb_randr_mode_t *pref_modes =
@@ -490,9 +618,14 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                     }
                 }
             }
+            fprintf(stdout, "isde-displayd: apply_config: %s: "
+                    "preferred mode fallback: %dx%d\n",
+                    name, want_w, want_h);
         }
 
         if (want_w <= 0 || want_h <= 0) {
+            fprintf(stdout, "isde-displayd: apply_config: %s: "
+                    "no usable mode, skipping\n", name);
             if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
                 first_enabled = randr_outs[i];
             free(name);
@@ -504,11 +637,14 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         if (crtc == XCB_NONE) {
             crtc = isde_randr_find_free_crtc(conn, oinfo, cfg_ts);
             if (crtc == XCB_NONE) {
-                fprintf(stderr, "isde-displayd: no free CRTC for %s\n", name);
+                fprintf(stdout, "isde-displayd: apply_config: %s: "
+                        "no free CRTC\n", name);
                 free(name);
                 free(oinfo);
                 continue;
             }
+            fprintf(stdout, "isde-displayd: apply_config: %s: "
+                    "assigned free CRTC %u\n", name, (unsigned)crtc);
         }
 
         /* Skip if already configured correctly */
@@ -523,6 +659,11 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
                     ci->width == (uint16_t)want_w &&
                     ci->height == (uint16_t)want_h)
                     already_correct = 1;
+                fprintf(stdout, "isde-displayd: apply_config: %s: "
+                        "current CRTC mode=%u %ux%u+%d+%d → %s\n",
+                        name, (unsigned)ci->mode,
+                        ci->width, ci->height, ci->x, ci->y,
+                        already_correct ? "already correct" : "needs update");
                 free(ci);
             }
         }
@@ -557,7 +698,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         }
 
         if (best_mode == XCB_NONE) {
-            fprintf(stderr, "isde-displayd: no mode %dx%d for %s\n",
+            fprintf(stdout, "isde-displayd: no mode %dx%d for %s\n",
                     want_w, want_h, name);
             free(name);
             free(oinfo);
@@ -600,7 +741,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
         xcb_randr_set_crtc_config_reply_t *cr =
             xcb_randr_set_crtc_config_reply(conn, ck, NULL);
         if (!cr || cr->status != XCB_RANDR_SET_CONFIG_SUCCESS) {
-            fprintf(stderr, "isde-displayd: set_crtc_config failed for %s"
+            fprintf(stdout, "isde-displayd: set_crtc_config failed for %s"
                     " (status %d)\n", name, cr ? cr->status : -1);
             free(cr);
             free(name);
@@ -608,7 +749,7 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
             continue;
         }
         free(cr);
-        fprintf(stderr, "isde-displayd: %s -> %dx%d+%d+%d @ %.0f Hz\n",
+        fprintf(stdout, "isde-displayd: %s -> %dx%d+%d+%d @ %.0f Hz\n",
                 name, want_w, want_h, want_x, want_y, best_refresh);
 
         if (first_enabled == XCB_NONE)
@@ -625,10 +766,15 @@ static void apply_config(xcb_connection_t *conn, xcb_window_t root,
     if (new_primary != XCB_NONE)
         xcb_randr_set_output_primary(conn, root, new_primary);
 
+    fprintf(stdout, "isde-displayd: apply_config: done, "
+            "first_enabled=%s\n",
+            first_enabled != XCB_NONE ? "yes" : "none");
+
     xcb_flush(conn);
     free(res);
     free(profile_key);
     isde_config_free(cfg);
+    return first_enabled != XCB_NONE;
 }
 
 /* ---------- main ---------- */
@@ -644,11 +790,13 @@ int main(int argc, char *argv[])
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
 
+    setlinebuf(stdout);
+
     const char *display = getenv("DISPLAY");
     int screen_num;
     xcb_connection_t *conn = xcb_connect(display, &screen_num);
     if (xcb_connection_has_error(conn)) {
-        fprintf(stderr, "isde-displayd: cannot connect to X\n");
+        fprintf(stdout, "isde-displayd: cannot connect to X\n");
         return 1;
     }
 
@@ -661,7 +809,7 @@ int main(int argc, char *argv[])
         xcb_randr_query_version_reply(conn,
             xcb_randr_query_version(conn, 1, 5), NULL);
     if (!ver) {
-        fprintf(stderr, "isde-displayd: RandR not available\n");
+        fprintf(stdout, "isde-displayd: RandR not available\n");
         xcb_disconnect(conn);
         return 1;
     }
@@ -670,7 +818,7 @@ int main(int argc, char *argv[])
     const xcb_query_extension_reply_t *ext =
         xcb_get_extension_data(conn, &xcb_randr_id);
     if (!ext || !ext->present) {
-        fprintf(stderr, "isde-displayd: RandR extension not present\n");
+        fprintf(stdout, "isde-displayd: RandR extension not present\n");
         xcb_disconnect(conn);
         return 1;
     }
@@ -701,9 +849,10 @@ int main(int argc, char *argv[])
 
     apply_config(conn, root, scr);
 
-    fprintf(stderr, "isde-displayd: watching for display changes\n");
+    fprintf(stdout, "isde-displayd: watching for display changes\n");
 
     int xcb_fd = xcb_get_file_descriptor(conn);
+    int no_outputs = 0;
 
     while (!quit_flag) {
         struct pollfd pfds[4];
@@ -714,20 +863,21 @@ int main(int argc, char *argv[])
         if (udev_fd >= 0)
             pfds[nfds++] = (struct pollfd){ .fd = udev_fd, .events = POLLIN };
 
-        poll(pfds, nfds, -1);
+        int timeout = no_outputs ? 1000 : -1;
+        poll(pfds, nfds, timeout);
 
         if (dbus)
             isde_dbus_dispatch(dbus);
 
         if (reload_flag) {
             reload_flag = 0;
-            fprintf(stderr, "isde-displayd: SIGHUP, reloading config\n");
+            fprintf(stdout, "isde-displayd: SIGHUP, reloading config\n");
             apply_config(conn, root, scr);
         }
 
         if (dbus_reload_flag) {
             dbus_reload_flag = 0;
-            fprintf(stderr, "isde-displayd: settings changed, applying\n");
+            fprintf(stdout, "isde-displayd: settings changed, applying\n");
             apply_config(conn, root, scr);
         }
 
@@ -751,27 +901,85 @@ int main(int argc, char *argv[])
         }
 
         if (xcb_connection_has_error(conn)) {
-            fprintf(stderr, "isde-displayd: X connection lost\n");
+            fprintf(stdout, "isde-displayd: X connection lost\n");
             break;
         }
 
         if (got_randr || got_hotplug) {
+            fprintf(stdout, "isde-displayd: hotplug event "
+                    "(randr=%d udev=%d)\n", got_randr, got_hotplug);
+
             disable_disconnected(conn, root);
 
+            fprintf(stdout, "isde-displayd: waiting 200ms for "
+                    "hardware settle\n");
             usleep(200000);
 
-            while ((ev = xcb_poll_for_event(conn)))
+            int drained_xcb = 0, drained_udev = 0;
+            while ((ev = xcb_poll_for_event(conn))) {
+                drained_xcb++;
                 free(ev);
+            }
             if (udev_mon) {
                 struct udev_device *dev;
-                while ((dev = udev_monitor_receive_device(udev_mon)))
+                while ((dev = udev_monitor_receive_device(udev_mon))) {
+                    drained_udev++;
                     udev_device_unref(dev);
+                }
+            }
+            if (drained_xcb || drained_udev) {
+                fprintf(stdout, "isde-displayd: drained %d xcb + "
+                        "%d udev events during settle\n",
+                        drained_xcb, drained_udev);
             }
 
-            enable_connected(conn, root, scr);
+            no_outputs = !apply_config(conn, root, scr);
+            if (no_outputs) {
+                fprintf(stdout, "isde-displayd: no outputs configured, "
+                        "will poll every 1s\n");
+            }
             xcb_dpms_force_level(conn, XCB_DPMS_DPMS_MODE_ON);
             xcb_force_screen_saver(conn, XCB_SCREEN_SAVER_RESET);
             xcb_flush(conn);
+            fprintf(stdout, "isde-displayd: hotplug handling complete\n");
+        }
+
+        if (no_outputs && !got_randr && !got_hotplug) {
+            xcb_randr_get_screen_resources_reply_t *probe =
+                xcb_randr_get_screen_resources_reply(conn,
+                    xcb_randr_get_screen_resources(conn, root), NULL);
+            if (probe) {
+                xcb_timestamp_t ts = probe->config_timestamp;
+                xcb_randr_output_t *pouts =
+                    xcb_randr_get_screen_resources_outputs(probe);
+                int npouts =
+                    xcb_randr_get_screen_resources_outputs_length(probe);
+                int found = 0;
+                for (int j = 0; j < npouts; j++) {
+                    xcb_randr_get_output_info_reply_t *oi =
+                        xcb_randr_get_output_info_reply(conn,
+                            xcb_randr_get_output_info(conn, pouts[j],
+                                                      ts), NULL);
+                    if (oi) {
+                        if (oi->connection == XCB_RANDR_CONNECTION_CONNECTED)
+                            found = 1;
+                        free(oi);
+                    }
+                    if (found) break;
+                }
+                free(probe);
+
+                if (found) {
+                    fprintf(stdout, "isde-displayd: output detected "
+                            "on poll probe, configuring\n");
+                    no_outputs = !apply_config(conn, root, scr);
+                    if (!no_outputs) {
+                        xcb_dpms_force_level(conn, XCB_DPMS_DPMS_MODE_ON);
+                        xcb_force_screen_saver(conn, XCB_SCREEN_SAVER_RESET);
+                        xcb_flush(conn);
+                    }
+                }
+            }
         }
     }
 
