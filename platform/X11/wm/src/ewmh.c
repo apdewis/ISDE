@@ -396,6 +396,7 @@ void wm_ewmh_setup(Wm *wm)
         wm->atom_net_wm_state_focused,
         ewmh->_NET_WORKAREA,
         ewmh->_NET_FRAME_EXTENTS,
+        ewmh->_NET_REQUEST_FRAME_EXTENTS,
         ewmh->_NET_WM_MOVERESIZE,
         ewmh->_NET_DESKTOP_LAYOUT,
         ewmh->_NET_WM_ALLOWED_ACTIONS,

@@ -664,8 +664,10 @@ void frame_send_configure_notify(Wm *wm, WmClient *c)
     ev.response_type = XCB_CONFIGURE_NOTIFY;
     ev.event = c->client;
     ev.window = c->client;
-    ev.x = 0;
-    ev.y = 0;
+    int title = c->decorated ? wm->title_height : 0;
+    int bw = c->maximized ? 0 : 1;
+    ev.x = c->x + WM_BORDER_WIDTH + bw;
+    ev.y = c->y + WM_BORDER_WIDTH + title + bw;
     ev.width = c->width;
     ev.height = c->height;
     ev.border_width = 0;

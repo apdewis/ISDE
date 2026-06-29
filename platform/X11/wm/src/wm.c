@@ -1768,11 +1768,13 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
+        int title = c->decorated ? wm->title_height : 0;
+        int bw = c->maximized ? 0 : 1;
         if (ev->value_mask & XCB_CONFIG_WINDOW_X) {
-            c->x = ev->x;
+            c->x = ev->x - WM_BORDER_WIDTH - bw;
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_Y) {
-            c->y = ev->y;
+            c->y = ev->y - WM_BORDER_WIDTH - title - bw;
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
             c->width = ev->width;
@@ -1971,7 +1973,7 @@ static void on_user_time_window_notify(Wm *wm, xcb_property_notify_event_t *ev)
     }
 }
 
-static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
+static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
 {
     xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
 
@@ -2178,7 +2180,40 @@ static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
         return 1;
     }
 
+    if (ev->type == ewmh->_NET_REQUEST_FRAME_EXTENTS) {
+        int decorated = wm_window_type_wants_decorations(wm, ev->window) &&
+                        wm_client_wants_decorations(wm, ev->window);
+        if (decorated) {
+            uint32_t left   = WM_BORDER_WIDTH + 1;
+            uint32_t right  = left;
+            uint32_t top    = WM_BORDER_WIDTH + wm->title_height + 1;
+            uint32_t bottom = WM_BORDER_WIDTH + 1;
+            xcb_ewmh_set_frame_extents(ewmh, ev->window,
+                                       left, right, top, bottom);
+        } else {
+            xcb_ewmh_set_frame_extents(ewmh, ev->window, 0, 0, 0, 0);
+        }
+        xcb_flush(wm->conn);
+        return 1;
+    }
+
     return 0;
+}
+
+static int on_client_message(Wm *wm, xcb_client_message_event_t *ev)
+{
+    int handled = handle_client_message(wm, ev);
+    xcb_get_atom_name_reply_t *nr = xcb_get_atom_name_reply(
+        wm->conn, xcb_get_atom_name(wm->conn, ev->type), NULL);
+    if (nr) {
+        fprintf(stderr, "isde-wm: ClientMessage 0x%x: %.*s — %s\n",
+                ev->window,
+                xcb_get_atom_name_name_length(nr),
+                xcb_get_atom_name_name(nr),
+                handled ? "handled" : "unhandled");
+        free(nr);
+    }
+    return handled;
 }
 
 /* ---------- title bar / button click handling ---------- */
