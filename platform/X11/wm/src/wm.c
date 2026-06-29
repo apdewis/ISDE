@@ -1768,20 +1768,37 @@ static void on_configure_request(Wm *wm, xcb_configure_request_event_t *ev)
 {
     WmClient *c = wm_find_client_by_window(wm, ev->window);
     if (c) {
-        int title = c->decorated ? wm->title_height : 0;
-        int bw = c->maximized ? 0 : 1;
-        if (ev->value_mask & XCB_CONFIG_WINDOW_X) {
-            c->x = ev->x - WM_BORDER_WIDTH - bw;
-        }
-        if (ev->value_mask & XCB_CONFIG_WINDOW_Y) {
-            c->y = ev->y - WM_BORDER_WIDTH - title - bw;
-        }
+        int new_w = c->width;
+        int new_h = c->height;
+
         if (ev->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
-            c->width = ev->width;
+            new_w = ev->width;
         }
         if (ev->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
-            c->height = ev->height;
+            new_h = ev->height;
         }
+        frame_constrain_size(c, &new_w, &new_h);
+        c->width = new_w;
+        c->height = new_h;
+
+        if (ev->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y)) {
+            int gx = (ev->value_mask & XCB_CONFIG_WINDOW_X) ? ev->x : 0;
+            int gy = (ev->value_mask & XCB_CONFIG_WINDOW_Y) ? ev->y : 0;
+
+            if (!(ev->value_mask & XCB_CONFIG_WINDOW_X) ||
+                !(ev->value_mask & XCB_CONFIG_WINDOW_Y)) {
+                int cur_gx, cur_gy;
+                frame_frame_to_gravity(wm, c, &cur_gx, &cur_gy);
+                if (!(ev->value_mask & XCB_CONFIG_WINDOW_X)) { gx = cur_gx; }
+                if (!(ev->value_mask & XCB_CONFIG_WINDOW_Y)) { gy = cur_gy; }
+            }
+
+            int fx, fy;
+            frame_gravity_to_frame(wm, c, gx, gy, &fx, &fy);
+            c->x = fx;
+            c->y = fy;
+        }
+
         frame_configure(wm, c);
     } else {
         uint32_t vals[7];

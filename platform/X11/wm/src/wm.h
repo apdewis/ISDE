@@ -111,6 +111,7 @@ typedef struct WmClient {
     int          base_w, base_h;
     int          inc_w, inc_h;
     int          fixed_size;       /* 1 if min == max in both dimensions */
+    xcb_gravity_t win_gravity;     /* ICCCM win_gravity (default NorthWest) */
 
     /* ICCCM WM_HINTS */
     int          input_hint;      /* 1 = Passive/Locally Active (default) */
@@ -308,6 +309,14 @@ int       wm_timer_next_timeout(Wm *wm);
 
 /* ---------- placement.c — window placement ---------- */
 void  wm_place_client(Wm *wm, WmClient *c);
+
+/* ---------- frame.c — ICCCM size constraint ---------- */
+void  frame_constrain_size(WmClient *c, int *w, int *h);
+void  frame_gravity_to_frame(Wm *wm, WmClient *c,
+                             int client_x, int client_y,
+                             int *frame_x, int *frame_y);
+void  frame_frame_to_gravity(Wm *wm, WmClient *c,
+                             int *client_x, int *client_y);
 
 /* ---------- frame.c — frame decoration ---------- */
 WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt);

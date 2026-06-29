@@ -218,6 +218,7 @@ void frame_read_size_hints(Wm *wm, WmClient *c)
     c->base_w = 0; c->base_h = 0;
     c->inc_w = 1;  c->inc_h = 1;
     c->fixed_size = 0;
+    c->win_gravity = XCB_GRAVITY_NORTH_WEST;
 
     if (!xcb_icccm_get_wm_normal_hints_reply(
             wm->conn,
@@ -244,9 +245,155 @@ void frame_read_size_hints(Wm *wm, WmClient *c)
         if (c->inc_w < 1) { c->inc_w = 1; }
         if (c->inc_h < 1) { c->inc_h = 1; }
     }
+    if (hints.flags & XCB_ICCCM_SIZE_HINT_P_WIN_GRAVITY) {
+        c->win_gravity = hints.win_gravity;
+    }
 
     c->fixed_size = (c->min_w > 0 && c->max_w > 0 && c->min_w == c->max_w &&
                      c->min_h > 0 && c->max_h > 0 && c->min_h == c->max_h);
+}
+
+/* ---------- ICCCM size constraints (§4.1.2.3) ---------- */
+
+void frame_constrain_size(WmClient *c, int *w, int *h)
+{
+    int bw = c->base_w > 0 ? c->base_w : (c->min_w > 0 ? c->min_w : 0);
+    int bh = c->base_h > 0 ? c->base_h : (c->min_h > 0 ? c->min_h : 0);
+
+    if (c->min_w > 0 && *w < c->min_w) { *w = c->min_w; }
+    if (c->min_h > 0 && *h < c->min_h) { *h = c->min_h; }
+    if (c->max_w > 0 && *w > c->max_w) { *w = c->max_w; }
+    if (c->max_h > 0 && *h > c->max_h) { *h = c->max_h; }
+
+    if (c->inc_w > 1) {
+        *w = bw + ((*w - bw) / c->inc_w) * c->inc_w;
+    }
+    if (c->inc_h > 1) {
+        *h = bh + ((*h - bh) / c->inc_h) * c->inc_h;
+    }
+}
+
+/* Convert client-supplied (gravity-relative) coordinates to frame position.
+ * ICCCM §4.1.2.3: the client's x/y in a ConfigureRequest specify where
+ * the reference point (defined by win_gravity) of the client window should
+ * appear on root. The WM must convert to frame content-origin coordinates.
+ *
+ * The client window sits inside the frame at root-absolute position:
+ *   abs_x = frame_x + frame_bw + WM_BORDER_WIDTH
+ *   abs_y = frame_y + frame_bw + WM_BORDER_WIDTH + title
+ * where frame_bw is the X border on the frame window (1px). */
+void frame_gravity_to_frame(Wm *wm, WmClient *c,
+                            int client_x, int client_y,
+                            int *frame_x, int *frame_y)
+{
+    int title = c->decorated ? wm->title_height : 0;
+    int bw = 1;
+    int left = WM_BORDER_WIDTH + bw;
+    int top  = WM_BORDER_WIDTH + title + bw;
+    int cw   = c->width;
+    int ch   = c->height;
+
+    switch (c->win_gravity) {
+    default:
+    case XCB_GRAVITY_NORTH_WEST:
+        *frame_x = client_x - left;
+        *frame_y = client_y - top;
+        break;
+    case XCB_GRAVITY_NORTH:
+        *frame_x = client_x - left - cw / 2;
+        *frame_y = client_y - top;
+        break;
+    case XCB_GRAVITY_NORTH_EAST:
+        *frame_x = client_x - left - cw;
+        *frame_y = client_y - top;
+        break;
+    case XCB_GRAVITY_WEST:
+        *frame_x = client_x - left;
+        *frame_y = client_y - top - ch / 2;
+        break;
+    case XCB_GRAVITY_CENTER:
+        *frame_x = client_x - left - cw / 2;
+        *frame_y = client_y - top - ch / 2;
+        break;
+    case XCB_GRAVITY_EAST:
+        *frame_x = client_x - left - cw;
+        *frame_y = client_y - top - ch / 2;
+        break;
+    case XCB_GRAVITY_SOUTH_WEST:
+        *frame_x = client_x - left;
+        *frame_y = client_y - top - ch;
+        break;
+    case XCB_GRAVITY_SOUTH:
+        *frame_x = client_x - left - cw / 2;
+        *frame_y = client_y - top - ch;
+        break;
+    case XCB_GRAVITY_SOUTH_EAST:
+        *frame_x = client_x - left - cw;
+        *frame_y = client_y - top - ch;
+        break;
+    case XCB_GRAVITY_STATIC:
+        *frame_x = client_x - left;
+        *frame_y = client_y - top;
+        break;
+    }
+}
+
+/* Inverse: convert frame position back to the gravity-relative position
+ * the client originally specified (used to fill in the unchanged axis
+ * when a ConfigureRequest only sets x or only y). */
+void frame_frame_to_gravity(Wm *wm, WmClient *c,
+                            int *client_x, int *client_y)
+{
+    int title = c->decorated ? wm->title_height : 0;
+    int bw = 1;
+    int left = WM_BORDER_WIDTH + bw;
+    int top  = WM_BORDER_WIDTH + title + bw;
+    int cw   = c->width;
+    int ch   = c->height;
+
+    switch (c->win_gravity) {
+    default:
+    case XCB_GRAVITY_NORTH_WEST:
+        *client_x = c->x + left;
+        *client_y = c->y + top;
+        break;
+    case XCB_GRAVITY_NORTH:
+        *client_x = c->x + left + cw / 2;
+        *client_y = c->y + top;
+        break;
+    case XCB_GRAVITY_NORTH_EAST:
+        *client_x = c->x + left + cw;
+        *client_y = c->y + top;
+        break;
+    case XCB_GRAVITY_WEST:
+        *client_x = c->x + left;
+        *client_y = c->y + top + ch / 2;
+        break;
+    case XCB_GRAVITY_CENTER:
+        *client_x = c->x + left + cw / 2;
+        *client_y = c->y + top + ch / 2;
+        break;
+    case XCB_GRAVITY_EAST:
+        *client_x = c->x + left + cw;
+        *client_y = c->y + top + ch / 2;
+        break;
+    case XCB_GRAVITY_SOUTH_WEST:
+        *client_x = c->x + left;
+        *client_y = c->y + top + ch;
+        break;
+    case XCB_GRAVITY_SOUTH:
+        *client_x = c->x + left + cw / 2;
+        *client_y = c->y + top + ch;
+        break;
+    case XCB_GRAVITY_SOUTH_EAST:
+        *client_x = c->x + left + cw;
+        *client_y = c->y + top + ch;
+        break;
+    case XCB_GRAVITY_STATIC:
+        *client_x = c->x + left;
+        *client_y = c->y + top;
+        break;
+    }
 }
 
 /* ---------- title bar layout ----------
