@@ -891,7 +891,11 @@ static void make_switcher_title_texture(WmCompositor *comp, const char *text)
         font_px = 10;
     }
     int h = font_px + (int)(12 * comp->scale + 0.5);
-    int w = (int)(comp->screen->width_in_pixels * (SWITCHER_SLOT_W * SWITCHER_VISIBLE));
+    /* Size the title plate to the visible row width on the primary monitor,
+     * not the combined virtual screen, so it never spans other displays. */
+    int pm_w = comp->switcher_pm_w > 0 ? comp->switcher_pm_w
+                                      : comp->screen->width_in_pixels;
+    int w = (int)(pm_w * (SWITCHER_SLOT_W * SWITCHER_VISIBLE));
     if (w < 1) {
         w = 1;
     }
@@ -1012,15 +1016,22 @@ static void draw_switcher(WmCompositor *comp)
         return;
     }
 
-    int W = comp->screen->width_in_pixels;
-    int H = comp->screen->height_in_pixels;
+    /* Confine the switcher to the primary monitor so it never spans other
+     * displays.  When the rect is unset (degenerate) we fall back to the full
+     * screen, preserving single-monitor behavior. */
+    int pm_x = comp->switcher_pm_w > 0 ? comp->switcher_pm_x : 0;
+    int pm_y = comp->switcher_pm_h > 0 ? comp->switcher_pm_y : 0;
+    int W = comp->switcher_pm_w > 0 ? comp->switcher_pm_w
+                                   : comp->screen->width_in_pixels;
+    int H = comp->switcher_pm_h > 0 ? comp->switcher_pm_h
+                                   : comp->screen->height_in_pixels;
     const IsdeColorScheme *scheme = isde_theme_current();
 
     float pitch = W * SWITCHER_SLOT_W;
     float box_h = H * SWITCHER_THUMB_H;
     float box_w = pitch * 0.88f;
-    float row_cy = H * 0.46f;
-    float center_x = W * 0.5f;
+    float row_cy = pm_y + H * 0.46f;
+    float center_x = pm_x + W * 0.5f;
     float xoff = comp->switcher_anim_dir * pitch * comp->switcher_anim;
     float frame_m = 4.0f;
     float panel_pad = 16.0f * comp->scale;
@@ -1028,9 +1039,9 @@ static void draw_switcher(WmCompositor *comp)
     int clip_w = (int)(pitch * SWITCHER_VISIBLE);
     int clip_x = (int)(center_x - clip_w / 2.0f);
 
-    /* Dim the whole screen, then draw one panel behind the entire switcher
-     * (preview row plus the title beneath it). */
-    draw_solid_quad(0, 0, W, H, 0.0f, 0.0f, 0.0f, 0.55f);
+    /* Dim only the primary monitor, then draw one panel behind the entire
+     * switcher (preview row plus the title beneath it). */
+    draw_solid_quad(pm_x, pm_y, W, H, 0.0f, 0.0f, 0.0f, 0.55f);
 
     float title_h = comp->switcher_title_tex ? (float)comp->switcher_title_h : 0.0f;
     float panel_top = row_cy - box_h / 2.0f - frame_m - panel_pad;
@@ -1106,7 +1117,8 @@ static void draw_switcher(WmCompositor *comp)
 }
 
 void wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
-                                  int count, int sel, const char *sel_title)
+                                   int count, int sel, const char *sel_title,
+                                   int pm_x, int pm_y, int pm_w, int pm_h)
 {
     free(comp->switcher_wins);
     comp->switcher_wins = NULL;
@@ -1124,6 +1136,22 @@ void wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
     comp->switcher_sel = sel;
     comp->switcher_anim = 0.0f;
     comp->switcher_anim_dir = 0;
+
+    /* Confine the switcher to the primary monitor.  Fall back to the full
+     * screen if the caller passed a degenerate rect, which keeps single-
+     * monitor and legacy behavior identical. */
+    if (pm_w > 0 && pm_h > 0) {
+        comp->switcher_pm_x = pm_x;
+        comp->switcher_pm_y = pm_y;
+        comp->switcher_pm_w = pm_w;
+        comp->switcher_pm_h = pm_h;
+    } else {
+        comp->switcher_pm_x = 0;
+        comp->switcher_pm_y = 0;
+        comp->switcher_pm_w = comp->screen->width_in_pixels;
+        comp->switcher_pm_h = comp->screen->height_in_pixels;
+    }
+
     make_switcher_title_texture(comp, sel_title);
     comp->needs_repaint = 1;
 }
@@ -1149,6 +1177,10 @@ void wm_compositor_switcher_end(WmCompositor *comp)
     comp->switcher_wins = NULL;
     comp->switcher_count = 0;
     comp->switcher_anim = 0.0f;
+    comp->switcher_pm_x = 0;
+    comp->switcher_pm_y = 0;
+    comp->switcher_pm_w = 0;
+    comp->switcher_pm_h = 0;
     if (comp->switcher_title_tex) {
         glDeleteTextures(1, &comp->switcher_title_tex);
         comp->switcher_title_tex = 0;

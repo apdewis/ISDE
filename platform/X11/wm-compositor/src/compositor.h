@@ -66,6 +66,13 @@ typedef struct WmCompositor {
     GLuint              switcher_title_tex;  /* texture of the centered title */
     int                 switcher_title_w, switcher_title_h;
 
+    /* Primary monitor geometry (screen-relative, physical pixels) the switcher
+     * is confined to.  On single-monitor setups this equals the full screen. */
+    int                 switcher_pm_x;
+    int                 switcher_pm_y;
+    int                 switcher_pm_w;
+    int                 switcher_pm_h;
+
     /* Desktop background */
     GLuint              bg_texture;
     int                 bg_has_texture;
@@ -85,7 +92,8 @@ int   wm_compositor_animating(WmCompositor *comp);
 void  wm_compositor_slide(WmCompositor *comp, int dx, int dy);
 void  wm_compositor_set_slide_exclude(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
-                                   int count, int sel, const char *sel_title);
+                                   int count, int sel, const char *sel_title,
+                                   int pm_x, int pm_y, int pm_w, int pm_h);
 void  wm_compositor_switcher_update(WmCompositor *comp, int sel, int dir,
                                     const char *sel_title);
 void  wm_compositor_switcher_end(WmCompositor *comp);

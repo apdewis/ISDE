@@ -250,9 +250,14 @@ void wm_switcher_show(Wm *wm)
                 WmClient *c = wm->switcher_order[i];
                 wins[i] = c->frame ? c->frame : c->client;
             }
+            /* Confine the compositor preview switcher to the primary monitor,
+             * mirroring create_osd() below, so it never spans other displays. */
+            int pm_x, pm_y, pm_w, pm_h;
+            wm_get_primary_monitor(wm, &pm_x, &pm_y, &pm_w, &pm_h);
             wm_compositor_switcher_begin(wm->compositor, wins,
                                          wm->switcher_count, wm->switcher_sel,
-                                         wm->switcher_labels[wm->switcher_sel]);
+                                         wm->switcher_labels[wm->switcher_sel],
+                                         pm_x, pm_y, pm_w, pm_h);
             free(wins);
         }
         return;
