@@ -229,11 +229,11 @@ typedef struct {
 
 typedef struct {
     plan_action_t    action;
-    xcb_randr_crtc_t crtc;
     xcb_randr_mode_t mode;
     int16_t          x, y;
     uint16_t         w, h;
     double           refresh;
+    int              is_primary;
 } desired_state_t;
 
 static xcb_timestamp_t refresh_cfg_ts(xcb_connection_t *conn,
@@ -305,7 +305,6 @@ static void plan_output(const output_state_t *st,
 {
     memset(out, 0, sizeof(*out));
     out->action = PLAN_SKIP;
-    out->crtc = XCB_NONE;
     out->mode = XCB_NONE;
 
     if (!st->connected) return;
@@ -319,6 +318,7 @@ static void plan_output(const output_state_t *st,
     int want_h = mon ? (int)isde_config_int(mon, "height", 0) : 0;
     int want_x = mon ? (int)isde_config_int(mon, "x", 0) : 0;
     int want_y = mon ? (int)isde_config_int(mon, "y", 0) : 0;
+    out->is_primary = mon ? isde_config_bool(mon, "primary", 0) : 0;
 
     if (want_w <= 0 || want_h <= 0) {
         xcb_randr_mode_t *pref_modes =
@@ -365,7 +365,6 @@ static void plan_output(const output_state_t *st,
         st->active_x == out->x && st->active_y == out->y &&
         st->active_w == out->w && st->active_h == out->h) {
         out->action = PLAN_KEEP;
-        out->crtc = st->bound_crtc;
         return;
     }
 
@@ -373,7 +372,7 @@ static void plan_output(const output_state_t *st,
 }
 
 static int apply_desired(xcb_connection_t *conn, xcb_window_t root,
-                         xcb_screen_t *scr, const output_state_t *st,
+                         const output_state_t *st,
                          const desired_state_t *des, xcb_timestamp_t *cfg_ts)
 {
     xcb_randr_crtc_t crtc = acquire_crtc(conn, st, *cfg_ts);
@@ -551,9 +550,6 @@ static int enable_connected(xcb_connection_t *conn, xcb_window_t root,
     /* ---- Phase C: apply ---- */
     xcb_randr_output_t first_enabled = XCB_NONE;
 
-    if (n_to_apply)
-        cfg_ts = refresh_cfg_ts(conn, root, cfg_ts);
-
     for (int i = 0; i < nouts; i++) {
         if (plans[i].action == PLAN_KEEP) {
             if (first_enabled == XCB_NONE)
@@ -563,7 +559,7 @@ static int enable_connected(xcb_connection_t *conn, xcb_window_t root,
         if (plans[i].action != PLAN_APPLY)
             continue;
 
-        int ok = apply_desired(conn, root, scr,
+        int ok = apply_desired(conn, root,
                                 &states[i], &plans[i], &cfg_ts);
         if (ok && first_enabled == XCB_NONE)
             first_enabled = outs[i];
@@ -593,7 +589,7 @@ static int enable_connected(xcb_connection_t *conn, xcb_window_t root,
  * off, set modes/positions for all enabled outputs.  When no profile
  * exists, enable all connected outputs at preferred modes with the
  * first as primary.  Used on startup, SIGHUP, and settings-panel
- * changes. */
+ * changes.  Shares observe/plan/apply helpers with enable_connected. */
 
 static int apply_config(xcb_connection_t *conn, xcb_window_t root,
                          xcb_screen_t *scr)
@@ -668,11 +664,8 @@ static int apply_config(xcb_connection_t *conn, xcb_window_t root,
     int n_randr_outs =
         xcb_randr_get_screen_resources_current_outputs_length(res);
 
-    xcb_randr_output_t primary_out = XCB_NONE;
-    xcb_randr_output_t first_enabled = XCB_NONE;
+    /* ---- Phase 0: disable outputs that config says should be off ---- */
     int changed = 0;
-
-    /* Disable outputs that config says should be off */
     for (int i = 0; i < n_randr_outs; i++) {
         xcb_randr_get_output_info_reply_t *oinfo =
             xcb_randr_get_output_info_reply(conn,
@@ -706,210 +699,116 @@ static int apply_config(xcb_connection_t *conn, xcb_window_t root,
         free(res);
         res = xcb_randr_get_screen_resources_current_reply(conn,
             xcb_randr_get_screen_resources_current(conn, root), NULL);
-        if (!res) { isde_config_free(cfg); return 0; }
+        if (!res) { free(profile_key); isde_config_free(cfg); return 0; }
         mode_infos = xcb_randr_get_screen_resources_current_modes(res);
         nmi = xcb_randr_get_screen_resources_current_modes_length(res);
         cfg_ts = res->config_timestamp;
         randr_outs = xcb_randr_get_screen_resources_current_outputs(res);
-        n_randr_outs = xcb_randr_get_screen_resources_current_outputs_length(res);
+        n_randr_outs =
+            xcb_randr_get_screen_resources_current_outputs_length(res);
     }
 
-    /* Configure all enabled connected outputs */
+    if (n_randr_outs == 0) {
+        free(res); free(profile_key); isde_config_free(cfg);
+        return 0;
+    }
+
+    output_state_t  *states = calloc(n_randr_outs, sizeof(output_state_t));
+    desired_state_t *plans  = calloc(n_randr_outs, sizeof(desired_state_t));
+    if (!states || !plans) {
+        free(states); free(plans);
+        free(res); free(profile_key); isde_config_free(cfg);
+        return 0;
+    }
+
+    /* ---- Phase A: observe ---- */
     for (int i = 0; i < n_randr_outs; i++) {
-        xcb_randr_get_output_info_reply_t *oinfo =
-            xcb_randr_get_output_info_reply(conn,
-                xcb_randr_get_output_info(conn, randr_outs[i], cfg_ts), NULL);
-        if (!oinfo) continue;
-        if (oinfo->connection != XCB_RANDR_CONNECTION_CONNECTED) {
-            free(oinfo);
-            continue;
-        }
+        output_get_state(conn, randr_outs[i], cfg_ts, &states[i]);
+        fprintf(stdout, "isde-displayd: apply_config: "
+                "%s: connected=%d crtc=%u active=%d mode=%u "
+                "%ux%u+%d+%d\n",
+                states[i].name, states[i].connected,
+                (unsigned)states[i].bound_crtc, states[i].crtc_active,
+                (unsigned)states[i].active_mode,
+                states[i].active_w, states[i].active_h,
+                states[i].active_x, states[i].active_y);
+    }
 
-        int namelen = xcb_randr_get_output_info_name_length(oinfo);
-        char *name = strndup((char *)xcb_randr_get_output_info_name(oinfo),
-                             namelen);
+    /* ---- Phase B: plan ---- */
+    int n_to_apply = 0;
+    for (int i = 0; i < n_randr_outs; i++) {
+        plan_output(&states[i], outs_tbl, mode_infos, nmi, &plans[i]);
+        const char *act = plans[i].action == PLAN_KEEP ? "keep" :
+                          plans[i].action == PLAN_APPLY ? "apply" : "skip";
+        fprintf(stdout, "isde-displayd: apply_config: %s: plan=%s"
+                "%s%s\n",
+                states[i].name, act,
+                plans[i].action == PLAN_APPLY ? " " : "",
+                plans[i].action == PLAN_APPLY && plans[i].is_primary ?
+                    "(primary)" :
+                plans[i].action == PLAN_APPLY ? "" : "");
+        if (plans[i].action == PLAN_APPLY)
+            n_to_apply++;
+    }
 
-        IsdeConfigTable *mon = isde_config_table(outs_tbl, name);
-
-        fprintf(stdout, "isde-displayd: apply_config: %s: "
-                "connected, crtc=%u, config=%s, %d modes, %d preferred\n",
-                name, (unsigned)oinfo->crtc,
-                mon ? "found" : "none",
-                xcb_randr_get_output_info_modes_length(oinfo),
-                oinfo->num_preferred);
-
-        if (mon && !isde_config_bool(mon, "enabled", 1)) {
-            fprintf(stdout, "isde-displayd: apply_config: "
-                    "%s disabled by config, skipping\n", name);
-            free(name);
-            free(oinfo);
-            continue;
-        }
-
-        int want_w = mon ? (int)isde_config_int(mon, "width", 0) : 0;
-        int want_h = mon ? (int)isde_config_int(mon, "height", 0) : 0;
-        int want_x = mon ? (int)isde_config_int(mon, "x", 0) : 0;
-        int want_y = mon ? (int)isde_config_int(mon, "y", 0) : 0;
-        int is_primary = mon ? isde_config_bool(mon, "primary", 0) : 0;
-
-        fprintf(stdout, "isde-displayd: apply_config: %s: "
-                "want %dx%d+%d+%d primary=%d\n",
-                name, want_w, want_h, want_x, want_y, is_primary);
-
-        if (want_w <= 0 || want_h <= 0) {
-            xcb_randr_mode_t *pref_modes =
-                xcb_randr_get_output_info_modes(oinfo);
-            if (xcb_randr_get_output_info_modes_length(oinfo) > 0 &&
-                oinfo->num_preferred > 0) {
-                for (int k = 0; k < nmi; k++) {
-                    if (mode_infos[k].id == pref_modes[0]) {
-                        want_w = mode_infos[k].width;
-                        want_h = mode_infos[k].height;
-                        break;
-                    }
-                }
-            }
-            fprintf(stdout, "isde-displayd: apply_config: %s: "
-                    "preferred mode fallback: %dx%d\n",
-                    name, want_w, want_h);
-        }
-
-        if (want_w <= 0 || want_h <= 0) {
-            fprintf(stdout, "isde-displayd: apply_config: %s: "
-                    "no usable mode, skipping\n", name);
-            if (oinfo->crtc != XCB_NONE && first_enabled == XCB_NONE)
-                first_enabled = randr_outs[i];
-            free(name);
-            free(oinfo);
-            continue;
-        }
-
-        xcb_randr_crtc_t crtc = oinfo->crtc;
-        if (crtc == XCB_NONE) {
-            crtc = isde_randr_find_free_crtc(conn, oinfo, cfg_ts);
-            if (crtc == XCB_NONE) {
-                fprintf(stdout, "isde-displayd: apply_config: %s: "
-                        "no free CRTC\n", name);
-                free(name);
-                free(oinfo);
-                continue;
-            }
-            fprintf(stdout, "isde-displayd: apply_config: %s: "
-                    "assigned free CRTC %u\n", name, (unsigned)crtc);
-        }
-
-        /* Skip if already configured correctly */
-        int already_correct = 0;
-        if (oinfo->crtc != XCB_NONE) {
-            xcb_randr_get_crtc_info_reply_t *ci =
-                xcb_randr_get_crtc_info_reply(conn,
-                    xcb_randr_get_crtc_info(conn, crtc, cfg_ts), NULL);
-            if (ci) {
-                if (ci->mode != XCB_NONE &&
-                    ci->x == (int16_t)want_x && ci->y == (int16_t)want_y &&
-                    ci->width == (uint16_t)want_w &&
-                    ci->height == (uint16_t)want_h)
-                    already_correct = 1;
-                fprintf(stdout, "isde-displayd: apply_config: %s: "
-                        "current CRTC mode=%u %ux%u+%d+%d → %s\n",
-                        name, (unsigned)ci->mode,
-                        ci->width, ci->height, ci->x, ci->y,
-                        already_correct ? "already correct" : "needs update");
-                free(ci);
-            }
-        }
-
-        if (already_correct) {
-            if (first_enabled == XCB_NONE)
-                first_enabled = randr_outs[i];
-            if (is_primary)
-                primary_out = randr_outs[i];
-            free(name);
-            free(oinfo);
-            continue;
-        }
-
-        xcb_randr_mode_t *out_modes = xcb_randr_get_output_info_modes(oinfo);
-        int out_nmodes = xcb_randr_get_output_info_modes_length(oinfo);
-        xcb_randr_mode_t best_mode = XCB_NONE;
-        double best_refresh = 0;
-
-        for (int m = 0; m < out_nmodes; m++) {
-            for (int k = 0; k < nmi; k++) {
-                if (mode_infos[k].id != out_modes[m]) continue;
-                if (mode_infos[k].width == (uint16_t)want_w &&
-                    mode_infos[k].height == (uint16_t)want_h) {
-                    double r = isde_randr_refresh(&mode_infos[k]);
-                    if (r > best_refresh) {
-                        best_refresh = r;
-                        best_mode = mode_infos[k].id;
-                    }
-                }
-            }
-        }
-
-        if (best_mode == XCB_NONE) {
-            fprintf(stdout, "isde-displayd: no mode %dx%d for %s\n",
-                    want_w, want_h, name);
-            free(name);
-            free(oinfo);
-            continue;
-        }
-
+    /* ---- Pre-compute screen resize from all planned geometries ---- */
+    if (n_to_apply) {
         xcb_get_geometry_reply_t *rg =
-            xcb_get_geometry_reply(conn,
-                xcb_get_geometry(conn, root), NULL);
+            xcb_get_geometry_reply(conn, xcb_get_geometry(conn, root), NULL);
         uint16_t cur_sw = rg ? rg->width  : scr->width_in_pixels;
         uint16_t cur_sh = rg ? rg->height : scr->height_in_pixels;
         free(rg);
-        int right = want_x + want_w;
-        int bottom = want_y + want_h;
-        if (right > (int)cur_sw || bottom > (int)cur_sh) {
-            int nw = right  > (int)cur_sw ? right  : (int)cur_sw;
-            int nh = bottom > (int)cur_sh ? bottom : (int)cur_sh;
-            int mm_w = scr->width_in_pixels > 0 ?
-                (nw * scr->width_in_millimeters) / scr->width_in_pixels : nw;
-            int mm_h = scr->height_in_pixels > 0 ?
-                (nh * scr->height_in_millimeters) / scr->height_in_pixels : nh;
-            xcb_randr_set_screen_size(conn, root, nw, nh, mm_w, mm_h);
+
+        int need_w = cur_sw, need_h = cur_sh;
+        for (int i = 0; i < n_randr_outs; i++) {
+            int right, bottom;
+            if (plans[i].action == PLAN_APPLY) {
+                right  = plans[i].x + plans[i].w;
+                bottom = plans[i].y + plans[i].h;
+            } else if (plans[i].action == PLAN_KEEP) {
+                right  = states[i].active_x + states[i].active_w;
+                bottom = states[i].active_y + states[i].active_h;
+            } else {
+                continue;
+            }
+            if (right  > need_w) need_w = right;
+            if (bottom > need_h) need_h = bottom;
         }
 
-        {
-            xcb_randr_get_screen_resources_current_reply_t *fresh =
-                xcb_randr_get_screen_resources_current_reply(conn,
-                    xcb_randr_get_screen_resources_current(conn, root), NULL);
-            if (fresh) {
-                cfg_ts = fresh->config_timestamp;
-                free(fresh);
-            }
+        if (need_w > (int)cur_sw || need_h > (int)cur_sh) {
+            int mm_w = scr->width_in_pixels > 0 ?
+                (need_w * scr->width_in_millimeters) /
+                scr->width_in_pixels : need_w;
+            int mm_h = scr->height_in_pixels > 0 ?
+                (need_h * scr->height_in_millimeters) /
+                scr->height_in_pixels : need_h;
+            xcb_randr_set_screen_size(conn, root, need_w, need_h, mm_w, mm_h);
         }
-        xcb_randr_set_crtc_config_cookie_t ck =
-            xcb_randr_set_crtc_config(conn, crtc,
-                XCB_CURRENT_TIME, cfg_ts,
-                (int16_t)want_x, (int16_t)want_y, best_mode,
-                XCB_RANDR_ROTATION_ROTATE_0,
-                1, &randr_outs[i]);
-        xcb_randr_set_crtc_config_reply_t *cr =
-            xcb_randr_set_crtc_config_reply(conn, ck, NULL);
-        if (!cr || cr->status != XCB_RANDR_SET_CONFIG_SUCCESS) {
-            fprintf(stdout, "isde-displayd: set_crtc_config failed for %s"
-                    " (status %d)\n", name, cr ? cr->status : -1);
-            free(cr);
-            free(name);
-            free(oinfo);
+    }
+
+    /* ---- Phase C: apply ---- */
+    xcb_randr_output_t primary_out = XCB_NONE;
+    xcb_randr_output_t first_enabled = XCB_NONE;
+
+    for (int i = 0; i < n_randr_outs; i++) {
+        if (plans[i].action == PLAN_KEEP) {
+            if (first_enabled == XCB_NONE)
+                first_enabled = randr_outs[i];
+            if (plans[i].is_primary)
+                primary_out = randr_outs[i];
             continue;
         }
-        free(cr);
-        fprintf(stdout, "isde-displayd: %s -> %dx%d+%d+%d @ %.0f Hz\n",
-                name, want_w, want_h, want_x, want_y, best_refresh);
+        if (plans[i].action != PLAN_APPLY)
+            continue;
 
-        if (first_enabled == XCB_NONE)
-            first_enabled = randr_outs[i];
-        if (is_primary)
-            primary_out = randr_outs[i];
-
-        free(name);
-        free(oinfo);
+        int ok = apply_desired(conn, root,
+                                &states[i], &plans[i], &cfg_ts);
+        if (ok) {
+            if (first_enabled == XCB_NONE)
+                first_enabled = randr_outs[i];
+            if (plans[i].is_primary)
+                primary_out = randr_outs[i];
+        }
     }
 
     xcb_randr_output_t new_primary =
@@ -921,12 +820,17 @@ static int apply_config(xcb_connection_t *conn, xcb_window_t root,
             "first_enabled=%s\n",
             first_enabled != XCB_NONE ? "yes" : "none");
 
+    for (int i = 0; i < n_randr_outs; i++)
+        free(states[i].oi);
+    free(states);
+    free(plans);
     xcb_flush(conn);
     free(res);
     free(profile_key);
     isde_config_free(cfg);
     return first_enabled != XCB_NONE;
 }
+
 
 /* ---------- main ---------- */
 
