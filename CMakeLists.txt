@@ -105,6 +105,7 @@ isde_dependency(LIBJPEG         PC libjpeg             LIBS jpeg            HEAD
 isde_dependency(XCB_XKB         PC xcb-xkb             LIBS xcb-xkb         HEADERS xcb/xkb.h)
 isde_dependency(XKBCOMMON       PC xkbcommon           LIBS xkbcommon       HEADERS xkbcommon/xkbcommon.h)
 isde_dependency(XCB_RANDR       PC xcb-randr           LIBS xcb-randr       HEADERS xcb/randr.h)
+isde_dependency(XCB_SYNC        PC xcb-sync            LIBS xcb-sync        HEADERS xcb/sync.h)
 isde_dependency(XCB_CURSOR      PC xcb-cursor          LIBS xcb-cursor      HEADERS xcb/xcb_cursor.h)
 isde_dependency(XCB_DPMS        PC xcb-dpms            LIBS xcb-dpms        HEADERS xcb/dpms.h)
 isde_dependency(XCB_SCREENSAVER PC xcb-screensaver     LIBS xcb-screensaver HEADERS xcb/screensaver.h)

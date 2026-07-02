@@ -652,6 +652,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     }
     free(sid_reply);
 
+    wm_sync_client_init(wm, c);
+
     if (adopt) {
         int title = c->decorated ? wm->title_height : 0;
         int bw = 1;
@@ -755,6 +757,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
 void frame_destroy(Wm *wm, WmClient *c)
 {
+    wm_sync_client_cleanup(wm, c);
     frame_destroy_grips(wm, c);
 
     xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);

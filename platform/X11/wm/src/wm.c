@@ -376,6 +376,21 @@ int wm_init(Wm *wm, int *argc, char **argv)
     }
     query_monitors(wm);
 
+    /* SYNC extension (for _NET_WM_SYNC_REQUEST resize throttling) */
+    const xcb_query_extension_reply_t *sync_ext =
+        xcb_get_extension_data(wm->conn, &xcb_sync_id);
+    if (sync_ext && sync_ext->present) {
+        xcb_sync_initialize_reply_t *sync_reply = xcb_sync_initialize_reply(
+            wm->conn,
+            xcb_sync_initialize(wm->conn, XCB_SYNC_MAJOR_VERSION,
+                                XCB_SYNC_MINOR_VERSION),
+            NULL);
+        if (sync_reply) {
+            wm->sync_event_base = sync_ext->first_event;
+            free(sync_reply);
+        }
+    }
+
     /* Virtual desktops */
     wm_desktops_init(wm);
 
@@ -733,6 +748,168 @@ void wm_close_client(Wm *wm, WmClient *c)
         xcb_kill_client(wm->conn, c->client);
     }
     xcb_flush(wm->conn);
+}
+
+/* ---------- _NET_WM_SYNC_REQUEST (EWMH resize throttling) ---------- */
+
+#define SYNC_FALLBACK_TIMEOUT_MS 1000
+
+/* The client never updated its counter within the timeout: disable sync for
+ * it so an interactive resize cannot stall on a broken client. */
+static void sync_timeout_cb(void *data)
+{
+    Wm *wm = data;
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        if (c->sync_waiting) {
+            c->sync_timer = -1;
+            c->sync_waiting = 0;
+            if (c->sync_alarm) {
+                xcb_sync_destroy_alarm(wm->conn, c->sync_alarm);
+                c->sync_alarm = 0;
+            }
+            c->sync_counter = 0;
+            if (c->sync_pending) {
+                c->sync_pending = 0;
+                frame_configure(wm, c);
+            }
+        }
+    }
+}
+
+/* Arm (or re-arm) the client's alarm to fire once its counter reaches the
+ * last serial we sent.  With delta 0 and positive comparison the alarm goes
+ * Inactive after triggering, so each request re-arms it. */
+static void sync_arm_alarm(Wm *wm, WmClient *c)
+{
+    xcb_sync_int64_t v;
+    v.hi = (int32_t)(c->sync_value >> 32);
+    v.lo = (uint32_t)(c->sync_value & 0xFFFFFFFF);
+    uint32_t mask = XCB_SYNC_CA_COUNTER | XCB_SYNC_CA_VALUE_TYPE |
+                    XCB_SYNC_CA_VALUE | XCB_SYNC_CA_TEST_TYPE |
+                    XCB_SYNC_CA_EVENTS;
+    if (!c->sync_alarm) {
+        xcb_sync_create_alarm_value_list_t vals;
+        memset(&vals, 0, sizeof(vals));
+        vals.counter   = c->sync_counter;
+        vals.valueType = XCB_SYNC_VALUETYPE_ABSOLUTE;
+        vals.value     = v;
+        vals.testType  = XCB_SYNC_TESTTYPE_POSITIVE_COMPARISON;
+        vals.events    = 1;
+        c->sync_alarm = xcb_generate_id(wm->conn);
+        xcb_sync_create_alarm_aux(wm->conn, c->sync_alarm, mask, &vals);
+    } else {
+        xcb_sync_change_alarm_value_list_t vals;
+        memset(&vals, 0, sizeof(vals));
+        vals.counter   = c->sync_counter;
+        vals.valueType = XCB_SYNC_VALUETYPE_ABSOLUTE;
+        vals.value     = v;
+        vals.testType  = XCB_SYNC_TESTTYPE_POSITIVE_COMPARISON;
+        vals.events    = 1;
+        xcb_sync_change_alarm_aux(wm->conn, c->sync_alarm, mask, &vals);
+    }
+}
+
+void wm_sync_client_init(Wm *wm, WmClient *c)
+{
+    c->sync_timer = -1;
+    if (!wm->sync_event_base) {
+        return;
+    }
+    xcb_ewmh_connection_t *ec = isde_ewmh_connection(wm->ewmh);
+    if (!client_supports_protocol(wm, c, ec->_NET_WM_SYNC_REQUEST)) {
+        return;
+    }
+    xcb_get_property_reply_t *reply = xcb_get_property_reply(wm->conn,
+        xcb_get_property(wm->conn, 0, c->client,
+                         ec->_NET_WM_SYNC_REQUEST_COUNTER,
+                         XCB_ATOM_CARDINAL, 0, 1), NULL);
+    if (reply && xcb_get_property_value_length(reply) >= 4) {
+        c->sync_counter = *(xcb_sync_counter_t *)xcb_get_property_value(reply);
+    }
+    free(reply);
+}
+
+void wm_sync_client_cleanup(Wm *wm, WmClient *c)
+{
+    if (c->sync_timer != -1) {
+        wm_timer_remove(wm, c->sync_timer);
+        c->sync_timer = -1;
+    }
+    if (c->sync_alarm) {
+        xcb_sync_destroy_alarm(wm->conn, c->sync_alarm);
+        c->sync_alarm = 0;
+    }
+    c->sync_waiting = 0;
+    c->sync_pending = 0;
+}
+
+/* Called before each interactive-resize configure.  Returns 1 if the
+ * configure must be deferred (the client has not caught up with the previous
+ * serial); the caller's geometry stays in c->x/y/width/height and is applied
+ * from wm_sync_alarm_notify().  Returns 0 with the sync request sent. */
+int wm_sync_throttle(Wm *wm, WmClient *c)
+{
+    if (!c->sync_counter) {
+        return 0;
+    }
+    if (c->sync_waiting) {
+        c->sync_pending = 1;
+        return 1;
+    }
+
+    c->sync_value++;
+
+    xcb_client_message_event_t msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.response_type = XCB_CLIENT_MESSAGE;
+    msg.window = c->client;
+    msg.type = wm->atom_wm_protocols;
+    msg.format = 32;
+    msg.data.data32[0] = isde_ewmh_connection(wm->ewmh)->_NET_WM_SYNC_REQUEST;
+    msg.data.data32[1] = wm->last_user_time;
+    msg.data.data32[2] = (uint32_t)(c->sync_value & 0xFFFFFFFF);
+    msg.data.data32[3] = (uint32_t)(c->sync_value >> 32);
+    xcb_send_event(wm->conn, 0, c->client, XCB_EVENT_MASK_NO_EVENT,
+                   (const char *)&msg);
+
+    sync_arm_alarm(wm, c);
+    c->sync_waiting = 1;
+    c->sync_timer = wm_timer_add(wm, SYNC_FALLBACK_TIMEOUT_MS,
+                                 sync_timeout_cb, wm);
+    return 0;
+}
+
+void wm_sync_alarm_notify(Wm *wm, xcb_sync_alarm_notify_event_t *ev)
+{
+    WmClient *c = NULL;
+    for (WmClient *p = wm->clients; p; p = p->next) {
+        if (p->sync_alarm && p->sync_alarm == ev->alarm) {
+            c = p;
+            break;
+        }
+    }
+    if (!c || !c->sync_waiting) {
+        return;
+    }
+
+    /* Alarms also notify on state changes (e.g. going Inactive); only a
+     * counter value at or past the last serial means the client caught up. */
+    uint64_t val = ((uint64_t)(uint32_t)ev->counter_value.hi << 32) |
+                   ev->counter_value.lo;
+    if (val < c->sync_value) {
+        return;
+    }
+
+    c->sync_waiting = 0;
+    if (c->sync_timer != -1) {
+        wm_timer_remove(wm, c->sync_timer);
+        c->sync_timer = -1;
+    }
+    if (c->sync_pending) {
+        c->sync_pending = 0;
+        frame_configure(wm, c);
+        xcb_flush(wm->conn);
+    }
 }
 
 /* ---------- work area (respects struts) ---------- */
@@ -1903,7 +2080,9 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
 
         c->x = nx; c->y = ny;
         c->width = nw; c->height = nh;
-        frame_configure(wm, c);
+        if (!wm_sync_throttle(wm, c)) {
+            frame_configure(wm, c);
+        }
     }
 
     xcb_flush(wm->conn);
@@ -1917,6 +2096,18 @@ static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
 
         if (wm->drag_mode == DRAG_MOVE && wm->snap_pending != SNAP_NONE && c) {
             apply_snap(wm, c, wm->snap_pending, wm->snap_monitor);
+        }
+        if (wm->drag_mode == DRAG_RESIZE && c && c->sync_waiting) {
+            /* Don't leave the final size waiting on the client's counter */
+            c->sync_waiting = 0;
+            if (c->sync_timer != -1) {
+                wm_timer_remove(wm, c->sync_timer);
+                c->sync_timer = -1;
+            }
+            if (c->sync_pending) {
+                c->sync_pending = 0;
+                frame_configure(wm, c);
+            }
         }
         snap_preview_hide(wm);
 
@@ -2495,6 +2686,10 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
              type == wm->randr_event_base + XCB_RANDR_NOTIFY)) {
             query_monitors(wm);
             rescue_orphaned_clients(wm);
+        }
+        else if (wm->sync_event_base &&
+                 type == wm->sync_event_base + XCB_SYNC_ALARM_NOTIFY) {
+            wm_sync_alarm_notify(wm, (xcb_sync_alarm_notify_event_t *)ev);
         }
 #ifdef ISDE_COMPOSITOR
         else if (wm->compositor &&

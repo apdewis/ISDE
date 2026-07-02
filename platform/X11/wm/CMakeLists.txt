@@ -36,6 +36,7 @@ target_link_libraries(isde-wm
     ISDE::XCB_XRM
     ISDE::XCB_UTIL
     ISDE::XCB_RANDR
+    ISDE::XCB_SYNC
     ISDE::CAIRO
     ISDE::CAIRO_XCB
     ISDE::FONTCONFIG

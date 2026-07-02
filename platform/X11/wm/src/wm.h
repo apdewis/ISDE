@@ -8,6 +8,7 @@
 #include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_keysyms.h>
+#include <xcb/sync.h>
 
 #include <cairo/cairo.h>
 #include <cairo/cairo-xcb.h>
@@ -116,6 +117,14 @@ typedef struct WmClient {
     /* ICCCM WM_HINTS */
     int          input_hint;      /* 1 = Passive/Locally Active (default) */
     int          initial_state;   /* NormalState=1, IconicState=3 */
+
+    /* _NET_WM_SYNC_REQUEST (EWMH resize throttling) */
+    xcb_sync_counter_t sync_counter; /* client's counter (0 = no sync) */
+    xcb_sync_alarm_t   sync_alarm;   /* alarm on counter (0 = not created) */
+    uint64_t           sync_value;   /* last serial sent to the client */
+    int                sync_waiting; /* 1 = waiting for counter to catch up */
+    int                sync_pending; /* resize arrived while waiting */
+    int                sync_timer;   /* fallback timer id (-1 = none) */
 
     /* Resize grips — input-only windows on frame edges */
     xcb_window_t  grip[8];  /* top, bottom, left, right, tl, tr, bl, br */
@@ -226,6 +235,7 @@ typedef struct Wm {
     MonitorGeom           *monitors;
     int                    nmonitors;
     uint8_t                randr_event_base;
+    uint8_t                sync_event_base;  /* 0 = SYNC extension absent */
 
     /* Resize cursors */
     xcb_cursor_t           cursors[8];
@@ -357,6 +367,12 @@ int       win_menu_click(Wm *wm, int16_t x, int16_t y);
 #define GRIP_TR     5
 #define GRIP_BL     6
 #define GRIP_BR     7
+
+/* ---------- wm.c — _NET_WM_SYNC_REQUEST resize throttling ---------- */
+void  wm_sync_client_init(Wm *wm, WmClient *c);
+void  wm_sync_client_cleanup(Wm *wm, WmClient *c);
+int   wm_sync_throttle(Wm *wm, WmClient *c);
+void  wm_sync_alarm_notify(Wm *wm, xcb_sync_alarm_notify_event_t *ev);
 
 /* ---------- wm.c — startup notification ---------- */
 WmStartupSeq *wm_find_startup_seq(Wm *wm, const char *id);

@@ -397,6 +397,7 @@ void wm_ewmh_setup(Wm *wm)
         ewmh->_NET_WORKAREA,
         ewmh->_NET_FRAME_EXTENTS,
         ewmh->_NET_REQUEST_FRAME_EXTENTS,
+        ewmh->_NET_WM_SYNC_REQUEST,
         ewmh->_NET_WM_MOVERESIZE,
         ewmh->_NET_DESKTOP_LAYOUT,
         ewmh->_NET_WM_ALLOWED_ACTIONS,
