@@ -425,16 +425,18 @@ static void position_menu(TrayBattery *tb)
         return;
     }
 
+    Widget shell = IswParent(menu);
+
     double sf = ISWScaleFactor(p->toplevel);
     int log_panel_top = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
 
-    if (!IswIsRealized(menu)) {
-        IswRealizeWidget(menu);
+    if (!IswIsRealized(shell)) {
+        IswRealizeWidget(shell);
     }
 
-    int menu_w = menu->core.width;
-    int menu_h = menu->core.height;
-    int menu_bw = menu->core.border_width;
+    int menu_w = shell->core.width;
+    int menu_h = shell->core.height;
+    int menu_bw = shell->core.border_width;
 
     /* Get the icon's position relative to the panel shell */
     int icon_x = 0;
@@ -459,7 +461,7 @@ static void position_menu(TrayBattery *tb)
         x = log_mon_x;
     }
 
-    IswConfigureWidget(menu, x, y, menu_w, menu_h, menu_bw);
+    IswConfigureWidget(shell, x, y, menu_w, menu_h, menu_bw);
 }
 
 void tbat_menu_init(TrayBattery *tb)
@@ -471,14 +473,16 @@ void tbat_menu_show(TrayBattery *tb)
 {
     Panel *p = tb->panel;
 
+    /* menu_shell holds the (windowless) SimpleMenu; its popup shell is
+     * IswParent(tb->menu_shell). */
     if (tb->menu_shell) {
-        IswDestroyWidget(tb->menu_shell);
+        IswDestroyWidget(IswParent(tb->menu_shell));
     }
 
     IswArgBuilder ab = IswArgBuilderInit();
-    tb->menu_shell = IswCreatePopupShell("batteryMenu", simpleMenuWidgetClass,
-                                          p->toplevel, NULL, 0);
-    IswAddEventHandler(tb->menu_shell, IswButtonPressMask, False,
+    tb->menu_shell = IswCreateMenuPopupShell("batteryMenu", p->toplevel,
+                                             NULL, 0);
+    IswAddEventHandler(IswParent(tb->menu_shell), IswButtonPressMask, False,
                        menu_button_handler, p);
 
     /* Battery info header */
@@ -517,18 +521,19 @@ void tbat_menu_show(TrayBattery *tb)
     }
 
     position_menu(tb);
-    IswPopup(tb->menu_shell, IswGrabNone);
-    IswGrabPointer(tb->menu_shell, True,
+    Widget shell = IswParent(tb->menu_shell);
+    IswPopup(shell, IswGrabNone);
+    IswGrabPointer(shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
                    IswCursorNone, ISW_CURRENT_TIME);
 
-    panel_show_popup(p, tb->menu_shell);
+    panel_show_popup(p, shell);
 }
 
 void tbat_menu_cleanup(TrayBattery *tb)
 {
     if (tb->menu_shell) {
-        IswDestroyWidget(tb->menu_shell);
+        IswDestroyWidget(IswParent(tb->menu_shell));
         tb->menu_shell = NULL;
     }
 }

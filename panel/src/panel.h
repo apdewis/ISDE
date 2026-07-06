@@ -67,7 +67,7 @@ typedef struct TaskGroup {
     Widget        menu;            /* Window-list popup (OverrideShell + List) */
     Widget        menu_list;       /* List widget inside menu */
     String       *menu_titles;     /* Title array backing menu_list */
-    Widget        ctx_menu;        /* Right-click context menu (SimpleMenu) */
+    Widget        ctx_menu;        /* Right-click context menu (windowless SimpleMenu; shell is IswParent(ctx_menu)) */
     Widget        ctx_close_all;   /* "Close all windows" entry */
     Widget        ctx_close_sep;   /* Separator above pin toggle */
     Widget        ctx_pin;         /* "Pin/Unpin" entry */

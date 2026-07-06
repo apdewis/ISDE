@@ -32,7 +32,7 @@ typedef struct TrayBattery {
     int                 popup_visible;
     int                 updating;
 
-    /* Right-click menu */
+    /* Right-click menu (windowless SimpleMenu; shell is IswParent(menu_shell)) */
     Widget              menu_shell;
 
     /* Power state */

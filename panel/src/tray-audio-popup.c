@@ -668,16 +668,18 @@ static void position_menu(TrayAudio *ta)
     if (!menu || !ta->icon)
         return;
 
+    Widget shell = IswParent(menu);
+
     double sf = ISWScaleFactor(p->toplevel);
     int log_panel_top = (int)((p->mon_y + p->mon_h) / sf + 0.5) - PANEL_HEIGHT;
 
-    if (!IswIsRealized(menu)) {
-        IswRealizeWidget(menu);
+    if (!IswIsRealized(shell)) {
+        IswRealizeWidget(shell);
     }
 
-    int menu_w = menu->core.width;
-    int menu_h = menu->core.height;
-    int menu_bw = menu->core.border_width;
+    int menu_w = shell->core.width;
+    int menu_h = shell->core.height;
+    int menu_bw = shell->core.border_width;
 
     /* Get the icon's position relative to the panel shell */
     int icon_x = 0;
@@ -700,7 +702,7 @@ static void position_menu(TrayAudio *ta)
     if (x < log_mon_x)
         x = log_mon_x;
 
-    IswConfigureWidget(menu, x, y, menu_w, menu_h, menu_bw);
+    IswConfigureWidget(shell, x, y, menu_w, menu_h, menu_bw);
 }
 
 void ta_menu_init(TrayAudio *ta)
@@ -712,17 +714,17 @@ void ta_menu_show(TrayAudio *ta)
 {
     Panel *p = ta->panel;
 
-    /* Destroy and recreate */
+    /* Destroy and recreate. menu_shell holds the (windowless) SimpleMenu;
+     * its popup shell is IswParent(ta->menu_shell). */
     if (ta->menu_shell)
-        IswDestroyWidget(ta->menu_shell);
+        IswDestroyWidget(IswParent(ta->menu_shell));
 
     n_menu_actions = 0;
 
     IswArgBuilder ab = IswArgBuilderInit();
 
-    ta->menu_shell = IswCreatePopupShell("audioMenu", simpleMenuWidgetClass,
-                                          p->toplevel, NULL, 0);
-    IswAddEventHandler(ta->menu_shell, IswButtonPressMask, False,
+    ta->menu_shell = IswCreateMenuPopupShell("audioMenu", p->toplevel, NULL, 0);
+    IswAddEventHandler(IswParent(ta->menu_shell), IswButtonPressMask, False,
                        menu_button_handler, p);
 
     if (ta->nsinks == 0) {
@@ -768,18 +770,19 @@ void ta_menu_show(TrayAudio *ta)
     }
 
     position_menu(ta);
-    IswPopup(ta->menu_shell, IswGrabNone);
-    IswGrabPointer(ta->menu_shell, True,
+    Widget shell = IswParent(ta->menu_shell);
+    IswPopup(shell, IswGrabNone);
+    IswGrabPointer(shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
                    IswCursorNone, ISW_CURRENT_TIME);
 
-    panel_show_popup(p, ta->menu_shell);
+    panel_show_popup(p, shell);
 }
 
 void ta_menu_cleanup(TrayAudio *ta)
 {
     if (ta->menu_shell) {
-        IswDestroyWidget(ta->menu_shell);
+        IswDestroyWidget(IswParent(ta->menu_shell));
         ta->menu_shell = NULL;
     }
     free(menu_actions);

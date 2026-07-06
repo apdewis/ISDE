@@ -469,8 +469,10 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
     IswArgBorderWidth(&ab, 0);
     IswArgTopMargin(&ab, 2);
     IswArgBottomMargin(&ab, 2);
-    g->ctx_menu = IswCreatePopupShell("ctxMenu", simpleMenuWidgetClass,
-                                     g->button, ab.args, ab.count);
+    /* ctx_menu holds the (windowless) SimpleMenu; its popup shell is
+     * IswParent(g->ctx_menu). */
+    g->ctx_menu = IswCreateMenuPopupShell("ctxMenu", g->button,
+                                          ab.args, ab.count);
 
     /* Desktop actions (static — these don't change) */
     if (g->desktop_index >= 0 && g->desktop_index < p->ndesktop) {
@@ -538,10 +540,11 @@ static void create_context_menu(Panel *p, TaskGroup *g, IswPointer closure)
                                         g->ctx_menu, ab.args, ab.count);
     IswAddCallback(g->ctx_pin, IswNcallback, pin_callback, closure);
 
-    IswAddEventHandler(g->ctx_menu,
+    Widget shell = IswParent(g->ctx_menu);
+    IswAddEventHandler(shell,
                       IswButtonPressMask | IswKeyPressMask,
                       False, popup_button_handler, p);
-    IswAddEventHandler(g->ctx_menu, IswKeyPressMask,
+    IswAddEventHandler(shell, IswKeyPressMask,
                       False, popup_key_handler, p);
 }
 
@@ -562,26 +565,28 @@ static void show_context_menu(Panel *p, TaskGroup *g)
     IswArgLabel(&ab, label);
     IswSetValues(g->ctx_pin, ab.args, ab.count);
 
+    Widget shell = IswParent(g->ctx_menu);
+
     /* Position above button, bottom flush with panel top */
     Position bx, by;
     IswTranslateCoords(g->button, 0, 0, &bx, &by);
 
-    if (!IswIsRealized(g->ctx_menu)) {
-        IswRealizeWidget(g->ctx_menu);
+    if (!IswIsRealized(shell)) {
+        IswRealizeWidget(shell);
     }
 
     Dimension mh, bw;
     IswArgBuilderReset(&ab);
     IswArgHeight(&ab, &mh);
     IswArgBorderWidth(&ab, &bw);
-    IswGetValues(g->ctx_menu, ab.args, ab.count);
+    IswGetValues(shell, ab.args, ab.count);
 
     IswArgBuilderReset(&ab);
     IswArgX(&ab, bx);
     IswArgY(&ab, by - (Position)mh - (Position)(2 * bw));
-    IswSetValues(g->ctx_menu, ab.args, ab.count);
+    IswSetValues(shell, ab.args, ab.count);
 
-    IswPopup(g->ctx_menu, IswGrabNone);
+    IswPopup(shell, IswGrabNone);
 
     /* Force immediate redraw — entries may have been managed/unmanaged */
     IswExposeProc expose = IswClass(g->ctx_menu)->core_class.expose;
@@ -589,10 +594,10 @@ static void show_context_menu(Panel *p, TaskGroup *g)
         expose(g->ctx_menu, NULL, 0);
     }
 
-    panel_show_popup(p, g->ctx_menu);
+    panel_show_popup(p, shell);
 
-    IswGrabKeyboard(g->ctx_menu, True, ISW_CURRENT_TIME);
-    IswGrabPointer(g->ctx_menu, True,
+    IswGrabKeyboard(shell, True, ISW_CURRENT_TIME);
+    IswGrabPointer(shell, True,
                    IswButtonPressMask | IswButtonReleaseMask,
                    IswCursorNone, ISW_CURRENT_TIME);
 }

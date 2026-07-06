@@ -100,7 +100,7 @@ typedef struct TrayAudio {
     int                  popup_visible;
     int                  updating;      /* suppress widget callbacks during programmatic updates */
 
-    /* Right-click menu */
+    /* Right-click menu (windowless SimpleMenu; shell is IswParent(menu_shell)) */
     Widget               menu_shell;
 
     /* Audio state */
