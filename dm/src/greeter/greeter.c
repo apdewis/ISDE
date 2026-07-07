@@ -83,6 +83,7 @@ static void destroy_blank_screens(Greeter *g)
 #define ROW_GAP          8
 #define SECTION_GAP      16
 #define BOTTOM_MARGIN    32
+#define CORNER_RADIUS    3
 
 /* ---------- Callbacks ---------- */
 
@@ -373,6 +374,7 @@ static void build_ui(Greeter *g)
     IswArgEditType(&ab, IswtextEdit);
     IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
+    IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgHorizDistance(&ab, input_x);
     IswArgVertDistance(&ab, row1_y);
     IswArgTop(&ab, IswChainTop);
@@ -406,6 +408,7 @@ static void build_ui(Greeter *g)
     IswArgEcho(&ab, False);
     IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
+    IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgHorizDistance(&ab, input_x);
     IswArgVertDistance(&ab, row2_y);
     IswArgTop(&ab, IswChainTop);
@@ -425,6 +428,7 @@ static void build_ui(Greeter *g)
     IswArgWidth(&ab, label_w);
     IswArgHeight(&ab, input_h);
     IswArgJustify(&ab, IswJustifyRight);
+    IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgBorderWidth(&ab, 0);
     IswArgHorizDistance(&ab, label_x);
     IswArgVertDistance(&ab, row3_y);
@@ -451,6 +455,7 @@ static void build_ui(Greeter *g)
     IswArgWidth(&ab, INPUT_W);
     IswArgHeight(&ab, input_h);
     IswArgBorderWidth(&ab, 1);
+    IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgHorizDistance(&ab, input_x);
     IswArgVertDistance(&ab, row3_y);
     IswArgTop(&ab, IswChainTop);
@@ -489,6 +494,7 @@ static void build_ui(Greeter *g)
     IswArgHeight(&ab, input_h);
     IswArgInternalWidth(&ab, BUTTON_PAD);
     IswArgInternalHeight(&ab, 0);
+    IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgHorizDistance(&ab, input_x + INPUT_W + ROW_GAP);
     IswArgVertDistance(&ab, row2_y);
     IswArgTop(&ab, IswChainTop);
@@ -521,6 +527,7 @@ static void build_ui(Greeter *g)
         IswArgInternalHeight(&ab, BUTTON_PAD);
         IswArgHorizDistance(&ab, btn_x);
         IswArgVertDistance(&ab, btn_y);
+        IswArgCornerRadius(&ab, CORNER_RADIUS);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainTop);
         IswArgLeft(&ab, IswChainLeft);
@@ -541,6 +548,7 @@ static void build_ui(Greeter *g)
         IswArgWidth(&ab, BUTTON_W);
         IswArgInternalWidth(&ab, BUTTON_PAD);
         IswArgInternalHeight(&ab, BUTTON_PAD);
+        IswArgCornerRadius(&ab, CORNER_RADIUS);
         IswArgHorizDistance(&ab, btn_x);
         IswArgVertDistance(&ab, btn_y);
         IswArgTop(&ab, IswChainTop);

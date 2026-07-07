@@ -8,6 +8,7 @@
  */
 
 #include "panel.h"
+#include <ISW/Core.h>
 #include <ISW/ShellP.h>
 #include <ISW/List.h>
 #include <ISW/ListBox.h>
