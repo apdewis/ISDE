@@ -287,9 +287,8 @@ void frame_gravity_to_frame(Wm *wm, WmClient *c,
                             int *frame_x, int *frame_y)
 {
     int title = c->decorated ? wm->title_height : 0;
-    int bw = 1;
-    int left = WM_BORDER_WIDTH + bw;
-    int top  = WM_BORDER_WIDTH + title + bw;
+    int left = WM_BORDER_WIDTH;
+    int top  = WM_BORDER_WIDTH + title;
     int cw   = c->width;
     int ch   = c->height;
 
@@ -345,9 +344,8 @@ void frame_frame_to_gravity(Wm *wm, WmClient *c,
                             int *client_x, int *client_y)
 {
     int title = c->decorated ? wm->title_height : 0;
-    int bw = 1;
-    int left = WM_BORDER_WIDTH + bw;
-    int top  = WM_BORDER_WIDTH + title + bw;
+    int left = WM_BORDER_WIDTH;
+    int top  = WM_BORDER_WIDTH + title;
     int cw   = c->width;
     int ch   = c->height;
 
@@ -656,9 +654,8 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
     if (adopt) {
         int title = c->decorated ? wm->title_height : 0;
-        int bw = 1;
-        c->x -= WM_BORDER_WIDTH + bw;
-        c->y -= WM_BORDER_WIDTH + title + bw;
+        c->x -= WM_BORDER_WIDTH;
+        c->y -= WM_BORDER_WIDTH + title;
         xcb_icccm_get_wm_transient_for_reply(
             wm->conn,
             xcb_icccm_get_wm_transient_for(wm->conn, c->client),
@@ -687,7 +684,7 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
     };
     xcb_create_window(wm->conn, XCB_COPY_FROM_PARENT,
                       c->frame, wm->root,
-                      c->x, c->y, fw, fh, 1,
+                      c->x, c->y, fw, fh, wm->scale_factor * 1,
                       XCB_WINDOW_CLASS_INPUT_OUTPUT,
                       wm->screen->root_visual,
                       XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
@@ -762,9 +759,8 @@ void frame_destroy(Wm *wm, WmClient *c)
 
     xcb_change_save_set(wm->conn, XCB_SET_MODE_DELETE, c->client);
     int title = c->decorated ? wm->title_height : 0;
-    int bw = 1;
-    int cx = c->x + WM_BORDER_WIDTH + bw;
-    int cy = c->y + WM_BORDER_WIDTH + title + bw;
+    int cx = c->x + WM_BORDER_WIDTH;
+    int cy = c->y + WM_BORDER_WIDTH;
     xcb_reparent_window(wm->conn, c->client, wm->root, cx, cy);
     if (!c->minimized) {
         xcb_map_window(wm->conn, c->client);
@@ -795,12 +791,12 @@ void frame_set_extents(Wm *wm, WmClient *c)
                                    c->client, 0, 0, 0, 0);
         return;
     }
-    int bw = c->maximized ? 0 : 1;
+    int bw = (c->maximized ? 0 : WM_BORDER_WIDTH) * wm->scale_factor;
     int title = wm->title_height;
-    uint32_t left   = WM_BORDER_WIDTH + bw;
+    uint32_t left   = bw;
     uint32_t right  = left;
-    uint32_t top    = WM_BORDER_WIDTH + title + bw;
-    uint32_t bottom = WM_BORDER_WIDTH + bw;
+    uint32_t top    = title + bw;
+    uint32_t bottom = bw;
     xcb_ewmh_set_frame_extents(isde_ewmh_connection(wm->ewmh),
                                c->client, left, right, top, bottom);
 }
@@ -815,9 +811,9 @@ void frame_send_configure_notify(Wm *wm, WmClient *c)
     ev.event = c->client;
     ev.window = c->client;
     int title = c->decorated ? wm->title_height : 0;
-    int bw = c->maximized ? 0 : 1;
-    ev.x = c->x + WM_BORDER_WIDTH + bw;
-    ev.y = c->y + WM_BORDER_WIDTH + title + bw;
+    int bw = (c->maximized ? 0 : WM_BORDER_WIDTH) * wm->scale_factor;
+    ev.x = c->x + bw;
+    ev.y = c->y + title + bw;
     ev.width = c->width;
     ev.height = c->height;
     ev.border_width = 0;
@@ -848,7 +844,7 @@ void frame_configure(Wm *wm, WmClient *c)
     int fh = frame_total_height(wm, c);
     int th = wm->title_height;
     int title = c->decorated ? th : 0;
-    int bw = c->maximized ? 0 : 1;
+    int bw = (c->maximized ? 0 : WM_BORDER_WIDTH) * wm->scale_factor;
 
     uint32_t frame_vals[] = { c->x, c->y, fw, fh, bw };
     xcb_configure_window(wm->conn, c->frame,

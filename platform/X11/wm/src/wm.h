@@ -22,7 +22,7 @@
 
 /* ---------- Frame geometry (physical pixels) ---------- */
 #define WM_TITLE_HEIGHT    isde_font_height("title", 10)
-#define WM_BORDER_WIDTH     0
+#define WM_BORDER_WIDTH     1
 #define WM_BUTTON_SIZE     16
 
 #include "isde-monitor-xcb.h"
