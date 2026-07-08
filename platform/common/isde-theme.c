@@ -1005,7 +1005,7 @@ char **isde_theme_build_resources(void)
     /* Buttons — 3px rounded border */
     res[i++] = fmt_color("*Command.background", s->bg_bright);
     res[i++] = fmt_color("*Command.foreground", s->fg);
-    res[i++] = fmt_color("*Command.borderColor", s->border);
+    res[i++] = fmt_color("*Command.borderColor", s->fg); //use FG colour for borders of active inputs
     res[i++] = strdup("*Command.borderWidth: 1");
     res[i++] = strdup("*Command.cornerRadius: 3");
 
@@ -1027,6 +1027,8 @@ char **isde_theme_build_resources(void)
     /* MenuBar buttons */
     res[i++] = fmt_color("*MenuButton.background", s->bg);
     res[i++] = fmt_color("*MenuButton.foreground", s->fg);
+    res[i++] = fmt_color("*MenuButton.borderColor", s->fg); //use FG colour for borders of active inputs
+
 
     /* Scrollbars */
     res[i++] = fmt_color("*Scrollbar.background", s->bg_light);
@@ -1055,6 +1057,8 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*SpinBox*up.foreground", s->fg);
     res[i++] = fmt_color("*SpinBox*down.background", s->bg_bright);
     res[i++] = fmt_color("*SpinBox*down.foreground", s->fg);
+    res[i++] = fmt_color("*SpinBox*.borderColor", s->fg); //use FG colour for borders of active inputs
+
 
     /* StatusBar */
     res[i++] = fmt_color("*StatusBar.background", s->bg_light);
@@ -1107,8 +1111,6 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*audioPopup.background", s->menu.bg);
     res[i++] = fmt_color("*audioPopup.borderColor", s->menu.border);
     res[i++] = strdup("*audioPopup.borderWidth: 1");
-    //res[i++] = fmt_color("*ctxList.background", s->menu.bg);
-    //res[i++] = fmt_color("*ctxList.foreground", s->menu.fg);
 
     /* Panel clock (scoped to clockBox so greeter clock is unaffected) */
     res[i++] = fmt_color("*clockBox.clockTime.background", s->taskbar.bg);
