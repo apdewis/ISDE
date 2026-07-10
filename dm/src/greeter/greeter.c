@@ -83,7 +83,7 @@ static void destroy_blank_screens(Greeter *g)
 #define ROW_GAP          8
 #define SECTION_GAP      16
 #define BOTTOM_MARGIN    32
-#define CORNER_RADIUS    3
+#define CORNER_RADIUS    5
 
 /* ---------- Callbacks ---------- */
 
@@ -339,7 +339,7 @@ static void build_ui(Greeter *g)
                          IswNwidth, &natural_lw, NULL);
     IswDestroyWidget(probe);
 
-    int input_h = natural_h;
+    int input_h = natural_h+(CORNER_RADIUS*2);
     int label_w = natural_lw;
     int input_x = (g->logical_w - INPUT_W) / 2;
     int label_x = input_x - ROW_GAP - label_w;
@@ -492,6 +492,7 @@ static void build_ui(Greeter *g)
         IswArgImage(&ab, login_icon);
     }
     IswArgHeight(&ab, input_h);
+    IswArgWidth(&ab, input_h);
     IswArgInternalWidth(&ab, BUTTON_PAD);
     IswArgInternalHeight(&ab, 0);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
