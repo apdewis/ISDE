@@ -12,6 +12,7 @@ add_executable(isde-panel-x11
     src/tray-audio.c
     src/tray-audio-pipewire.c
     src/tray-audio-popup.c
+    src/tray-audio-state.c
     src/tray-battery.c
     src/tray-battery-popup.c
     src/tray-bt.c

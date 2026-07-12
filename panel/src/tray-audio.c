@@ -107,6 +107,8 @@ static void on_icon_event(Widget w, IswPointer client_data,
             if (vol > 1.0f) vol = 1.0f;
             def->volume = vol;
             ta_pw_set_volume(ta, def->id, vol);
+            if (def->node_name[0])
+                ta_state_record_volume(ta, 0, def->node_name, vol);
             tn_audio_update_icon(ta);
         }
         *cont = False;
@@ -141,6 +143,9 @@ void tn_audio_init(Panel *p)
     /* Initialize popup and menu */
     ta_popup_init(ta);
     ta_menu_init(ta);
+
+    /* Load persisted manual choices before PipeWire binds nodes */
+    ta_state_load(ta);
 
     /* Initialize PipeWire */
     if (ta_pw_init(ta) != 0) {
@@ -181,6 +186,9 @@ void tn_audio_cleanup(Panel *p)
     ta_popup_cleanup(ta);
     ta_menu_cleanup(ta);
     ta_pw_cleanup(ta);
+
+    ta_state_save_now(ta);
+    ta_state_cleanup(ta);
 
     if (ta->icon) {
         panel_tray_remove_icon(p, ta->icon);

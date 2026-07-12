@@ -511,6 +511,13 @@ static int metadata_property(void *data, uint32_t subject,
         tn_audio_update_icon(ta);
     if (ta->popup_visible)
         ta_popup_update(ta);
+
+    /* If WirePlumber's reported default differs from the user's persisted
+     * manual choice (e.g. after a reconnect), switch back. Guarded against
+     * loops: once we set it, the next metadata event reports our value and
+     * ta_state_apply_defaults short-circuits. */
+    ta_state_apply_defaults(ta);
+
     return 0;
 }
 
@@ -604,6 +611,14 @@ static void bind_sink(TrayAudio *ta, uint32_t id, const struct spa_dict *props)
 
     ta->nsinks++;
 
+    /* Reapply any persisted manual volume/mute for this node. */
+    if (sink->node_name[0])
+        ta_state_apply_for_node(ta, 0, sink->node_name);
+
+    /* A reappearing device may be the user's chosen default; re-assert it.
+     * Guarded: no-op if the current default already matches. */
+    ta_state_apply_defaults(ta);
+
     /* Ensure the device is bound so we get Route params */
     if (sink->device_id) {
         DeviceInfo *existing = ta_find_device(ta, sink->device_id);
@@ -663,6 +678,13 @@ static void bind_source(TrayAudio *ta, uint32_t id, const struct spa_dict *props
     }
 
     ta->nsources++;
+
+    /* Reapply any persisted manual volume/mute for this node. */
+    if (src->node_name[0])
+        ta_state_apply_for_node(ta, 1, src->node_name);
+
+    /* A reappearing device may be the user's chosen default; re-assert it. */
+    ta_state_apply_defaults(ta);
 
     if (src->device_id) {
         DeviceInfo *existing = ta_find_device(ta, src->device_id);
@@ -786,6 +808,13 @@ static const struct pw_core_events core_events = {
 
 /* ---------- Xt event loop integration ---------- */
 
+static void deferred_apply_defaults(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    TrayAudio *ta = (TrayAudio *)client_data;
+    ta_state_apply_defaults(ta);
+}
+
 static void pw_input_cb(IswPointer client_data, int *fd, IswInputId *input_id)
 {
     (void)fd; (void)input_id;
@@ -859,6 +888,11 @@ int ta_pw_init(TrayAudio *ta)
     }
 
     pw_core_sync(ta->pw_core, 0, 0);
+
+    /* Belt-and-braces: re-assert persisted defaults shortly after init in
+     * case the metadata event arrived before the cache was ready. Cheap and
+     * guarded against loops. */
+    IswAppAddTimeOut(ta->panel->app, 500, deferred_apply_defaults, ta);
 
     return 0;
 }

@@ -133,6 +133,12 @@ typedef struct TrayAudio {
 
     /* Small font for popup widgets */
     IswFontStruct       *small_font;
+
+    /* Manual-choice persistence (tray-audio-state.c) */
+    char    *manual_default_sink;     /* node_name, or NULL */
+    char    *manual_default_source;   /* node_name, or NULL */
+    IswIntervalId save_timer;        /* debounced save timeout id */
+    int      save_pending;            /* set when a save is scheduled */
 } TrayAudio;
 
 /* ---------- tray-audio.c ---------- */
@@ -167,5 +173,23 @@ void ta_popup_cleanup(TrayAudio *ta);
 void ta_menu_init(TrayAudio *ta);
 void ta_menu_show(TrayAudio *ta);
 void ta_menu_cleanup(TrayAudio *ta);
+
+/* ---------- tray-audio-state.c ---------- */
+void ta_state_load(TrayAudio *ta);                 /* read audio-state.toml at init */
+void ta_state_schedule_save(TrayAudio *ta);        /* arm/refresh 1s debounce timer */
+void ta_state_save_now(TrayAudio *ta);             /* flush immediately (cleanup) */
+void ta_state_cleanup(TrayAudio *ta);              /* cancel timer, free strings */
+
+/* Record a manual action (called from popup/menu callbacks) */
+void ta_state_record_default_sink(TrayAudio *ta, const char *node_name);
+void ta_state_record_default_source(TrayAudio *ta, const char *node_name);
+void ta_state_record_volume(TrayAudio *ta, int is_source,
+                            const char *node_name, float volume);
+void ta_state_record_mute(TrayAudio *ta, int is_source,
+                          const char *node_name, int muted);
+
+/* Reapply: called when a node is bound or default metadata changes */
+void ta_state_apply_for_node(TrayAudio *ta, int is_source, const char *node_name);
+void ta_state_apply_defaults(TrayAudio *ta);
 
 #endif /* ISDE_TRAY_AUDIO_H */

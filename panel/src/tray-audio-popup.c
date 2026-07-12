@@ -83,6 +83,17 @@ static void on_slider_changed(Widget w, IswPointer client_data,
 
     float vol = (float)cd->value / 100.0f;
     ta_pw_set_volume(r->ta, r->node_id, vol);
+
+    /* Persist manual volume choice for sinks/sources (not streams). */
+    if (!r->is_source) {
+        SinkInfo *sink = ta_find_sink(r->ta, r->node_id);
+        if (sink && sink->node_name[0])
+            ta_state_record_volume(r->ta, 0, sink->node_name, vol);
+    } else {
+        SourceInfo *source = ta_find_source(r->ta, r->node_id);
+        if (source && source->node_name[0])
+            ta_state_record_volume(r->ta, 1, source->node_name, vol);
+    }
 }
 
 static void on_mute_clicked(Widget w, IswPointer client_data,
@@ -95,20 +106,28 @@ static void on_mute_clicked(Widget w, IswPointer client_data,
 
     int muted = 0;
     SinkInfo *sink = ta_find_sink(r->ta, r->node_id);
+    SourceInfo *source = ta_find_source(r->ta, r->node_id);
     if (sink) {
         muted = sink->muted;
+    } else if (source) {
+        muted = source->muted;
     } else {
-        SourceInfo *source = ta_find_source(r->ta, r->node_id);
-        if (source) {
-            muted = source->muted;
-        } else {
-            StreamInfo *stream = ta_find_stream(r->ta, r->node_id);
-            if (stream)
-                muted = stream->muted;
-        }
+        StreamInfo *stream = ta_find_stream(r->ta, r->node_id);
+        if (stream)
+            muted = stream->muted;
     }
 
-    ta_pw_set_mute(r->ta, r->node_id, muted ? 0 : 1);
+    int new_muted = muted ? 0 : 1;
+    ta_pw_set_mute(r->ta, r->node_id, new_muted);
+
+    /* Persist manual mute choice for sinks/sources (not streams). */
+    if (!r->is_source) {
+        if (sink && sink->node_name[0])
+            ta_state_record_mute(r->ta, 0, sink->node_name, new_muted);
+    } else {
+        if (source && source->node_name[0])
+            ta_state_record_mute(r->ta, 1, source->node_name, new_muted);
+    }
 }
 
 static void on_radio_toggled(Widget w, IswPointer client_data,
@@ -125,10 +144,17 @@ static void on_radio_toggled(Widget w, IswPointer client_data,
     IswGetValues(w, ab.args, ab.count);
 
     if (state) {
-        if (r->is_source)
+        if (r->is_source) {
             ta_pw_set_default_source(r->ta, r->node_id);
-        else
+            SourceInfo *source = ta_find_source(r->ta, r->node_id);
+            if (source && source->node_name[0])
+                ta_state_record_default_source(r->ta, source->node_name);
+        } else {
             ta_pw_set_default_sink(r->ta, r->node_id);
+            SinkInfo *sink = ta_find_sink(r->ta, r->node_id);
+            if (sink && sink->node_name[0])
+                ta_state_record_default_sink(r->ta, sink->node_name);
+        }
     }
 }
 
@@ -636,6 +662,9 @@ static void on_select_sink(Widget w, IswPointer client_data,
     (void)w; (void)call_data;
     MenuAction *a = (MenuAction *)client_data;
     ta_pw_set_default_sink(a->ta, a->sink_id);
+    SinkInfo *sink = ta_find_sink(a->ta, a->sink_id);
+    if (sink && sink->node_name[0])
+        ta_state_record_default_sink(a->ta, sink->node_name);
 }
 
 static void on_mute_default(Widget w, IswPointer client_data,
