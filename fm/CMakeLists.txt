@@ -13,7 +13,7 @@ add_executable(isde-fm
     src/fileops.c
     src/clipboard.c
     src/dnd.c
-    src/instance.c
+    src/daemon.c
     src/jobqueue.c
     src/places.c
     src/fm_mountd.c

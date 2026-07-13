@@ -184,6 +184,11 @@ typedef struct FmApp {
 
     char          *initial_path;  /* from argv, used by fm_app_init */
 
+    /* Daemon mode (--background): no initial window, owns the D-Bus name. */
+    int            background;
+    /* Theme/settings watchers are registered on the first spawned window. */
+    int            theme_watch_pending;
+
     /* Mount monitor (inotify on /proc/mounts) */
     int            mount_inotify_fd;
     int            mount_wd;
@@ -490,7 +495,11 @@ int   actions_match(FmApp *app, const FmEntry **entries, int nentries,
                     int *indices, int max);
 void  actions_cleanup(FmApp *app);
 
-/* ---------- instance.c ---------- */
-int   instance_try_primary(FmApp *app, const char *path);
+/* ---------- daemon.c ---------- */
+const char       *fm_dbus_name(void);
+int               fm_name_has_owner(IsdeDBus *bus, const char *name);
+int               fm_call_open_path(IsdeDBus *bus, const char *service,
+                                   const char *path_str);
+int               fm_daemon_register(FmApp *app);
 
 #endif /* ISDE_FM_H */

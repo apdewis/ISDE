@@ -26,6 +26,24 @@ FmApp *fm_global_app = NULL;
 
 static void app_remove_window(FmApp *app, Fm *fm);
 
+/* Remove a "--flag" token from argv, returning 1 if it was present. */
+static int strip_flag(int *argc, char **argv, const char *flag)
+{
+    int found = 0;
+    for (int i = 1; i < *argc; i++) {
+        if (argv[i] && strcmp(argv[i], flag) == 0) {
+            found = 1;
+            for (int j = i; j < *argc - 1; j++) {
+                argv[j] = argv[j + 1];
+            }
+            argv[*argc - 1] = NULL;
+            (*argc)--;
+            i--;
+        }
+    }
+    return found;
+}
+
 /* ---------- D-Bus settings reload ---------- */
 
 static void fm_reload_config(Fm *fm)
@@ -79,10 +97,12 @@ static void on_settings_changed(const char *section, const char *key,
                                 void *user_data)
 {
     (void)key;
-    Fm *fm = (Fm *)user_data;
+    FmApp *app = (FmApp *)user_data;
     if (strcmp(section, "general") == 0 ||
         strcmp(section, "input") == 0) {
-        fm_reload_config(fm);
+        for (int i = 0; i < app->nwindows; i++) {
+            fm_reload_config(app->windows[i]);
+        }
     }
 }
 
@@ -135,10 +155,7 @@ static void app_remove_window(FmApp *app, Fm *fm)
             break;
         }
     }
-    if (app->nwindows == 0) {
-        app->running = 0;
-        IswAppSetExitFlag(app->app);
-    }
+    /* The daemon persists at zero windows; only SIGTERM/SIGINT exit it. */
 }
 
 /* ---------- per-window config ---------- */
@@ -166,6 +183,10 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
 {
     memset(app, 0, sizeof(*app));
     app->mount_inotify_fd = -1;
+
+    if (strip_flag(argc, argv, "--background")) {
+        app->background = 1;
+    }
 
     fm_global_app = app;
 
@@ -261,30 +282,22 @@ int fm_app_init(FmApp *app, int *argc, char **argv)
      * can show all devices (mounted and unmounted). */
     fm_mountd_init(app);
 
-    /* Open initial window */
-    Fm *first = fm_window_new(app, app->initial_path);
-    if (!first) {
-        return -1;
+    /* Daemon: own the per-display D-Bus name and register the OpenPath
+     * method handler. No window is created at startup — windows are
+     * spawned on demand by launchers calling OpenPath. */
+    int rc = fm_daemon_register(app);
+    if (rc <= 0) {
+        /* rc == 0: another daemon already owns the name — exit silently.
+         * rc == -1: D-Bus error. */
+        if (rc == -1) {
+            fprintf(stderr, "isde-fm: failed to register D-Bus name\n");
+        }
+        return rc == 0 ? 1 : -1;
     }
 
-    /* Single-instance check — now that the first window is realized,
-     * use its toplevel for the selection ownership. */
-    int rc = instance_try_primary(app, app->initial_path);
-    if (rc == 0) {
-        /* Another instance will handle the path — tear down and exit */
-        fm_window_destroy(first);
-        free(app->initial_path);
-        app->initial_path = NULL;
-        IswDestroyApplicationContext(app->app);
-        return 1;
-    }
-
-    /* D-Bus settings subscriptions */
-    if (app->dbus) {
-        isde_theme_watch(app->dbus, app->first_toplevel,
-                         on_theme_changed, first);
-        isde_dbus_settings_subscribe(app->dbus, on_settings_changed, first);
-    }
+    /* Theme/settings watchers are registered on the first spawned window
+     * (they need a realized toplevel for isde_theme_watch). */
+    app->theme_watch_pending = 1;
 
 #ifdef __linux__
     /* Only use inotify mount monitor when mountd is not available —
@@ -494,6 +507,15 @@ Fm *fm_window_new(FmApp *app, const char *path)
     fm_update_title(fm);
 
     IswRealizeWidget(fm->toplevel);
+
+    /* On the first spawned window, register the app-wide theme/settings
+     * watchers now that a toplevel is realized. */
+    if (app->theme_watch_pending && app->dbus) {
+        isde_theme_watch(app->dbus, fm->toplevel,
+                         on_theme_changed, fm);
+        isde_dbus_settings_subscribe(app->dbus, on_settings_changed, app);
+        app->theme_watch_pending = 0;
+    }
 
     /* DnD init must be after realize — re-apply keyboard shortcuts
      * afterward since DnD translation overrides can clobber them. */
