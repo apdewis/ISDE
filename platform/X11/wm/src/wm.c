@@ -1921,6 +1921,9 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
     if (!c || edge < 0 || c->fixed_size) {
         return;
     }
+    if (ev->detail != XCB_BUTTON_INDEX_1 && ev->detail != XCB_BUTTON_INDEX_3) {
+        return;
+    }
 
     wm_focus_client(wm, c, ev->time);
     wm->drag_mode    = DRAG_RESIZE;
@@ -1928,6 +1931,7 @@ static void on_grip_press(Wm *wm, xcb_button_press_event_t *ev)
     wm->drag_client  = c;
     wm->drag_start_x = ev->root_x;
     wm->drag_start_y = ev->root_y;
+    wm->drag_button  = ev->detail;
     wm->drag_orig_x  = c->x;
     wm->drag_orig_y  = c->y;
     wm->drag_orig_w  = c->width;
@@ -2090,7 +2094,9 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
 
 static void on_button_release(Wm *wm, xcb_button_release_event_t *ev)
 {
-    (void)ev;
+    if (wm->drag_button != 0 && ev->detail != wm->drag_button) {
+        return;
+    }
     if (wm->drag_mode != DRAG_NONE) {
         WmClient *c = wm->drag_client;
 
@@ -2302,6 +2308,7 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
         wm->drag_client  = c;
         wm->drag_start_x = root_x;
         wm->drag_start_y = root_y;
+        wm->drag_button  = (xcb_button_t)ev->data.data32[3];
         wm->drag_orig_x  = c->x;
         wm->drag_orig_y  = c->y;
         wm->drag_orig_w  = c->width;
@@ -2429,6 +2436,9 @@ static void on_frame_button_press(Wm *wm, WmClient *c,
     if (!c->decorated || ev->event_y >= wm->title_height) {
         return;
     }
+    if (ev->detail != XCB_BUTTON_INDEX_1 && ev->detail != XCB_BUTTON_INDEX_3) {
+        return;
+    }
 
     wm_focus_client(wm, c, ev->time);
 
@@ -2439,6 +2449,7 @@ static void on_frame_button_press(Wm *wm, WmClient *c,
         wm->btn_press_client = c;
         wm->btn_press_btn    = btn;
         wm->btn_press_hover  = 1;
+        wm->btn_press_mouse  = ev->detail;
         frame_paint(wm, c);
 
         xcb_grab_pointer(wm->conn, 1, wm->root,
@@ -2455,6 +2466,7 @@ static void on_frame_button_press(Wm *wm, WmClient *c,
     wm->drag_client  = c;
     wm->drag_start_x = ev->root_x;
     wm->drag_start_y = ev->root_y;
+    wm->drag_button  = ev->detail;
     wm->drag_orig_x  = c->x;
     wm->drag_orig_y  = c->y;
 
@@ -2489,6 +2501,10 @@ static void on_button_press_release(Wm *wm, xcb_button_release_event_t *ev)
 {
     WmClient *c = wm->btn_press_client;
     int btn = wm->btn_press_btn;
+
+    if (ev->detail != wm->btn_press_mouse) {
+        return;
+    }
 
     xcb_ungrab_pointer(wm->conn, XCB_CURRENT_TIME);
 

@@ -214,6 +214,7 @@ typedef struct Wm {
     int                    resize_edge;
     WmClient              *drag_client;
     int16_t                drag_start_x, drag_start_y;
+    xcb_button_t           drag_button;  /* button that began the drag, 0 = any */
     int16_t                drag_orig_x, drag_orig_y;
     uint16_t               drag_orig_w, drag_orig_h;
 
@@ -221,6 +222,7 @@ typedef struct Wm {
     WmClient              *btn_press_client; /* client whose button is held */
     int                    btn_press_btn;    /* FRAME_BTN_* or -1 */
     int                    btn_press_hover;  /* pointer currently over it */
+    xcb_button_t           btn_press_mouse;  /* mouse button that pressed it */
 
     /* Snap preview */
     xcb_window_t           snap_preview;   /* overlay window (0 = none) */
