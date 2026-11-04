@@ -2028,6 +2028,23 @@ static void on_motion_notify(Wm *wm, xcb_motion_notify_event_t *ev)
     int dy = ry - wm->drag_start_y;
 
     if (wm->drag_mode == DRAG_MOVE) {
+        if (c->maximized && (dx || dy)) {
+            /* Dragging a maximized window restores it, keeping the grab
+             * point at the same proportion across the title bar. */
+            int max_w = c->width;
+            int off_x = wm->drag_start_x - wm->drag_orig_x;
+            int off_y = wm->drag_start_y - wm->drag_orig_y;
+            wm_maximize_client(wm, c);
+            if (max_w > 0) {
+                off_x = off_x * c->width / max_w;
+            }
+            wm->drag_orig_x  = rx - off_x;
+            wm->drag_orig_y  = ry - off_y;
+            wm->drag_start_x = rx;
+            wm->drag_start_y = ry;
+            dx = 0;
+            dy = 0;
+        }
         c->x = wm->drag_orig_x + dx;
         c->y = wm->drag_orig_y + dy;
         uint32_t vals[] = { c->x, c->y };
