@@ -70,6 +70,9 @@ struct TermWidget {
     int  press_cx;
     int  press_cy;
 
+    /* smooth-scroll remainder, in pixels, not yet converted to whole lines */
+    float scroll_accum;
+
     /* clipboard */
     char *sel_text;       /* UTF-8 copy of current selection; owned, free() */
     size_t sel_len;
@@ -745,19 +748,6 @@ static void handle_button(TermWidget *t, IswButtonEvent *bev, bool press)
     if (cx < 0) cx = 0;
     if (cy < 0) cy = 0;
 
-    if (bev->button == IswButtonWheelUp) {
-        if (!press) return;
-        tsm_screen_sb_up(t->screen, 3);
-        request_redraw(t);
-        return;
-    }
-    if (bev->button == IswButtonWheelDown) {
-        if (!press) return;
-        tsm_screen_sb_down(t->screen, 3);
-        request_redraw(t);
-        return;
-    }
-
     if (bev->button == IswButtonLeft) {
         if (press) {
             t->sel_pressed = 1;
@@ -781,6 +771,31 @@ static void handle_button(TermWidget *t, IswButtonEvent *bev, bool press)
         if (press) request_paste(t, t->a_primary);
         return;
     }
+}
+
+/* Negative = up (into scrollback).  A discrete wheel notch scrolls 3 lines;
+ * smooth (trackpad) deltas accumulate until they cover whole cell rows. */
+static void handle_scroll(TermWidget *t, IswScrollEvent *sev)
+{
+    int lines;
+
+    if (sev->smooth) {
+        if (t->cell_h <= 0) return;
+        t->scroll_accum += sev->delta_y;
+        lines = (int)(t->scroll_accum / t->cell_h);
+        t->scroll_accum -= (float)lines * t->cell_h;
+    } else {
+        t->scroll_accum = 0;
+        lines = sev->discrete_y * 3;
+    }
+
+    if (lines < 0)
+        tsm_screen_sb_up(t->screen, (unsigned)-lines);
+    else if (lines > 0)
+        tsm_screen_sb_down(t->screen, (unsigned)lines);
+    else
+        return;
+    request_redraw(t);
 }
 
 static void handle_motion(TermWidget *t, IswMotionEvent *mev)
@@ -822,6 +837,9 @@ static void input_cb(Widget w, IswPointer cd, IswPointer call)
         break;
     case IswMotion:
         handle_motion(t, &ev->motion);
+        break;
+    case IswScroll:
+        handle_scroll(t, &ev->scroll);
         break;
     default: break;
     }
@@ -913,6 +931,9 @@ TermWidget *term_widget_create(Widget parent, const char *name,
     IswAddCallback(t->canvas, IswNexposeCallback, expose_cb, t);
     IswAddCallback(t->canvas, IswNresizeCallback, resize_cb, t);
     IswAddCallback(t->canvas, IswNinputCallback,  input_cb,  t);
+    /* DrawingArea's default translations don't route scroll events */
+    IswAugmentTranslations(t->canvas,
+        IswParseTranslationTable("<Scroll>: DrawingAreaInput()"));
 
     recompute_metrics(t);
 
