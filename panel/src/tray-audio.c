@@ -6,6 +6,8 @@
 
 #include <ISW/ISWRender.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/ScrollWheel.h>
+#include <ISW/IntrinsicP.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +82,7 @@ static void on_icon_click(Widget w, IswPointer client_data,
     ta_popup_show(ta);
 }
 
-/* ---------- event handler for scroll wheel and right-click ---------- */
+/* ---------- event handler for right-click ---------- */
 
 static void on_icon_event(Widget w, IswPointer client_data,
                           IswEvent *event, Boolean *cont)
@@ -91,30 +93,83 @@ static void on_icon_event(Widget w, IswPointer client_data,
     if (event->kind != IswButtonDown)
         return;
 
-    switch (event->button.button) {
-    case IswButtonRight:
+    if (event->button.button == IswButtonRight) {
         ta_menu_show(ta);
         *cont = False;
-        break;
+    }
+}
 
-    case IswButtonWheelUp:
-    case IswButtonWheelDown: {
-        SinkInfo *def = ta_default_sink(ta);
-        if (def) {
-            float delta = (event->button.button == IswButtonWheelUp) ? 0.05f : -0.05f;
-            float vol = def->volume + delta;
-            if (vol < 0.0f) vol = 0.0f;
-            if (vol > 1.0f) vol = 1.0f;
-            def->volume = vol;
-            ta_pw_set_volume(ta, def->id, vol);
-            if (def->node_name[0])
-                ta_state_record_volume(ta, 0, def->node_name, vol);
-            tn_audio_update_icon(ta);
-        }
-        *cont = False;
-        break;
+/* ---------- scroll wheel volume ---------- */
+
+/* Scroll is not a button event and is not delivered to event handlers or
+ * translations once ISW's scroll dispatcher is installed (any Viewport or
+ * Scrollbar in the panel installs it; it routes only to scrollable
+ * containers).  So we sit in front of it: scrolls over the volume icon
+ * adjust volume, everything else is chained to ISW's dispatcher. */
+
+static TrayAudio           *scroll_ta;
+static IswEventDispatchProc prev_scroll_dispatch;
+static float                scroll_accum;
+
+static Boolean pointer_over_icon(Widget icon, IswEvent *event)
+{
+    Widget root = (Widget)(void *)event->any.target;
+    Widget a;
+    int ix = 0, iy = 0;
+
+    if (!root || !IswIsWidget(root) || !IswIsRealized(icon))
+        return False;
+
+    /* Event must come from the icon's shell */
+    while (root && !IswIsShell(root))
+        root = IswParent(root);
+    for (a = icon; a && !IswIsShell(a); a = IswParent(a)) {
+        ix += a->core.x + (int)a->core.border_width;
+        iy += a->core.y + (int)a->core.border_width;
     }
+    if (root != a)
+        return False;
+
+    return event->scroll.shell_x >= ix &&
+           event->scroll.shell_x < ix + (int)icon->core.width &&
+           event->scroll.shell_y >= iy &&
+           event->scroll.shell_y < iy + (int)icon->core.height;
+}
+
+static Boolean scroll_dispatch(IswEvent *event, IswDisplay dpy)
+{
+    TrayAudio *ta = scroll_ta;
+    int steps;
+
+    if (event->kind != IswScroll || !ta || !ta->icon ||
+        !pointer_over_icon(ta->icon, event))
+        return prev_scroll_dispatch ? prev_scroll_dispatch(event, dpy) : False;
+
+    /* Negative = up = louder.  Smooth deltas count one step per
+     * wheel-notch-equivalent of pixels. */
+    if (event->scroll.smooth) {
+        scroll_accum += event->scroll.delta_y;
+        steps = (int)(scroll_accum / ISW_SCROLL_WHEEL_DEFAULT_INCREMENT);
+        scroll_accum -= (float)steps * ISW_SCROLL_WHEEL_DEFAULT_INCREMENT;
+    } else {
+        scroll_accum = 0;
+        steps = event->scroll.discrete_y;
     }
+    if (steps == 0)
+        return True;
+
+    SinkInfo *def = ta_default_sink(ta);
+    if (def) {
+        float vol = def->volume - 0.05f * (float)steps;
+        if (vol < 0.0f) vol = 0.0f;
+        if (vol > 1.0f) vol = 1.0f;
+        def->volume = vol;
+        ta_pw_set_volume(ta, def->id, vol);
+        if (def->node_name[0])
+            ta_state_record_volume(ta, 0, def->node_name, vol);
+        tn_audio_update_icon(ta);
+    }
+    return True;
 }
 
 /* ---------- deferred initial icon load ---------- */
@@ -139,6 +194,15 @@ void tn_audio_init(Panel *p)
     IswAddCallback(ta->icon, IswNcallback, on_icon_click, ta);
     IswAddEventHandler(ta->icon, IswButtonPressMask, False,
                        on_icon_event, ta);
+
+    /* Install ISW's scroll dispatcher now so ours is guaranteed to sit in
+     * front of it (it never chains, and is otherwise installed lazily by
+     * the first Scrollbar). */
+    IswDisplay dpy = IswDisplayOf(ta->icon);
+    ISWScrollWheelInit(dpy);
+    scroll_ta = ta;
+    prev_scroll_dispatch = IswSetEventDispatcher(dpy, IswScroll,
+                                                 scroll_dispatch);
 
     /* Initialize popup and menu */
     ta_popup_init(ta);
@@ -183,6 +247,7 @@ void tn_audio_cleanup(Panel *p)
     if (!ta)
         return;
 
+    scroll_ta = NULL;
     ta_popup_cleanup(ta);
     ta_menu_cleanup(ta);
     ta_pw_cleanup(ta);
