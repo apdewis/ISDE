@@ -1005,7 +1005,6 @@ char **isde_theme_build_resources(void)
     /* Buttons — 3px rounded border */
     res[i++] = fmt_color("*Command.background", s->bg_bright);
     res[i++] = fmt_color("*Command.foreground", s->fg);
-    res[i++] = fmt_color("*Command.borderColor", s->fg); //use FG colour for borders of active inputs
     res[i++] = strdup("*Command.borderWidth: 1");
     res[i++] = strdup("*Command.cornerRadius: 3");
 
@@ -1027,7 +1026,6 @@ char **isde_theme_build_resources(void)
     /* MenuBar buttons */
     res[i++] = fmt_color("*MenuButton.background", s->bg);
     res[i++] = fmt_color("*MenuButton.foreground", s->fg);
-    res[i++] = fmt_color("*MenuButton.borderColor", s->fg); //use FG colour for borders of active inputs
 
 
     /* Scrollbars */
@@ -1057,7 +1055,6 @@ char **isde_theme_build_resources(void)
     res[i++] = fmt_color("*SpinBox*up.foreground", s->fg);
     res[i++] = fmt_color("*SpinBox*down.background", s->bg_bright);
     res[i++] = fmt_color("*SpinBox*down.foreground", s->fg);
-    res[i++] = fmt_color("*SpinBox*.borderColor", s->fg); //use FG colour for borders of active inputs
 
 
     /* StatusBar */
