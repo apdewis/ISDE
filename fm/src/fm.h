@@ -248,6 +248,11 @@ typedef struct Fm {
     /* Status bar */
     Widget         status_label;
 
+    /* Type-ahead search box (managed while a search is active) */
+    Widget         typeahead_box;
+    Widget         typeahead_text;
+    int            typeahead_match;  /* entry index of current match, -1 = none */
+
     /* Current directory */
     char          *cwd;
     FmEntry       *entries;
@@ -389,6 +394,7 @@ void   ctx_free_dynamic(Fm *fm);
 /* ---------- shortcuts.c ---------- */
 void   fm_register_actions(IswAppContext app);
 void   fm_install_shortcuts(Widget w);
+void   fm_install_typeahead_shortcuts(Widget w);
 
 /* ---------- dialogs.c ---------- */
 void   show_rename_dialog(Fm *fm);
@@ -416,6 +422,9 @@ void  fileview_cleanup(Fm *fm);
 void  fileview_set_mode(Fm *fm, FmViewMode mode);
 int   fileview_get_selected(Fm *fm);
 int   fileview_get_selected_items(Fm *fm, int **indices_out);
+void  fileview_typeahead_update(Fm *fm);
+void  fileview_typeahead_step(Fm *fm, int step);
+void  fileview_typeahead_close(Fm *fm);
 
 /* ---------- navbar.c ---------- */
 void  navbar_init(Fm *fm);

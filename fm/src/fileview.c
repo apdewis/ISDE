@@ -10,6 +10,9 @@
 #include <time.h>
 #include <ISW/IswArgMacros.h>
 #include <ISW/Reports.h>
+#include <ISW/Text.h>
+#include <ISW/IconViewP.h>
+#include <ISW/ListViewP.h>
 
 /* ---------- scroll-triggered thumbnail generation ---------- */
 
@@ -274,6 +277,106 @@ int fileview_get_selected_items(Fm *fm, int **indices_out)
     return 0;
 }
 
+/* ---------- type-ahead search ---------- */
+
+#define TYPEAHEAD_PAD 4  /* top/bottom padding of the search row */
+
+static const char *typeahead_get_text(Fm *fm)
+{
+    String str = NULL;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, &str);
+    IswGetValues(fm->typeahead_text, ab.args, ab.count);
+    return str ? str : "";
+}
+
+/* Select only item idx, scroll it into view and redraw.  Positions the
+ * view's cursor just before idx and lets MoveCursor take the one step. */
+static void typeahead_select(Fm *fm, int idx)
+{
+    String param;
+    Widget view;
+
+    if (fm->view_mode == FM_VIEW_LIST) {
+        view = fm->listview;
+        ((ListViewWidget)view)->listView.cursor = idx - 1;
+        param = (idx == 0) ? "home" : "down";
+    } else {
+        view = fm->iconview;
+        ((IconViewWidget)view)->iconView.cursor = idx - 1;
+        param = (idx == 0) ? "home" : "right";
+    }
+    IswCallActionProc(view, "MoveCursor", NULL, &param, 1);
+}
+
+/* Select the first entry whose name starts with the typed text, looking
+ * from start in direction step and wrapping round. */
+static void typeahead_search(Fm *fm, int start, int step)
+{
+    const char *text = typeahead_get_text(fm);
+    size_t len = strlen(text);
+    int n = fm->nentries;
+    if (len == 0 || n <= 0)
+        return;
+
+    for (int i = 0; i < n; i++) {
+        int idx = ((start + i * step) % n + n) % n;
+        if (strncasecmp(fm->entries[idx].name, text, len) != 0)
+            continue;
+        fm->typeahead_match = idx;
+        typeahead_select(fm, idx);
+        fileview_update_status(fm);
+        return;
+    }
+}
+
+static void typeahead_key_handler(Widget w, IswPointer closure,
+                                  IswEvent *ev, Boolean *cont)
+{
+    (void)w; (void)cont;
+    Fm *fm = (Fm *)closure;
+
+    if (ev->kind != IswKeyDown || IswIsManaged(fm->typeahead_box))
+        return;
+    /* Space is ToggleCursor; control characters never start a search */
+    if (ev->key.unicode <= 0x20 || ev->key.unicode == 0x7f)
+        return;
+    if (ev->key.modifiers & (IswModControl | IswModMod1 | IswModMod4))
+        return;
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, ev->key.text);
+    IswSetValues(fm->typeahead_text, ab.args, ab.count);
+    IswTextSetInsertionPoint(fm->typeahead_text, strlen(ev->key.text));
+    IswManageChild(fm->typeahead_box);
+    IswSetKeyboardFocus(fm->toplevel, fm->typeahead_text);
+
+    fm->typeahead_match = -1;
+    typeahead_search(fm, 0, 1);
+}
+
+void fileview_typeahead_update(Fm *fm)
+{
+    typeahead_search(fm, fm->typeahead_match < 0 ? 0 : fm->typeahead_match, 1);
+}
+
+void fileview_typeahead_step(Fm *fm, int step)
+{
+    typeahead_search(fm, fm->typeahead_match + step, step);
+}
+
+void fileview_typeahead_close(Fm *fm)
+{
+    IswUnmanageChild(fm->typeahead_box);
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgString(&ab, "");
+    IswSetValues(fm->typeahead_text, ab.args, ab.count);
+
+    IswSetKeyboardFocus(fm->toplevel, fm->view_mode == FM_VIEW_LIST
+                                      ? fm->listview : fm->iconview);
+}
+
 /* ---------- ListView data helpers ---------- */
 
 #define LV_NCOLS 3
@@ -317,15 +420,24 @@ static IswListViewColumn lv_columns[] = {
 
 void fileview_init(Fm *fm)
 {
-    /* Viewport for scrolling — below the nav bar, right of places sidebar */
+    /* Vertical column right of places sidebar: file view above, type-ahead
+     * search box below */
     IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, IswOrientVertical);
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexGrow(&ab, 1);
+    Widget view_box = IswCreateManagedWidget("viewBox", flexBoxWidgetClass,
+                                             fm->hbox, ab.args, ab.count);
+
+    /* Viewport for scrolling — below the nav bar, right of places sidebar */
+    IswArgBuilderReset(&ab);
     IswArgAllowVert(&ab, True);
     IswArgAllowHoriz(&ab, False);
     IswArgUseRight(&ab, True);
     IswArgBorderWidth(&ab, 0);
     IswArgFlexGrow(&ab, 1);
     fm->viewport = IswCreateManagedWidget("viewport", viewportWidgetClass,
-                                         fm->hbox, ab.args, ab.count);
+                                         view_box, ab.args, ab.count);
     IswAddCallback(fm->viewport, IswNreportCallback, viewport_scroll_cb, fm);
 
     /* Default sort: name descending */
@@ -389,6 +501,56 @@ void fileview_init(Fm *fm)
 
     /* Default to icon view */
     fm->view_mode = FM_VIEW_ICON;
+
+    /* Type-ahead search row below the file view (shown while typing) */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderTop(&ab, 1);
+    fm->typeahead_box = IswCreateWidget("typeaheadBox", flexBoxWidgetClass,
+                                       view_box, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Search:");
+    IswArgBorderWidth(&ab, 0);
+    Widget typeahead_label = IswCreateManagedWidget("typeaheadLabel",
+                                                    labelWidgetClass,
+                                                    fm->typeahead_box,
+                                                    ab.args, ab.count);
+
+    /* Text box: font-derived label height plus its 1px border.  Row: text
+     * box plus top/bottom padding, set as flexBasis since the row is a
+     * child of the vertical view_box. */
+    Dimension label_h = 0;
+    IswVaGetValues(typeahead_label, IswNheight, &label_h, NULL);
+    int text_h = label_h + 2;
+    IswVaSetValues(fm->typeahead_box,
+                   IswNflexBasis, text_h + 2 * TYPEAHEAD_PAD, NULL);
+
+    IswArgBuilderReset(&ab);
+    IswArgEditType(&ab, IswtextEdit);
+    IswArgString(&ab, "");
+    IswArgBorderWidth(&ab, 1);
+    IswArgHeight(&ab, text_h);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswArgFlexGrow(&ab, 1);
+    fm->typeahead_text = IswCreateManagedWidget("typeahead", textWidgetClass,
+                                               fm->typeahead_box,
+                                               ab.args, ab.count);
+    fm_install_typeahead_shortcuts(fm->typeahead_text);
+
+    /* Right side padding */
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, TYPEAHEAD_PAD);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           fm->typeahead_box, ab.args, ab.count);
+    fm->typeahead_match = -1;
+
+    IswAddEventHandler(fm->iconview, IswKeyPressMask, False,
+                       typeahead_key_handler, fm);
+    IswAddEventHandler(fm->listview, IswKeyPressMask, False,
+                       typeahead_key_handler, fm);
 
     /* Status bar */
     Widget statusbar = IswMainWindowGetStatusBar(fm->main_window);
@@ -489,6 +651,9 @@ void fileview_update_status(Fm *fm)
 
 void fileview_populate(Fm *fm)
 {
+    if (fm->typeahead_box && IswIsManaged(fm->typeahead_box))
+        fileview_typeahead_close(fm);
+
     if (fm->view_mode == FM_VIEW_ICON && fm->iconview) {
         thumbs_apply_cache(fm);
 

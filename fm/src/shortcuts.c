@@ -181,6 +181,61 @@ static void act_close_window(Widget w, IswEvent *ev,
     }
 }
 
+static void act_typeahead_update(Widget w, IswEvent *ev,
+                                 String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) {
+        fileview_typeahead_update(fm);
+    }
+}
+
+static void act_typeahead_next(Widget w, IswEvent *ev,
+                               String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) {
+        fileview_typeahead_step(fm, 1);
+    }
+}
+
+static void act_typeahead_prev(Widget w, IswEvent *ev,
+                               String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) {
+        fileview_typeahead_step(fm, -1);
+    }
+}
+
+static void act_typeahead_cancel(Widget w, IswEvent *ev,
+                                 String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (fm) {
+        fileview_typeahead_close(fm);
+    }
+}
+
+static void act_typeahead_open(Widget w, IswEvent *ev,
+                               String *p, Cardinal *n)
+{
+    (void)ev; (void)p; (void)n;
+    Fm *fm = fm_from_widget(w);
+    if (!fm) {
+        return;
+    }
+    int match = fm->typeahead_match;
+    fileview_typeahead_close(fm);
+    if (match >= 0 && match < fm->nentries) {
+        browser_open_entry(fm, match);
+    }
+}
+
 /* ---------- action table and translations ---------- */
 
 static IswActionsRec fm_actions[] = {
@@ -200,6 +255,11 @@ static IswActionsRec fm_actions[] = {
     {"fm-toggle-view", act_toggle_view},
     {"fm-new-window", act_new_window},
     {"fm-close-window", act_close_window},
+    {"fm-typeahead-update", act_typeahead_update},
+    {"fm-typeahead-next",   act_typeahead_next},
+    {"fm-typeahead-prev",   act_typeahead_prev},
+    {"fm-typeahead-cancel", act_typeahead_cancel},
+    {"fm-typeahead-open",   act_typeahead_open},
 };
 
 static char fm_translations[] =
@@ -219,6 +279,16 @@ static char fm_translations[] =
     "Ctrl<Key>l:        fm-toggle-view()\n"
     "Ctrl<Key>n:        fm-new-window()\n";
 
+static char fm_typeahead_translations[] =
+    "<Key>Escape:        fm-typeahead-cancel()\n"
+    "<Key>Return:        fm-typeahead-open()\n"
+    "Shift<Key>Tab:      fm-typeahead-prev()\n"
+    "<Key>Tab:           fm-typeahead-next()\n"
+    "<Key>Up:            fm-typeahead-prev()\n"
+    "<Key>Down:          fm-typeahead-next()\n"
+    "<Key>BackSpace:     delete-previous-character() fm-typeahead-update()\n"
+    "<Key>:              insert-char() fm-typeahead-update()\n";
+
 void fm_register_actions(IswAppContext app)
 {
     IswAppAddActions(app, fm_actions, IswNumber(fm_actions));
@@ -227,4 +297,9 @@ void fm_register_actions(IswAppContext app)
 void fm_install_shortcuts(Widget w)
 {
     IswOverrideTranslations(w, IswParseTranslationTable(fm_translations));
+}
+
+void fm_install_typeahead_shortcuts(Widget w)
+{
+    IswOverrideTranslations(w, IswParseTranslationTable(fm_typeahead_translations));
 }
