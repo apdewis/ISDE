@@ -21,6 +21,12 @@ color_scheme = "default-light"
 # cursor_theme = "default"
 icon_theme = "isde-standard"
 
+[fonts]
+# Font rendering; unset keys fall back to fontconfig (fonts.conf)
+# antialias = true
+# hinting = "slight"     # none | slight | medium | full
+# subpixel = "none"      # none | rgb | bgr | vrgb | vbgr
+
 [mount]
 mount_base = "/media"
 auto_mount = false

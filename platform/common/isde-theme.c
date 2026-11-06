@@ -10,6 +10,7 @@
 #include <ISW/Intrinsic.h>
 #include <ISW/StringDefs.h>
 #include <ISW/ISWPlatform.h>
+#include <ISW/ISWRender.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -909,7 +910,7 @@ static void theme_watch_dbus_cb(const char *section, const char *key,
     for (int i = 0; i < g_nwatchers; i++) {
         ThemeWatchCtx *w = &g_watchers[i];
         isde_theme_set_resource_manager(IswDisplayOfObject(w->toplevel));
-        IswReloadScreenDatabase(IswScreenOfObject(w->toplevel));
+        ISWRenderReloadFontOptions(IswDisplayOfObject(w->toplevel));
         isde_theme_merge_xrm(w->toplevel);
         if (w->cb) {
             w->cb(w->user_data);
@@ -1238,6 +1239,29 @@ char **isde_theme_build_resources(void)
                 sl  = (int)isde_config_int(fonts, "title_slant",
                                            FC_SLANT_ROMAN);
                 res[i++] = fmt_font("*titleBar.font", fam, sz, wt, sl);
+
+                /* Rendering — Xft.* only for keys present in config */
+                int aa = isde_config_bool(fonts, "antialias", -1);
+                if (aa >= 0) {
+                    res[i++] = strdup(aa ? "Xft.antialias: 1"
+                                         : "Xft.antialias: 0");
+                }
+
+                const char *hint = isde_config_string(fonts, "hinting", NULL);
+                if (hint) {
+                    char buf[64];
+                    res[i++] = strdup(strcmp(hint, "none") == 0
+                                      ? "Xft.hinting: 0" : "Xft.hinting: 1");
+                    snprintf(buf, sizeof(buf), "Xft.hintstyle: hint%s", hint);
+                    res[i++] = strdup(buf);
+                }
+
+                const char *rgba = isde_config_string(fonts, "subpixel", NULL);
+                if (rgba) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "Xft.rgba: %s", rgba);
+                    res[i++] = strdup(buf);
+                }
             }
             isde_config_free(cfg);
         }

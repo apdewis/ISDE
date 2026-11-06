@@ -8,6 +8,8 @@
  *
  * Config stored in [fonts] section of isde.toml with keys:
  *   general_family, general_size, fixed_family, fixed_size, ...
+ *   antialias (bool), hinting ("none"|"slight"|"medium"|"full"),
+ *   subpixel ("none"|"rgb"|"bgr"|"vrgb"|"vbgr")
  */
 #include "settings.h"
 
@@ -17,6 +19,9 @@
 
 #include <ISW/FontChooser.h>
 #include <ISW/IswArgMacros.h>
+#include <ISW/List.h>
+#include <ISW/ComboBox.h>
+#include <ISW/Toggle.h>
 #include <fontconfig/fontconfig.h>
 #include "isde-dialog.h"
 
@@ -27,6 +32,7 @@
 #define LABEL_W 150
 #define SLIDER_W 300
 #define BUTTON_W 60
+#define COMBO_W 200
 
 
 static const char *font_labels[NUM_FONTS] = {
@@ -87,6 +93,24 @@ static const int default_sizes[NUM_FONTS] = {
     10, 10, 8, 9, 10, 10,
 };
 
+/* ---------- rendering option definitions ---------- */
+
+static String hinting_labels[] = {
+    "None", "Slight", "Medium", "Full"
+};
+static const char *hinting_values[] = {
+    "none", "slight", "medium", "full"
+};
+#define NUM_HINTING 4
+
+static String subpixel_labels[] = {
+    "None", "RGB", "BGR", "Vertical RGB", "Vertical BGR"
+};
+static const char *subpixel_values[] = {
+    "none", "rgb", "bgr", "vrgb", "vbgr"
+};
+#define NUM_SUBPIXEL 5
+
 /* ---------- state ---------- */
 
 typedef struct {
@@ -99,7 +123,19 @@ typedef struct {
 static FontSetting current[NUM_FONTS];
 static FontSetting saved[NUM_FONTS];
 
+typedef struct {
+    int antialias;
+    int hinting;   /* index into hinting_values */
+    int subpixel;  /* index into subpixel_values */
+} RenderSetting;
+
+static RenderSetting render_current;
+static RenderSetting render_saved;
+
 static Widget desc_labels[NUM_FONTS];  /* label showing "Family 10pt" */
+static Widget antialias_toggle;
+static Widget hinting_combo;
+static Widget subpixel_combo;
 static Widget toplevel_cache;          /* for popup shell parent */
 
 static IsdeDBus *panel_dbus;
@@ -216,6 +252,83 @@ static void edit_cb(Widget w, IswPointer cd, IswPointer call)
     show_chooser(slot);
 }
 
+/* ---------- rendering option callbacks ---------- */
+
+static void antialias_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)cd; (void)call;
+    Boolean state = False;
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgState(&ab, &state);
+    IswGetValues(w, ab.args, ab.count);
+    render_current.antialias = state ? 1 : 0;
+}
+
+static void hinting_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    render_current.hinting = ret->list_index;
+}
+
+static void subpixel_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    render_current.subpixel = ret->list_index;
+}
+
+static int value_index(const char *s, const char **values, int n, int def)
+{
+    for (int i = 0; i < n; i++) {
+        if (strcmp(s, values[i]) == 0) {
+            return i;
+        }
+    }
+    return def;
+}
+
+static Widget make_option_row(Widget vbox, const char *label_text)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 8);
+    Widget row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                       vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, label_text);
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, LABEL_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("fontCatLbl", labelWidgetClass,
+                           row, ab.args, ab.count);
+    return row;
+}
+
+static Widget make_combo_row(Widget vbox, const char *label_text,
+                             String *items, int nitems, int selected,
+                             IswCallbackProc cb)
+{
+    Widget row = make_option_row(vbox, label_text);
+
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgList(&ab, items);
+    IswArgNumberStrings(&ab, nitems);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgWidth(&ab, COMBO_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    Widget combo = IswCreateManagedWidget("combo", comboBoxWidgetClass,
+                                          row, ab.args, ab.count);
+    IswAddCallback(combo, IswNcallback, cb, NULL);
+    IswListHighlight(combo, selected);
+    return combo;
+}
+
 /* ---------- panel lifecycle ---------- */
 
 static Widget fonts_create(Widget parent, IswAppContext app)
@@ -245,6 +358,9 @@ static Widget fonts_create(Widget parent, IswAppContext app)
         current[i].weight = FC_WEIGHT_REGULAR;
         current[i].slant = FC_SLANT_ROMAN;
     }
+    render_current.antialias = 1;
+    render_current.hinting = 1;
+    render_current.subpixel = 0;
 
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
@@ -275,11 +391,24 @@ static Widget fonts_create(Widget parent, IswAppContext app)
                     current[i].slant = sl;
                 }
             }
+            render_current.antialias = isde_config_bool(fonts, "antialias",
+                                                        1) ? 1 : 0;
+            const char *hint = isde_config_string(fonts, "hinting", NULL);
+            if (hint) {
+                render_current.hinting = value_index(hint, hinting_values,
+                                                     NUM_HINTING, 1);
+            }
+            const char *rgba = isde_config_string(fonts, "subpixel", NULL);
+            if (rgba) {
+                render_current.subpixel = value_index(rgba, subpixel_values,
+                                                      NUM_SUBPIXEL, 0);
+            }
         }
         isde_config_free(cfg);
     }
 
     memcpy(saved, current, sizeof(saved));
+    render_saved = render_current;
 
     /* Build rows */
     for (int i = 0; i < NUM_FONTS; i++) {
@@ -336,6 +465,25 @@ static Widget fonts_create(Widget parent, IswAppContext app)
                                row, ab.args, ab.count);
     }
 
+    /* Rendering options */
+    Widget aa_row = make_option_row(vbox, "Antialiasing:");
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 1);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    if (render_current.antialias) { IswArgState(&ab, True); }
+    antialias_toggle = IswCreateManagedWidget("antialiasToggle",
+                                              toggleWidgetClass,
+                                              aa_row, ab.args, ab.count);
+    IswAddCallback(antialias_toggle, IswNcallback, antialias_cb, NULL);
+
+    hinting_combo = make_combo_row(vbox, "Hinting:",
+                                   hinting_labels, NUM_HINTING,
+                                   render_current.hinting, hinting_cb);
+    subpixel_combo = make_combo_row(vbox, "Subpixel order:",
+                                    subpixel_labels, NUM_SUBPIXEL,
+                                    render_current.subpixel, subpixel_cb);
+
     return vbox;
 }
 
@@ -354,9 +502,16 @@ static void fonts_apply(void)
         isde_config_write_int(path, "fonts",
                               font_slant_keys[i], current[i].slant);
     }
+    isde_config_write_bool(path, "fonts", "antialias",
+                           render_current.antialias);
+    isde_config_write_string(path, "fonts", "hinting",
+                             hinting_values[render_current.hinting]);
+    isde_config_write_string(path, "fonts", "subpixel",
+                             subpixel_values[render_current.subpixel]);
 
     free(path);
     memcpy(saved, current, sizeof(saved));
+    render_saved = render_current;
 
     if (panel_dbus) {
         isde_dbus_settings_notify(panel_dbus, "fonts", "*");
@@ -369,11 +524,26 @@ static void fonts_revert(void)
     for (int i = 0; i < NUM_FONTS; i++) {
         update_desc_label(i);
     }
+
+    render_current = render_saved;
+    if (antialias_toggle) {
+        IswArgBuilder ab = IswArgBuilderInit();
+        IswArgState(&ab, render_saved.antialias ? True : False);
+        IswSetValues(antialias_toggle, ab.args, ab.count);
+    }
+    if (hinting_combo) {
+        IswListHighlight(hinting_combo, render_saved.hinting);
+    }
+    if (subpixel_combo) {
+        IswListHighlight(subpixel_combo, render_saved.subpixel);
+    }
 }
 
 static int fonts_has_changes(void)
 {
-    return memcmp(current, saved, sizeof(current)) != 0;
+    return memcmp(current, saved, sizeof(current)) != 0 ||
+           memcmp(&render_current, &render_saved,
+                  sizeof(render_current)) != 0;
 }
 
 static void fonts_destroy(void)
@@ -383,6 +553,9 @@ static void fonts_destroy(void)
     for (int i = 0; i < NUM_FONTS; i++) {
         desc_labels[i] = NULL;
     }
+    antialias_toggle = NULL;
+    hinting_combo = NULL;
+    subpixel_combo = NULL;
 }
 
 void panel_fonts_set_dbus(IsdeDBus *bus) { panel_dbus = bus; }
