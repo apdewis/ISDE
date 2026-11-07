@@ -19,6 +19,7 @@ repeat_interval = 30
 [appearance]
 color_scheme = "default-light"
 # cursor_theme = "default"
+# cursor_size = "24"
 icon_theme = "isde-standard"
 
 [fonts]

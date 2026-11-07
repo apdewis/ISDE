@@ -3,10 +3,12 @@
  * panel-appearance.c — Appearance settings:
  *   - Colour scheme (base16 themes)
  *   - Pointer/cursor theme (Xcursor)
+ *   - Pointer/cursor size (Xcursor)
  *   - Icon theme (freedesktop)
  */
 #include "settings.h"
 #include <ISW/List.h>
+#include <ISW/ComboBox.h>
 #include <ISW/IswArgMacros.h>
 
 #include <stdlib.h>
@@ -25,6 +27,16 @@ static Widget  cursor_list;
 static String *cursor_names_arr;
 static int     cursor_count;
 static int     saved_cursor_idx;
+
+/* --- cursor size --- */
+#define COMBO_W 200
+static String cursor_size_labels[] = {
+    "24", "32", "48", "64", "96"
+};
+#define NUM_CURSOR_SIZES 5
+static Widget  cursor_size_combo;
+static int     saved_size_idx;
+static int     sel_size_idx;
 
 /* --- icon theme --- */
 static Widget  icon_list;
@@ -58,6 +70,13 @@ static void appearance_apply(void)
         saved_cursor_idx = sr->list_index;
     }
 
+    /* Cursor size */
+    if (sel_size_idx >= 0 && sel_size_idx < NUM_CURSOR_SIZES) {
+        isde_config_write_string(path, "appearance", "cursor_size",
+                                 cursor_size_labels[sel_size_idx]);
+        saved_size_idx = sel_size_idx;
+    }
+
     /* Icon theme */
     sr = IswListShowCurrent(icon_list);
     if (sr && sr->list_index >= 0 && sr->list_index < icon_count) {
@@ -81,9 +100,20 @@ static void appearance_revert(void)
     if (saved_cursor_idx >= 0) {
         IswListHighlight(cursor_list, saved_cursor_idx);
     }
+    sel_size_idx = saved_size_idx;
+    if (cursor_size_combo) {
+        IswListHighlight(cursor_size_combo, saved_size_idx);
+    }
     if (saved_icon_idx >= 0) {
         IswListHighlight(icon_list, saved_icon_idx);
     }
+}
+
+static void cursor_size_cb(Widget w, IswPointer cd, IswPointer call)
+{
+    (void)w; (void)cd;
+    IswListReturnStruct *ret = (IswListReturnStruct *)call;
+    sel_size_idx = ret->list_index;
 }
 
 /* ---------- find index of a name in an array ---------- */
@@ -112,6 +142,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
 
     /* Load current config */
     char *cur_scheme = NULL, *cur_cursor = NULL, *cur_icon = NULL;
+    char *cur_size = NULL;
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
     if (cfg) {
@@ -123,6 +154,8 @@ static Widget appearance_create(Widget parent, IswAppContext app)
             if (s) { cur_scheme = strdup(s); }
             s = isde_config_string(appear, "cursor_theme", NULL);
             if (s) { cur_cursor = strdup(s); }
+            s = isde_config_string(appear, "cursor_size", NULL);
+            if (s) { cur_size = strdup(s); }
             s = isde_config_string(appear, "icon_theme", NULL);
             if (s) { cur_icon = strdup(s); }
         }
@@ -243,6 +276,48 @@ static Widget appearance_create(Widget parent, IswAppContext app)
     IswCreateManagedWidget("spacer", labelWidgetClass,
                            cursor_row, ab.args, ab.count);
 
+    /* --- Cursor Size --- */
+    IswArgBuilderReset(&ab);
+    IswArgOrientation(&ab, IswOrientHorizontal);
+    IswArgBorderWidth(&ab, 0);
+    IswArgSpacing(&ab, 8);
+    Widget size_row = IswCreateManagedWidget("row", flexBoxWidgetClass,
+                                            vbox, ab.args, ab.count);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "Cursor Size:");
+    IswArgBorderWidth(&ab, 0);
+    IswArgJustify(&ab, IswJustifyRight);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    IswCreateManagedWidget("lbl", labelWidgetClass,
+                           size_row, ab.args, ab.count);
+
+    saved_size_idx = find_index(cursor_size_labels, NUM_CURSOR_SIZES,
+                                cur_size);
+    sel_size_idx = saved_size_idx;
+
+    IswArgBuilderReset(&ab);
+    IswArgList(&ab, cursor_size_labels);
+    IswArgNumberStrings(&ab, NUM_CURSOR_SIZES);
+    IswArgDefaultColumns(&ab, 1);
+    IswArgForceColumns(&ab, True);
+    IswArgVerticalList(&ab, True);
+    IswArgWidth(&ab, COMBO_W);
+    IswArgFlexAlign(&ab, IswFlexAlignCenter);
+    cursor_size_combo = IswCreateManagedWidget("cursorSizeCombo",
+                                               comboBoxWidgetClass,
+                                               size_row, ab.args, ab.count);
+    IswAddCallback(cursor_size_combo, IswNcallback, cursor_size_cb, NULL);
+    IswListHighlight(cursor_size_combo, saved_size_idx);
+
+    IswArgBuilderReset(&ab);
+    IswArgLabel(&ab, "");
+    IswArgBorderWidth(&ab, 0);
+    IswArgFlexBasis(&ab, lbl_w);
+    IswCreateManagedWidget("spacer", labelWidgetClass,
+                           size_row, ab.args, ab.count);
+
     /* --- Icon Theme --- */
     IswArgBuilderReset(&ab);
     IswArgOrientation(&ab, IswOrientHorizontal);
@@ -311,6 +386,7 @@ static Widget appearance_create(Widget parent, IswAppContext app)
 
     free(cur_scheme);
     free(cur_cursor);
+    free(cur_size);
     free(cur_icon);
 
     return vbox;
@@ -327,6 +403,7 @@ static int appearance_has_changes(void)
         IswListReturnStruct *sr = IswListShowCurrent(cursor_list);
         if (sr && sr->list_index != saved_cursor_idx) return 1;
     }
+    if (sel_size_idx != saved_size_idx) return 1;
     if (icon_list) {
         IswListReturnStruct *sr = IswListShowCurrent(icon_list);
         if (sr && sr->list_index != saved_icon_idx) return 1;
@@ -338,6 +415,7 @@ static void appearance_destroy(void)
 {
     scheme_list = NULL;
     cursor_list = NULL;
+    cursor_size_combo = NULL;
     icon_list = NULL;
     /* name arrays stay alive — List widgets hold pointers */
 }
