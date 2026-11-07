@@ -233,9 +233,9 @@ int panel_init(Panel *p, int *argc, char **argv)
     /* Claim system tray selection (needs realized window) */
 
     /* D-Bus settings notifications */
+    isde_theme_watch(p->toplevel, on_panel_theme_changed, p);
     p->dbus = isde_dbus_init();
     if (p->dbus) {
-        isde_theme_watch(p->dbus, p->toplevel, on_panel_theme_changed, p);
         isde_dbus_settings_subscribe(p->dbus, on_panel_settings_changed, p);
         panel_dbus_register_service(p);
         int dbus_fd = isde_dbus_get_fd(p->dbus);
@@ -258,20 +258,6 @@ int panel_init(Panel *p, int *argc, char **argv)
 static void on_panel_theme_changed(void *user_data)
 {
     Panel *p = (Panel *)user_data;
-
-    IswReloadResources(p->shell);
-
-    for (TaskGroup *g = p->groups; g; g = g->next) {
-        if (g->menu)
-            IswReloadResources(g->menu);
-        if (g->ctx_menu)
-            IswReloadResources(g->ctx_menu);
-    }
-
-    if (p->start_shell)
-        IswReloadResources(p->start_shell);
-    if (p->cal_shell)
-        IswReloadResources(p->cal_shell);
 
     taskbar_highlight_active(p);
     startmenu_reload_theme(p);

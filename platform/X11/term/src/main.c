@@ -49,7 +49,6 @@ static void dbus_input_cb(IswPointer closure, int *source, IswInputId *id)
 static void on_theme_changed(void *user_data)
 {
     TermApp *a = (TermApp *)user_data;
-    IswReloadResources(a->toplevel);
     TermConfig cfg;
     term_config_load(&cfg);
     term_widget_apply_config(a->term, &cfg);
@@ -161,10 +160,9 @@ int main(int argc, char **argv)
     term_widget_attach_pty(g_app.term, g_app.pty);
 
     /* DBus settings subscription */
+    isde_theme_watch(g_app.toplevel, on_theme_changed, &g_app);
     g_app.dbus = isde_dbus_init();
     if (g_app.dbus) {
-        isde_theme_watch(g_app.dbus, g_app.toplevel,
-                         on_theme_changed, &g_app);
         isde_dbus_settings_subscribe(g_app.dbus, on_settings_changed, &g_app);
         int fd = isde_dbus_get_fd(g_app.dbus);
         if (fd >= 0) {

@@ -132,20 +132,18 @@ void isde_theme_reload(void);
 
 /* ---------- Theme change protocol ---------- */
 
-/* Callback invoked when the ISDE theme changes.  The new scheme is already
- * loaded and available via isde_theme_current().  The toplevel widget's Xrm
- * database has been re-merged.  The callback should refresh any cached
- * colors or trigger a redraw. */
+/* Callback invoked when the ISDE theme changes.  ISW has already re-applied
+ * the changed resources and redrawn; the new scheme is loaded and available
+ * via isde_theme_current().  The callback should refresh state that does not
+ * come from resources (custom-drawn colours, cached pixels, icons). */
 typedef void (*IsdeThemeChangedCb)(void *user_data);
 
-/* Subscribe to theme changes on an existing D-Bus connection.
- * Filters for "appearance" section changes and automatically calls
- * isde_config_invalidate_cache(), isde_theme_reload(),
- * isde_theme_set_resource_manager(), IswReloadScreenDatabase(),
- * and isde_theme_merge_xrm() before invoking the callback.
- * The D-Bus connection must already be dispatched in the event loop. */
-void isde_theme_watch(IsdeDBus *bus, Widget toplevel,
-                      IsdeThemeChangedCb cb, void *user_data);
+/* Subscribe to theme changes on toplevel's display.  Hooks ISW's
+ * IswNresourcesChangedCallback (fired after an automatic reload on a
+ * RESOURCE_MANAGER change), calls isde_config_invalidate_cache() and
+ * isde_theme_reload(), then invokes cb. */
+void isde_theme_watch(Widget toplevel, IsdeThemeChangedCb cb,
+                      void *user_data);
 
 /* Convert a theme color (0xRRGGBB) to a double triplet (0.0-1.0). */
 void isde_color_to_rgb(unsigned int color, double *r, double *g, double *b);

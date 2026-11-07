@@ -10,7 +10,6 @@
 #include <ISW/Intrinsic.h>
 #include <ISW/StringDefs.h>
 #include <ISW/ISWPlatform.h>
-#include <ISW/ISWRender.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -833,12 +832,44 @@ char *isde_icon_theme_lookup(const char *theme, const char *category,
 /* ---------- global active theme ---------- */
 
 static IsdeColorScheme *g_scheme = NULL;
+static char *g_scheme_name  = NULL;
 static char *g_cursor_theme = NULL;
 static char *g_cursor_size  = NULL;
+static IswDisplay g_watch_dpy = NULL;  /* set by isde_theme_watch */
+
+/* Scheme name published as isde.colorScheme in the watched display's
+ * resource database, or NULL.  Caller frees. */
+static char *published_scheme_name(void)
+{
+    if (!g_watch_dpy) { return NULL; }
+    IswDatabaseHandle db = IswDatabase(g_watch_dpy);
+    char *value = NULL;
+    if (!db || _IswPlatformResourceGetString(db, "isde.colorScheme",
+                                             "Isde.ColorScheme", &value) < 0) {
+        return NULL;
+    }
+    return value;
+}
 
 const IsdeColorScheme *isde_theme_current(void)
 {
-    if (g_scheme) { return g_scheme; }
+    if (g_scheme) {
+        /* ISW rebuilds the resource database before redrawing on a
+         * RESOURCE_MANAGER change; follow the published scheme so widgets
+         * painted from it in that redraw get the new one. */
+        char *pub = published_scheme_name();
+        if (pub && g_scheme_name && strcmp(pub, g_scheme_name) != 0) {
+            IsdeColorScheme *s = isde_scheme_load(pub);
+            if (s) {
+                isde_scheme_free(g_scheme);
+                g_scheme = s;
+                free(g_scheme_name);
+                g_scheme_name = strdup(pub);
+            }
+        }
+        free(pub);
+        return g_scheme;
+    }
 
     char errbuf[256];
     IsdeConfig *cfg = isde_config_load_xdg("isde.toml", errbuf, sizeof(errbuf));
@@ -850,6 +881,10 @@ const IsdeColorScheme *isde_theme_current(void)
         const char *name = isde_config_string(appear, "color_scheme", NULL);
         if (name) {
             g_scheme = isde_scheme_load(name);
+            if (g_scheme) {
+                free(g_scheme_name);
+                g_scheme_name = strdup(name);
+            }
         }
         const char *ct = isde_config_string(appear, "cursor_theme", NULL);
         free(g_cursor_theme);
@@ -863,6 +898,8 @@ const IsdeColorScheme *isde_theme_current(void)
     /* Default to light if no scheme configured */
     if (!g_scheme) {
         g_scheme = isde_scheme_load("default-light");
+        free(g_scheme_name);
+        g_scheme_name = strdup("default-light");
     }
 
     return g_scheme;
@@ -884,54 +921,37 @@ void isde_theme_reload(void)
 /* ---------- Theme change protocol ---------- */
 
 typedef struct {
-    Widget             toplevel;
     IsdeThemeChangedCb cb;
     void              *user_data;
 } ThemeWatchCtx;
 
-#define MAX_THEME_WATCHERS 8
-static ThemeWatchCtx g_watchers[MAX_THEME_WATCHERS];
-static int           g_nwatchers;
-
-static void theme_watch_dbus_cb(const char *section, const char *key,
-                                void *user_data)
+/* ISW has already rebuilt the resource database, re-applied resources and
+ * redrawn (isde_theme_current() follows isde.colorScheme, so scheme-painted
+ * widgets were drawn with the new scheme); let the app do the rest. */
+static void theme_watch_resources_cb(Widget w, IswPointer cd, IswPointer call)
 {
-    (void)key;
-    (void)user_data;
-    if (strcmp(section, "appearance") != 0 &&
-        strcmp(section, "fonts") != 0 &&
-        strcmp(section, "*") != 0) {
-        return;
-    }
+    (void)w; (void)call;
+    ThemeWatchCtx *ctx = (ThemeWatchCtx *)cd;
 
     isde_config_invalidate_cache();
-    isde_theme_reload();
-
-    for (int i = 0; i < g_nwatchers; i++) {
-        ThemeWatchCtx *w = &g_watchers[i];
-        isde_theme_set_resource_manager(IswDisplayOfObject(w->toplevel));
-        ISWRenderReloadFontOptions(IswDisplayOfObject(w->toplevel));
-        isde_theme_merge_xrm(w->toplevel);
-        if (w->cb) {
-            w->cb(w->user_data);
-        }
+    if (ctx->cb) {
+        ctx->cb(ctx->user_data);
     }
 }
 
-void isde_theme_watch(IsdeDBus *bus, Widget toplevel,
-                      IsdeThemeChangedCb cb, void *user_data)
+void isde_theme_watch(Widget toplevel, IsdeThemeChangedCb cb, void *user_data)
 {
-    if (!bus || g_nwatchers >= MAX_THEME_WATCHERS) { return; }
+    if (!toplevel) { return; }
 
-    int first = (g_nwatchers == 0);
-    ThemeWatchCtx *w = &g_watchers[g_nwatchers++];
-    w->toplevel = toplevel;
-    w->cb = cb;
-    w->user_data = user_data;
+    ThemeWatchCtx *ctx = malloc(sizeof(*ctx));
+    if (!ctx) { return; }
+    ctx->cb = cb;
+    ctx->user_data = user_data;
+    g_watch_dpy = IswDisplayOfObject(toplevel);
 
-    if (first) {
-        isde_dbus_settings_subscribe(bus, theme_watch_dbus_cb, NULL);
-    }
+    IswAddCallback(IswHooksOfDisplay(IswDisplayOfObject(toplevel)),
+                   IswNresourcesChangedCallback,
+                   theme_watch_resources_cb, (IswPointer)ctx);
 }
 
 const char *isde_cursor_theme_configured(void)
@@ -983,6 +1003,13 @@ char **isde_theme_build_resources(void)
 
     char **res = calloc(160, sizeof(char *));
     int i = 0;
+
+    /* Scheme name — isde_theme_current() in watching apps follows it */
+    if (g_scheme_name) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "isde.colorScheme: %s", g_scheme_name);
+        res[i++] = strdup(buf);
+    }
 
     /* Global defaults */
     res[i++] = fmt_color("*background", s->bg);
@@ -1262,6 +1289,16 @@ char **isde_theme_build_resources(void)
                     snprintf(buf, sizeof(buf), "Xft.rgba: %s", rgba);
                     res[i++] = strdup(buf);
                 }
+            }
+
+            /* Icon theme — not a widget resource, but publishing it makes an
+             * icon-theme change a RESOURCE_MANAGER change that apps see. */
+            IsdeConfigTable *appear = isde_config_table(root, "appearance");
+            const char *icon = isde_config_string(appear, "icon_theme", NULL);
+            if (icon) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "isde.iconTheme: %s", icon);
+                res[i++] = strdup(buf);
             }
             isde_config_free(cfg);
         }

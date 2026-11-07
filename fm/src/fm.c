@@ -74,20 +74,8 @@ static void on_theme_changed(void *user_data)
     printf("Number of windows %d \n", app->nwindows);
     for (int i = 0; i < app->nwindows; i++) {
         Fm *w = app->windows[i];
-        IswReloadResources(w->toplevel);
         IswOverrideTranslations(w->toplevel, IswParseTranslationTable(
             "<WindowClose>: fm-close-window()\n"));
-        IswReloadResources(w->main_window);
-        IswReloadResources(w->nav_box);
-        IswReloadResources(w->vbox);
-        IswReloadResources(w->hbox);
-        if (w->viewport) { IswReloadResources(w->viewport); }
-        if (w->iconview) { IswReloadResources(w->iconview); }
-        if (w->listview) { IswReloadResources(w->listview); }
-        if (w->places_vp) { IswReloadResources(w->places_vp); }
-        if (w->places_listbox) { IswReloadResources(w->places_listbox); }
-        if (w->ctx_shell) { IswReloadResources(w->ctx_shell); }
-        if (w->dev_ctx_shell) { IswReloadResources(w->dev_ctx_shell); }
     }
 
     //fm_reload_config(fm);
@@ -510,10 +498,11 @@ Fm *fm_window_new(FmApp *app, const char *path)
 
     /* On the first spawned window, register the app-wide theme/settings
      * watchers now that a toplevel is realized. */
-    if (app->theme_watch_pending && app->dbus) {
-        isde_theme_watch(app->dbus, fm->toplevel,
-                         on_theme_changed, fm);
-        isde_dbus_settings_subscribe(app->dbus, on_settings_changed, app);
+    if (app->theme_watch_pending) {
+        isde_theme_watch(fm->toplevel, on_theme_changed, fm);
+        if (app->dbus) {
+            isde_dbus_settings_subscribe(app->dbus, on_settings_changed, app);
+        }
         app->theme_watch_pending = 0;
     }
 
