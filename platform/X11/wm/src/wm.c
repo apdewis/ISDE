@@ -174,6 +174,7 @@ static void wm_set_root_cursor(Wm *wm)
     xcb_cursor_t ptr = xcb_cursor_load_cursor(ctx, "left_ptr");
     if (ptr) {
         xcb_change_window_attributes(wm->conn, wm->root, XCB_CW_CURSOR, &ptr);
+        xcb_free_cursor(wm->conn, ptr);
     }
     xcb_cursor_context_free(ctx);
 }
@@ -2682,6 +2683,13 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
     }
     case XCB_PROPERTY_NOTIFY: {
         xcb_property_notify_event_t *pn = (xcb_property_notify_event_t *)ev;
+        /* Xcursor.size / Xcursor.theme may have changed: reload cursors */
+        if (pn->window == wm->root &&
+            pn->atom == XCB_ATOM_RESOURCE_MANAGER) {
+            wm_set_root_cursor(wm);
+            frame_reload_cursors(wm);
+            xcb_flush(wm->conn);
+        } else
 #ifdef ISDE_COMPOSITOR
         if (pn->window == wm->root && wm->compositor &&
             wm->compositor->atom_xrootpmap &&

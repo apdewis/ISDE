@@ -927,6 +927,28 @@ void frame_init_cursors(Wm *wm)
     xcb_cursor_context_free(ctx);
 }
 
+/* Reload the resize cursors (theme/size change) and re-apply them to every
+ * client's grips. */
+void frame_reload_cursors(Wm *wm)
+{
+    for (int i = 0; i < 8; i++) {
+        if (wm->cursors[i]) {
+            xcb_free_cursor(wm->conn, wm->cursors[i]);
+        }
+        wm->cursors[i] = 0;
+    }
+    frame_init_cursors(wm);
+
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        for (int i = 0; i < 8; i++) {
+            if (c->grip[i]) {
+                xcb_change_window_attributes(wm->conn, c->grip[i],
+                                             XCB_CW_CURSOR, &wm->cursors[i]);
+            }
+        }
+    }
+}
+
 /* ---------- resize grips ---------- */
 
 void frame_create_grips(Wm *wm, WmClient *c)

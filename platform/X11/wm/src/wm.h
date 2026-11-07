@@ -350,6 +350,7 @@ void      frame_create_grips(Wm *wm, WmClient *c);
 void      frame_update_grips(Wm *wm, WmClient *c);
 void      frame_destroy_grips(Wm *wm, WmClient *c);
 void      frame_init_cursors(Wm *wm);
+void      frame_reload_cursors(Wm *wm);
 void      frame_init_icons(Wm *wm);
 
 /* Identify which title bar button is at frame-relative (x,y).

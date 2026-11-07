@@ -71,9 +71,11 @@ static void apply_appearance_settings(void)
             setenv("XCURSOR_THEME", cursor, 1);
             fprintf(stderr, "isde-session: cursor theme=%s\n", cursor);
         }
+        /* Size is published as Xcursor.size in RESOURCE_MANAGER; an
+         * XCURSOR_SIZE env var would override it and block live changes. */
         const char *cursor_size = isde_config_string(appear, "cursor_size", NULL);
         if (cursor_size) {
-            setenv("XCURSOR_SIZE", cursor_size, 1);
+            unsetenv("XCURSOR_SIZE");
         }
     }
 
