@@ -125,7 +125,8 @@ static char *build_profile_key(xcb_connection_t *conn, xcb_window_t root)
     char *key = malloc(keylen);
     key[0] = '\0';
     for (int i = 0; i < nhashes; i++) {
-        if (i > 0) strcat(key, ",");
+        /* '_' keeps the key a valid bare TOML key (',' is not) */
+        if (i > 0) strcat(key, "_");
         strcat(key, hashes[i]);
         free(hashes[i]);
     }

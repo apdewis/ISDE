@@ -159,7 +159,8 @@ static void update_profile_key(void)
     cur_profile_key = malloc(keylen);
     cur_profile_key[0] = '\0';
     for (int i = 0; i < nhashes; i++) {
-        if (i > 0) strcat(cur_profile_key, ",");
+        /* '_' keeps the key a valid bare TOML key (',' is not) */
+        if (i > 0) strcat(cur_profile_key, "_");
         strcat(cur_profile_key, hashes[i]);
     }
     free(hashes);
