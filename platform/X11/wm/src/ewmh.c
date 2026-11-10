@@ -543,8 +543,8 @@ void wm_ewmh_update_workarea(Wm *wm)
 
     int wx = left;
     int wy = top;
-    int ww = wm->screen->width_in_pixels - left - right;
-    int wh = wm->screen->height_in_pixels - top - bottom;
+    int ww = wm->root_w - left - right;
+    int wh = wm->root_h - top - bottom;
 
     xcb_ewmh_geometry_t *areas = malloc(
         wm->num_desktops * sizeof(xcb_ewmh_geometry_t));

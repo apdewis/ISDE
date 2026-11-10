@@ -32,6 +32,8 @@ typedef struct WmCompositor {
     xcb_connection_t   *conn;
     xcb_screen_t       *screen;
     xcb_window_t        overlay;
+    int                 root_w;          /* current root size (tracks RandR) */
+    int                 root_h;
 
     uint8_t             damage_event_base;
     uint8_t             composite_major;
@@ -88,6 +90,7 @@ void  wm_compositor_add_window(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_remove_window(WmCompositor *comp, xcb_window_t win);
 void  wm_compositor_set_mapped(WmCompositor *comp, xcb_window_t win, int mapped);
 void  wm_compositor_paint(WmCompositor *comp);
+void  wm_compositor_resize(WmCompositor *comp, int w, int h);
 int   wm_compositor_animating(WmCompositor *comp);
 void  wm_compositor_slide(WmCompositor *comp, int dx, int dy);
 void  wm_compositor_set_slide_exclude(WmCompositor *comp, xcb_window_t win);

@@ -138,6 +138,8 @@ typedef struct Wm {
     xcb_connection_t      *conn;
     xcb_screen_t          *screen;
     xcb_window_t           root;
+    int                    root_w;     /* current root size (tracks RandR) */
+    int                    root_h;
     int                    screen_num;
 
     /* EWMH / ICCCM */

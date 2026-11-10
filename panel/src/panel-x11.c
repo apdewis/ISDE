@@ -73,12 +73,25 @@ void query_primary_monitor(Panel *p)
     PanelX11ServerContext *ctx = (PanelX11ServerContext *)p->server_context;
     xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle((IswScreenOf(p->toplevel)));
 
+    if (screen == NULL) return;
+
+    /* The setup's screen size is fixed at connect time; query the root
+     * for its current size. */
+    int root_w = screen->width_in_pixels;
+    int root_h = screen->height_in_pixels;
+    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(ctx->conn,
+        xcb_get_geometry(ctx->conn, screen->root), NULL);
+    if (geo) {
+        root_w = geo->width;
+        root_h = geo->height;
+        free(geo);
+    }
+    p->root_h = root_h;
+
     p->mon_x = 0;
     p->mon_y = 0;
-    p->mon_w = screen->width_in_pixels;
-    p->mon_h = screen->height_in_pixels;
-
-    if (screen == NULL) return;
+    p->mon_w = root_w;
+    p->mon_h = root_h;
 
     const IsdeMonitorOps *ops = isde_monitor_xcb_probe(ctx->conn);
     if (ops) {
@@ -96,7 +109,10 @@ void query_primary_monitor(Panel *p)
 void panel_update_strut(Panel *p)
 {
     Arg args[4];
-    IswSetArg(args[0], IswNstrutBottom, p->phys_panel_h);
+    /* Bottom strut is measured from the root's bottom edge, which is below
+     * the panel's monitor when another monitor extends further down. */
+    IswSetArg(args[0], IswNstrutBottom,
+              p->root_h - (p->mon_y + p->mon_h) + p->phys_panel_h);
     IswSetArg(args[1], IswNstrutLeft, 0);
     IswSetArg(args[2], IswNstrutRight, 0);
     IswSetArg(args[3], IswNstrutTop, 0);
@@ -328,12 +344,15 @@ void taskbar_update(Panel *p)
 
 void panel_reconfigure(Panel *p)
 {
-    int16_t  old_x = p->mon_x;
+    int16_t  old_x = p->mon_x, old_y = p->mon_y;
     uint16_t old_w = p->mon_w, old_h = p->mon_h;
+    int      old_root_h = p->root_h;
 
     query_primary_monitor(p);
 
-    if (p->mon_x == old_x && p->mon_w == old_w && p->mon_h == old_h) {
+    if (p->mon_x == old_x && p->mon_y == old_y &&
+        p->mon_w == old_w && p->mon_h == old_h &&
+        p->root_h == old_root_h) {
         return;
     }
 

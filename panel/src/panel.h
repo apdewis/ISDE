@@ -184,6 +184,7 @@ typedef struct Panel {
     int16_t            mon_y;
     uint16_t           mon_w;
     uint16_t           mon_h;
+    int                root_h;     /* current root height (struts are root-relative) */
 
     /* HiDPI: physical panel height (PANEL_HEIGHT * scale factor) */
     int                phys_panel_h;

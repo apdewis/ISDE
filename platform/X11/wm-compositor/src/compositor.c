@@ -310,8 +310,7 @@ static void snapshot_window(WmCompositor *comp, CompositorWindow *cw)
     glPopMatrix();
 
     pfn_glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, comp->screen->width_in_pixels,
-               comp->screen->height_in_pixels);
+    glViewport(0, 0, comp->root_w, comp->root_h);
 }
 
 static void bind_pixmap(WmCompositor *comp, CompositorWindow *cw)
@@ -389,6 +388,8 @@ int wm_compositor_init(Wm *wm)
     WmCompositor *comp = calloc(1, sizeof(*comp));
     comp->conn = wm->conn;
     comp->screen = wm->screen;
+    comp->root_w = wm->root_w;
+    comp->root_h = wm->root_h;
     comp->scale = wm->scale_factor;
     comp->damage_event_base = dmg_ext->first_event;
     comp->composite_major = cv->major_version;
@@ -509,12 +510,10 @@ int wm_compositor_init(Wm *wm)
     xcb_flush(comp->conn);
 
     /* Set up orthographic projection matching screen size */
-    glViewport(0, 0, comp->screen->width_in_pixels,
-               comp->screen->height_in_pixels);
+    glViewport(0, 0, comp->root_w, comp->root_h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0, comp->screen->width_in_pixels,
-            comp->screen->height_in_pixels, 0, -1, 1);
+    glOrtho(0, comp->root_w, comp->root_h, 0, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
@@ -564,6 +563,23 @@ int wm_compositor_init(Wm *wm)
 
     fprintf(stderr, "compositor: initialized (overlay 0x%x)\n", comp->overlay);
     return 0;
+}
+
+void wm_compositor_resize(WmCompositor *comp, int w, int h)
+{
+    if (!comp || (w == comp->root_w && h == comp->root_h)) return;
+
+    comp->root_w = w;
+    comp->root_h = h;
+
+    glViewport(0, 0, comp->root_w, comp->root_h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, comp->root_w, comp->root_h, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    comp->needs_repaint = 1;
 }
 
 void wm_compositor_reload_background(WmCompositor *comp)
@@ -894,7 +910,7 @@ static void make_switcher_title_texture(WmCompositor *comp, const char *text)
     /* Size the title plate to the visible row width on the primary monitor,
      * not the combined virtual screen, so it never spans other displays. */
     int pm_w = comp->switcher_pm_w > 0 ? comp->switcher_pm_w
-                                      : comp->screen->width_in_pixels;
+                                      : comp->root_w;
     int w = (int)(pm_w * (SWITCHER_SLOT_W * SWITCHER_VISIBLE));
     if (w < 1) {
         w = 1;
@@ -1022,9 +1038,9 @@ static void draw_switcher(WmCompositor *comp)
     int pm_x = comp->switcher_pm_w > 0 ? comp->switcher_pm_x : 0;
     int pm_y = comp->switcher_pm_h > 0 ? comp->switcher_pm_y : 0;
     int W = comp->switcher_pm_w > 0 ? comp->switcher_pm_w
-                                   : comp->screen->width_in_pixels;
+                                   : comp->root_w;
     int H = comp->switcher_pm_h > 0 ? comp->switcher_pm_h
-                                   : comp->screen->height_in_pixels;
+                                   : comp->root_h;
     const IsdeColorScheme *scheme = isde_theme_current();
 
     float pitch = W * SWITCHER_SLOT_W;
@@ -1148,8 +1164,8 @@ void wm_compositor_switcher_begin(WmCompositor *comp, const xcb_window_t *wins,
     } else {
         comp->switcher_pm_x = 0;
         comp->switcher_pm_y = 0;
-        comp->switcher_pm_w = comp->screen->width_in_pixels;
-        comp->switcher_pm_h = comp->screen->height_in_pixels;
+        comp->switcher_pm_w = comp->root_w;
+        comp->switcher_pm_h = comp->root_h;
     }
 
     make_switcher_title_texture(comp, sel_title);
@@ -1346,8 +1362,8 @@ void wm_compositor_paint(WmCompositor *comp)
     if (comp->bg_has_texture && comp->bg_texture) {
         glBindTexture(GL_TEXTURE_2D, comp->bg_texture);
         glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        int sw = comp->screen->width_in_pixels;
-        int sh = comp->screen->height_in_pixels;
+        int sw = comp->root_w;
+        int sh = comp->root_h;
         glBegin(GL_QUADS);
         glTexCoord2f(0.0f, 0.0f); glVertex2i(0,  0);
         glTexCoord2f(1.0f, 0.0f); glVertex2i(sw, 0);
@@ -1396,14 +1412,14 @@ void wm_compositor_paint(WmCompositor *comp)
                               cw->window != comp->slide_exclude);
             if (slide_part && cw->slide_role > 0) {
                 ox = (1.0f - comp->slide_progress) * comp->slide_dx *
-                     comp->screen->width_in_pixels;
+                     comp->root_w;
                 oy = (1.0f - comp->slide_progress) * comp->slide_dy *
-                     comp->screen->height_in_pixels;
+                     comp->root_h;
             } else if (slide_part && cw->slide_role < 0) {
                 ox = -comp->slide_progress * comp->slide_dx *
-                     comp->screen->width_in_pixels;
+                     comp->root_w;
                 oy = -comp->slide_progress * comp->slide_dy *
-                     comp->screen->height_in_pixels;
+                     comp->root_h;
             }
 
             float x0 = cw->x + ox;

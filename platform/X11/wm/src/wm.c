@@ -951,14 +951,13 @@ void wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
 
     *wx = left;
     *wy = top;
-    *ww = wm->screen->width_in_pixels - left - right;
-    *wh = wm->screen->height_in_pixels - top - bottom;
+    *ww = wm->root_w - left - right;
+    *wh = wm->root_h - top - bottom;
 }
 
 void wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh)
 {
-    IsdeMonitor pm = { 0, 0, wm->screen->width_in_pixels,
-                             wm->screen->height_in_pixels };
+    IsdeMonitor pm = { 0, 0, wm->root_w, wm->root_h };
     if (wm->mon_ops) {
         wm->mon_ops->get_primary(&wm->mon_ctx, &pm);
     }
@@ -968,19 +967,69 @@ void wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh)
     *mh = pm.height;
 }
 
+/* Trim a monitor rect by one window's strut.  Struts are measured from the
+ * root edges; each side only applies where its start/end range overlaps
+ * the monitor (a zero range means the full edge). */
+static void trim_monitor_strut(Wm *wm, xcb_ewmh_connection_t *ewmh,
+                               xcb_window_t win, const MonitorGeom *m,
+                               int *x0, int *y0, int *x1, int *y1)
+{
+    xcb_ewmh_wm_strut_partial_t s;
+    if (!xcb_ewmh_get_wm_strut_partial_reply(ewmh,
+            xcb_ewmh_get_wm_strut_partial(ewmh, win), &s, NULL)) {
+        return;
+    }
+
+    int mx0 = m->x, mx1 = m->x + m->width;
+    int my0 = m->y, my1 = m->y + m->height;
+
+    if (s.top > 0 && ((s.top_start_x == 0 && s.top_end_x == 0) ||
+                      ((int)s.top_end_x >= mx0 && (int)s.top_start_x < mx1))) {
+        if ((int)s.top > *y0) { *y0 = s.top; }
+    }
+    if (s.bottom > 0 && ((s.bottom_start_x == 0 && s.bottom_end_x == 0) ||
+                         ((int)s.bottom_end_x >= mx0 &&
+                          (int)s.bottom_start_x < mx1))) {
+        int edge = wm->root_h - (int)s.bottom;
+        if (edge < *y1) { *y1 = edge; }
+    }
+    if (s.left > 0 && ((s.left_start_y == 0 && s.left_end_y == 0) ||
+                       ((int)s.left_end_y >= my0 && (int)s.left_start_y < my1))) {
+        if ((int)s.left > *x0) { *x0 = s.left; }
+    }
+    if (s.right > 0 && ((s.right_start_y == 0 && s.right_end_y == 0) ||
+                        ((int)s.right_end_y >= my0 &&
+                         (int)s.right_start_y < my1))) {
+        int edge = wm->root_w - (int)s.right;
+        if (edge < *x1) { *x1 = edge; }
+    }
+}
+
 static void wm_get_monitor_work_area(Wm *wm, int monitor,
                                       int *wx, int *wy, int *ww, int *wh)
 {
-    int gwx, gwy, gww, gwh;
-    wm_get_work_area(wm, &gwx, &gwy, &gww, &gwh);
-
+    xcb_ewmh_connection_t *ewmh = isde_ewmh_connection(wm->ewmh);
     MonitorGeom *m = &wm->monitors[monitor];
-    int x0 = m->x > gwx ? m->x : gwx;
-    int y0 = m->y > gwy ? m->y : gwy;
-    int x1 = (m->x + m->width) < (gwx + gww) ?
-             (m->x + m->width) : (gwx + gww);
-    int y1 = (m->y + m->height) < (gwy + gwh) ?
-             (m->y + m->height) : (gwy + gwh);
+    int x0 = m->x;
+    int y0 = m->y;
+    int x1 = m->x + m->width;
+    int y1 = m->y + m->height;
+
+    for (WmClient *c = wm->clients; c; c = c->next) {
+        trim_monitor_strut(wm, ewmh, c->client, m, &x0, &y0, &x1, &y1);
+    }
+
+    xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+        wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+    if (tree) {
+        xcb_window_t *children = xcb_query_tree_children(tree);
+        int nchildren = xcb_query_tree_children_length(tree);
+        for (int i = 0; i < nchildren; i++) {
+            trim_monitor_strut(wm, ewmh, children[i], m, &x0, &y0, &x1, &y1);
+        }
+        free(tree);
+    }
+
     *wx = x0;
     *wy = y0;
     *ww = x1 - x0 > 0 ? x1 - x0 : 0;
@@ -1002,6 +1051,19 @@ static void query_monitors(Wm *wm)
     wm->monitors = NULL;
     wm->nmonitors = 0;
 
+    /* The setup's screen size is fixed at connect time; query the root
+     * for its current size. */
+    xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(wm->conn,
+        xcb_get_geometry(wm->conn, wm->root), NULL);
+    if (geo) {
+        wm->root_w = geo->width;
+        wm->root_h = geo->height;
+        free(geo);
+    } else if (wm->root_w == 0) {
+        wm->root_w = wm->screen->width_in_pixels;
+        wm->root_h = wm->screen->height_in_pixels;
+    }
+
     IsdeMonitor *mons = NULL;
     int n = 0;
     if (wm->mon_ops) {
@@ -1015,8 +1077,8 @@ static void query_monitors(Wm *wm)
         wm->monitors = malloc(sizeof(MonitorGeom));
         wm->monitors[0].x = 0;
         wm->monitors[0].y = 0;
-        wm->monitors[0].width  = wm->screen->width_in_pixels;
-        wm->monitors[0].height = wm->screen->height_in_pixels;
+        wm->monitors[0].width  = wm->root_w;
+        wm->monitors[0].height = wm->root_h;
         wm->nmonitors = 1;
     }
 }
@@ -2726,6 +2788,10 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
             (type == wm->randr_event_base + XCB_RANDR_SCREEN_CHANGE_NOTIFY ||
              type == wm->randr_event_base + XCB_RANDR_NOTIFY)) {
             query_monitors(wm);
+            wm_ewmh_update_workarea(wm);
+#ifdef ISDE_COMPOSITOR
+            wm_compositor_resize(wm->compositor, wm->root_w, wm->root_h);
+#endif
             rescue_orphaned_clients(wm);
         }
         else if (wm->sync_event_base &&
