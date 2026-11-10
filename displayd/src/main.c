@@ -568,6 +568,52 @@ static int enable_connected(xcb_connection_t *conn, xcb_window_t root,
     if (first_enabled != XCB_NONE)
         xcb_randr_set_output_primary(conn, root, first_enabled);
 
+    /* ---- Shrink screen to the extent of the active CRTCs ----
+     * Must follow the apply phase: the server rejects a screen size
+     * smaller than any active CRTC. */
+    xcb_randr_get_screen_resources_current_reply_t *fit_res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root), NULL);
+    if (fit_res) {
+        xcb_randr_crtc_t *crtcs =
+            xcb_randr_get_screen_resources_current_crtcs(fit_res);
+        int ncrtcs =
+            xcb_randr_get_screen_resources_current_crtcs_length(fit_res);
+        int fit_w = 0, fit_h = 0;
+        for (int i = 0; i < ncrtcs; i++) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(conn,
+                    xcb_randr_get_crtc_info(conn, crtcs[i],
+                                            fit_res->config_timestamp),
+                    NULL);
+            if (!ci)
+                continue;
+            if (ci->mode != XCB_NONE) {
+                if (ci->x + ci->width > fit_w)  fit_w = ci->x + ci->width;
+                if (ci->y + ci->height > fit_h) fit_h = ci->y + ci->height;
+            }
+            free(ci);
+        }
+        free(fit_res);
+
+        xcb_get_geometry_reply_t *rg =
+            xcb_get_geometry_reply(conn, xcb_get_geometry(conn, root), NULL);
+        if (rg && fit_w > 0 && fit_h > 0 &&
+            (fit_w < rg->width || fit_h < rg->height)) {
+            int mm_w = scr->width_in_pixels > 0 ?
+                (fit_w * scr->width_in_millimeters) /
+                scr->width_in_pixels : fit_w;
+            int mm_h = scr->height_in_pixels > 0 ?
+                (fit_h * scr->height_in_millimeters) /
+                scr->height_in_pixels : fit_h;
+            fprintf(stdout, "isde-displayd: enable_connected: shrinking "
+                    "screen %dx%d -> %dx%d\n",
+                    rg->width, rg->height, fit_w, fit_h);
+            xcb_randr_set_screen_size(conn, root, fit_w, fit_h, mm_w, mm_h);
+        }
+        free(rg);
+    }
+
     fprintf(stdout, "isde-displayd: enable_connected: done, "
             "first_enabled=%s\n",
             first_enabled != XCB_NONE ? "yes" : "none");
@@ -815,6 +861,52 @@ static int apply_config(xcb_connection_t *conn, xcb_window_t root,
         primary_out != XCB_NONE ? primary_out : first_enabled;
     if (new_primary != XCB_NONE)
         xcb_randr_set_output_primary(conn, root, new_primary);
+
+    /* ---- Shrink screen to the extent of the active CRTCs ----
+     * Must follow the apply phase: the server rejects a screen size
+     * smaller than any active CRTC. */
+    xcb_randr_get_screen_resources_current_reply_t *fit_res =
+        xcb_randr_get_screen_resources_current_reply(conn,
+            xcb_randr_get_screen_resources_current(conn, root), NULL);
+    if (fit_res) {
+        xcb_randr_crtc_t *crtcs =
+            xcb_randr_get_screen_resources_current_crtcs(fit_res);
+        int ncrtcs =
+            xcb_randr_get_screen_resources_current_crtcs_length(fit_res);
+        int fit_w = 0, fit_h = 0;
+        for (int i = 0; i < ncrtcs; i++) {
+            xcb_randr_get_crtc_info_reply_t *ci =
+                xcb_randr_get_crtc_info_reply(conn,
+                    xcb_randr_get_crtc_info(conn, crtcs[i],
+                                            fit_res->config_timestamp),
+                    NULL);
+            if (!ci)
+                continue;
+            if (ci->mode != XCB_NONE) {
+                if (ci->x + ci->width > fit_w)  fit_w = ci->x + ci->width;
+                if (ci->y + ci->height > fit_h) fit_h = ci->y + ci->height;
+            }
+            free(ci);
+        }
+        free(fit_res);
+
+        xcb_get_geometry_reply_t *rg =
+            xcb_get_geometry_reply(conn, xcb_get_geometry(conn, root), NULL);
+        if (rg && fit_w > 0 && fit_h > 0 &&
+            (fit_w < rg->width || fit_h < rg->height)) {
+            int mm_w = scr->width_in_pixels > 0 ?
+                (fit_w * scr->width_in_millimeters) /
+                scr->width_in_pixels : fit_w;
+            int mm_h = scr->height_in_pixels > 0 ?
+                (fit_h * scr->height_in_millimeters) /
+                scr->height_in_pixels : fit_h;
+            fprintf(stdout, "isde-displayd: apply_config: shrinking "
+                    "screen %dx%d -> %dx%d\n",
+                    rg->width, rg->height, fit_w, fit_h);
+            xcb_randr_set_screen_size(conn, root, fit_w, fit_h, mm_w, mm_h);
+        }
+        free(rg);
+    }
 
     fprintf(stdout, "isde-displayd: apply_config: done, "
             "first_enabled=%s\n",
