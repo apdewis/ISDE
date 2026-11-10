@@ -57,12 +57,23 @@ static void create_blank_screens(Greeter *g)
         g->blanks[g->nblanks++] = win;
     }
 
+    /* Keep the greeter above the blanks in case a monitor overlaps it */
+    xcb_window_t shell_win = (xcb_window_t)(uintptr_t)IswWindowNativeHandle(
+        _IswPlatformWidgetWindow(IswDisplayOf(g->shell), g->shell));
+    uint32_t stack = XCB_STACK_MODE_ABOVE;
+    xcb_configure_window(conn, shell_win, XCB_CONFIG_WINDOW_STACK_MODE, &stack);
+
     xcb_flush(conn);
-    free(mons);
+    g->mons = mons;
+    g->nmons = nmons;
 }
 
 static void destroy_blank_screens(Greeter *g)
 {
+    free(g->mons);
+    g->mons = NULL;
+    g->nmons = 0;
+
     if (!g->blanks) return;
     xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
     for (int i = 0; i < g->nblanks; i++)
@@ -301,6 +312,64 @@ static void load_config(Greeter *g)
 
 /* ---------- UI construction ---------- */
 
+/* Position all form children for the current logical screen size. */
+static void layout_ui(Greeter *g)
+{
+    IswArgBuilder ab = IswArgBuilderInit();
+    IswArgWidth(&ab, g->logical_w);
+    IswArgHeight(&ab, g->logical_h);
+    IswSetValues(g->form, ab.args, ab.count);
+
+    int input_h = g->input_h;
+    int input_x = (g->logical_w - INPUT_W) / 2;
+    int label_x = input_x - ROW_GAP - g->label_w;
+
+    int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
+    int form_y = g->logical_h * 5 / 8 - form_total_h / 2;
+    int row1_y = form_y;
+    int row2_y = row1_y + input_h + ROW_GAP;
+    int row3_y = row2_y + input_h + ROW_GAP;
+    int row4_y = row3_y + input_h + SECTION_GAP;
+
+    IswVaSetValues(g->user_label, IswNhorizDistance, label_x,
+                   IswNvertDistance, row1_y, NULL);
+    IswVaSetValues(g->user_text, IswNhorizDistance, input_x,
+                   IswNvertDistance, row1_y, NULL);
+    IswVaSetValues(g->pass_label, IswNhorizDistance, label_x,
+                   IswNvertDistance, row2_y, NULL);
+    IswVaSetValues(g->pass_text, IswNhorizDistance, input_x,
+                   IswNvertDistance, row2_y, NULL);
+    IswVaSetValues(g->login_btn, IswNhorizDistance, input_x + INPUT_W + ROW_GAP,
+                   IswNvertDistance, row2_y, NULL);
+    IswVaSetValues(g->session_label, IswNhorizDistance, label_x,
+                   IswNvertDistance, row3_y, NULL);
+    IswVaSetValues(g->session_btn, IswNhorizDistance, input_x,
+                   IswNvertDistance, row3_y, NULL);
+    IswVaSetValues(g->error_label, IswNhorizDistance, label_x,
+                   IswNvertDistance, row4_y, NULL);
+
+    int btn_h = 40;
+    int btn_y = g->logical_h * 7 / 8 - btn_h / 2;
+    int btn_count = g->allow_shutdown + g->allow_reboot + g->allow_suspend;
+    int btn_total_w = btn_count * BUTTON_W + (btn_count - 1) * BUTTON_PAD;
+    int btn_x = (g->logical_w - btn_total_w) / 2;
+
+    if (g->shutdown_btn) {
+        IswVaSetValues(g->shutdown_btn, IswNhorizDistance, btn_x,
+                       IswNvertDistance, btn_y, NULL);
+        btn_x += BUTTON_W + BUTTON_PAD;
+    }
+    if (g->reboot_btn) {
+        IswVaSetValues(g->reboot_btn, IswNhorizDistance, btn_x,
+                       IswNvertDistance, btn_y, NULL);
+        btn_x += BUTTON_W + BUTTON_PAD;
+    }
+    if (g->suspend_btn) {
+        IswVaSetValues(g->suspend_btn, IswNhorizDistance, btn_x,
+                       IswNvertDistance, btn_y, NULL);
+    }
+}
+
 static void build_ui(Greeter *g)
 {
     IswArgBuilder ab = IswArgBuilderInit();
@@ -319,8 +388,6 @@ static void build_ui(Greeter *g)
     IswArgBuilderReset(&ab);
     IswArgDefaultDistance(&ab, 0);
     IswArgBorderWidth(&ab, 0);
-    IswArgWidth(&ab, g->logical_w);
-    IswArgHeight(&ab, g->logical_h);
     g->form = IswCreateManagedWidget("greeterForm", formWidgetClass,
                                     g->shell, ab.args, ab.count);
 
@@ -339,17 +406,10 @@ static void build_ui(Greeter *g)
                          IswNwidth, &natural_lw, NULL);
     IswDestroyWidget(probe);
 
-    int input_h = natural_h+(CORNER_RADIUS*2);
-    int label_w = natural_lw;
-    int input_x = (g->logical_w - INPUT_W) / 2;
-    int label_x = input_x - ROW_GAP - label_w;
-
-    int form_total_h = 4 * input_h + 3 * ROW_GAP + SECTION_GAP;
-    int form_y = g->logical_h * 5 / 8 - form_total_h / 2;
-    int row1_y = form_y;
-    int row2_y = row1_y + input_h + ROW_GAP;
-    int row3_y = row2_y + input_h + ROW_GAP;
-    int row4_y = row3_y + input_h + SECTION_GAP;
+    g->input_h = natural_h+(CORNER_RADIUS*2);
+    g->label_w = natural_lw;
+    int input_h = g->input_h;
+    int label_w = g->label_w;
 
     /* Username label */
     IswArgBuilderReset(&ab);
@@ -358,8 +418,6 @@ static void build_ui(Greeter *g)
     IswArgHeight(&ab, input_h);
     IswArgJustify(&ab, IswJustifyRight);
     IswArgBorderWidth(&ab, 0);
-    IswArgHorizDistance(&ab, label_x);
-    IswArgVertDistance(&ab, row1_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -375,8 +433,6 @@ static void build_ui(Greeter *g)
     IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
-    IswArgHorizDistance(&ab, input_x);
-    IswArgVertDistance(&ab, row1_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -391,8 +447,6 @@ static void build_ui(Greeter *g)
     IswArgHeight(&ab, input_h);
     IswArgJustify(&ab, IswJustifyRight);
     IswArgBorderWidth(&ab, 0);
-    IswArgHorizDistance(&ab, label_x);
-    IswArgVertDistance(&ab, row2_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -409,8 +463,6 @@ static void build_ui(Greeter *g)
     IswArgConsumeTab(&ab, False);
     IswArgBorderWidth(&ab, 1);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
-    IswArgHorizDistance(&ab, input_x);
-    IswArgVertDistance(&ab, row2_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -430,8 +482,6 @@ static void build_ui(Greeter *g)
     IswArgJustify(&ab, IswJustifyRight);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
     IswArgBorderWidth(&ab, 0);
-    IswArgHorizDistance(&ab, label_x);
-    IswArgVertDistance(&ab, row3_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -456,8 +506,6 @@ static void build_ui(Greeter *g)
     IswArgHeight(&ab, input_h);
     IswArgBorderWidth(&ab, 1);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
-    IswArgHorizDistance(&ab, input_x);
-    IswArgVertDistance(&ab, row3_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -475,8 +523,6 @@ static void build_ui(Greeter *g)
     IswArgWidth(&ab, label_w + ROW_GAP + INPUT_W);
     IswArgHeight(&ab, input_h);
     IswArgBorderWidth(&ab, 0);
-    IswArgHorizDistance(&ab, label_x);
-    IswArgVertDistance(&ab, row4_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -496,8 +542,6 @@ static void build_ui(Greeter *g)
     IswArgInternalWidth(&ab, BUTTON_PAD);
     IswArgInternalHeight(&ab, 0);
     IswArgCornerRadius(&ab, CORNER_RADIUS);
-    IswArgHorizDistance(&ab, input_x + INPUT_W + ROW_GAP);
-    IswArgVertDistance(&ab, row2_y);
     IswArgTop(&ab, IswChainTop);
     IswArgBottom(&ab, IswChainTop);
     IswArgLeft(&ab, IswChainLeft);
@@ -507,12 +551,6 @@ static void build_ui(Greeter *g)
     IswAddCallback(g->login_btn, IswNcallback, login_cb, g);
 
     /* --- Power buttons (horizontally centered at bottom) --- */
-    int btn_h = 40;
-    int btn_y = g->logical_h * 7 / 8 - btn_h / 2;
-    int btn_count = g->allow_shutdown + g->allow_reboot + g->allow_suspend;
-    int btn_total_w = btn_count * BUTTON_W + (btn_count - 1) * BUTTON_PAD;
-    int btn_x = (g->logical_w - btn_total_w) / 2;
-
     char *shutdown_icon = isde_icon_find("actions", "system-shutdown");
     char *reboot_icon   = isde_icon_find("actions", "system-reboot");
     char *suspend_icon  = isde_icon_find("actions", "system-suspend");
@@ -526,8 +564,6 @@ static void build_ui(Greeter *g)
         IswArgWidth(&ab, BUTTON_W);
         IswArgInternalWidth(&ab, BUTTON_PAD);
         IswArgInternalHeight(&ab, BUTTON_PAD);
-        IswArgHorizDistance(&ab, btn_x);
-        IswArgVertDistance(&ab, btn_y);
         IswArgCornerRadius(&ab, CORNER_RADIUS);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainTop);
@@ -537,7 +573,6 @@ static void build_ui(Greeter *g)
                                                 commandWidgetClass,
                                                 g->form, ab.args, ab.count);
         IswAddCallback(g->shutdown_btn, IswNcallback, shutdown_cb, g);
-        btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_reboot) {
@@ -550,8 +585,6 @@ static void build_ui(Greeter *g)
         IswArgInternalWidth(&ab, BUTTON_PAD);
         IswArgInternalHeight(&ab, BUTTON_PAD);
         IswArgCornerRadius(&ab, CORNER_RADIUS);
-        IswArgHorizDistance(&ab, btn_x);
-        IswArgVertDistance(&ab, btn_y);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainTop);
         IswArgLeft(&ab, IswChainLeft);
@@ -560,7 +593,6 @@ static void build_ui(Greeter *g)
                                               commandWidgetClass,
                                               g->form, ab.args, ab.count);
         IswAddCallback(g->reboot_btn, IswNcallback, reboot_cb, g);
-        btn_x += BUTTON_W + BUTTON_PAD;
     }
 
     if (g->allow_suspend) {
@@ -572,8 +604,6 @@ static void build_ui(Greeter *g)
         IswArgWidth(&ab, BUTTON_W);
         IswArgInternalWidth(&ab, BUTTON_PAD);
         IswArgInternalHeight(&ab, BUTTON_PAD);
-        IswArgHorizDistance(&ab, btn_x);
-        IswArgVertDistance(&ab, btn_y);
         IswArgTop(&ab, IswChainTop);
         IswArgBottom(&ab, IswChainTop);
         IswArgLeft(&ab, IswChainLeft);
@@ -587,6 +617,8 @@ static void build_ui(Greeter *g)
     free(shutdown_icon);
     free(reboot_icon);
     free(suspend_icon);
+
+    layout_ui(g);
 }
 
 /* ---------- HiDPI detection ---------- */
@@ -773,6 +805,80 @@ static void shell_mapped_cb(Widget w, IswPointer cd, IswEvent *ev, Boolean *cont
     apply_x_focus(g);
 }
 
+/* ---------- Primary monitor tracking ---------- */
+
+#define MONITOR_POLL_MS 1000
+
+/* Query primary monitor geometry into g->screen_* / g->logical_*.
+ * Returns nonzero if the geometry differs from the stored values. */
+static int query_primary(Greeter *g)
+{
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
+    IsdeMonitor pm = { 0, 0, screen->width_in_pixels, screen->height_in_pixels };
+    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(conn);
+    if (ops) {
+        IsdeMonitorXcbCtx mon_ctx = { conn, screen->root, screen };
+        ops->get_primary(&mon_ctx, &pm);
+    }
+
+    if (pm.x == g->screen_x && pm.y == g->screen_y &&
+        pm.width == g->screen_w && pm.height == g->screen_h) {
+        return 0;
+    }
+
+    g->screen_x = pm.x;
+    g->screen_y = pm.y;
+    g->screen_w = pm.width;
+    g->screen_h = pm.height;
+
+    double sf = ISWScaleFactor(g->toplevel);
+    if (sf < 1.0) {
+        sf = 1.0;
+    }
+    g->logical_x = (int)(g->screen_x / sf + 0.5);
+    g->logical_y = (int)(g->screen_y / sf + 0.5);
+    g->logical_w = (int)(g->screen_w / sf + 0.5);
+    g->logical_h = (int)(g->screen_h / sf + 0.5);
+    return 1;
+}
+
+static void monitor_poll_cb(IswPointer client_data, IswIntervalId *id)
+{
+    (void)id;
+    Greeter *g = (Greeter *)client_data;
+
+    int primary_changed = query_primary(g);
+    if (primary_changed) {
+        IswConfigureWidget(g->shell, g->logical_x, g->logical_y,
+                           g->logical_w, g->logical_h, 0);
+        layout_ui(g);
+        fprintf(stderr, "isde-greeter: primary monitor now %dx%d+%d+%d\n",
+                g->screen_w, g->screen_h, g->screen_x, g->screen_y);
+    }
+
+    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
+    xcb_screen_t *scr = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
+    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(conn);
+    IsdeMonitorXcbCtx mon_ctx = { conn, scr->root, scr };
+    IsdeMonitor *mons = NULL;
+    int nmons = ops ? ops->get_monitors(&mon_ctx, &mons) : 0;
+    if (nmons < 0) {
+        nmons = 0;
+    }
+    int mons_changed = nmons != g->nmons ||
+        (nmons > 0 && memcmp(mons, g->mons, nmons * sizeof(IsdeMonitor)) != 0);
+    free(mons);
+
+    if (primary_changed || mons_changed) {
+        destroy_blank_screens(g);
+        create_blank_screens(g);
+    }
+
+    g->monitor_timer = IswAppAddTimeOut(g->app, MONITOR_POLL_MS,
+                                        monitor_poll_cb, g);
+}
+
 /* ---------- Public API ---------- */
 
 int greeter_init(Greeter *g, int *argc, char **argv)
@@ -831,27 +937,7 @@ int greeter_init(Greeter *g, int *argc, char **argv)
                     sizeof(greeter_actions) / sizeof(greeter_actions[0]));
 
     /* Get primary monitor geometry */
-    xcb_connection_t *conn = (xcb_connection_t *)IswDisplayNativeHandle(IswDisplayOf(g->toplevel));
-    xcb_screen_t *screen = (xcb_screen_t *)IswScreenNativeHandle(IswScreenOf(g->toplevel));
-    IsdeMonitor pm = { 0, 0, screen->width_in_pixels, screen->height_in_pixels };
-    const IsdeMonitorOps *ops = isde_monitor_xcb_probe(conn);
-    if (ops) {
-        IsdeMonitorXcbCtx mon_ctx = { conn, screen->root, screen };
-        ops->get_primary(&mon_ctx, &pm);
-    }
-    g->screen_x = pm.x;
-    g->screen_y = pm.y;
-    g->screen_w = pm.width;
-    g->screen_h = pm.height;
-
-    double sf = ISWScaleFactor(g->toplevel);
-    if (sf < 1.0) {
-        sf = 1.0;
-    }
-    g->logical_x = (int)(g->screen_x / sf + 0.5);
-    g->logical_y = (int)(g->screen_y / sf + 0.5);
-    g->logical_w = (int)(g->screen_w / sf + 0.5);
-    g->logical_h = (int)(g->screen_h / sf + 0.5);
+    query_primary(g);
 
     /* Build UI */
     build_ui(g);
@@ -868,6 +954,10 @@ int greeter_init(Greeter *g, int *argc, char **argv)
     IswRealizeWidget(g->shell);
     create_blank_screens(g);
     IswPopup(g->shell, IswGrabNone);
+
+    /* Follow primary monitor changes (ISW does not deliver RandR events) */
+    g->monitor_timer = IswAppAddTimeOut(g->app, MONITOR_POLL_MS,
+                                        monitor_poll_cb, g);
 
     /* Connect to daemon IPC */
     if (greeter_ipc_init(g) != 0) {
@@ -897,6 +987,10 @@ void greeter_run(Greeter *g)
 
 void greeter_cleanup(Greeter *g)
 {
+    if (g->monitor_timer) {
+        IswRemoveTimeOut(g->monitor_timer);
+        g->monitor_timer = 0;
+    }
     destroy_blank_screens(g);
     greeter_clock_cleanup(g);
 

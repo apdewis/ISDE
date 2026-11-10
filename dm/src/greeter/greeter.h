@@ -16,6 +16,7 @@
 #include <ISW/ISWRender.h>
 
 #include "isde-theme.h"
+#include "isde-monitor.h"
 #include "isde-xdg.h"
 #include "isde-config.h"
 #include "desktop.h"
@@ -77,10 +78,17 @@ typedef struct Greeter {
     int             logical_y;
     int             logical_w;
     int             logical_h;
+    IswIntervalId    monitor_timer;   /* primary monitor change poll */
+
+    /* Font-derived login form metrics (logical pixels) */
+    int             input_h;
+    int             label_w;
 
     /* Blank windows on non-primary monitors */
     xcb_window_t   *blanks;
     int             nblanks;
+    IsdeMonitor    *mons;           /* monitor list blanks were built from */
+    int             nmons;
 
     /* Config */
     char           *color_scheme;    /* colour scheme name from DM config */
