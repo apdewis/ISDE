@@ -412,8 +412,24 @@ int wm_init(Wm *wm, int *argc, char **argv)
                     xcb_get_window_attributes(wm->conn, children[i]),
                     NULL);
             if (attr) {
+                /* Iconic windows are unmapped but still managed */
+                int iconic = 0;
                 if (!attr->override_redirect &&
-                    attr->map_state == XCB_MAP_STATE_VIEWABLE) {
+                    attr->map_state != XCB_MAP_STATE_VIEWABLE) {
+                    xcb_get_property_reply_t *st = xcb_get_property_reply(
+                        wm->conn,
+                        xcb_get_property(wm->conn, 0, children[i],
+                                         wm->atom_wm_state,
+                                         wm->atom_wm_state, 0, 2),
+                        NULL);
+                    if (st && xcb_get_property_value_length(st) >= 4 &&
+                        *(uint32_t *)xcb_get_property_value(st) == 3) {
+                        iconic = 1;
+                    }
+                    free(st);
+                }
+                if (!attr->override_redirect &&
+                    (attr->map_state == XCB_MAP_STATE_VIEWABLE || iconic)) {
                     xcb_atom_t wtype = isde_ewmh_get_window_type(
                         wm->ewmh, children[i]);
                     if (wtype == isde_ewmh_connection(wm->ewmh)
@@ -492,14 +508,19 @@ int wm_init(Wm *wm, int *argc, char **argv)
 
                         int visible = (c->desktop == wm->current_desktop ||
                                        c->desktop == 0xFFFFFFFF);
-                        if (visible) {
+                        c->hidden = !visible;
+                        if (iconic) {
+                            c->minimized = 1;
+                            wm_set_wm_state(wm, c, 3);
+                        } else if (visible) {
                             xcb_map_window(wm->conn, c->frame);
                             xcb_map_window(wm->conn, c->client);
                             c->mapped = 1;
                             wm_set_wm_state(wm, c, 1);
                             frame_send_configure_notify(wm, c);
                         } else {
-                            xcb_unmap_window(wm->conn, c->frame);
+                            c->ignore_unmap++;
+                            xcb_unmap_window(wm->conn, c->client);
                         }
                     }
                 }
@@ -684,6 +705,24 @@ WmClient *wm_find_modal_for(Wm *wm, WmClient *c)
     return found;
 }
 
+/* Most recently focused client that is on screen, or NULL */
+static WmClient *mru_visible_client(Wm *wm)
+{
+    WmClient *mru = NULL;
+    for (WmClient *n = wm->clients; n; n = n->next) {
+        if (n->minimized || n->hidden || !n->mapped) {
+            continue;
+        }
+        if (n->desktop != wm->current_desktop && n->desktop != 0xFFFFFFFF) {
+            continue;
+        }
+        if (!mru || n->focus_seq > mru->focus_seq) {
+            mru = n;
+        }
+    }
+    return mru;
+}
+
 /* ---------- ICCCM WM_STATE ---------- */
 
 static void wm_set_wm_state(Wm *wm, WmClient *c, uint32_t state)
@@ -826,13 +865,7 @@ void wm_remove_client(Wm *wm, WmClient *c)
     if (!wm->focused && parent && parent->frame && parent->mapped) {
         wm_focus_client(wm, parent, XCB_CURRENT_TIME);
     } else if (!wm->focused && wm->clients) {
-        WmClient *mru = NULL;
-        for (WmClient *p = wm->clients; p; p = p->next) {
-            if (!mru || p->focus_seq > mru->focus_seq) {
-                mru = p;
-            }
-        }
-        wm_focus_client(wm, mru, XCB_CURRENT_TIME);
+        wm_focus_client(wm, mru_visible_client(wm), XCB_CURRENT_TIME);
     }
 }
 
@@ -1219,6 +1252,26 @@ static int monitor_at_point(Wm *wm, int rx, int ry)
     return 0;
 }
 
+/* Strut-trimmed work area of the monitor under the pointer */
+void wm_get_pointer_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh)
+{
+    int mon = 0;
+    xcb_query_pointer_reply_t *ptr = xcb_query_pointer_reply(wm->conn,
+        xcb_query_pointer(wm->conn, wm->root), NULL);
+    if (ptr) {
+        mon = monitor_at_point(wm, ptr->root_x, ptr->root_y);
+        free(ptr);
+    }
+    wm_get_monitor_work_area(wm, mon, wx, wy, ww, wh);
+}
+
+/* Strut-trimmed work area of the monitor under the client's centre */
+void wm_get_client_work_area(Wm *wm, WmClient *c,
+                             int *wx, int *wy, int *ww, int *wh)
+{
+    wm_get_monitor_work_area(wm, monitor_for_client(wm, c), wx, wy, ww, wh);
+}
+
 static void rescue_orphaned_clients(Wm *wm)
 {
     for (WmClient *c = wm->clients; c; c = c->next) {
@@ -1569,13 +1622,14 @@ static void minimize_one(Wm *wm, WmClient *c)
 {
     c->minimized = 1;
     wm_set_wm_state(wm, c, 3);
-    if (c->frame) {
+
+    /* Never-mapped or hidden windows produce no UnmapNotify to ignore */
+    if (c->mapped) {
         xcb_unmap_window(wm->conn, c->frame);
         c->mapped = 0;
+        c->ignore_unmap++;
+        xcb_unmap_window(wm->conn, c->client);
     }
-
-    c->ignore_unmap++;
-    xcb_unmap_window(wm->conn, c->client);
 }
 
 static void restore_one(Wm *wm, WmClient *c)
@@ -1583,6 +1637,11 @@ static void restore_one(Wm *wm, WmClient *c)
     if (!c->minimized) return;
     c->minimized = 0;
     wm_set_wm_state(wm, c, 1);
+
+    /* A window on another desktop is shown by the next switch there */
+    if (c->hidden) {
+        return;
+    }
     xcb_map_window(wm->conn, c->client);
     if (c->frame) {
         xcb_map_window(wm->conn, c->frame);
@@ -1602,20 +1661,7 @@ void wm_minimize_client(Wm *wm, WmClient *c)
     xcb_flush(wm->conn);
 
     if (wm->focused && wm->focused->minimized) {
-        WmClient *mru = NULL;
-        for (WmClient *n = wm->clients; n; n = n->next) {
-            if (n->minimized || n->hidden || !n->mapped) {
-                continue;
-            }
-            if (n->desktop != wm->current_desktop &&
-                n->desktop != 0xFFFFFFFF) {
-                continue;
-            }
-            if (!mru || n->focus_seq > mru->focus_seq) {
-                mru = n;
-            }
-        }
-        wm_focus_client(wm, mru, XCB_CURRENT_TIME);
+        wm_focus_client(wm, mru_visible_client(wm), XCB_CURRENT_TIME);
     }
 }
 
@@ -1739,16 +1785,17 @@ void wm_set_below(Wm *wm, WmClient *c, int enable)
     wm_ewmh_update_client_list_stacking(wm);
 }
 
-/* Moves the whole transient family of c; the caller owns c's sticky state. */
+/* Moves the whole transient family of c; 0xFFFFFFFF makes it sticky. */
 void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
 {
     WmClient *top = wm_client_top_ancestor(wm, c);
+    int lost_focus = 0;
 
     for (WmClient *m = wm->clients; m; m = m->next) {
         if (wm_client_top_ancestor(wm, m) != top) {
             continue;
         }
-        if (m != c && m->sticky != (desktop == 0xFFFFFFFF)) {
+        if (m->sticky != (desktop == 0xFFFFFFFF)) {
             m->sticky = (desktop == 0xFFFFFFFF);
             wm_update_net_wm_state(wm, m);
         }
@@ -1766,28 +1813,35 @@ void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
         int visible_before = (old == wm->current_desktop ||
                               old == 0xFFFFFFFF);
 
+        /* Minimized windows are already unmapped and stay that way */
         if (visible_before && !visible_now) {
             m->hidden = 1;
-            m->ignore_unmap++;
-            xcb_unmap_window(wm->conn, m->client);
-            if (m->frame && m->mapped) {
-                xcb_unmap_window(wm->conn, m->frame);
-                m->mapped = 0;
+            if (!m->minimized) {
+                m->ignore_unmap++;
+                xcb_unmap_window(wm->conn, m->client);
+                if (m->frame && m->mapped) {
+                    xcb_unmap_window(wm->conn, m->frame);
+                    m->mapped = 0;
+                }
             }
             if (wm->focused == m) {
-                wm->focused = NULL;
-                wm_ewmh_update_active(wm);
+                lost_focus = 1;
             }
         } else if (!visible_before && visible_now) {
             m->hidden = 0;
-            xcb_map_window(wm->conn, m->client);
-            if (m->frame) {
-                xcb_map_window(wm->conn, m->frame);
-                m->mapped = 1;
+            if (!m->minimized) {
+                xcb_map_window(wm->conn, m->client);
+                if (m->frame) {
+                    xcb_map_window(wm->conn, m->frame);
+                    m->mapped = 1;
+                }
             }
         }
     }
 
+    if (lost_focus) {
+        wm_focus_client(wm, mru_visible_client(wm), XCB_CURRENT_TIME);
+    }
     xcb_flush(wm->conn);
 }
 
@@ -2123,8 +2177,13 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
                                 c->client, c->desktop);
         wm_ewmh_set_allowed_actions(wm, c);
 
-        if (c->initial_state == 3) {
-            /* Only this window starts iconic, not its parent's family */
+        /* Parent is on another desktop: shown on the next switch there */
+        c->hidden = (c->desktop != wm->current_desktop &&
+                     c->desktop != 0xFFFFFFFF);
+
+        if (c->initial_state == 3 || (top != c && top->minimized)) {
+            /* Only this window starts iconic, not its parent's family; a
+             * transient of a minimized parent stays minimized with it */
             minimize_one(wm, c);
             wm_ewmh_update_client_list(wm);
             wm_ewmh_update_client_list_stacking(wm);
@@ -2132,9 +2191,7 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
             return;
         }
 
-        if (c->desktop != wm->current_desktop && c->desktop != 0xFFFFFFFF) {
-            /* Parent is on another desktop: shown on the next switch there */
-            c->hidden = 1;
+        if (c->hidden) {
             wm_set_wm_state(wm, c, 1);
             wm_ewmh_update_client_list(wm);
             wm_ewmh_update_client_list_stacking(wm);
@@ -2507,8 +2564,16 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
         if (source != 2 && wm->focused && wm->focused != c) {
             if (req_time == 0 || (wm->last_user_time != 0 &&
                 (int32_t)(req_time - wm->last_user_time) < 0)) {
+                /* Refused activation: flag it instead of stealing focus */
+                c->demands_attention = 1;
+                wm_update_net_wm_state(wm, c);
+                xcb_flush(wm->conn);
                 return 1;
             }
+        }
+
+        if (c->desktop != wm->current_desktop && c->desktop != 0xFFFFFFFF) {
+            wm_desktops_switch(wm, c->desktop);
         }
 
         if (c->minimized) {
@@ -2579,13 +2644,10 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
             a2 == ewmh->_NET_WM_STATE_STICKY) {
             int want = (action == 1) || (action == 2 && !c->sticky);
             if (want && !c->sticky) {
-                c->sticky = 1;
                 wm_move_to_desktop(wm, c, 0xFFFFFFFF);
             } else if (!want && c->sticky) {
-                c->sticky = 0;
                 wm_move_to_desktop(wm, c, wm->current_desktop);
             }
-            wm_update_net_wm_state(wm, c);
         }
         if (a1 == ewmh->_NET_WM_STATE_SKIP_TASKBAR ||
             a2 == ewmh->_NET_WM_STATE_SKIP_TASKBAR) {

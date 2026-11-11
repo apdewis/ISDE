@@ -72,20 +72,25 @@ static void wm_desktops_sync_visibility(Wm *wm)
     for (WmClient *c = wm->clients; c; c = c->next) {
         int visible = (c->desktop == wm->current_desktop ||
                        c->desktop == 0xFFFFFFFF);
+        /* Minimized windows are already unmapped and stay that way */
         if (visible && c->hidden) {
             c->hidden = 0;
-            xcb_map_window(wm->conn, c->client);
-            if (c->frame) {
-                xcb_map_window(wm->conn, c->frame);
-                c->mapped = 1;
+            if (!c->minimized) {
+                xcb_map_window(wm->conn, c->client);
+                if (c->frame) {
+                    xcb_map_window(wm->conn, c->frame);
+                    c->mapped = 1;
+                }
             }
         } else if (!visible && !c->hidden) {
             c->hidden = 1;
-            c->ignore_unmap++;
-            xcb_unmap_window(wm->conn, c->client);
-            if (c->frame && c->mapped) {
-                xcb_unmap_window(wm->conn, c->frame);
-                c->mapped = 0;
+            if (!c->minimized) {
+                c->ignore_unmap++;
+                xcb_unmap_window(wm->conn, c->client);
+                if (c->frame && c->mapped) {
+                    xcb_unmap_window(wm->conn, c->frame);
+                    c->mapped = 0;
+                }
             }
         }
     }
@@ -192,20 +197,25 @@ void wm_desktops_switch(Wm *wm, uint32_t desktop)
             continue;
         }
 
+        /* Minimized windows are already unmapped and stay that way */
         if (c->desktop == old && c->desktop != desktop) {
             c->hidden = 1;
-            c->ignore_unmap++;
-            xcb_unmap_window(wm->conn, c->client);
-            if (c->frame && c->mapped) {
-                xcb_unmap_window(wm->conn, c->frame);
-                c->mapped = 0;
+            if (!c->minimized) {
+                c->ignore_unmap++;
+                xcb_unmap_window(wm->conn, c->client);
+                if (c->frame && c->mapped) {
+                    xcb_unmap_window(wm->conn, c->frame);
+                    c->mapped = 0;
+                }
             }
         } else if (c->desktop == desktop && c->desktop != old) {
             c->hidden = 0;
-            xcb_map_window(wm->conn, c->client);
-            if (c->frame) {
-                xcb_map_window(wm->conn, c->frame);
-                c->mapped = 1;
+            if (!c->minimized) {
+                xcb_map_window(wm->conn, c->client);
+                if (c->frame) {
+                    xcb_map_window(wm->conn, c->frame);
+                    c->mapped = 1;
+                }
             }
         }
     }

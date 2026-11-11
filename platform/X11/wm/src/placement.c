@@ -15,7 +15,7 @@
 static void clamp_to_work_area(Wm *wm, WmClient *c)
 {
     int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+    wm_get_client_work_area(wm, c, &wx, &wy, &ww, &wh);
 
     /* Shrink client if it exceeds available space (accounting for frame) */
     int title = c->decorated ? wm->title_height : 0;
@@ -80,9 +80,9 @@ static int place_dialog_type(Wm *wm, WmClient *c)
         return 0;
     }
 
-    /* No transient_for parent — center on screen work area */
+    /* No parent — center on the work area of the monitor under the pointer */
     int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+    wm_get_pointer_work_area(wm, &wx, &wy, &ww, &wh);
 
     c->x = wx + (ww - frame_total_width(c)) / 2;
     c->y = wy + (wh - frame_total_height(wm, c)) / 2;
@@ -101,9 +101,12 @@ static void place_cascade(Wm *wm, WmClient *c)
     static int initialized;
 
     int wx, wy, ww, wh;
-    wm_get_work_area(wm, &wx, &wy, &ww, &wh);
+    wm_get_pointer_work_area(wm, &wx, &wy, &ww, &wh);
 
-    if (!initialized) {
+    /* Restart when first used or when the pointer moved to another monitor */
+    if (!initialized ||
+        cascade_x < wx || cascade_x >= wx + ww ||
+        cascade_y < wy || cascade_y >= wy + wh) {
         cascade_x = wx;
         cascade_y = wy;
         initialized = 1;
@@ -136,13 +139,7 @@ void wm_place_client(Wm *wm, WmClient *c)
         return;
     }
 
-    /* 3. Dialog type without transient_for: center on screen */
-    //#FIXME this path currently causes broken centering and is causing more problems than not 
-    //if (place_dialog_type(wm, c)) {
-    //    return;
-    //}
-
-    /* 4. Check if client explicitly requested a position via WM_NORMAL_HINTS */
+    /* 3. Check if client explicitly requested a position via WM_NORMAL_HINTS */
     xcb_size_hints_t hints;
     memset(&hints, 0, sizeof(hints));
     if (xcb_icccm_get_wm_normal_hints_reply(
@@ -155,6 +152,11 @@ void wm_place_client(Wm *wm, WmClient *c)
             clamp_to_work_area(wm, c);
             return;
         }
+    }
+
+    /* 4. Dialog type without a parent: center on the pointer's monitor */
+    if (place_dialog_type(wm, c)) {
+        return;
     }
 
     /* 5. Default: cascade */

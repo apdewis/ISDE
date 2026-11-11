@@ -318,6 +318,9 @@ WmClient *wm_find_modal_for(Wm *wm, WmClient *c);
 /* ---------- wm.c — work area / monitors ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
 void  wm_get_primary_monitor(Wm *wm, int *mx, int *my, int *mw, int *mh);
+void  wm_get_pointer_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);
+void  wm_get_client_work_area(Wm *wm, WmClient *c,
+                              int *wx, int *wy, int *ww, int *wh);
 
 /* ---------- wm.c — decoration checks ---------- */
 int   wm_client_wants_decorations(Wm *wm, xcb_window_t win);
