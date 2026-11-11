@@ -652,14 +652,12 @@ WmClient *frame_create(Wm *wm, xcb_window_t client, int adopt)
 
     wm_sync_client_init(wm, c);
 
+    wm_update_transient(wm, c);
+
     if (adopt) {
         int title = c->decorated ? wm->title_height : 0;
         c->x -= WM_BORDER_WIDTH;
         c->y -= WM_BORDER_WIDTH + title;
-        xcb_icccm_get_wm_transient_for_reply(
-            wm->conn,
-            xcb_icccm_get_wm_transient_for(wm->conn, c->client),
-            &c->transient_for, NULL);
     } else {
         wm_place_client(wm, c);
     }

@@ -53,11 +53,7 @@ static void clamp_to_work_area(Wm *wm, WmClient *c)
 
 static int place_transient(Wm *wm, WmClient *c)
 {
-    if (!c->transient_for) {
-        return 0;
-    }
-
-    WmClient *parent = wm_find_client_by_window(wm, c->transient_for);
+    WmClient *parent = wm_client_parent(wm, c);
     if (!parent) {
         return 0;
     }
@@ -133,13 +129,7 @@ static void place_cascade(Wm *wm, WmClient *c)
 
 void wm_place_client(Wm *wm, WmClient *c)
 {
-    /* 1. Read WM_TRANSIENT_FOR */
-    xcb_window_t transient = XCB_WINDOW_NONE;
-    xcb_icccm_get_wm_transient_for_reply(
-        wm->conn,
-        xcb_icccm_get_wm_transient_for(wm->conn, c->client),
-        &transient, NULL);
-    c->transient_for = transient;
+    /* 1. c->transient_for was read by wm_update_transient() */
 
     /* 2. Transient windows: center over parent */
     if (place_transient(wm, c)) {

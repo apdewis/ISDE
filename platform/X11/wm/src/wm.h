@@ -93,7 +93,9 @@ typedef struct WmClient {
     int          decorated;     /* 0 = CSD/no frame chrome */
     int          mapped;       /* frame is mapped */
     uint32_t     desktop;      /* _NET_WM_DESKTOP (0xFFFFFFFF = sticky) */
-    xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none) */
+    xcb_window_t transient_for; /* WM_TRANSIENT_FOR parent (0 = none,
+                                   root = transient for the window group) */
+    xcb_window_t group_leader;  /* WM_HINTS window_group (0 = none) */
     /* Saved geometry for restore from maximize */
     int16_t      save_x, save_y;
     uint16_t     save_w, save_h;
@@ -306,6 +308,12 @@ void      wm_set_above(Wm *wm, WmClient *c, int enable);
 void      wm_set_below(Wm *wm, WmClient *c, int enable);
 void      wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop);
 void      wm_restack_above_below(Wm *wm);
+
+/* ---------- wm.c — transient / modal relationships ---------- */
+void      wm_update_transient(Wm *wm, WmClient *c);
+WmClient *wm_client_parent(Wm *wm, WmClient *c);
+WmClient *wm_client_top_ancestor(Wm *wm, WmClient *c);
+WmClient *wm_find_modal_for(Wm *wm, WmClient *c);
 
 /* ---------- wm.c — work area / monitors ---------- */
 void  wm_get_work_area(Wm *wm, int *wx, int *wy, int *ww, int *wh);

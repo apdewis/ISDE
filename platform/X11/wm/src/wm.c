@@ -568,6 +568,122 @@ WmClient *wm_find_client_by_window(Wm *wm, xcb_window_t win)
     return NULL;
 }
 
+/* ---------- transient / modal relationships ---------- */
+
+/* Bound on transient chain walks, so a malformed hierarchy can't hang us */
+#define WM_TRANSIENT_MAX_DEPTH 32
+
+/* Re-read WM_TRANSIENT_FOR and the WM_HINTS window group.  A transient-for
+ * of None or root marks a transient for the whole window group (stored as
+ * wm->root).  Self references and cycles are dropped. */
+void wm_update_transient(Wm *wm, WmClient *c)
+{
+    xcb_window_t parent = XCB_WINDOW_NONE;
+    c->transient_for = XCB_WINDOW_NONE;
+    if (xcb_icccm_get_wm_transient_for_reply(
+            wm->conn,
+            xcb_icccm_get_wm_transient_for(wm->conn, c->client),
+            &parent, NULL)) {
+        if (parent == XCB_WINDOW_NONE || parent == wm->root) {
+            c->transient_for = wm->root;
+        } else if (parent != c->client) {
+            c->transient_for = parent;
+        }
+    }
+
+    c->group_leader = XCB_WINDOW_NONE;
+    xcb_icccm_wm_hints_t hints;
+    if (xcb_icccm_get_wm_hints_reply(wm->conn,
+            xcb_icccm_get_wm_hints(wm->conn, c->client),
+            &hints, NULL)) {
+        if (hints.flags & XCB_ICCCM_WM_HINT_WINDOW_GROUP) {
+            c->group_leader = hints.window_group;
+        }
+    }
+
+    /* c may not be in the client list yet, so match it by window */
+    WmClient *p = wm_client_parent(wm, c);
+    int depth = 0;
+    while (p && p != c && depth++ < WM_TRANSIENT_MAX_DEPTH) {
+        p = (p->transient_for == c->client) ? c : wm_client_parent(wm, p);
+    }
+    if (p) {
+        c->transient_for = XCB_WINDOW_NONE;
+    }
+}
+
+/* The managed window c is transient for: its WM_TRANSIENT_FOR window, or
+ * for a group transient the most recently focused top-level of its group. */
+WmClient *wm_client_parent(Wm *wm, WmClient *c)
+{
+    if (!c->transient_for) {
+        return NULL;
+    }
+    if (c->transient_for != wm->root) {
+        return wm_find_client_by_window(wm, c->transient_for);
+    }
+    if (!c->group_leader) {
+        return NULL;
+    }
+    WmClient *best = NULL;
+    for (WmClient *p = wm->clients; p; p = p->next) {
+        if (p == c || p->transient_for || p->group_leader != c->group_leader) {
+            continue;
+        }
+        if (!best || p->focus_seq > best->focus_seq) {
+            best = p;
+        }
+    }
+    return best;
+}
+
+WmClient *wm_client_top_ancestor(Wm *wm, WmClient *c)
+{
+    for (int depth = 0; depth < WM_TRANSIENT_MAX_DEPTH; depth++) {
+        WmClient *p = wm_client_parent(wm, c);
+        if (!p) {
+            break;
+        }
+        c = p;
+    }
+    return c;
+}
+
+/* Does mapped modal m block input to c?  A modal blocks its parent; a
+ * group modal blocks every top-level of its group. */
+static int modal_blocks(Wm *wm, WmClient *m, WmClient *c)
+{
+    if (m == c || !m->modal || !m->frame || !m->mapped) {
+        return 0;
+    }
+    if (wm_client_parent(wm, m) == c) {
+        return 1;
+    }
+    return m->transient_for == wm->root && m->group_leader &&
+           !c->transient_for && m->group_leader == c->group_leader;
+}
+
+/* The deepest modal window blocking c, or NULL if c accepts input. */
+WmClient *wm_find_modal_for(Wm *wm, WmClient *c)
+{
+    WmClient *found = NULL;
+    for (int depth = 0; depth < WM_TRANSIENT_MAX_DEPTH; depth++) {
+        WmClient *next = NULL;
+        for (WmClient *m = wm->clients; m; m = m->next) {
+            if (modal_blocks(wm, m, c)) {
+                next = m;
+                break;
+            }
+        }
+        if (!next) {
+            break;
+        }
+        found = next;
+        c = next;
+    }
+    return found;
+}
+
 /* ---------- ICCCM WM_STATE ---------- */
 
 static void wm_set_wm_state(Wm *wm, WmClient *c, uint32_t state)
@@ -586,12 +702,9 @@ static void wm_update_net_wm_state(Wm *wm, WmClient *c);
 void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
 {
     if (c) {
-        for (WmClient *m = wm->clients; m; m = m->next) {
-            if (m->modal && m->transient_for == c->client &&
-                m->frame && m->mapped) {
-                c = m;
-                break;
-            }
+        WmClient *modal = wm_find_modal_for(wm, c);
+        if (modal) {
+            c = modal;
         }
     }
 
@@ -631,14 +744,20 @@ void wm_focus_client(Wm *wm, WmClient *c, xcb_timestamp_t time)
         }
         fprintf(stderr, "isde-wm: focus+raise client 0x%x frame 0x%x\n",
                 c->client, (unsigned)c->frame);
-        if (wm->ndocks > 0 && !c->above && !c->fullscreen) {
+        /* Raise the whole transient family; wm_restack_above_below then
+         * puts the transients back above their parents. */
+        WmClient *raise = wm_client_top_ancestor(wm, c);
+        if (!raise->frame || !raise->mapped) {
+            raise = c;
+        }
+        if (wm->ndocks > 0 && !raise->above && !raise->fullscreen) {
             uint32_t vals[] = { wm->docks[0], XCB_STACK_MODE_BELOW };
-            xcb_configure_window(wm->conn, c->frame,
+            xcb_configure_window(wm->conn, raise->frame,
                                  XCB_CONFIG_WINDOW_SIBLING |
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
         } else {
             uint32_t vals[] = { XCB_STACK_MODE_ABOVE };
-            xcb_configure_window(wm->conn, c->frame,
+            xcb_configure_window(wm->conn, raise->frame,
                                  XCB_CONFIG_WINDOW_STACK_MODE, vals);
         }
         c->demands_attention = 0;
@@ -657,6 +776,9 @@ static void snap_preview_hide(Wm *wm);
 
 void wm_remove_client(Wm *wm, WmClient *c)
 {
+    /* A closing focused transient hands focus back to its parent */
+    WmClient *parent = (wm->focused == c) ? wm_client_parent(wm, c) : NULL;
+
     WmClient **pp = &wm->clients;
     while (*pp && *pp != c) {
         pp = &(*pp)->next;
@@ -701,7 +823,9 @@ void wm_remove_client(Wm *wm, WmClient *c)
     wm_ewmh_update_client_list_stacking(wm);
     wm_ewmh_update_active(wm);
 
-    if (!wm->focused && wm->clients) {
+    if (!wm->focused && parent && parent->frame && parent->mapped) {
+        wm_focus_client(wm, parent, XCB_CURRENT_TIME);
+    } else if (!wm->focused && wm->clients) {
         WmClient *mru = NULL;
         for (WmClient *p = wm->clients; p; p = p->next) {
             if (!mru || p->focus_seq > mru->focus_seq) {
@@ -1441,7 +1565,7 @@ void wm_fullscreen_client(Wm *wm, WmClient *c, int enable)
     xcb_flush(wm->conn);
 }
 
-void wm_minimize_client(Wm *wm, WmClient *c)
+static void minimize_one(Wm *wm, WmClient *c)
 {
     c->minimized = 1;
     wm_set_wm_state(wm, c, 3);
@@ -1452,21 +1576,9 @@ void wm_minimize_client(Wm *wm, WmClient *c)
 
     c->ignore_unmap++;
     xcb_unmap_window(wm->conn, c->client);
-    xcb_flush(wm->conn);
-
-    if (wm->focused == c) {
-        wm->focused = NULL;
-        for (WmClient *n = wm->clients; n; n = n->next) {
-            if (n != c) {
-                wm_focus_client(wm, n, XCB_CURRENT_TIME);
-                break;
-            }
-        }
-        wm_ewmh_update_active(wm);
-    }
 }
 
-void wm_restore_client(Wm *wm, WmClient *c)
+static void restore_one(Wm *wm, WmClient *c)
 {
     if (!c->minimized) return;
     c->minimized = 0;
@@ -1476,10 +1588,103 @@ void wm_restore_client(Wm *wm, WmClient *c)
         xcb_map_window(wm->conn, c->frame);
         c->mapped = 1;
     }
+}
+
+/* Minimize and restore act on the whole transient family of c. */
+void wm_minimize_client(Wm *wm, WmClient *c)
+{
+    WmClient *top = wm_client_top_ancestor(wm, c);
+    for (WmClient *m = wm->clients; m; m = m->next) {
+        if (!m->minimized && wm_client_top_ancestor(wm, m) == top) {
+            minimize_one(wm, m);
+        }
+    }
     xcb_flush(wm->conn);
+
+    if (wm->focused && wm->focused->minimized) {
+        WmClient *mru = NULL;
+        for (WmClient *n = wm->clients; n; n = n->next) {
+            if (n->minimized || n->hidden || !n->mapped) {
+                continue;
+            }
+            if (n->desktop != wm->current_desktop &&
+                n->desktop != 0xFFFFFFFF) {
+                continue;
+            }
+            if (!mru || n->focus_seq > mru->focus_seq) {
+                mru = n;
+            }
+        }
+        wm_focus_client(wm, mru, XCB_CURRENT_TIME);
+    }
+}
+
+void wm_restore_client(Wm *wm, WmClient *c)
+{
+    WmClient *top = wm_client_top_ancestor(wm, c);
+    for (WmClient *m = wm->clients; m; m = m->next) {
+        if (m->minimized && wm_client_top_ancestor(wm, m) == top) {
+            restore_one(wm, m);
+        }
+    }
+    wm_restack_above_below(wm);
 }
 
 /* ---------- above / below / move to desktop ---------- */
+
+static int cmp_focus_seq(const void *a, const void *b)
+{
+    const WmClient *ca = *(const WmClient *const *)a;
+    const WmClient *cb = *(const WmClient *const *)b;
+    if (ca->focus_seq < cb->focus_seq) { return -1; }
+    if (ca->focus_seq > cb->focus_seq) { return 1; }
+    return 0;
+}
+
+/* Stack the mapped transients of parent above it, least recently focused
+ * lowest, each directly followed by its own transients.  Returns the frame
+ * now topmost in parent's family. */
+static xcb_window_t restack_transients(Wm *wm, WmClient *parent, int depth)
+{
+    xcb_window_t top = parent->frame;
+    if (depth >= WM_TRANSIENT_MAX_DEPTH) {
+        return top;
+    }
+
+    int n = 0;
+    for (WmClient *t = wm->clients; t; t = t->next) {
+        if (t != parent && t->frame && t->mapped &&
+            wm_client_parent(wm, t) == parent) {
+            n++;
+        }
+    }
+    if (n == 0) {
+        return top;
+    }
+
+    WmClient **kids = malloc(n * sizeof(WmClient *));
+    if (!kids) {
+        return top;
+    }
+    int i = 0;
+    for (WmClient *t = wm->clients; t; t = t->next) {
+        if (t != parent && t->frame && t->mapped &&
+            wm_client_parent(wm, t) == parent) {
+            kids[i++] = t;
+        }
+    }
+    qsort(kids, n, sizeof(WmClient *), cmp_focus_seq);
+
+    for (i = 0; i < n; i++) {
+        uint32_t v[] = { top, XCB_STACK_MODE_ABOVE };
+        xcb_configure_window(wm->conn, kids[i]->frame,
+                             XCB_CONFIG_WINDOW_SIBLING |
+                             XCB_CONFIG_WINDOW_STACK_MODE, v);
+        top = restack_transients(wm, kids[i], depth + 1);
+    }
+    free(kids);
+    return top;
+}
 
 void wm_restack_above_below(Wm *wm)
 {
@@ -1504,20 +1709,10 @@ void wm_restack_above_below(Wm *wm)
         }
     }
     for (WmClient *c = wm->clients; c; c = c->next) {
-        if (!c->frame || !c->mapped) {
+        if (!c->frame || !c->mapped || wm_client_parent(wm, c)) {
             continue;
         }
-        if (!c->modal || !c->transient_for) {
-            continue;
-        }
-        WmClient *parent = wm_find_client_by_window(wm, c->transient_for);
-        if (!parent || !parent->frame || !parent->mapped) {
-            continue;
-        }
-        uint32_t v[] = { parent->frame, XCB_STACK_MODE_ABOVE };
-        xcb_configure_window(wm->conn, c->frame,
-                             XCB_CONFIG_WINDOW_SIBLING |
-                             XCB_CONFIG_WINDOW_STACK_MODE, v);
+        restack_transients(wm, c, 0);
     }
     xcb_flush(wm->conn);
 }
@@ -1544,40 +1739,52 @@ void wm_set_below(Wm *wm, WmClient *c, int enable)
     wm_ewmh_update_client_list_stacking(wm);
 }
 
+/* Moves the whole transient family of c; the caller owns c's sticky state. */
 void wm_move_to_desktop(Wm *wm, WmClient *c, uint32_t desktop)
 {
-    if (desktop == c->desktop) {
-        return;
-    }
+    WmClient *top = wm_client_top_ancestor(wm, c);
 
-    uint32_t old = c->desktop;
-    c->desktop = desktop;
-    xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
-                            c->client, desktop);
-
-    int visible_now = (desktop == wm->current_desktop ||
-                       desktop == 0xFFFFFFFF);
-    int visible_before = (old == wm->current_desktop ||
-                          old == 0xFFFFFFFF);
-
-    if (visible_before && !visible_now) {
-        c->hidden = 1;
-        c->ignore_unmap++;
-        xcb_unmap_window(wm->conn, c->client);
-        if (c->frame && c->mapped) {
-            xcb_unmap_window(wm->conn, c->frame);
-            c->mapped = 0;
+    for (WmClient *m = wm->clients; m; m = m->next) {
+        if (wm_client_top_ancestor(wm, m) != top) {
+            continue;
         }
-        if (wm->focused == c) {
-            wm->focused = NULL;
-            wm_ewmh_update_active(wm);
+        if (m != c && m->sticky != (desktop == 0xFFFFFFFF)) {
+            m->sticky = (desktop == 0xFFFFFFFF);
+            wm_update_net_wm_state(wm, m);
         }
-    } else if (!visible_before && visible_now) {
-        c->hidden = 0;
-        xcb_map_window(wm->conn, c->client);
-        if (c->frame) {
-            xcb_map_window(wm->conn, c->frame);
-            c->mapped = 1;
+        if (desktop == m->desktop) {
+            continue;
+        }
+
+        uint32_t old = m->desktop;
+        m->desktop = desktop;
+        xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
+                                m->client, desktop);
+
+        int visible_now = (desktop == wm->current_desktop ||
+                           desktop == 0xFFFFFFFF);
+        int visible_before = (old == wm->current_desktop ||
+                              old == 0xFFFFFFFF);
+
+        if (visible_before && !visible_now) {
+            m->hidden = 1;
+            m->ignore_unmap++;
+            xcb_unmap_window(wm->conn, m->client);
+            if (m->frame && m->mapped) {
+                xcb_unmap_window(wm->conn, m->frame);
+                m->mapped = 0;
+            }
+            if (wm->focused == m) {
+                wm->focused = NULL;
+                wm_ewmh_update_active(wm);
+            }
+        } else if (!visible_before && visible_now) {
+            m->hidden = 0;
+            xcb_map_window(wm->conn, m->client);
+            if (m->frame) {
+                xcb_map_window(wm->conn, m->frame);
+                m->mapped = 1;
+            }
         }
     }
 
@@ -1901,14 +2108,34 @@ static void on_map_request(Wm *wm, xcb_map_request_event_t *ev)
 
     WmClient *c = frame_create(wm, ev->window, 0);
     if (c) {
-        c->desktop = wm->current_desktop;
+        /* Transients live on their parent's desktop */
+        WmClient *top = wm_client_top_ancestor(wm, c);
+        if (top != c) {
+            c->desktop = top->desktop;
+            if (c->sticky != top->sticky) {
+                c->sticky = top->sticky;
+                wm_update_net_wm_state(wm, c);
+            }
+        } else {
+            c->desktop = wm->current_desktop;
+        }
         xcb_ewmh_set_wm_desktop(isde_ewmh_connection(wm->ewmh),
                                 c->client, c->desktop);
         wm_ewmh_set_allowed_actions(wm, c);
 
         if (c->initial_state == 3) {
-            wm_set_wm_state(wm, c, 3);
-            wm_minimize_client(wm, c);
+            /* Only this window starts iconic, not its parent's family */
+            minimize_one(wm, c);
+            wm_ewmh_update_client_list(wm);
+            wm_ewmh_update_client_list_stacking(wm);
+            xcb_flush(wm->conn);
+            return;
+        }
+
+        if (c->desktop != wm->current_desktop && c->desktop != 0xFFFFFFFF) {
+            /* Parent is on another desktop: shown on the next switch there */
+            c->hidden = 1;
+            wm_set_wm_state(wm, c, 1);
             wm_ewmh_update_client_list(wm);
             wm_ewmh_update_client_list_stacking(wm);
             xcb_flush(wm->conn);
@@ -2223,6 +2450,12 @@ static void on_property_notify(Wm *wm, xcb_property_notify_event_t *ev)
         } else if (!c->fixed_size && was_fixed && c->decorated && !c->grip[0]) {
             frame_create_grips(wm, c);
         }
+    } else if (ev->atom == XCB_ATOM_WM_TRANSIENT_FOR ||
+               ev->atom == XCB_ATOM_WM_HINTS) {
+        wm_update_transient(wm, c);
+        wm_restack_above_below(wm);
+        wm_ewmh_update_client_list(wm);
+        wm_ewmh_update_client_list_stacking(wm);
     } else if (ev->atom == wm->atom_motif_wm_hints) {
         int dominated = wm_client_wants_decorations(wm, c->client);
         if (dominated != c->decorated) {
@@ -2278,9 +2511,13 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
             }
         }
 
-        xcb_map_window(wm->conn, c->frame);
-        xcb_map_window(wm->conn, c->client);
-        c->mapped = 1;
+        if (c->minimized) {
+            wm_restore_client(wm, c);
+        } else {
+            xcb_map_window(wm->conn, c->frame);
+            xcb_map_window(wm->conn, c->client);
+            c->mapped = 1;
+        }
         wm_focus_client(wm, c, req_time ? req_time : XCB_CURRENT_TIME);
         return 1;
     } else if (ev->type == ewmh->_NET_CLOSE_WINDOW) {
@@ -2336,6 +2573,7 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
             a2 == ewmh->_NET_WM_STATE_MODAL) {
             c->modal = (action == 1) || (action == 2 && !c->modal);
             wm_update_net_wm_state(wm, c);
+            wm_restack_above_below(wm);
         }
         if (a1 == ewmh->_NET_WM_STATE_STICKY ||
             a2 == ewmh->_NET_WM_STATE_STICKY) {
@@ -2431,33 +2669,7 @@ static int handle_client_message(Wm *wm, xcb_client_message_event_t *ev)
         if (c) {
             uint32_t desk = ev->data.data32[0];
             if (desk < (uint32_t)wm->num_desktops || desk == 0xFFFFFFFF) {
-                int was_visible = (c->desktop == wm->current_desktop ||
-                                   c->desktop == 0xFFFFFFFF);
-                c->desktop = desk;
-                xcb_ewmh_set_wm_desktop(ewmh, c->client, desk);
-                int is_visible = (desk == wm->current_desktop ||
-                                  desk == 0xFFFFFFFF);
-                if (was_visible && !is_visible) {
-                    c->hidden = 1;
-                    c->ignore_unmap++;
-                    xcb_unmap_window(wm->conn, c->client);
-                    if (c->frame && c->mapped) {
-                        xcb_unmap_window(wm->conn, c->frame);
-                        c->mapped = 0;
-                    }
-                    if (wm->focused == c) {
-                        wm->focused = NULL;
-                        wm_ewmh_update_active(wm);
-                    }
-                } else if (!was_visible && is_visible) {
-                    c->hidden = 0;
-                    xcb_map_window(wm->conn, c->client);
-                    if (c->frame) {
-                        xcb_map_window(wm->conn, c->frame);
-                        c->mapped = 1;
-                    }
-                }
-                xcb_flush(wm->conn);
+                wm_move_to_desktop(wm, c, desk);
             }
         }
         return 1;
@@ -2734,8 +2946,12 @@ static void dispatch_wm_event(Wm *wm, xcb_generic_event_t *ev)
             } else {
                 WmClient *c = wm_find_client_by_window(wm, bp->event);
                 if (c) {
+                    /* A modal swallows clicks aimed at the window it blocks */
+                    int blocked = wm_find_modal_for(wm, c) != NULL;
                     wm_focus_client(wm, c, bp->time);
-                    xcb_allow_events(wm->conn, XCB_ALLOW_REPLAY_POINTER,
+                    xcb_allow_events(wm->conn,
+                                     blocked ? XCB_ALLOW_ASYNC_POINTER
+                                             : XCB_ALLOW_REPLAY_POINTER,
                                      bp->time);
                     xcb_flush(wm->conn);
                 }
