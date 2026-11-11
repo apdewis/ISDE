@@ -424,8 +424,7 @@ void wm_ewmh_update_client_list(Wm *wm)
 {
     int count = 0;
     for (WmClient *c = wm->clients; c; c = c->next) {
-        if (!c->transient_for)
-            count++;
+        count++;
     }
 
     xcb_window_t *wins = NULL;
@@ -436,8 +435,7 @@ void wm_ewmh_update_client_list(Wm *wm)
         }
         int i = 0;
         for (WmClient *c = wm->clients; c; c = c->next) {
-            if (!c->transient_for)
-                wins[i++] = c->client;
+            wins[i++] = c->client;
         }
     }
 
@@ -445,54 +443,34 @@ void wm_ewmh_update_client_list(Wm *wm)
     free(wins);
 }
 
-static int cmp_stacking(const void *a, const void *b)
-{
-    const WmClient *ca = *(const WmClient *const *)a;
-    const WmClient *cb = *(const WmClient *const *)b;
-    if (ca->below != cb->below) { return ca->below ? -1 : 1; }
-    if (ca->above != cb->above) { return ca->above ? 1 : -1; }
-    if (ca->focus_seq < cb->focus_seq) { return -1; }
-    if (ca->focus_seq > cb->focus_seq) { return 1; }
-    return 0;
-}
-
+/* Bottom-to-top, taken from the frames' actual stacking order on root */
 void wm_ewmh_update_client_list_stacking(Wm *wm)
 {
+    xcb_query_tree_reply_t *tree = xcb_query_tree_reply(
+        wm->conn, xcb_query_tree(wm->conn, wm->root), NULL);
+    if (!tree) {
+        return;
+    }
+
+    xcb_window_t *children = xcb_query_tree_children(tree);
+    int nchildren = xcb_query_tree_children_length(tree);
+    xcb_window_t *wins = malloc((nchildren > 0 ? nchildren : 1) *
+                                sizeof(xcb_window_t));
+    if (!wins) {
+        free(tree);
+        return;
+    }
+
     int count = 0;
-    for (WmClient *c = wm->clients; c; c = c->next) {
-        if (!c->transient_for) {
-            count++;
+    for (int i = 0; i < nchildren; i++) {
+        WmClient *c = wm_find_client_by_frame(wm, children[i]);
+        if (c) {
+            wins[count++] = c->client;
         }
     }
+    free(tree);
 
-    if (count == 0) {
-        isde_ewmh_set_client_list_stacking(wm->ewmh, NULL, 0);
-        return;
-    }
-
-    WmClient **sorted = malloc(count * sizeof(WmClient *));
-    xcb_window_t *wins = malloc(count * sizeof(xcb_window_t));
-    if (!sorted || !wins) {
-        free(sorted);
-        free(wins);
-        return;
-    }
-
-    int idx = 0;
-    for (WmClient *c = wm->clients; c; c = c->next) {
-        if (!c->transient_for) {
-            sorted[idx++] = c;
-        }
-    }
-
-    qsort(sorted, count, sizeof(WmClient *), cmp_stacking);
-
-    for (int i = 0; i < count; i++) {
-        wins[i] = sorted[i]->client;
-    }
-
-    free(sorted);
-    isde_ewmh_set_client_list_stacking(wm->ewmh, wins, count);
+    isde_ewmh_set_client_list_stacking(wm->ewmh, count ? wins : NULL, count);
     free(wins);
 }
 

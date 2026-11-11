@@ -285,6 +285,16 @@ void taskbar_update(Panel *p)
         if (win_desk != cur_desk && win_desk != 0xFFFFFFFF) {
             continue;
         }
+        /* Dialogs and other transients belong to their parent's entry */
+        xcb_get_property_reply_t *tf = xcb_get_property_reply(ctx->conn,
+            xcb_get_property(ctx->conn, 0, wins[i],
+                             XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW,
+                             0, 1), NULL);
+        int transient = tf && tf->type == XCB_ATOM_WINDOW;
+        free(tf);
+        if (transient) {
+            continue;
+        }
         xcb_ewmh_get_atoms_reply_t wm_state;
         if (xcb_ewmh_get_wm_state_reply(ec,
                 xcb_ewmh_get_wm_state(ec, wins[i]),
